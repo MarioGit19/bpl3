@@ -9,6 +9,7 @@ export default class IfExpr extends Expression {
     public elseBranch: BlockExpr | null,
   ) {
     super(ExpressionType.IfExpression);
+    this.requiresSemicolon = false;
   }
 
   toString(depth: number = 0): string {

@@ -17,6 +17,7 @@ export default class FunctionDeclarationExpr extends Expression {
     public body: Expression,
   ) {
     super(ExpressionType.FunctionDeclaration);
+    this.requiresSemicolon = false;
   }
 
   toString(depth: number = 0): string {
@@ -34,7 +35,9 @@ export default class FunctionDeclarationExpr extends Expression {
     }
     this.depth--;
     if (this.returnType) {
-      output += this.getDepth() + `Return Type: ${this.returnType.value}\n`;
+      // TODO: improve return type representation
+      output +=
+        this.getDepth() + `Return Type: ${this.returnType.type.value}\n`;
     } else {
       output += this.getDepth() + `Return Type: void\n`;
     }
@@ -66,7 +69,8 @@ export default class FunctionDeclarationExpr extends Expression {
     output += argsOutput.join(", ");
     output += ")";
     if (this.returnType) {
-      output += ": " + this.returnType.value;
+      // TODO: improve return type representation
+      output += ": " + this.returnType.type.value;
     }
     output += " {\n";
     output += this.body.transpile() + "\n";

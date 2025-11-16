@@ -5,6 +5,7 @@ import Expression from "./expr";
 export default class LoopExpr extends Expression {
   constructor(public body: BlockExpr) {
     super(ExpressionType.LoopExpression);
+    this.requiresSemicolon = false;
   }
 
   toString(depth: number = 0): string {

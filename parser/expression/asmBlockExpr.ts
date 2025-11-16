@@ -6,6 +6,7 @@ export class AsmBlockExpr extends Expression {
   constructor(code: Token[]) {
     super(ExpressionType.AsmBlockExpression);
     this.code = code;
+    this.requiresSemicolon = false;
   }
 
   public code: Token[];

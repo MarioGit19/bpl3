@@ -21,6 +21,8 @@ import BlockExpr from "./expression/blockExpr";
 import type { FunctionArgument } from "./expression/functionDeclaration";
 import FunctionDeclarationExpr from "./expression/functionDeclaration";
 import FunctionCallExpr from "./expression/functionCallExpr";
+import ReturnExpr from "./expression/returnExpr";
+import EOFExpr from "./expression/EOFExpr";
 
 export class Parser {
   constructor(tokens: Token[]) {
@@ -44,7 +46,9 @@ export class Parser {
   parseExpression(): Expression {
     const expr = this.parseAssignment();
     expr.log();
-    this.consume(TokenType.SEMICOLON, "Expected ';' after expression.");
+    if (expr.requiresSemicolon) {
+      this.consume(TokenType.SEMICOLON, "Expected ';' after expression.");
+    }
     return expr;
   }
 
@@ -307,6 +311,10 @@ export class Parser {
         return this.parseFunctionCall();
       }
 
+      if (token.value === "return") {
+        return this.parseFunctionReturn();
+      }
+
       const identifierToken = this.consume(TokenType.IDENTIFIER);
       return new IdentifierExpr(identifierToken.value);
     }
@@ -321,7 +329,22 @@ export class Parser {
       return new StringLiteralExpr(stringToken.value, stringToken);
     }
 
+    if (token.type === TokenType.EOF) {
+      this.consume(TokenType.EOF);
+      return new EOFExpr();
+    }
+
     throw new Error(`Unexpected token: ${token.type} @${token.line}`);
+  }
+
+  parseFunctionReturn(): Expression {
+    this.consume(TokenType.IDENTIFIER); // consume 'return' token
+    let returnExpr: Expression | null = null;
+    if (this.peek() && this.peek()!.type !== TokenType.SEMICOLON) {
+      returnExpr = this.parseTernary();
+    }
+
+    return new ReturnExpr(returnExpr);
   }
 
   parseFunctionCall(): Expression {

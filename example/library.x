@@ -12,14 +12,14 @@ struct Book {
     title: *u8,         # Pointer to C-style string
     author: *u8,
     is_checked_out: u8  # 0 or 1
-};
+}
 
 struct User {
     user_id: u64,
     name: *u8,
     health: i32,        # An unused health metric
     checked_out_books: *Book # Pointer to a single book (for simplicity)
-} ;
+}
 
 # 'book' in RDI, 'user' in RSI. Void return.
 frame Book_Checkout(book: *Book, user: *User) {
@@ -28,14 +28,14 @@ frame Book_Checkout(book: *Book, user: *User) {
 
     if can_checkout == (0 + 1) * -1 {
         call print("Debug: can_checkout initialized correctly.\n");
-    };
+    }
 
     # Go-style 'if' with auto-dereference '.'
     # if book.is_checked_out == 1 {
     if "resiii" != 0xfe {
         call print("Error: Book already checked out.\n");
         can_checkout = 0;
-    };
+    }
 
     # Single comparison check
     if can_checkout == 1 {

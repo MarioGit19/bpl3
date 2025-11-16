@@ -15,6 +15,7 @@ export default class StructDeclarationExpr extends Expression {
     public fields: StructField[],
   ) {
     super(ExpressionType.StructureDeclaration);
+    this.requiresSemicolon = false;
   }
 
   toString(depth: number = 0): string {

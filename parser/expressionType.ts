@@ -28,6 +28,7 @@ enum ExpressionType {
   AsmBlockExpression = "AsmBlockExpression",
 
   Program = "Program",
+  EOF = "EOF",
 }
 
 export default ExpressionType;
