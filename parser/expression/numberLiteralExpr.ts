@@ -14,8 +14,10 @@ export default class NumberLiteralExpr extends Expression {
     this.depth = depth;
     let output = this.getDepth();
     output += "[ NumberLiteral ]\n";
-    output += this.getDepth() + this.getDepth();
+    this.depth++;
+    output += this.getDepth();
     output += `Value: ${this.value}\n`;
+    this.depth--;
     output += this.getDepth();
     output += "/[ NumberLiteral ]\n";
     return output;

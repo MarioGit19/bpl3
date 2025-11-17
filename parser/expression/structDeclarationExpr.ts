@@ -23,14 +23,16 @@ export default class StructDeclarationExpr extends Expression {
     let output = this.getDepth();
     output += "[ StructDeclaration ]\n";
     this.depth++;
-    output += this.getDepth() + this.getDepth();
+    output += this.getDepth();
     output += `Name: ${this.name}\n`;
-    output += this.getDepth() + this.getDepth();
+    output += this.getDepth();
     output += `Fields:\n`;
+    this.depth++;
     for (const field of this.fields) {
-      output += this.getDepth() + this.getDepth() + this.getDepth();
+      output += this.getDepth();
       output += `- Name: ${field.name}, Type: ${field.type.value}, IsArray: ${field.isArray === 1 ? "true" : field.isArray || "false"}, IsPointer: ${field.isPointer === 1 ? "true" : field.isPointer || "false"}\n`;
     }
+    this.depth--;
     this.depth--;
     output += this.getDepth();
     output += "/[ StructDeclaration ]\n";

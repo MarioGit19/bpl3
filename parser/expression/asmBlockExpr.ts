@@ -20,7 +20,7 @@ export class AsmBlockExpr extends Expression {
       .map((token) => this.getDepth() + token.value)
       .join("\n");
     this.depth--;
-    output += `\n${this.getDepth()}} @${this.code.at(-1)?.line ?? "EOF"}\n`;
+    output += `\n${this.getDepth()}} @${this.code[this.code.length - 1]?.line ?? "EOF"}\n`;
     return output;
   }
 

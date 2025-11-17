@@ -14,8 +14,10 @@ export default class StringLiteralExpr extends Expression {
     this.depth = depth;
     let output = this.getDepth();
     output += "[ StringLiteral ]\n";
-    output += this.getDepth() + this.getDepth();
+    this.depth++;
+    output += this.getDepth();
     output += `Value: "${this.value}"\n`;
+    this.depth--;
     output += this.getDepth();
     output += "/[ StringLiteral ]\n";
     return output;

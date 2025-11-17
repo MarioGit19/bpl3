@@ -7,19 +7,17 @@ enum ExpressionType {
   BlockExpression = "BlockExpression",
 
   VariableDeclaration = "VariableDeclaration",
-  VariableAssignment = "VariableAssignment",
 
   BinaryExpression = "BinaryExpression",
   UnaryExpression = "UnaryExpression",
 
   StructureDeclaration = "StructureDeclaration",
+  MemberAccessExpression = "MemberAccessExpression",
 
   IfExpression = "IfExpression",
   TernaryExpression = "TernaryExpression",
 
   LoopExpression = "LoopExpression",
-  BreakExpression = "BreakExpression",
-  ContinueExpression = "ContinueExpression",
 
   FunctionDeclaration = "FunctionDeclaration",
   FunctionCall = "FunctionCall",

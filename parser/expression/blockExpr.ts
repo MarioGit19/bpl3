@@ -9,11 +9,9 @@ export default class BlockExpr extends Expression {
   toString(depth: number = 0): string {
     this.depth = depth;
     let output = this.getDepth() + "[ BlockExpr ]\n";
-    this.depth++;
     for (const expr of this.expressions) {
       output += expr.toString(depth + 1);
     }
-    this.depth--;
     output += this.getDepth() + "/[ BlockExpr ]\n";
     return output;
   }

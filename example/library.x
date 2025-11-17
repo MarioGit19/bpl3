@@ -32,6 +32,7 @@ frame Book_Checkout(book: *Book, user: *User) {
 
     # Go-style 'if' with auto-dereference '.'
     # if book.is_checked_out == 1 {
+    # 0xff 255 0o377 0b11111111
     if "resiii" != 0xfe {
         call print("Error: Book already checked out.\n");
         can_checkout = 0;
@@ -102,12 +103,13 @@ frame main() ret u8 {
 
     # --- Final Output and Exit ---
     call print("\n--- Final Status ---\n");
-    call print("User: "); print(user1.name); print("\n");
-    call print("Health: "); print_i32(user1.health); print("\n");
-    call print("Checked Out Book Title: "); print(user1.checked_out_books.title); print("\n");
+    call print("User: "); call print(user1.name); call print("\n");
+    call print("Health: "); call print(user1.health);call print("\n");
+    call print("Checked Out Book Title: "); call print(user1.checked_out_books.title); call print("\n");
 
     # Exit the program with a successful exit code (0)
     asm {
+        mov rax, [count]
         mov rax, 60     # syscall: exit
         mov rdi, 0      # exit code 0
         syscall

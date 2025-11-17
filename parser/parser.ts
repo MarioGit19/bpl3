@@ -11,7 +11,9 @@ import NumberLiteralExpr from "./expression/numberLiteralExpr";
 import StringLiteralExpr from "./expression/stringLiteralExpr";
 import LoopExpr from "./expression/loopExpr";
 import { AsmBlockExpr } from "./expression/asmBlockExpr";
-import VariableDeclarationExpr from "./expression/variableDeclarationExpr";
+import VariableDeclarationExpr, {
+  type VariableType,
+} from "./expression/variableDeclarationExpr";
 import StructDeclarationExpr, {
   type StructField,
 } from "./expression/structDeclarationExpr";
@@ -23,6 +25,7 @@ import FunctionDeclarationExpr from "./expression/functionDeclaration";
 import FunctionCallExpr from "./expression/functionCallExpr";
 import ReturnExpr from "./expression/returnExpr";
 import EOFExpr from "./expression/EOFExpr";
+import MemberAccessExpr from "./expression/memberAccessExpr";
 
 export class Parser {
   constructor(tokens: Token[]) {
@@ -192,9 +195,9 @@ export class Parser {
 
     if (
       (nextToken.type === TokenType.LESS_THAN &&
-        nextToken.type === TokenType.LESS_THAN) ||
+        secondNextToken.type === TokenType.LESS_THAN) ||
       (nextToken.type === TokenType.GREATER_THAN &&
-        nextToken.type === TokenType.GREATER_THAN)
+        secondNextToken.type === TokenType.GREATER_THAN)
     ) {
       const operator = this.consume(nextToken.type);
       this.consume(secondNextToken.type);
@@ -271,6 +274,13 @@ export class Parser {
       this.consume(TokenType.OPEN_PAREN);
       const expr = this.parseTernary();
       this.consume(TokenType.CLOSE_PAREN, "Expected ')' after expression.");
+
+      if (
+        this.peek()?.type === TokenType.DOT ||
+        this.peek()?.type === TokenType.OPEN_BRACKET
+      ) {
+        return this.parseIdentifierWithAccess(expr);
+      }
       return expr;
     }
 
@@ -304,6 +314,7 @@ export class Parser {
       }
 
       if (token.value === "NULL") {
+        this.consume(TokenType.IDENTIFIER); // consume 'NULL' token
         return new NullLiteral();
       }
 
@@ -313,6 +324,13 @@ export class Parser {
 
       if (token.value === "return") {
         return this.parseFunctionReturn();
+      }
+
+      if (
+        this.peek(1)?.type === TokenType.DOT ||
+        this.peek(1)?.type === TokenType.OPEN_BRACKET
+      ) {
+        return this.parseIdentifierWithAccess();
       }
 
       const identifierToken = this.consume(TokenType.IDENTIFIER);
@@ -335,6 +353,69 @@ export class Parser {
     }
 
     throw new Error(`Unexpected token: ${token.type} @${token.line}`);
+  }
+
+  parseIdentifierWithAccess(prevExpr: Expression | null = null): Expression {
+    // start parsing the identifier and its accesses
+    // circulary parse until no more accesses are found
+    // use MemberAccessExpr for both since both will be base addr + offset
+    // for .property and index access [expr]
+    // if prevExpr is null that means we are starting fresh,
+    // if we have prevExpr, we use it as the base object and continue parsing accesses
+    let objectExpr: Expression;
+    let accessExpr: Expression;
+
+    if (prevExpr === null) {
+      const identifierToken = this.consume(TokenType.IDENTIFIER);
+      if (this.peek()?.type === TokenType.DOT) {
+        this.consume(TokenType.DOT);
+        const propertyToken = this.consume(TokenType.IDENTIFIER);
+        accessExpr = new IdentifierExpr(propertyToken.value);
+        objectExpr = new IdentifierExpr(identifierToken.value);
+        const memberAccess = new MemberAccessExpr(
+          objectExpr,
+          accessExpr,
+          false,
+        );
+        return this.parseIdentifierWithAccess(memberAccess);
+      } else if (this.peek()?.type === TokenType.OPEN_BRACKET) {
+        this.consume(TokenType.OPEN_BRACKET);
+        const indexExpr = this.parseTernary();
+        this.consume(
+          TokenType.CLOSE_BRACKET,
+          "Expected ']' after index expression.",
+        );
+        accessExpr = indexExpr;
+        objectExpr = new IdentifierExpr(identifierToken.value);
+        const memberAccess = new MemberAccessExpr(objectExpr, accessExpr, true);
+        return this.parseIdentifierWithAccess(memberAccess);
+      }
+      throw new Error(
+        `Expected '.' or '[' after identifier @${identifierToken.line}`,
+      );
+    }
+
+    objectExpr = prevExpr;
+
+    if (this.peek()?.type === TokenType.DOT) {
+      this.consume(TokenType.DOT);
+      const propertyToken = this.consume(TokenType.IDENTIFIER);
+      accessExpr = new IdentifierExpr(propertyToken.value);
+      const memberAccess = new MemberAccessExpr(objectExpr, accessExpr, false);
+      return this.parseIdentifierWithAccess(memberAccess);
+    } else if (this.peek()?.type === TokenType.OPEN_BRACKET) {
+      this.consume(TokenType.OPEN_BRACKET);
+      const indexExpr = this.parseTernary();
+      this.consume(
+        TokenType.CLOSE_BRACKET,
+        "Expected ']' after index expression.",
+      );
+      accessExpr = indexExpr;
+      const memberAccess = new MemberAccessExpr(objectExpr, accessExpr, true);
+      return this.parseIdentifierWithAccess(memberAccess);
+    }
+
+    return objectExpr;
   }
 
   parseFunctionReturn(): Expression {
@@ -534,7 +615,26 @@ export class Parser {
     }
     const varNameToken = this.consume(TokenType.IDENTIFIER);
     this.consume(TokenType.COLON, "Expected ':' after variable name.");
-    const typeToken = this.consume(TokenType.IDENTIFIER);
+
+    const typeToken: VariableType = {
+      name: "",
+      isPointer: 0,
+      isArray: 0,
+    };
+
+    while (this.peek() && this.peek()!.type === TokenType.STAR) {
+      this.consume(TokenType.STAR);
+      typeToken.isPointer++;
+    }
+
+    const typeNameToken = this.consume(TokenType.IDENTIFIER);
+    typeToken.name = typeNameToken.value;
+
+    while (this.peek() && this.peek()!.type === TokenType.OPEN_BRACKET) {
+      this.consume(TokenType.OPEN_BRACKET);
+      this.consume(TokenType.CLOSE_BRACKET);
+      typeToken.isArray++;
+    }
 
     if (this.peek() && this.peek()!.type !== TokenType.ASSIGN) {
       if (isConst) {

@@ -2,12 +2,18 @@ import type Token from "../../lexer/token";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
 
+export type VariableType = {
+  name: string;
+  isPointer: number;
+  isArray: number;
+};
+
 export default class VariableDeclarationExpr extends Expression {
   constructor(
     public scope: "global" | "local",
     public isConst: boolean,
     public name: string,
-    public varType: Token,
+    public varType: VariableType,
     public value: Expression | null,
   ) {
     super(ExpressionType.VariableDeclaration);
@@ -18,20 +24,20 @@ export default class VariableDeclarationExpr extends Expression {
     let output = this.getDepth();
     output += "[ VariableDeclaration ]\n";
     this.depth++;
-    output += this.getDepth() + this.getDepth();
+    output += this.getDepth();
     output += `Scope: ${this.scope}\n`;
-    output += this.getDepth() + this.getDepth();
+    output += this.getDepth();
     output += `IsConst: ${this.isConst}\n`;
-    output += this.getDepth() + this.getDepth();
+    output += this.getDepth();
     output += `Name: ${this.name}\n`;
-    output += this.getDepth() + this.getDepth();
-    output += `Type: ${this.varType.value}\n`;
+    output += this.getDepth();
+    output += `Type: ${this.varType.name} IsPointer: ${this.varType.isPointer ? (this.varType.isPointer === 1 ? "true" : this.varType.isPointer) : "false"}, IsArray: ${this.varType.isArray ? (this.varType.isArray === 1 ? "true" : this.varType.isArray) : "false"}\n`;
     if (this.value) {
-      output += this.getDepth() + this.getDepth();
+      output += this.getDepth();
       output += `Value:\n`;
       output += this.value.toString(this.depth + 1);
     } else {
-      output += this.getDepth() + this.getDepth();
+      output += this.getDepth();
       output += `Value: uninitialized\n`;
     }
     this.depth--;
@@ -52,6 +58,7 @@ export default class VariableDeclarationExpr extends Expression {
       output += this.isConst ? "const " : "let ";
     }
     output += `${this.name}`;
+    output += `: ${this.varType.name}`;
     if (this.value) {
       output += ` = ${this.value.transpile()}`;
     }

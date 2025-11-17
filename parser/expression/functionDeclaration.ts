@@ -42,7 +42,7 @@ export default class FunctionDeclarationExpr extends Expression {
       output += this.getDepth() + `Return Type: void\n`;
     }
     output += this.getDepth() + `Body:\n`;
-    output += this.body.toString(this.depth + 1) + "\n";
+    output += this.body.toString(this.depth + 1);
     this.depth--;
     output += this.getDepth() + `/[ FunctionDeclaration ]\n`;
 
