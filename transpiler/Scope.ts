@@ -2,12 +2,33 @@ export type VarInfo =
   | { type: "local"; offset: number } // stack: [rbp - offset]
   | { type: "global"; label: string }; // data: [label]
 
+export type ContextType =
+  | { type: "function"; label: string; endLabel: string }
+  | { type: "loop"; breakLabel: string; continueLabel: string }
+  | { type: "LHS" }
+  | null;
+
 export default class Scope {
   private vars = new Map<string, VarInfo>();
   private functions = new Map<string, any>();
   public stackOffset = 0; // Tracks stack usage for this function
+  public currentContext: ContextType = null;
 
   constructor(private parent: Scope | null = null) {}
+
+  setCurrentContext(context: ContextType) {
+    this.currentContext = context;
+  }
+
+  getCurrentContext(type: "loop" | "function" | "LHS"): ContextType {
+    if (this.currentContext?.type === type) {
+      return this.currentContext;
+    } else if (this.parent) {
+      return this.parent.getCurrentContext(type);
+    } else {
+      return null;
+    }
+  }
 
   // Find a variable recursively
   resolve(name: string): VarInfo | null {

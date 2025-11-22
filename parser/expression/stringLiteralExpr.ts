@@ -37,7 +37,7 @@ export default class StringLiteralExpr extends Expression {
     const strLabel = gen.generateLabel("str");
     gen.emitRoData(strLabel, '"' + this.formatString() + '"' + ", 0");
     gen.emit(
-      "lea rax, [ rel " + strLabel + "]",
+      `lea rax, [rel ${strLabel}]`,
       "Load address of string literal into rax",
     );
   }

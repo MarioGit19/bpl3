@@ -32,9 +32,22 @@ export default class ReturnExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
+    const currentContext = scope.getCurrentContext("function");
+    if (!currentContext) {
+      throw new Error("Return statement used outside of a function.");
+    }
+
     if (this.value) {
       this.value.transpile(gen, scope);
+    } else {
+      gen.emit("xor rax, rax", "Return void (0)");
     }
-    gen.emit("ret", "Return without value");
+
+    if (currentContext.type === "function") {
+      gen.emit(
+        `jmp ${currentContext.endLabel}`,
+        "Jump to function end for return",
+      );
+    }
   }
 }

@@ -1,5 +1,5 @@
 import type AsmGenerator from "../../transpiler/AsmGenerator";
-import type Scope from "../../transpiler/Scope";
+import Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import type BlockExpr from "./blockExpr";
 import Expression from "./expr";
@@ -25,8 +25,24 @@ export default class LoopExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    gen.emit("; Loop expression not yet implemented", "Loop expression");
-    this.body.transpile(gen, scope);
-    gen.emit("; End of loop expression", "Loop expression");
+    const loopLabel = gen.generateLabel("loop_");
+    const loopStartLabel = loopLabel + "_start";
+    const loopEndLabel = loopLabel + "_end";
+
+    gen.emitLabel(loopStartLabel);
+
+    const localScope = new Scope(scope);
+    localScope.setCurrentContext({
+      type: "loop",
+      breakLabel: loopEndLabel,
+      continueLabel: loopStartLabel,
+    });
+
+    this.body.transpile(gen, localScope);
+
+    localScope.setCurrentContext(null);
+
+    gen.emit(`jmp ${loopStartLabel}`, "jump to the beginning of the loop");
+    gen.emitLabel(loopEndLabel);
   }
 }

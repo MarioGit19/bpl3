@@ -29,7 +29,15 @@ export default class UnaryExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
+    const prevContext = scope.currentContext;
+    const shouldSetLHS = this.operator.type === TokenType.AMPERSAND;
+    if (shouldSetLHS) {
+      scope.setCurrentContext({ type: "LHS" });
+    }
     this.right.transpile(gen, scope);
+    if (shouldSetLHS) {
+      scope.setCurrentContext(prevContext);
+    }
     switch (this.operator.type) {
       case TokenType.MINUS:
         gen.emit("neg rax", "unary negation");
@@ -47,12 +55,12 @@ export default class UnaryExpr extends Expression {
         gen.emit("sete al", "set al to 1 if zero, else 0");
         gen.emit("movzx rax, al", "zero-extend al to rax");
         break;
-      // case TokenType.INCREMENT:
-      //   gen.emit("inc rax", "pre-increment");
-      //   break;
-      // case TokenType.DECREMENT:
-      //   gen.emit("dec rax", "pre-decrement");
-      //   break;
+      case TokenType.INCREMENT:
+        gen.emit("inc rax", "pre-increment");
+        break;
+      case TokenType.DECREMENT:
+        gen.emit("dec rax", "pre-decrement");
+        break;
       case TokenType.AMPERSAND:
         if (this.right.type == ExpressionType.IdentifierExpr) {
           gen.emit("lea rax, [rax]", "address-of operator");

@@ -1,5 +1,5 @@
 import type AsmGenerator from "../../transpiler/AsmGenerator";
-import type Scope from "../../transpiler/Scope";
+import Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
 import type { VariableType } from "./variableDeclarationExpr";
@@ -47,14 +47,53 @@ export default class FunctionDeclarationExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    gen.emit(`; begin function ${this.name}`, "func_begin");
-    for (const arg of this.args) {
-      gen.emit(
-        `; param ${arg.name} : ${this.printType(arg.type)}`,
-        "func_param",
+    if (this.args.length > this.argOrders.length) {
+      throw new Error(
+        `Function declarations with more than ${this.argOrders.length} arguments are not supported.`,
       );
     }
-    this.body.transpile(gen, scope);
-    gen.emit(`; end function ${this.name}`, "func_end");
+
+    const localScope = new Scope(scope);
+
+    const funcLabel =
+      this.name === "main" ? "main" : gen.generateLabel(`func_${this.name}_`);
+    const endLabel = `${funcLabel}_end`;
+
+    scope.defineFunction(this.name, funcLabel);
+
+    gen.emitLabel(funcLabel);
+    gen.emit("", `func_begin ${this.name}`);
+    gen.emit("push rbp", "Function prologue");
+    gen.emit("mov rbp, rsp");
+
+    if (this.args.length) {
+      gen.emit(
+        "sub rsp, " + this.args.length * 8,
+        `Allocate space for arguments`,
+      );
+    }
+
+    this.args.forEach((arg, index) => {
+      const offset = localScope.allocLocal(8); // Assuming 8 bytes for each argument which is 64-bit
+      localScope.define(arg.name, { type: "local", offset: offset });
+      gen.emit(
+        `mov [rbp - ${offset}], ${this.argOrders[index]}`,
+        `func_param ${arg.name}: ${this.printType(arg.type)}`,
+      );
+    });
+
+    localScope.setCurrentContext({
+      type: "function",
+      label: funcLabel,
+      endLabel: endLabel,
+    });
+    this.body.transpile(gen, localScope);
+    localScope.setCurrentContext(null);
+
+    gen.emitLabel(endLabel);
+    gen.emit("mov rsp, rbp", "Function epilogue");
+    gen.emit("pop rbp");
+    gen.emit("ret");
+    gen.emit("", `func_end ${this.name}`);
   }
 }

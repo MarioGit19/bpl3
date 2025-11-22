@@ -23,10 +23,8 @@ export default class BlockExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    gen.emit("; begin block", "block_begin");
     for (const expr of this.expressions) {
       expr.transpile(gen, scope);
     }
-    gen.emit("; end block", "block_end");
   }
 }

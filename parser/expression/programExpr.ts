@@ -35,6 +35,7 @@ export default class ProgramExpr extends Expression {
 
     // Generate Helper Functions like print(value: any with max len 20 bytes) and exit(status: int)
     HelperGenerator.generateHelperFunctions(gen, scope);
+
     // 1. Entry point label
     gen.emitLabel("_start");
 
@@ -44,17 +45,13 @@ export default class ProgramExpr extends Expression {
     // 2. Standard Prologue (Setup Stack)
     gen.emit("push rbp");
     gen.emit("mov rbp, rsp");
+    gen.emit("call main", "call main function");
+    gen.emit("mov rdi, 0", "status: 0");
+    gen.emit("call exit", "call exit function");
 
     // 3. Transpile all children
     for (const expr of this.expressions) {
       expr.transpile(gen, scope);
     }
-
-    // 4. Standard Epilogue (Exit with 0)
-    gen.emit("mov rax, 60", "syscall: exit");
-    gen.emit("mov rdi, 0", "status: 0");
-    gen.emit("syscall");
-
-    HelperGenerator.generateExitFunction(gen, scope);
   }
 }

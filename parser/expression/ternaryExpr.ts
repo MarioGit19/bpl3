@@ -31,10 +31,21 @@ export default class TernaryExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    gen.emit("; not yet implemented", " Ternary Expression ");
+    const label = gen.generateLabel("ternary_");
+    const condLabel = label + "_cond";
+    const thenLabel = label + "_then";
+    const elseLabel = label + "_else";
+    const endLabel = label + "_end";
+
+    gen.emitLabel(condLabel);
     this.condition.transpile(gen, scope);
+    gen.emit("cmp rax, 0", "compare condition to zero");
+    gen.emit(`je ${elseLabel}`, "jump to else if condition is false");
+    gen.emitLabel(thenLabel);
     this.trueExpr.transpile(gen, scope);
+    gen.emit(`jmp ${endLabel}`, "jump to end of ternary expression");
+    gen.emitLabel(elseLabel);
     this.falseExpr.transpile(gen, scope);
-    gen.emit("; end not yet implemented", " Ternary Expression ");
+    gen.emitLabel(endLabel);
   }
 }

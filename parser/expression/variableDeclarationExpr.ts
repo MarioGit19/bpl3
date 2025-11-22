@@ -62,7 +62,7 @@ export default class VariableDeclarationExpr extends Expression {
         gen.startPrecomputeBlock();
         this.value.transpile(gen, scope);
         gen.emit(
-          `mov [${label}], rax`,
+          `mov [rel ${label}], rax`,
           "initialize global variable " + this.name,
         );
         gen.endPrecomputeBlock();
@@ -83,7 +83,21 @@ export default class VariableDeclarationExpr extends Expression {
         });
       }
     } else {
-      throw new Error("Local variable declarations not implemented yet.");
+      const offset = scope.allocLocal(8);
+      gen.emit("sub rsp, 8", "allocate space for local variable " + this.name);
+      scope.define(this.name, { type: "local", offset: offset });
+      if (this.value) {
+        this.value.transpile(gen, scope);
+        gen.emit(
+          `mov [rbp - ${offset}], rax`,
+          "initialize local variable " + this.name,
+        );
+      } else {
+        gen.emit(
+          `mov qword [rbp - ${offset}], 0`,
+          "initialize local variable " + this.name + " to 0",
+        );
+      }
     }
   }
 }

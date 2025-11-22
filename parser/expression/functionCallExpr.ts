@@ -27,24 +27,32 @@ export default class FunctionCallExpr extends Expression {
     console.log(this.toString(depth));
   }
 
-  argOrders: string[] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
-
   transpile(gen: AsmGenerator, scope: Scope): void {
-    gen.emit(`; call function ${this.functionName}`, "func_call");
+    if (this.args.length > this.argOrders.length) {
+      throw new Error(
+        `Function calls with more than ${this.argOrders.length} arguments are not supported.`,
+      );
+    }
+
+    const funcInfo = scope.resolveFunction(this.functionName);
+    if (!funcInfo) {
+      throw new Error(`Undefined function: ${this.functionName}`);
+    }
+
+    gen.emit("", `func_call ${this.functionName}`);
+
     this.args.forEach((arg, index) => {
-      if (index < this.argOrders.length) {
-        arg.transpile(gen, scope);
-        gen.emit(
-          `mov ${this.argOrders[index]}, rax`,
-          `Move argument ${index + 1} into ${this.argOrders[index]}`,
-        );
-      } else {
-        throw new Error(
-          `Function calls with more than ${this.argOrders.length} arguments are not supported.`,
-        );
-      }
+      arg.transpile(gen, scope);
+      gen.emit("push rax", `Push argument ${index + 1} onto stack`);
     });
 
-    gen.emit(`call ${this.functionName}`, "call_instr");
+    for (let i = this.args.length - 1; i >= 0; i--) {
+      gen.emit(
+        `pop ${this.argOrders[i]}`,
+        `Move argument ${i + 1} into ${this.argOrders[i]}`,
+      );
+    }
+
+    gen.emit(`call ${funcInfo}`, "call_instr");
   }
 }

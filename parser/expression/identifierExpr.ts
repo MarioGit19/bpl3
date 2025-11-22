@@ -29,12 +29,20 @@ export default class IdentifierExpr extends Expression {
       throw new Error(`Undefined variable: ${this.name}`);
     }
 
+    const isLHS = scope.getCurrentContext("LHS") !== null;
+    const operation = isLHS ? "lea" : "mov";
+
     if (varInfo.type === "global") {
       const label = varInfo.label;
-      gen.emit(`mov rax, [${label}]`, `load global variable ${this.name}`);
+      gen.emit(
+        `${operation} rax, [rel ${label}]`,
+        `load global variable ${this.name}`,
+      );
     } else {
-      throw new Error(
-        `Local variable access not implemented for: ${this.name}`,
+      const offset = varInfo.offset;
+      gen.emit(
+        `${operation} rax, [rbp - ${offset}]`,
+        `load local variable ${this.name}`,
       );
     }
   }

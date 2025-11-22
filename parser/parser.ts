@@ -24,6 +24,8 @@ import FunctionCallExpr from "./expression/functionCallExpr";
 import ReturnExpr from "./expression/returnExpr";
 import EOFExpr from "./expression/EOFExpr";
 import MemberAccessExpr from "./expression/memberAccessExpr";
+import BreakExpr from "./expression/breakExpr";
+import ContinueExpr from "./expression/continueExpr";
 
 export class Parser {
   constructor(tokens: Token[]) {
@@ -46,10 +48,11 @@ export class Parser {
 
   parseExpression(): Expression {
     const expr = this.parseAssignment();
-    expr.log();
+
     if (expr.requiresSemicolon) {
       this.consume(TokenType.SEMICOLON, "Expected ';' after expression.");
     }
+
     return expr;
   }
 
@@ -382,6 +385,10 @@ export class Parser {
         return this.parseFunctionCall();
       case "return":
         return this.parseFunctionReturn();
+      case "break":
+        return this.parseBreakExpr();
+      case "continue":
+        return this.parseContinueExpr();
       case "NULL":
         this.consume(TokenType.IDENTIFIER);
         return new NullLiteral();
@@ -474,6 +481,16 @@ export class Parser {
     this.consume(TokenType.CLOSE_BRACE, "Expected '}' after struct fields.");
 
     return new StructDeclarationExpr(structNameToken.value, fields);
+  }
+
+  parseBreakExpr(): Expression {
+    this.consume(TokenType.IDENTIFIER);
+    return new BreakExpr();
+  }
+
+  parseContinueExpr(): Expression {
+    this.consume(TokenType.IDENTIFIER);
+    return new ContinueExpr();
   }
 
   parseLoopDeclaration(): LoopExpr {

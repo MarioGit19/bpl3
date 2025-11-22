@@ -18,6 +18,8 @@ enum ExpressionType {
   TernaryExpression = "TernaryExpression",
 
   LoopExpression = "LoopExpression",
+  BreakExpression = "BreakExpression",
+  ContinueExpression = "ContinueExpression",
 
   FunctionDeclaration = "FunctionDeclaration",
   FunctionCall = "FunctionCall",

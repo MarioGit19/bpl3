@@ -1,5 +1,5 @@
 import type AsmGenerator from "../../transpiler/AsmGenerator";
-import type Scope from "../../transpiler/Scope";
+import Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import type BlockExpr from "./blockExpr";
 import Expression from "./expr";
@@ -37,12 +37,26 @@ export default class IfExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    gen.emit("; not yet implemented", " IfExpr ");
+    const ifLabel = gen.generateLabel("if_");
+    const condLabel = ifLabel + "_cond";
+    const thenLabel = ifLabel + "_then";
+    const elseLabel = ifLabel + "_else";
+    const endLabel = ifLabel + "_end";
+
+    gen.emitLabel(condLabel);
     this.condition.transpile(gen, scope);
-    this.thenBranch.transpile(gen, scope);
+    gen.emit(`cmp rax, 0`);
+    gen.emit(`je ${this.elseBranch ? elseLabel : endLabel}`);
+
+    gen.emitLabel(thenLabel);
+    this.thenBranch.transpile(gen, new Scope(scope));
+    gen.emit(`jmp ${endLabel}`);
+
     if (this.elseBranch) {
-      this.elseBranch.transpile(gen, scope);
+      gen.emitLabel(elseLabel);
+      this.elseBranch.transpile(gen, new Scope(scope));
     }
-    gen.emit("; end not yet implemented", " IfExpr ");
+
+    gen.emitLabel(endLabel);
   }
 }

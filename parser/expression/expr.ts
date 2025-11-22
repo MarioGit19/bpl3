@@ -11,6 +11,8 @@ export default class Expression {
   public depth: number = 0;
   public requiresSemicolon: boolean = true;
 
+  public argOrders: string[] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+
   toString(depth: number = 0): string {
     throw new Error("Method not implemented.");
   }
