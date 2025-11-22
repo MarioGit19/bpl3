@@ -4,6 +4,8 @@ export default class AsmGenerator {
   private rodata: string[] = []; // Read-only data
   private bss: string[] = []; // Uninitialized
   private precompute: string[] = []; // Precomputed instructions
+  private globalDefinitions: string[] = [];
+  private importDefinitions: string[] = [];
   private labelCount: number = 0;
 
   isPrecomputeBlock: boolean = false;
@@ -12,6 +14,14 @@ export default class AsmGenerator {
   }
   endPrecomputeBlock() {
     this.isPrecomputeBlock = false;
+  }
+
+  emitGlobalDefinition(definition: string) {
+    this.globalDefinitions.push(definition);
+  }
+
+  emitImportStatement(statement: string) {
+    this.importDefinitions.push(statement);
   }
 
   // Helper to emit indented instructions
@@ -48,6 +58,7 @@ export default class AsmGenerator {
 
   build(): string {
     return [
+      ...this.importDefinitions,
       "section .rodata",
       ...this.rodata,
       "section .data",
@@ -55,9 +66,11 @@ export default class AsmGenerator {
       "section .bss",
       ...this.bss,
       "section .text",
+      "global _start",
+      ...this.globalDefinitions,
       "_precompute:",
       ...this.precompute,
-      "global _start",
+      "    ret",
       ...this.text,
     ].join("\n");
   }

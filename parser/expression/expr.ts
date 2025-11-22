@@ -36,7 +36,8 @@ export default class Expression {
       ", IsPointer: " +
       (type.isPointer === 1 ? "true" : type.isPointer || "false");
     output +=
-      ", IsArray: " + (type.isArray === 1 ? "true" : type.isArray || "false");
+      ", IsArray: " +
+      (type.isArray.length ? `[${type.isArray.join("][")}]` : "false");
     return output;
   }
 }

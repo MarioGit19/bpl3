@@ -61,13 +61,13 @@ export default class UnaryExpr extends Expression {
         gen.emit("dec rax", "pre-decrement");
         break;
       case TokenType.AMPERSAND:
-        if (this.right.type == ExpressionType.IdentifierExpr) {
-          gen.emit("lea rax, [rax]", "address-of operator");
-        } else {
-          throw new Error(
-            `Address-of operator can only be applied to identifiers/variables.`,
-          );
-        }
+        // if (this.right.type == ExpressionType.IdentifierExpr) {
+        gen.emit("lea rax, [rax]", "address-of operator");
+        // } else {
+        //   throw new Error(
+        //     `Address-of operator can only be applied to identifiers/variables.`,
+        //   );
+        // }
         break;
       case TokenType.STAR:
         gen.emit("mov rax, [rax]", "dereference operator");

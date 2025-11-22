@@ -31,6 +31,28 @@ export class AsmBlockExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    gen.emit("; missing asm block", "asm_block");
+    const lines = [];
+    let line = "";
+    let prevLineNum = this.code[0]?.line ?? 0;
+    this.code.forEach((token) => {
+      if (token.line !== prevLineNum) {
+        lines.push(line);
+        line = token.value;
+        prevLineNum = token.line;
+      } else {
+        if (line.length > 0) {
+          line += " ";
+        }
+        line += token.value;
+      }
+    });
+    if (line.length > 0) {
+      lines.push(line);
+    }
+    gen.emit("", "begin asm block");
+    lines.forEach((asmLine) => {
+      gen.emit(asmLine, "raw asm code");
+    });
+    gen.emit("", "end asm block");
   }
 }

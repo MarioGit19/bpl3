@@ -64,6 +64,7 @@ export default class FunctionDeclarationExpr extends Expression {
     gen.emitLabel(funcLabel);
     gen.emit("", `func_begin ${this.name}`);
     gen.emit("push rbp", "Function prologue");
+    scope.stackOffset += 8;
     gen.emit("mov rbp, rsp");
 
     if (this.args.length) {
@@ -93,6 +94,7 @@ export default class FunctionDeclarationExpr extends Expression {
     gen.emitLabel(endLabel);
     gen.emit("mov rsp, rbp", "Function epilogue");
     gen.emit("pop rbp");
+    scope.stackOffset -= 8;
     gen.emit("ret");
     gen.emit("", `func_end ${this.name}`);
   }

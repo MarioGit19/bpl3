@@ -34,9 +34,6 @@ ast.transpile(generator, globalScope);
 
 // Get the result
 const assemblyCode = generator.build();
-console.log("\n");
-console.log(assemblyCode);
-console.log("\n");
 
 const outputFileName = fileName.replace(/\.[^/.]+$/, "") + ".asm";
 writeFileSync(outputFileName, assemblyCode, { encoding: "utf-8" });

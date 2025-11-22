@@ -55,9 +55,13 @@ export default class Scope {
   }
 
   resolveFunction(name: string): any | null {
-    return (
-      this.functions.get(name) || this.parent?.resolveFunction(name) || null
-    );
+    if (this.parent) {
+      return this.parent.resolveFunction(name);
+    } else if (!this.functions.has(name)) {
+      return null;
+    } else {
+      return this.functions.get(name);
+    }
   }
 
   defineFunction(name: string, info: any) {

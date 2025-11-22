@@ -42,10 +42,7 @@ export default class BinaryExpr extends Expression {
   ];
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    gen.emit(
-      "; Begin Binary Expression",
-      "binary expression start - " + this.operator.value,
-    );
+    gen.emit("", "binary expression start - " + this.operator.value);
     this.right.transpile(gen, scope);
     gen.emit("push rax", "save right operand");
 
@@ -74,14 +71,12 @@ export default class BinaryExpr extends Expression {
         gen.emit("imul rax, rbx", "multiplication");
         break;
       case TokenType.SLASH:
-        gen.emit("xor rdx, rdx", "clear rdx for division");
-        gen.emit("mov rdi, rax", "move dividend to rdi");
-        gen.emit("mov rax, rbx", "move divisor to rax");
-        gen.emit("div rdi", "division");
+        gen.emit("cqo", "sign-extend RAX into RDX for signed division");
+        gen.emit("idiv rbx", "perform RDX:RAX / RBX");
         break;
       case TokenType.PERCENT:
-        gen.emit("xor rdx, rdx", "clear rdx for division");
-        gen.emit("div rbx", "division");
+        gen.emit("cqo", "sign-extend RAX into RDX for signed division");
+        gen.emit("idiv rbx", "division");
         gen.emit("mov rax, rdx", "move remainder to rax");
         break;
       case TokenType.CARET:
@@ -122,23 +117,24 @@ export default class BinaryExpr extends Expression {
         break;
       case TokenType.SLASH_ASSIGN:
         gen.emit("push rax", "save dividend address");
-        gen.emit("xor rdx, rdx", "clear rdx for division");
-        gen.emit("mov rdi, [rax]", "move dividend to rdi");
-        gen.emit("mov rax, rbx", "move divisor to rax");
-        gen.emit("div rdi", "division");
+
+        gen.emit("mov rax, [rax]", "move dividend to rdi");
+        gen.emit("cqo", "sign-extend RAX into RDX for signed division");
+        gen.emit("idiv rbx", "perform RDX:RAX / RBX");
+
         gen.emit("mov rbx, rax", "move result to rbx");
         gen.emit("pop rax", "restore dividend address");
-        gen.emit("mov [rax], rax", "store result back to variable");
+        gen.emit("mov [rax], rbx", "store result back to variable");
         break;
       case TokenType.PERCENT_ASSIGN:
         gen.emit("push rax", "save dividend address");
-        gen.emit("xor rdx, rdx", "clear rdx for division");
-        gen.emit("mov rdi, [rax]", "move dividend to rdi");
-        gen.emit("mov rax, rbx", "move divisor to rax");
-        gen.emit("div rdi", "division");
-        gen.emit("mov rbx, rdx", "move remainder to rbx");
+
+        gen.emit("mov rax, [rax]");
+        gen.emit("cqo", "sign-extend RAX into RDX for signed division");
+        gen.emit("idiv rbx", "division");
+
         gen.emit("pop rax", "restore dividend address");
-        gen.emit("mov [rax], rbx", "store remainder back to variable");
+        gen.emit("mov [rax], rdx", "store remainder back to variable");
         break;
       case TokenType.CARET_ASSIGN:
         gen.emit("xor [rax], rbx", "bitwise XOR assignment");
@@ -200,9 +196,6 @@ export default class BinaryExpr extends Expression {
       default:
         throw new Error(`Unsupported binary operator: ${this.operator.value}`);
     }
-    gen.emit(
-      "; End Binary Expression",
-      "binary expression end - " + this.operator.value,
-    );
+    gen.emit("", "binary expression end - " + this.operator.value);
   }
 }

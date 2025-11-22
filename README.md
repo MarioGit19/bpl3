@@ -9,7 +9,8 @@ bun install
 To run:
 
 ```bash
-bun run index.ts example/hello-world.x
+bun run index.ts example/hello-world.x - To get asm code
+./cmp.sh example/hello-world.x - To compile and run
 ```
 
 This project was created using `bun init` in bun v1.2.13. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.

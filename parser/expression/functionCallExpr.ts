@@ -44,6 +44,7 @@ export default class FunctionCallExpr extends Expression {
     this.args.forEach((arg, index) => {
       arg.transpile(gen, scope);
       gen.emit("push rax", `Push argument ${index + 1} onto stack`);
+      scope.stackOffset += 8;
     });
 
     for (let i = this.args.length - 1; i >= 0; i--) {
@@ -51,8 +52,31 @@ export default class FunctionCallExpr extends Expression {
         `pop ${this.argOrders[i]}`,
         `Move argument ${i + 1} into ${this.argOrders[i]}`,
       );
+      scope.stackOffset -= 8;
     }
 
+    const alignmentBytes = 16;
+    const stackOffset = scope.stackOffset % alignmentBytes;
+
+    if (stackOffset !== 0) {
+      gen.emit(
+        `sub rsp, ${alignmentBytes - stackOffset}`,
+        `Align stack to ${alignmentBytes} bytes`,
+      );
+      scope.stackOffset += alignmentBytes - stackOffset;
+    }
+
+    gen.emit("", "Calling with stack offset of " + scope.stackOffset);
+    gen.emit("xor rax, rax", "clear rax as return value");
+    gen.emit("xor rbx, rbx", "clear rbx as well just in case");
     gen.emit(`call ${funcInfo}`, "call_instr");
+
+    if (stackOffset !== 0) {
+      gen.emit(
+        `add rsp, ${alignmentBytes - stackOffset}`,
+        "Restore stack alignment",
+      );
+      scope.stackOffset -= alignmentBytes - stackOffset;
+    }
   }
 }

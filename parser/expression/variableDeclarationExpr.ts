@@ -1,4 +1,3 @@
-import type Token from "../../lexer/token";
 import type AsmGenerator from "../../transpiler/AsmGenerator";
 import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
@@ -7,7 +6,7 @@ import Expression from "./expr";
 export type VariableType = {
   name: string;
   isPointer: number;
-  isArray: number;
+  isArray: number[];
 };
 
 export default class VariableDeclarationExpr extends Expression {
@@ -33,7 +32,7 @@ export default class VariableDeclarationExpr extends Expression {
     output += this.getDepth();
     output += `Name: ${this.name}\n`;
     output += this.getDepth();
-    output += `Type: ${this.varType.name} IsPointer: ${this.varType.isPointer ? (this.varType.isPointer === 1 ? "true" : this.varType.isPointer) : "false"}, IsArray: ${this.varType.isArray ? (this.varType.isArray === 1 ? "true" : this.varType.isArray) : "false"}\n`;
+    output += this.printType(this.varType);
     if (this.value) {
       output += this.getDepth();
       output += `Value:\n`;
@@ -83,8 +82,14 @@ export default class VariableDeclarationExpr extends Expression {
         });
       }
     } else {
-      const offset = scope.allocLocal(8);
-      gen.emit("sub rsp, 8", "allocate space for local variable " + this.name);
+      const allocSize = this.varType.isArray.length
+        ? Number(this.varType.isArray[0]) * 8
+        : 8;
+      const offset = scope.allocLocal(allocSize);
+      gen.emit(
+        `sub rsp, ${allocSize}`,
+        "allocate space for local variable " + this.name,
+      );
       scope.define(this.name, { type: "local", offset: offset });
       if (this.value) {
         this.value.transpile(gen, scope);
@@ -93,10 +98,30 @@ export default class VariableDeclarationExpr extends Expression {
           "initialize local variable " + this.name,
         );
       } else {
-        gen.emit(
-          `mov qword [rbp - ${offset}], 0`,
-          "initialize local variable " + this.name + " to 0",
-        );
+        if (this.varType.isArray.length) {
+          // 1. Load the starting address (the low end of the array) into RDI
+          gen.emit(
+            `lea rdi, [rbp - ${offset}]`,
+            "load address of array " + this.name + " into RDI",
+          );
+          // 2. Set the value to write (AL/RAX) to zero
+          gen.emit(
+            `xor rax, rax`,
+            "set RAX to 0 for initializing array " + this.name,
+          );
+          // 3. Set the counter: 5 QWORD elements
+          gen.emit(
+            `mov rcx, ${Number(this.varType.isArray[0])}`,
+            "set RCX to array size for " + this.name,
+          );
+          // 4. Repeat Store QWORD: Write RAX into [RDI], then increment RDI, RCX--
+          gen.emit(`rep stosq`, "initialize array " + this.name + " to 0");
+        } else {
+          gen.emit(
+            `mov qword [rbp - ${offset}], 0`,
+            "initialize local variable " + this.name + " to 0",
+          );
+        }
       }
     }
   }

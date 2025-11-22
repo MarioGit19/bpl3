@@ -4,7 +4,17 @@ fileName="${1%%.*}" # remove .s extension
 outputFile="$(basename "$1" .x)"
 
 echo "Compiling and running TypeScript file: $1"
-bun index.ts $1 1>/dev/null
+bun index.ts $1 # > /dev/null
+if [ $? -ne 0 ]; then
+    echo "TypeScript compilation failed. Exiting."
+    exit 1
+fi
+
+echo "Generated assembly file: ${fileName}.asm"
+echo;
+
+cat "${fileName}.asm"
+echo;
 echo;
 
 echo "Assembling and linking assembly file: ${fileName}.asm"
@@ -25,8 +35,13 @@ fi
 rm "${fileName}.o"
 
 
+echo;
 echo "Running the output file: ${outputFile}"
 echo "-----------------------------------";
-[ "$2" == "-g" ] && gdb -q ${outputFile};
-[ "$2" == "-g" ] || (./${outputFile}; echo "Exit code: $?");
+
+EXIT_CODE='AAA';
+[ "$2" == "-g" ] && gdb -q ${outputFile}; 
+[ "$2" == "-g" ] || { ./${outputFile}; EXIT_CODE="$?"; };
 echo "-----------------------------------";
+
+[ "$EXIT_CODE" != "AAA" ] && echo "Program exited with code: $EXIT_CODE";

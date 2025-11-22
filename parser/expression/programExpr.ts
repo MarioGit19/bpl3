@@ -45,7 +45,9 @@ export default class ProgramExpr extends Expression {
     // 2. Standard Prologue (Setup Stack)
     gen.emit("push rbp");
     gen.emit("mov rbp, rsp");
+    gen.emit("sub rsp, 8", "align stack to 16 bytes");
     gen.emit("call main", "call main function");
+    gen.emit("add rsp, 8", "dealign stack");
     gen.emit(
       "mov rdi, rax",
       "status: move return value of main to rdi for exit",

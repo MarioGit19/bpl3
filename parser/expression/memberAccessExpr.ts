@@ -2,6 +2,7 @@ import type AsmGenerator from "../../transpiler/AsmGenerator";
 import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
+import type IdentifierExpr from "./identifierExpr";
 
 export default class MemberAccessExpr extends Expression {
   constructor(
@@ -31,9 +32,24 @@ export default class MemberAccessExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    gen.emit("; not yet implemented", "Member access expression");
     this.object.transpile(gen, scope);
+    gen.emit("lea rbx, [rax]", "load address of object for member access");
+    gen.emit("push rbx", "push object address onto stack");
     this.property.transpile(gen, scope);
-    gen.emit("; end not yet implemented", "Member access expression");
+    gen.emit("pop rbx", "pop object address into rbx");
+    if (this.isIndexAccess) {
+      gen.emit(
+        "mov rax, [rbx + rax * 8]",
+        "load value from object at computed index",
+      );
+    } else {
+      // Assuming property is an identifier and we have a way to get its offset
+      const propertyName = (this.property as IdentifierExpr).name; // Cast to any for simplicity
+      const offset = 8; //scope.getPropertyOffset(propertyName);
+      gen.emit(
+        `mov rax, [rbx + ${offset}]`,
+        `load value of property '${propertyName}' from object`,
+      );
+    }
   }
 }

@@ -26,6 +26,7 @@ import EOFExpr from "./expression/EOFExpr";
 import MemberAccessExpr from "./expression/memberAccessExpr";
 import BreakExpr from "./expression/breakExpr";
 import ContinueExpr from "./expression/continueExpr";
+import ImportExpr from "./expression/importExpr";
 
 export class Parser {
   constructor(tokens: Token[]) {
@@ -259,7 +260,8 @@ export class Parser {
     while (
       nextToken?.type === TokenType.STAR ||
       nextToken?.type === TokenType.SLASH ||
-      nextToken?.type === TokenType.PERCENT
+      nextToken?.type === TokenType.PERCENT ||
+      nextToken?.type === TokenType.SLASH_SLASH
     ) {
       const operator = this.consume(nextToken.type);
       const right = this.parseUnary();
@@ -389,6 +391,10 @@ export class Parser {
         return this.parseBreakExpr();
       case "continue":
         return this.parseContinueExpr();
+      case "import":
+        return this.parseImportExpression();
+      case "export":
+        return this.parseExportExpression();
       case "NULL":
         this.consume(TokenType.IDENTIFIER);
         return new NullLiteral();
@@ -396,6 +402,50 @@ export class Parser {
         const identifierToken = this.consume(TokenType.IDENTIFIER);
         return new IdentifierExpr(identifierToken.value);
     }
+  }
+
+  parseImportExpression(): Expression {
+    this.consume(TokenType.IDENTIFIER);
+    const importNames: string[] = [];
+
+    while (
+      this.peek()?.type === TokenType.IDENTIFIER &&
+      this.peek()?.value !== "from"
+    ) {
+      const importNameToken = this.consume(TokenType.IDENTIFIER);
+      importNames.push(importNameToken.value);
+      if (this.peek()?.type === TokenType.COMMA) {
+        this.consume(TokenType.COMMA);
+      }
+    }
+
+    if (importNames.length === 0) {
+      throw new Error(
+        `Expected at least one import name after 'import' @${this.peek(-1)?.line}`,
+      );
+    }
+
+    let moduleNameToken: Token | null = null;
+    if (this.peek()?.value === "from") {
+      this.consume(TokenType.IDENTIFIER); // consume 'from'
+      const nextToken = this.peek(); // check next token for module name, can be identifier or string literal
+      if (
+        !nextToken ||
+        (nextToken?.type !== TokenType.IDENTIFIER &&
+          nextToken.type !== TokenType.STRING_LITERAL)
+      ) {
+        throw new Error(
+          `Expected module name after 'from' @${this.peek(-1)?.line}`,
+        );
+      }
+      moduleNameToken = this.consume(nextToken!.type);
+    }
+
+    return new ImportExpr(moduleNameToken?.value ?? "global", importNames);
+  }
+
+  parseExportExpression(): Expression {
+    throw new Error("Export functionality not implemented.");
   }
 
   parseFunctionReturn(): Expression {
@@ -641,7 +691,7 @@ export class Parser {
     const typeInfo: VariableType = {
       name: "",
       isPointer: 0,
-      isArray: 0,
+      isArray: [],
     };
 
     while (this.peek()?.type === TokenType.STAR) {
@@ -654,11 +704,21 @@ export class Parser {
 
     while (this.peek()?.type === TokenType.OPEN_BRACKET) {
       this.consume(TokenType.OPEN_BRACKET);
+      let size = 0;
+      if (this.peek()?.type === TokenType.NUMBER_LITERAL) {
+        const sizeToken = this.consume(TokenType.NUMBER_LITERAL);
+        size = parseInt(sizeToken.value, 10);
+      } else if (this.peek()?.type === TokenType.CLOSE_BRACKET) {
+        throw new Error(
+          "Array size must be specified as a number literal or numeric expression.",
+        );
+      }
+
       this.consume(
         TokenType.CLOSE_BRACKET,
         "Expected ']' after array brackets.",
       );
-      typeInfo.isArray++;
+      typeInfo.isArray.push(size);
     }
 
     return typeInfo;
