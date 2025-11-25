@@ -155,12 +155,14 @@ frame function_name() ret return_type {}
 frame function_name() {} // for void return type
 ```
 
-### Command Line Arguments
+### Command Line Arguments and Environment Variables
 
-The `main` function can optionally accept command line arguments. It supports the standard `argc` (argument count) and `argv` (argument vector) parameters.
+The `main` function can optionally accept command line arguments and environment variables. It supports `argc` (argument count), `argv` (argument vector), and `envp` (environment pointer).
 
 ```bpl
-frame main(argc: u32, argv: **u8) ret u8 {
+import getenv;
+frame main(argc: u32, argv: **u8, envp: **u8) ret u8 {
+    # Print arguments
     local i: u32 = 0;
     loop {
         if i >= argc {
@@ -168,6 +170,12 @@ frame main(argc: u32, argv: **u8) ret u8 {
         }
         call printf("Arg %d: %s\n", i, argv[i]);
         i = i + 1;
+    }
+
+    # Get specific environment variable
+    local path: *u8 = call getenv("PATH");
+    if path != null {
+        call printf("PATH: %s\n", path);
     }
     return 0;
 }
@@ -376,6 +384,7 @@ The `example` directory contains several programs demonstrating various features
 - `strings_demo.x`: Demonstrates string manipulation capabilities.
 - `else_if_demo.x`: Demonstrates `else if` control flow.
 - `args_demo.x`: Demonstrates command line arguments handling.
+- `env_demo.x`: Demonstrates environment variables handling.
 
 ## Contributing
 
