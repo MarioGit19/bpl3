@@ -29,12 +29,16 @@ export default class ImportExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    gen.emit(
-      `;; Importing module: ${this.moduleName} with imports: ${this.importName.join(", ")}`,
-    );
-    gen.emitImportStatement("extern " + this.importName.join(", "));
-    this.importName.forEach((importedFunction) => {
-      scope.defineFunction(importedFunction, importedFunction);
+    gen.emitImportStatement(`extern ${this.importName.join(", ")}`);
+    this.importName.forEach((name) => {
+      scope.defineFunction(name, {
+        name: name,
+        label: name,
+        args: [],
+        returnType: null,
+        startLabel: name,
+        endLabel: name,
+      });
     });
   }
 }

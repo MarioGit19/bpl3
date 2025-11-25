@@ -167,7 +167,16 @@ class Lexer {
       );
     }
 
-    return new Token(TokenType.NUMBER_LITERAL, value.toString(), this.line);
+    // return all bases as hex, except decimal
+    if (Object.keys(error_message_key).includes(numberStr.slice(0, 2))) {
+      return new Token(
+        TokenType.NUMBER_LITERAL,
+        "0x" + value.toString(16),
+        this.line,
+      );
+    } else {
+      return new Token(TokenType.NUMBER_LITERAL, value.toString(), this.line);
+    }
   }
 
   parseLogicalOperator(char: string): Token {
@@ -291,10 +300,10 @@ class Lexer {
   }
 
   parseSlashOperator(): Token {
-    if (this.peek() === "/") {
-      this.consume();
-      return new Token(TokenType.SLASH_SLASH, "//", this.line);
-    }
+    // if (this.peek() === "/") {
+    //   this.consume();
+    //   return new Token(TokenType.SLASH_SLASH, "//", this.line);
+    // }
     if (this.peek() === "=") {
       this.consume();
       return new Token(TokenType.SLASH_ASSIGN, "/=", this.line);
@@ -303,10 +312,10 @@ class Lexer {
   }
 
   parseStarOperator(): Token {
-    if (this.peek() === "*") {
-      this.consume();
-      return new Token(TokenType.STAR_STAR, "**", this.line);
-    }
+    // if (this.peek() === "*") {
+    //   this.consume();
+    //   return new Token(TokenType.STAR_STAR, "**", this.line);
+    // }
     if (this.peek() === "=") {
       this.consume();
       return new Token(TokenType.STAR_ASSIGN, "*=", this.line);

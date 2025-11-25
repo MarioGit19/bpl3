@@ -28,55 +28,52 @@ export default class FunctionCallExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    if (this.args.length > this.argOrders.length) {
-      throw new Error(
-        `Function calls with more than ${this.argOrders.length} arguments are not supported.`,
-      );
+    const func = scope.resolveFunction(this.functionName);
+    if (!func) {
+      throw new Error(`Function ${this.functionName} not found`);
     }
-
-    const funcInfo = scope.resolveFunction(this.functionName);
-    if (!funcInfo) {
-      throw new Error(`Undefined function: ${this.functionName}`);
-    }
-
-    gen.emit("", `func_call ${this.functionName}`);
 
     this.args.forEach((arg, index) => {
       arg.transpile(gen, scope);
-      gen.emit("push rax", `Push argument ${index + 1} onto stack`);
-      scope.stackOffset += 8;
+      gen.emit(
+        "push rax",
+        `Push argument ${index} for function call ${this.functionName}`,
+      );
+      scope.stackOffset += 8; // assuming 64-bit architecture
     });
 
     for (let i = this.args.length - 1; i >= 0; i--) {
       gen.emit(
         `pop ${this.argOrders[i]}`,
-        `Move argument ${i + 1} into ${this.argOrders[i]}`,
+        `Move argument ${i} into correct register for function call ${this.functionName}`,
       );
       scope.stackOffset -= 8;
     }
 
-    const alignmentBytes = 16;
-    const stackOffset = scope.stackOffset % alignmentBytes;
-
+    const stackAlignment = 16;
+    const stackOffset = scope.stackOffset % stackAlignment;
     if (stackOffset !== 0) {
       gen.emit(
-        `sub rsp, ${alignmentBytes - stackOffset}`,
-        `Align stack to ${alignmentBytes} bytes`,
+        `sub rsp, ${stackAlignment - stackOffset}`,
+        `Align stack before calling function ${this.functionName}`,
       );
-      scope.stackOffset += alignmentBytes - stackOffset;
     }
 
-    gen.emit("", "Calling with stack offset of " + scope.stackOffset);
-    gen.emit("xor rax, rax", "clear rax as return value");
-    gen.emit("xor rbx, rbx", "clear rbx as well just in case");
-    gen.emit(`call ${funcInfo}`, "call_instr");
+    gen.emit(
+      "xor rax, rax",
+      `Clear rax before calling function ${this.functionName}`,
+    );
+    gen.emit(
+      "xor rbx, rbx",
+      `Clear rbx before calling function ${this.functionName}`,
+    );
+    gen.emit(`call ${func.startLabel}`, `Call function ${this.functionName}`);
 
     if (stackOffset !== 0) {
       gen.emit(
-        `add rsp, ${alignmentBytes - stackOffset}`,
-        "Restore stack alignment",
+        `add rsp, ${stackAlignment - stackOffset}`,
+        `Restore stack after calling function ${this.functionName}`,
       );
-      scope.stackOffset -= alignmentBytes - stackOffset;
     }
   }
 }

@@ -42,160 +42,189 @@ export default class BinaryExpr extends Expression {
   ];
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    gen.emit("", "binary expression start - " + this.operator.value);
+    if (this.assignmentOperators.includes(this.operator.type)) {
+      this.handleAssignment(gen, scope);
+      return;
+    }
+
+    const isLHS = scope.getCurrentContext("LHS");
+    if (isLHS) scope.removeCurrentContext("LHS");
+
     this.right.transpile(gen, scope);
-    gen.emit("push rax", "save right operand");
-
-    const isAssignmentOp = this.assignmentOperators.includes(
-      this.operator.type,
-    );
-
-    if (isAssignmentOp) {
-      scope.setCurrentContext({ type: "LHS" });
-    }
+    gen.emit("push rax", "Push right operand");
     this.left.transpile(gen, scope);
-    if (isAssignmentOp) {
-      scope.removeCurrentContext("LHS");
-    }
+    gen.emit("pop rbx", "Pop right operand into rbx");
 
-    gen.emit("pop rbx", "load right operand");
+    if (isLHS) scope.setCurrentContext({ type: "LHS" });
+
     switch (this.operator.type) {
       // Arithmetic Operators
       case TokenType.PLUS:
-        gen.emit("add rax, rbx", "addition");
+        gen.emit("add rax, rbx", "Addition");
         break;
       case TokenType.MINUS:
-        gen.emit("sub rax, rbx", "subtraction");
+        gen.emit("sub rax, rbx", "Subtraction");
         break;
       case TokenType.STAR:
-        gen.emit("imul rax, rbx", "multiplication");
+        gen.emit("imul rax, rbx", "Multiplication");
         break;
       case TokenType.SLASH:
-        gen.emit("cqo", "sign-extend RAX into RDX for signed division");
-        gen.emit("idiv rbx", "perform RDX:RAX / RBX");
+        gen.emit(
+          "cqo",
+          "Sign-extend RAX into RDX:RAX for 128-bit signed dividend",
+        );
+        gen.emit(
+          "idiv rbx",
+          "Signed division (RDX:RAX / RBX). Quotient remains in RAX.",
+        );
         break;
       case TokenType.PERCENT:
-        gen.emit("cqo", "sign-extend RAX into RDX for signed division");
-        gen.emit("idiv rbx", "division");
-        gen.emit("mov rax, rdx", "move remainder to rax");
+        gen.emit(
+          "cqo",
+          "Sign-extend RAX into RDX:RAX for 128-bit signed dividend",
+        );
+        gen.emit(
+          "idiv rbx",
+          "Signed division (RDX:RAX / RBX). Remainder is in RDX.",
+        );
+        gen.emit("mov rax, rdx", "Move remainder (RDX) to result register RAX");
         break;
       case TokenType.CARET:
-        gen.emit("xor rax, rbx", "bitwise XOR");
+        gen.emit("xor rax, rbx", "Bitwise XOR");
         break;
       case TokenType.AMPERSAND:
-        gen.emit("and rax, rbx", "bitwise AND");
+        gen.emit("and rax, rbx", "Bitwise AND");
         break;
       case TokenType.PIPE:
-        gen.emit("or rax, rbx", "bitwise OR");
+        gen.emit("or rax, rbx", "Bitwise OR");
         break;
+
+      // Logical Operators
       case TokenType.BITSHIFT_LEFT:
-        gen.emit("mov cl, bl", "move shift amount to cl");
-        gen.emit("sal rax, cl", "bitwise left shift");
+        gen.emit("mov cl, bl", "Move shift amount to cl");
+        gen.emit("shl rax, cl", "Bitwise Left Shift");
         break;
       case TokenType.BITSHIFT_RIGHT:
-        gen.emit("mov cl, bl", "move shift amount to cl");
-        gen.emit("sar rax, cl", "bitwise right shift");
-        break;
-
-      // Assignment Operators
-      case TokenType.ASSIGN:
-        if (this.left.type !== ExpressionType.IdentifierExpr) {
-          throw new Error("Left operand of assignment must be an identifier.");
-        }
-        gen.emit("mov [rax], rbx", "assignment");
-        break;
-      case TokenType.PLUS_ASSIGN:
-        gen.emit("add [rax], rbx", "plus assignment");
-        break;
-      case TokenType.MINUS_ASSIGN:
-        gen.emit("sub [rax], rbx", "minus assignment");
-        break;
-      case TokenType.STAR_ASSIGN:
-        gen.emit("mov rcx, [rax]", "load current value for times assignment");
-        gen.emit("imul rcx, rbx", "times assignment");
-        gen.emit("mov [rax], rcx", "store result back to variable");
-        break;
-      case TokenType.SLASH_ASSIGN:
-        gen.emit("push rax", "save dividend address");
-
-        gen.emit("mov rax, [rax]", "move dividend to rdi");
-        gen.emit("cqo", "sign-extend RAX into RDX for signed division");
-        gen.emit("idiv rbx", "perform RDX:RAX / RBX");
-
-        gen.emit("mov rbx, rax", "move result to rbx");
-        gen.emit("pop rax", "restore dividend address");
-        gen.emit("mov [rax], rbx", "store result back to variable");
-        break;
-      case TokenType.PERCENT_ASSIGN:
-        gen.emit("push rax", "save dividend address");
-
-        gen.emit("mov rax, [rax]");
-        gen.emit("cqo", "sign-extend RAX into RDX for signed division");
-        gen.emit("idiv rbx", "division");
-
-        gen.emit("pop rax", "restore dividend address");
-        gen.emit("mov [rax], rdx", "store remainder back to variable");
-        break;
-      case TokenType.CARET_ASSIGN:
-        gen.emit("xor [rax], rbx", "bitwise XOR assignment");
-        break;
-      case TokenType.AMPERSAND_ASSIGN:
-        gen.emit("and [rax], rbx", "bitwise AND assignment");
-        break;
-      case TokenType.PIPE_ASSIGN:
-        gen.emit("or [rax], rbx", "bitwise OR assignment");
+        gen.emit("mov cl, bl", "Move shift amount to cl");
+        gen.emit("shr rax, cl", "Bitwise Right Shift");
         break;
 
       // Comparison Operators
       case TokenType.EQUAL:
-        gen.emit("cmp rax, rbx", "compare for equality");
-        gen.emit("sete al", "set al if equal");
-        gen.emit("movzx rax, al", "zero extend al to rax");
+        gen.emit("cmp rax, rbx", "Compare for equality");
+        gen.emit("sete al", "Set al if equal");
+        gen.emit("movzx rax, al", "Zero extend al to rax");
         break;
       case TokenType.NOT_EQUAL:
-        gen.emit("cmp rax, rbx", "compare for inequality");
-        gen.emit("setne al", "set al if not equal");
-        gen.emit("movzx rax, al", "zero extend al to rax");
+        gen.emit("cmp rax, rbx", "Compare for inequality");
+        gen.emit("setne al", "Set al if not equal");
+        gen.emit("movzx rax, al", "Zero extend al to rax");
         break;
       case TokenType.LESS_THAN:
-        gen.emit("cmp rax, rbx", "compare for less than");
-        gen.emit("setl al", "set al if less than");
-        gen.emit("movzx rax, al", "zero extend al to rax");
-        break;
-      case TokenType.LESS_EQUAL:
-        gen.emit("cmp rax, rbx", "compare for less than or equal");
-        gen.emit("setle al", "set al if less than or equal");
-        gen.emit("movzx rax, al", "zero extend al to rax");
+        gen.emit("cmp rax, rbx", "Compare for less than");
+        gen.emit("setl al", "Set al if less than");
+        gen.emit("movzx rax, al", "Zero extend al to rax");
         break;
       case TokenType.GREATER_THAN:
-        gen.emit("cmp rax, rbx", "compare for greater than");
-        gen.emit("setg al", "set al if greater than");
-        gen.emit("movzx rax, al", "zero extend al to rax");
+        gen.emit("cmp rax, rbx", "Compare for greater than");
+        gen.emit("setg al", "Set al if greater than");
+        gen.emit("movzx rax, al", "Zero extend al to rax");
+        break;
+      case TokenType.LESS_EQUAL:
+        gen.emit("cmp rax, rbx", "Compare for less than or equal");
+        gen.emit("setle al", "Set al if less than or equal");
+        gen.emit("movzx rax, al", "Zero extend al to rax");
         break;
       case TokenType.GREATER_EQUAL:
-        gen.emit("cmp rax, rbx", "compare for greater than or equal");
-        gen.emit("setge al", "set al if greater than or equal");
-        gen.emit("movzx rax, al", "zero extend al to rax");
+        gen.emit("cmp rax, rbx", "Compare for greater than or equal");
+        gen.emit("setge al", "Set al if greater than or equal");
+        gen.emit("movzx rax, al", "Zero extend al to rax");
         break;
       case TokenType.AND: // &&
-        gen.emit("cmp rax, 0", "compare left operand to 0");
-        gen.emit("sete al", "set al if left operand is true");
-        gen.emit("cmp rbx, 0", "compare right operand to 0");
-        gen.emit("sete bl", "set bl if right operand is true");
-        gen.emit("and al, bl", "logical AND");
-        gen.emit("movzx rax, al", "zero extend al to rax");
+        const andLabel = gen.generateLabel("cmp_and_");
+        gen.emit("cmp rax, 0", "Compare left operand to 0");
+        gen.emit(`je ${andLabel}_false`, "Short-circuit if left is 0");
+        gen.emit("cmp rbx, 0", "Compare right operand to 0");
+        gen.emit(`jne ${andLabel}_true`, "Shift-circuit if right is not 0");
+        gen.emitLabel(`${andLabel}_false`);
+        gen.emit("xor rax, rax", "Result is false (0)");
+        gen.emit(`jmp ${andLabel}_end`, "Jump to end");
+        gen.emitLabel(`${andLabel}_true`);
+        gen.emit("mov rax, 1", "Result is true (1)");
+        gen.emitLabel(`${andLabel}_end`);
         break;
       case TokenType.OR: // ||
-        gen.emit("cmp rax, 0", "compare left operand to 0");
-        gen.emit("sete al", "set al if left operand is true");
-        gen.emit("cmp rbx, 0", "compare right operand to 0");
-        gen.emit("sete bl", "set bl if right operand is true");
-        gen.emit("or al, bl", "logical OR");
-        gen.emit("movzx rax, al", "zero extend al to rax");
+        const orLabel = gen.generateLabel("cmp_or_");
+        gen.emit("cmp rax, 0", "Compare left operand to 0");
+        gen.emit(`jne ${orLabel}_true`, "Short-circuit if left is not 0");
+        gen.emit("cmp rbx, 0", "Compare right operand to 0");
+        gen.emit(`je ${orLabel}_false`, "Short-circuit if right is 0");
+        gen.emitLabel(`${orLabel}_true`);
+        gen.emit("mov rax, 1", "Result is true (1)");
+        gen.emit(`jmp ${orLabel}_end`, "Jump to end");
+        gen.emitLabel(`${orLabel}_false`);
+        gen.emit("xor rax, rax", "Result is false (0)");
+        gen.emitLabel(`${orLabel}_end`);
+        break;
+    }
+  }
+
+  handleAssignment(gen: AsmGenerator, scope: Scope): void {
+    this.right.transpile(gen, scope); // Evaluate right-hand side
+    gen.emit("push rax", "Push right-hand side value onto stack");
+    scope.stackOffset += 8;
+
+    scope.setCurrentContext({ type: "LHS" });
+    this.left.transpile(gen, scope); // Evaluate left-hand side (address)
+    scope.removeCurrentContext("LHS");
+
+    gen.emit("pop rbx", "Pop right-hand side value into rbx");
+    scope.stackOffset -= 8;
+
+    switch (this.operator.type) {
+      case TokenType.ASSIGN:
+        gen.emit("mov [rax], rbx", "Simple assignment");
+        break;
+      case TokenType.PLUS_ASSIGN:
+        gen.emit("add [rax], rbx", "Addition assignment");
+        break;
+      case TokenType.MINUS_ASSIGN:
+        gen.emit("sub [rax], rbx", "Subtraction assignment");
+        break;
+      case TokenType.STAR_ASSIGN:
+        gen.emit("mov rcx, [rax]", "Load value from address");
+        gen.emit("imul rcx, rbx", "Multiplication");
+        gen.emit("mov [rax], rcx", "Store result back");
+        break;
+      case TokenType.SLASH_ASSIGN:
+        gen.emit("push rax", "Save address");
+        gen.emit("mov rax, [rax]", "Load value");
+        gen.emit("cqo", "Sign-extend RAX into RDX:RAX");
+        gen.emit("idiv rbx", "Signed division");
+        gen.emit("pop rdi", "Restore address");
+        gen.emit("mov [rdi], rax", "Division assignment");
+        break;
+      case TokenType.PERCENT_ASSIGN:
+        gen.emit("push rax", "Save address");
+        gen.emit("mov rax, [rax]", "Load value");
+        gen.emit("cqo", "Sign-extend RAX into RDX:RAX");
+        gen.emit("idiv rbx", "Signed division");
+        gen.emit("pop rdi", "Restore address");
+        gen.emit("mov [rdi], rdx", "Modulo assignment");
+        break;
+      case TokenType.CARET_ASSIGN:
+        gen.emit("xor [rax], rbx", "Bitwise XOR assignment");
+        break;
+      case TokenType.AMPERSAND_ASSIGN:
+        gen.emit("and [rax], rbx", "Bitwise AND assignment");
+        break;
+      case TokenType.PIPE_ASSIGN:
+        gen.emit("or [rax], rbx", "Bitwise OR assignment");
         break;
       default:
-        throw new Error(`Unsupported binary operator: ${this.operator.value}`);
+        throw new Error(
+          `Unsupported assignment operator: ${this.operator.value}`,
+        );
     }
-    gen.emit("", "binary expression end - " + this.operator.value);
   }
 }

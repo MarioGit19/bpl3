@@ -28,6 +28,7 @@ import BreakExpr from "./expression/breakExpr";
 import ContinueExpr from "./expression/continueExpr";
 import ImportExpr from "./expression/importExpr";
 import ExportExpr from "./expression/exportExpr";
+import ArrayLiteralExpr from "./expression/arrayLiteralExpr";
 
 export class Parser {
   constructor(tokens: Token[]) {
@@ -360,12 +361,41 @@ export class Parser {
       case TokenType.STRING_LITERAL:
         const stringToken = this.consume(TokenType.STRING_LITERAL);
         return new StringLiteralExpr(stringToken.value, stringToken);
+      case TokenType.OPEN_BRACKET:
+        return this.parseArrayLiteral();
       case TokenType.EOF:
         this.consume(TokenType.EOF);
         return new EOFExpr();
     }
 
     throw new Error(`Unexpected token: ${token.type} @${token.line}`);
+  }
+
+  parseArrayLiteral(): Expression {
+    this.consume(TokenType.OPEN_BRACKET);
+    const elements: Expression[] = [];
+
+    while (this.peek() && this.peek()!.type !== TokenType.CLOSE_BRACKET) {
+      const element = this.parseTernary();
+      elements.push(element);
+
+      if (
+        this.peek()?.type !== TokenType.CLOSE_BRACKET &&
+        this.peek()?.type !== TokenType.COMMA
+      ) {
+        throw new Error(
+          `Expected ',' or ']' after array element @${this.peek()?.line}`,
+        );
+      }
+
+      if (this.peek() && this.peek()!.type === TokenType.COMMA) {
+        this.consume(TokenType.COMMA);
+      }
+    }
+
+    this.consume(TokenType.CLOSE_BRACKET, "Expected ']' after array literal.");
+
+    return new ArrayLiteralExpr(elements);
   }
 
   parseIdentifier(): Expression {
@@ -710,7 +740,7 @@ export class Parser {
       let size = 0;
       if (this.peek()?.type === TokenType.NUMBER_LITERAL) {
         const sizeToken = this.consume(TokenType.NUMBER_LITERAL);
-        size = parseInt(sizeToken.value, 10);
+        size = Number(sizeToken.value);
       } else if (this.peek()?.type === TokenType.CLOSE_BRACKET) {
         throw new Error(
           "Array size must be specified as a number literal or numeric expression.",

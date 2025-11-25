@@ -37,20 +37,20 @@ export default class IfExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    const ifLabel = gen.generateLabel("if_");
-    const condLabel = ifLabel + "_cond";
-    const thenLabel = ifLabel + "_then";
-    const elseLabel = ifLabel + "_else";
-    const endLabel = ifLabel + "_end";
+    const label = gen.generateLabel("if_");
+    const conditionLabel = `${label}_condition`;
+    const thenLabel = `${label}_then`;
+    const endLabel = `${label}_end`;
+    const elseLabel = this.elseBranch ? `${label}_else` : endLabel;
 
-    gen.emitLabel(condLabel);
+    gen.emitLabel(conditionLabel);
     this.condition.transpile(gen, scope);
-    gen.emit(`cmp rax, 0`);
-    gen.emit(`je ${this.elseBranch ? elseLabel : endLabel}`);
+    gen.emit(`cmp rax, 0`, "compare condition result to 0");
+    gen.emit(`je ${elseLabel}`, "jump to else branch if condition is false");
 
     gen.emitLabel(thenLabel);
     this.thenBranch.transpile(gen, scope);
-    gen.emit(`jmp ${endLabel}`);
+    gen.emit(`jmp ${endLabel}`, "jump to end after then branch");
 
     if (this.elseBranch) {
       gen.emitLabel(elseLabel);

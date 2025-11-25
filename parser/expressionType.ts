@@ -2,6 +2,7 @@ enum ExpressionType {
   NumberLiteralExpr = "NumberLiteralExpr",
   StringLiteralExpr = "StringLiteralExpr",
   NullLiteralExpr = "NullLiteralExpr",
+  ArrayLiteralExpr = "ArrayLiteralExpr",
 
   IdentifierExpr = "IdentifierExpr",
   BlockExpression = "BlockExpression",

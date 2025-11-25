@@ -32,24 +32,33 @@ export default class MemberAccessExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
+    const isLHS = scope.getCurrentContext("LHS");
+    if (isLHS) scope.removeCurrentContext("LHS");
+
     this.object.transpile(gen, scope);
-    gen.emit("lea rbx, [rax]", "load address of object for member access");
-    gen.emit("push rbx", "push object address onto stack");
-    this.property.transpile(gen, scope);
-    gen.emit("pop rbx", "pop object address into rbx");
+    gen.emit("push rax", "MEMBER ACCESS EXPR - save base address");
+    scope.stackOffset += 8;
+
     if (this.isIndexAccess) {
-      gen.emit(
-        "mov rax, [rbx + rax * 8]",
-        "load value from object at computed index",
-      );
+      // Index access logic
+      this.property.transpile(gen, scope);
+      gen.emit("pop rbx", "MEMBER ACCESS EXPR - restore base address");
+      scope.stackOffset -= 8;
+
+      // Calculate address: rbx + rax * elementSize
+      const elementSize = 8; // Assuming 8 bytes for simplicity (u64)
+      gen.emit(`imul rax, ${elementSize}`, "MEMBER ACCESS EXPR - scale index");
+      gen.emit("add rax, rbx", "MEMBER ACCESS EXPR - calculate address");
     } else {
-      // Assuming property is an identifier and we have a way to get its offset
-      const propertyName = (this.property as IdentifierExpr).name; // Cast to any for simplicity
-      const offset = 8; //scope.getPropertyOffset(propertyName);
-      gen.emit(
-        `mov rax, [rbx + ${offset}]`,
-        `load value of property '${propertyName}' from object`,
-      );
+      gen.emit("pop rbx", "MEMBER ACCESS EXPR - restore base address");
+      scope.stackOffset -= 8;
+      throw new Error("Struct member access not implemented yet");
+    }
+
+    if (!isLHS) {
+      gen.emit("mov rax, [rax]", "MEMBER ACCESS EXPR - dereference if RHS");
+    } else {
+      scope.setCurrentContext({ type: "LHS" });
     }
   }
 }

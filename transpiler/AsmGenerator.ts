@@ -39,17 +39,17 @@ export default class AsmGenerator {
   }
 
   // For global variables like: var x = 10;
-  emitData(label: string, value: string | number) {
-    this.data.push(`${label} dq ${value}`);
+  emitData(label: string, type: string, value: string | number) {
+    this.data.push(`${label} ${type} ${value}`);
   }
 
-  emitRoData(label: string, value: string) {
-    this.rodata.push(`${label} db ${value}`);
+  emitRoData(label: string, type: string, value: string) {
+    this.rodata.push(`${label} ${type} ${value}`);
   }
 
   // For uninitialized globals: var x;
-  emitBss(label: string, size: number) {
-    this.bss.push(`${label} resb ${size}`);
+  emitBss(label: string, type: string, size: number) {
+    this.bss.push(`${label} ${type} ${size}`);
   }
 
   generateLabel(prefix: string = "L"): string {

@@ -1,6 +1,7 @@
 import type AsmGenerator from "../../transpiler/AsmGenerator";
 import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
+import ArrayLiteralExpr from "./arrayLiteralExpr";
 import Expression from "./expr";
 
 export type VariableType = {
@@ -53,76 +54,125 @@ export default class VariableDeclarationExpr extends Expression {
 
   transpile(gen: AsmGenerator, scope: Scope): void {
     if (this.scope === "global") {
-      const label = gen.generateLabel(
-        "global_" + (this.isConst ? "const_" : "") + this.name,
-      );
-      gen.emitData(label, 0);
-      if (this.value) {
-        gen.startPrecomputeBlock();
-        this.value.transpile(gen, scope);
-        gen.emit(
-          `mov [rel ${label}], rax`,
-          "initialize global variable " + this.name,
+      this.parseGlobalVariableDeclaration(gen, scope);
+      return;
+    }
+
+    if (this.scope !== "local") {
+      throw new Error("Invalid variable scope: " + this.scope);
+    }
+
+    if (this.value === null && this.isConst) {
+      throw new Error("Const local variable must be initialized");
+    }
+
+    const totalBytes = this.varType.isArray.length
+      ? 8 * this.varType.isArray.reduce((a, b) => a * b, 1)
+      : 8;
+    const offset = scope.allocLocal(totalBytes);
+    gen.emit("sub rsp, " + totalBytes, "Allocate space for local variable");
+
+    scope.define(this.name, {
+      offset: offset.toString(),
+      type: "local",
+      varType: this.varType,
+    });
+
+    if (this.value && this.varType.isArray.length) {
+      if (!(this.value instanceof ArrayLiteralExpr)) {
+        throw new Error(
+          "Local array variable must be initialized with an array literal",
         );
-        gen.endPrecomputeBlock();
-        scope.define(this.name, {
-          type: "global",
-          label: label,
-        });
-      } else {
-        gen.startPrecomputeBlock();
-        gen.emit(
-          `mov qword [${label}], 0`,
-          "initialize global variable " + this.name + " to 0",
-        );
-        gen.endPrecomputeBlock();
-        scope.define(this.name, {
-          type: "global",
-          label: label,
-        });
       }
-    } else {
-      const allocSize = this.varType.isArray.length
-        ? Number(this.varType.isArray[0]) * 8
-        : 8;
-      const offset = scope.allocLocal(allocSize);
+
+      this.value.transpile(gen, scope);
+      (this.value as ArrayLiteralExpr).elements.forEach((_, index) => {
+        gen.emit("pop rbx", "Load array element");
+        scope.stackOffset -= 8;
+        gen.emit(
+          `mov [ rbp - ${offset} + ${index} * 8 ], rbx`,
+          `Initialize local array variable ${this.name}[${index}]`,
+        );
+      });
+    } else if (this.value) {
+      this.value.transpile(gen, scope);
       gen.emit(
-        `sub rsp, ${allocSize}`,
-        "allocate space for local variable " + this.name,
+        `mov [ rbp - ${offset} ], rax`,
+        "Initialize local variable " + this.name,
       );
-      scope.define(this.name, { type: "local", offset: offset });
-      if (this.value) {
-        this.value.transpile(gen, scope);
-        gen.emit(
-          `mov [rbp - ${offset}], rax`,
-          "initialize local variable " + this.name,
+    } else if (!this.value && !this.varType.isArray.length) {
+      gen.emit(
+        `mov qword [ rbp - ${offset} ], 0`,
+        "Uninitialized local variable",
+      );
+    } else if (!this.value && this.varType.isArray.length) {
+      gen.emit("xor rax, rax", "Zero value for array initialization");
+      gen.emit(`mov rcx, ${totalBytes}`, "Array initialization loop counter");
+      gen.emit(`lea rdi, [ rbp - ${offset} ]`, "Array start address");
+      gen.emit("rep stosq", "Initialize local array variable to zero");
+    }
+  }
+
+  private parseGlobalVariableDeclaration(
+    gen: AsmGenerator,
+    scope: Scope,
+  ): void {
+    if (scope.parent !== null) {
+      throw new Error(
+        "Global variable declaration should be in the global scope",
+      );
+    }
+
+    if (this.value === null && this.isConst) {
+      throw new Error("Const global variable must be initialized");
+    }
+
+    const label = gen.generateLabel("global_var_" + this.name);
+    scope.define(this.name, {
+      offset: label,
+      type: "global",
+      varType: this.varType,
+    });
+
+    if (!this.value && !this.varType.isArray.length) {
+      gen.emitBss(label, "resq", 1);
+      gen.startPrecomputeBlock();
+      gen.emit(
+        "mov qword [ rel " + label + " ], 0",
+        "Uninitialized global variable",
+      );
+      gen.endPrecomputeBlock();
+    } else if (!this.value && this.varType.isArray.length) {
+      const arraySize = this.varType.isArray.reduce((a, b) => a * b, 1) || 1;
+      gen.emitBss(label, "resq", arraySize);
+    } else if (this.value && this.varType.isArray.length) {
+      const arraySize = this.varType.isArray.reduce((a, b) => a * b, 1) || 1;
+      gen.emitBss(label, "resq", arraySize);
+      if (!(this.value instanceof ArrayLiteralExpr)) {
+        throw new Error(
+          "Global array variable must be initialized with an array literal",
         );
-      } else {
-        if (this.varType.isArray.length) {
-          // 1. Load the starting address (the low end of the array) into RDI
-          gen.emit(
-            `lea rdi, [rbp - ${offset}]`,
-            "load address of array " + this.name + " into RDI",
-          );
-          // 2. Set the value to write (AL/RAX) to zero
-          gen.emit(
-            `xor rax, rax`,
-            "set RAX to 0 for initializing array " + this.name,
-          );
-          // 3. Set the counter: 5 QWORD elements
-          gen.emit(
-            `mov rcx, ${Number(this.varType.isArray[0])}`,
-            "set RCX to array size for " + this.name,
-          );
-          // 4. Repeat Store QWORD: Write RAX into [RDI], then increment RDI, RCX--
-          gen.emit(`rep stosq`, "initialize array " + this.name + " to 0");
-        } else {
-          gen.emit(
-            `mov qword [rbp - ${offset}], 0`,
-            "initialize local variable " + this.name + " to 0",
-          );
-        }
       }
+      gen.startPrecomputeBlock();
+      this.value!.transpile(gen, scope);
+      (this.value as ArrayLiteralExpr).elements.forEach((_, index) => {
+        gen.emit("pop rbx", "Load array element");
+        scope.stackOffset -= 8;
+        gen.emit(
+          `mov [ rel ${label} + ${index} * 8 ], rbx`,
+          `Initialize global array variable ${this.name}[${index}]`,
+        );
+      });
+      gen.endPrecomputeBlock();
+    } else {
+      gen.emitBss(label, "resq", 1);
+      gen.startPrecomputeBlock();
+      this.value!.transpile(gen, scope);
+      gen.emit(
+        "mov [ rel " + label + " ], rax",
+        "Initialize global variable " + this.name,
+      );
+      gen.endPrecomputeBlock();
     }
   }
 }

@@ -47,55 +47,64 @@ export default class FunctionDeclarationExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    if (this.args.length > this.argOrders.length) {
-      throw new Error(
-        `Function declarations with more than ${this.argOrders.length} arguments are not supported.`,
-      );
-    }
+    const label = gen.generateLabel(`func_${this.name}_`);
+    const endLabel = label + "_end";
 
-    const localScope = new Scope(scope);
-
-    const funcLabel =
-      this.name === "main" ? "main" : gen.generateLabel(`func_${this.name}_`);
-    const endLabel = `${funcLabel}_end`;
-
-    scope.defineFunction(this.name, funcLabel);
-
-    gen.emitLabel(funcLabel);
-    gen.emit("", `func_begin ${this.name}`);
-    gen.emit("push rbp", "Function prologue");
-    scope.stackOffset += 8;
-    gen.emit("mov rbp, rsp");
-
-    if (this.args.length) {
-      gen.emit(
-        "sub rsp, " + this.args.length * 8,
-        `Allocate space for arguments`,
-      );
-    }
-
-    this.args.forEach((arg, index) => {
-      const offset = localScope.allocLocal(8); // Assuming 8 bytes for each argument which is 64-bit
-      localScope.define(arg.name, { type: "local", offset: offset });
-      gen.emit(
-        `mov [rbp - ${offset}], ${this.argOrders[index]}`,
-        `func_param ${arg.name}: ${this.printType(arg.type)}`,
-      );
+    scope.defineFunction(this.name, {
+      args: this.args,
+      returnType: this.returnType,
+      endLabel: endLabel,
+      label: label,
+      name: this.name,
+      startLabel: label,
     });
 
-    localScope.setCurrentContext({
+    if (this.name === "main") {
+      gen.emitGlobalDefinition(`main equ ${label}`);
+    }
+    gen.emitLabel(label);
+    const funcScope = new Scope(scope);
+    funcScope.setCurrentContext({
       type: "function",
-      label: funcLabel,
+      label: label,
       endLabel: endLabel,
     });
-    this.body.transpile(gen, localScope);
-    localScope.removeCurrentContext("function");
 
+    // Function prologue
+    gen.emit("push rbp", "save base pointer");
+    gen.emit("mov rbp, rsp", "set new base pointer");
+    // funcScope.allocLocal(8); // RBP - Removed to fix stack offset
+
+    // Set up function arguments in the new scope
+    if (this.args.length > 0) {
+      gen.emit(
+        `sub rsp, ${this.args.length * 8}`,
+        "allocate space for arguments",
+      );
+    }
+    this.args.forEach((arg, index) => {
+      const offset = funcScope.allocLocal(8);
+      gen.emit(
+        `mov [rbp - ${offset}], ${this.argOrders[index]}`,
+        `store argument ${arg.name}`,
+      );
+      funcScope.define(arg.name, {
+        offset: offset.toString(),
+        type: "local",
+        varType: arg.type,
+      });
+    });
+
+    // body
+    this.body.transpile(gen, funcScope);
+
+    funcScope.removeCurrentContext("function");
+
+    // Function epilogue
     gen.emitLabel(endLabel);
-    gen.emit("mov rsp, rbp", "Function epilogue");
-    gen.emit("pop rbp");
-    scope.stackOffset -= 8;
-    gen.emit("ret");
-    gen.emit("", `func_end ${this.name}`);
+    gen.emit("mov rsp, rbp", "reset stack pointer");
+    gen.emit("pop rbp", "restore base pointer");
+    gen.emit("ret", "return from function");
+    // funcScope.allocLocal(-8); // RBP
   }
 }

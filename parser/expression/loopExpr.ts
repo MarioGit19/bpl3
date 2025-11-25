@@ -25,23 +25,21 @@ export default class LoopExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    const loopLabel = gen.generateLabel("loop_");
-    const loopStartLabel = loopLabel + "_start";
-    const loopEndLabel = loopLabel + "_end";
-
-    gen.emitLabel(loopStartLabel);
+    const label = gen.generateLabel("loop_");
+    const startLabel = `${label}_start`;
+    const endLabel = `${label}_end`;
 
     scope.setCurrentContext({
       type: "loop",
-      breakLabel: loopEndLabel,
-      continueLabel: loopStartLabel,
+      continueLabel: startLabel,
+      breakLabel: endLabel,
     });
 
+    gen.emitLabel(startLabel);
     this.body.transpile(gen, scope);
+    gen.emit(`jmp ${startLabel}`, "jump to start of loop");
+    gen.emitLabel(endLabel);
 
     scope.removeCurrentContext("loop");
-
-    gen.emit(`jmp ${loopStartLabel}`, "jump to the beginning of the loop");
-    gen.emitLabel(loopEndLabel);
   }
 }

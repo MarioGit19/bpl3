@@ -25,14 +25,11 @@ export default class ExportExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    const funcLabel = scope.resolveFunction(this.methodName);
-    if (!funcLabel) {
-      throw new Error(
-        `Exported method "${this.methodName}" is not defined in the current scope.`,
-      );
+    const func = scope.resolveFunction(this.methodName);
+    if (!func) {
+      throw new Error(`Exporting undefined function: ${this.methodName}`);
     }
-    gen.emit(`;; Export method: ${this.methodName}`);
-    gen.emitGlobalDefinition(`${this.methodName} equ ${funcLabel}`);
     gen.emitGlobalDefinition(`global ${this.methodName}`);
+    gen.emitGlobalDefinition(`${this.methodName} equ ${func.label}`);
   }
 }

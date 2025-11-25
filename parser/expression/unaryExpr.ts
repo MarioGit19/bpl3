@@ -29,48 +29,42 @@ export default class UnaryExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    const shouldSetLHS = this.operator.type === TokenType.AMPERSAND;
-    if (shouldSetLHS) {
+    if (this.operator.type === TokenType.AMPERSAND) {
       scope.setCurrentContext({ type: "LHS" });
-    }
-    this.right.transpile(gen, scope);
-    if (shouldSetLHS) {
+      this.right.transpile(gen, scope);
       scope.removeCurrentContext("LHS");
+      return;
     }
+
+    if (this.operator.type === TokenType.STAR) {
+      const isLHS = scope.getCurrentContext("LHS");
+      if (isLHS) scope.removeCurrentContext("LHS");
+
+      this.right.transpile(gen, scope);
+
+      if (isLHS) {
+        scope.setCurrentContext({ type: "LHS" });
+      } else {
+        gen.emit("mov rax, [rax]", "dereference pointer");
+      }
+      return;
+    }
+
+    this.right.transpile(gen, scope);
     switch (this.operator.type) {
       case TokenType.MINUS:
-        gen.emit("neg rax", "unary negation");
+        gen.emit("neg rax", "unary minus");
         break;
       case TokenType.PLUS:
-        // Unary plus does nothing
-        gen.emit("; unary plus - no operation");
-        break;
-      case TokenType.TILDE:
-        gen.emit("not rax", "bitwise NOT");
+        gen.emit("noop", "unary plus (no operation)");
         break;
       case TokenType.NOT:
-        // Logical NOT
-        gen.emit("cmp rax, 0", "compare with zero for logical NOT");
+        gen.emit("cmp rax, 0", "compare rax to 0 for logical NOT");
         gen.emit("sete al", "set al to 1 if zero, else 0");
         gen.emit("movzx rax, al", "zero-extend al to rax");
         break;
-      case TokenType.INCREMENT:
-        gen.emit("inc rax", "pre-increment");
-        break;
-      case TokenType.DECREMENT:
-        gen.emit("dec rax", "pre-decrement");
-        break;
-      case TokenType.AMPERSAND:
-        // if (this.right.type == ExpressionType.IdentifierExpr) {
-        gen.emit("lea rax, [rax]", "address-of operator");
-        // } else {
-        //   throw new Error(
-        //     `Address-of operator can only be applied to identifiers/variables.`,
-        //   );
-        // }
-        break;
-      case TokenType.STAR:
-        gen.emit("mov rax, [rax]", "dereference operator");
+      case TokenType.TILDE:
+        gen.emit("not rax", "bitwise NOT");
         break;
       default:
         throw new Error(`Unsupported unary operator: ${this.operator.value}`);

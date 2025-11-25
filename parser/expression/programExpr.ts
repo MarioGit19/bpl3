@@ -31,39 +31,28 @@ export default class ProgramExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    // We can assume 'scope' passed here is the Global Scope
-
     const weHaveExportStmt = this.expressions.find(
-      (x) => x.type === ExpressionType.ExportExpression,
+      (expr) => expr.type === ExpressionType.ExportExpression,
     );
+    HelperGenerator.generateBaseTypes(gen, scope);
+    HelperGenerator.generateHelperFunctions(gen, scope);
     if (!weHaveExportStmt) {
       gen.emitGlobalDefinition("global _start");
-    }
-
-    // Generate Helper Functions like print(value: any with max len 20 bytes) and exit(status: int)
-    HelperGenerator.generateHelperFunctions(gen, scope);
-
-    if (!weHaveExportStmt) {
-      // 1. Entry point label
       gen.emitLabel("_start");
-
-      // Call precompute section to initialize any precomputed values like globals
-      gen.emit("call _precompute", "call precompute section");
-
-      // 2. Standard Prologue (Setup Stack)
-      gen.emit("push rbp");
-      gen.emit("mov rbp, rsp");
+      gen.emit("call _precompute", "call precompute function");
+      gen.emit("push rbp", "standard function prologue");
+      gen.emit("mov rbp, rsp", "standard function prologue");
       gen.emit("sub rsp, 8", "align stack to 16 bytes");
       gen.emit("call main", "call main function");
-      gen.emit("add rsp, 8", "dealign stack");
-      gen.emit(
-        "mov rdi, rax",
-        "status: move return value of main to rdi for exit",
-      );
+      gen.emit("add rsp, 8", "realign stack");
+      gen.emit("pop rbp", "standard function epilogue");
+      gen.emit("mov rdi, rax", "move return value into rdi for exit");
       gen.emit("call exit", "call exit function");
+      gen.emit("", "end of _start");
+    } else {
+      gen.emit("call _precompute", "call precompute function");
     }
 
-    // 3. Transpile all children
     for (const expr of this.expressions) {
       expr.transpile(gen, scope);
     }

@@ -24,25 +24,18 @@ export default class IdentifierExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    const varInfo = scope.resolve(this.name);
-    if (!varInfo) {
-      throw new Error(`Undefined variable: ${this.name}`);
+    const symbol = scope.resolve(this.name);
+    if (!symbol) {
+      throw new Error(`Undefined identifier: ${this.name}`);
     }
-
-    const isLHS = scope.getCurrentContext("LHS") !== null;
-    const operation = isLHS ? "lea" : "mov";
-
-    if (varInfo.type === "global") {
-      const label = varInfo.label;
+    const context = scope.getCurrentContext("LHS");
+    if (context) {
       gen.emit(
-        `${operation} rax, [rel ${label}]`,
-        `load global variable ${this.name}`,
+        `lea rax, [${symbol.type === "global" ? "rel " + symbol.offset : "rbp - " + symbol.offset}]`,
       );
     } else {
-      const offset = varInfo.offset;
       gen.emit(
-        `${operation} rax, [rbp - ${offset}]`,
-        `load local variable ${this.name}`,
+        `mov rax, [${symbol.type === "global" ? "rel " + symbol.offset : "rbp - " + symbol.offset}]`,
       );
     }
   }

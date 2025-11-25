@@ -18,6 +18,6 @@ export default class NullLiteral extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    gen.emit("mov rax, 0", "Load null literal into rax");
+    gen.emit("mov rax, 0", "NULL LITERAL");
   }
 }

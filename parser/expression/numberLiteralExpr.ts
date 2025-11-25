@@ -30,6 +30,6 @@ export default class NumberLiteralExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    gen.emit(`mov rax, ${this.value}`, `Load literal ${this.value}`);
+    gen.emit(`mov rax, ${this.value}`, `Number Literal ${this.value}`);
   }
 }

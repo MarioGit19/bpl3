@@ -32,19 +32,21 @@ export default class TernaryExpr extends Expression {
 
   transpile(gen: AsmGenerator, scope: Scope): void {
     const label = gen.generateLabel("ternary_");
-    const condLabel = label + "_cond";
-    const thenLabel = label + "_then";
-    const elseLabel = label + "_else";
-    const endLabel = label + "_end";
+    const conditionLabel = `${label}_condition`;
+    const trueLabel = `${label}_true`;
+    const falseLabel = `${label}_false`;
+    const endLabel = `${label}_end`;
 
-    gen.emitLabel(condLabel);
+    gen.emitLabel(conditionLabel);
     this.condition.transpile(gen, scope);
-    gen.emit("cmp rax, 0", "compare condition to zero");
-    gen.emit(`je ${elseLabel}`, "jump to else if condition is false");
-    gen.emitLabel(thenLabel);
+    gen.emit(`cmp rax, 0`, "compare condition result to 0");
+    gen.emit(`je ${falseLabel}`, "jump to false branch if condition is false");
+
+    gen.emitLabel(trueLabel);
     this.trueExpr.transpile(gen, scope);
-    gen.emit(`jmp ${endLabel}`, "jump to end of ternary expression");
-    gen.emitLabel(elseLabel);
+    gen.emit(`jmp ${endLabel}`, "jump to end after true branch");
+
+    gen.emitLabel(falseLabel);
     this.falseExpr.transpile(gen, scope);
     gen.emitLabel(endLabel);
   }

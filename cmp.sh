@@ -72,13 +72,15 @@ LIBRARY_FILES="$@"
 
 # Derived file names
 fileName="${SOURCE_FILE%%.*}" # e.g., source
-outputFile="$(basename "$SOURCE_FILE" .x)" # e.g., source
+outputFile="${fileName}" # e.g., source
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd -P )"
 
 # --- 3. Transpile (.x -> .asm) ---
 
-echo "--- 1. Transpiling $SOURCE_FILE ---"
+[ "$QUIET_TRANSPILE" == "" ] && echo "--- 1. Transpiling $SOURCE_FILE ---"
 # We use eval to allow the QUIET_TRANSPILE variable to be applied dynamically
-eval bun index.ts "$SOURCE_FILE" $QUIET_TRANSPILE
+eval bun "$SCRIPT_DIR/index.ts" "$SOURCE_FILE" $QUIET_TRANSPILE
 if [ $? -ne 0 ]; then
     echo "TypeScript transpilation failed. Exiting."
     exit 1
@@ -87,17 +89,17 @@ fi
 # --- 4. Print Assembly (Optional) ---
 
 if [ "$PRINT_ASM" == "true" ]; then
-    echo "--- 2. Generated Assembly: ${fileName}.asm ---"
+    [ "$QUIET_TRANSPILE" == "" ] && echo "--- 2. Generated Assembly: ${fileName}.asm ---"
     cat "${fileName}.asm"
-    echo "-----------------------------------"
+    [ "$QUIET_TRANSPILE" == "" ] && echo "-----------------------------------"
 else
-    echo "--- 2. Skipping assembly printout ---"
+    [ "$QUIET_TRANSPILE" == "" ] && echo "--- 2. Skipping assembly printout ---"
 fi
 
 # --- 5. Assemble (.asm -> .o) ---
 
-echo "--- 3. Assembling ${fileName}.asm ---"
-nasm -f elf64 "${fileName}.asm"
+[ "$QUIET_TRANSPILE" == "" ] && echo "--- 3. Assembling ${fileName}.asm ---"
+eval nasm -f elf64 "${fileName}.asm" "$QUIET_TRANSPILE"
 if [ $? -ne 0 ]; then
     echo "Assembly failed. Exiting."
     exit 1
@@ -105,7 +107,7 @@ fi
 
 # --- 6. Link (.o + libs -> executable) ---
 
-echo "--- 4. Linking to create executable: ${outputFile} (Mode: $LINK_MODE) ---"
+[ "$QUIET_TRANSPILE" == "" ] && echo "--- 4. Linking to create executable: ${outputFile} (Mode: $LINK_MODE) ---"
 
 # Start the linker command with the main object file
 LD_COMMAND="ld ${fileName}.o ${LIBRARY_FILES} -o ${outputFile} -lc"
@@ -119,8 +121,8 @@ else
 fi
 
 # Execute the final linker command
-echo "Executing: $LD_COMMAND"
-$LD_COMMAND
+[ "$QUIET_TRANSPILE" == "" ] && echo "Executing: $LD_COMMAND"
+eval $LD_COMMAND "$QUIET_TRANSPILE"
 
 if [ $? -ne 0 ]; then
     echo "Linking failed. Exiting."
@@ -129,17 +131,17 @@ fi
 
 # --- 7. Cleanup Intermediate Files ---
 if [ "$SHOULD_CLEANUP_ASM" == "true" ]; then
-    echo "--- Cleaning up assembly file ---"
+    [ "$QUIET_TRANSPILE" == "" ] && echo "--- Cleaning up assembly file ---"
     rm -f "${fileName}.asm"
 fi
 
 if [ "$SHOULD_CLEANUP_O" == "true" ]; then
-    echo "--- Cleaning up object file ---"
+    [ "$QUIET_TRANSPILE" == "" ] && echo "--- Cleaning up object file ---"
     rm -f "${fileName}.o"
 fi
 
 if [ "$SHOULD_CLEANUP_EXE" == "true" ]; then
-    echo "--- Cleaning up executable file ---"
+    [ "$QUIET_TRANSPILE" == "" ] && echo "--- Cleaning up executable file ---"
     rm -f "./${outputFile}"
     exit 0;
 fi
@@ -151,15 +153,14 @@ if [ "$SHOULD_RUN" == "false" ] && [ "$SHOULD_GDB" == "false" ]; then
     exit 0;
 fi
 
-echo;
-echo "--- 5. Running ${outputFile} ---"
+[ "$QUIET_TRANSPILE" == "" ] && echo "--- 5. Running ${outputFile} ---"
 if [ "$SHOULD_GDB" == "true" ]; then
     gdb -q ./${outputFile};
 else
-    echo "-----------------------------------";
+    [ "$QUIET_TRANSPILE" == "" ] && echo "-----------------------------------";
     ./${outputFile}; 
     EXIT_CODE="$?";
-    echo "-----------------------------------";
+    [ "$QUIET_TRANSPILE" == "" ] && echo "-----------------------------------";
 
-    echo "Program exited with code: $EXIT_CODE";
+    [ "$QUIET_TRANSPILE" == "" ] && echo "Program exited with code: $EXIT_CODE";
 fi

@@ -31,28 +31,21 @@ export class AsmBlockExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    const lines = [];
+    // TODO: Add asm block transpilation to interpolate local variables into asm block
+    let lastLine = -1;
     let line = "";
-    let prevLineNum = this.code[0]?.line ?? 0;
-    this.code.forEach((token) => {
-      if (token.line !== prevLineNum) {
-        lines.push(line);
-        line = token.value;
-        prevLineNum = token.line;
-      } else {
+    for (const token of this.code) {
+      if (token.line !== lastLine) {
         if (line.length > 0) {
-          line += " ";
+          gen.emit(line.trim(), "inline assembly");
         }
-        line += token.value;
+        line = "";
+        lastLine = token.line;
       }
-    });
-    if (line.length > 0) {
-      lines.push(line);
+      line += token.value + " ";
     }
-    gen.emit("", "begin asm block");
-    lines.forEach((asmLine) => {
-      gen.emit(asmLine, "raw asm code");
-    });
-    gen.emit("", "end asm block");
+    if (line.length > 0) {
+      gen.emit(line.trim(), "inline assembly");
+    }
   }
 }

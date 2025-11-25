@@ -1,5 +1,5 @@
-import type Token from "../../lexer/token";
 import type AsmGenerator from "../../transpiler/AsmGenerator";
+import type { TypeInfo } from "../../transpiler/Scope";
 import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
@@ -45,6 +45,6 @@ export default class StructDeclarationExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    gen.emit("; not yet implemented", " Struct Declaration " + this.name);
+    gen.emit("", "STRUCT DECLARATION EXPR");
   }
 }

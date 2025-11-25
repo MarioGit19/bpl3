@@ -34,11 +34,11 @@ export default class StringLiteralExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    const strLabel = gen.generateLabel("str");
-    gen.emitRoData(strLabel, '"' + this.formatString() + '"' + ", 0");
+    const label = gen.generateLabel("str_");
+    gen.emitRoData(label, "db", `"${this.formatString()}", 0`);
     gen.emit(
-      `lea rax, [rel ${strLabel}]`,
-      "Load address of string literal into rax",
+      `lea rax, [rel ${label}]`,
+      `Load address of string literal "${this.value}"`,
     );
   }
 }

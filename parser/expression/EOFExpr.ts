@@ -19,6 +19,6 @@ export default class EOFExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    gen.emit("; EOF reached", " EOFExpr ");
+    gen.emit("", "EOFExpr\n");
   }
 }

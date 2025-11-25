@@ -20,13 +20,12 @@ export default class ContinueExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    const currentContext = scope.getCurrentContext("loop");
-    if (!currentContext) {
+    const context = scope.getCurrentContext("loop");
+    if (!context) {
       throw new Error("Continue statement used outside of a loop");
     }
-
-    if (currentContext.type === "loop") {
-      gen.emit(`jmp ${currentContext.continueLabel}`, "continue loop");
+    if (context.type === "loop") {
+      gen.emit(`jmp ${context.continueLabel}`, "CONTINUE EXPR");
     }
   }
 }

@@ -1,6 +1,10 @@
-export type VarInfo =
-  | { type: "local"; offset: number } // stack: [rbp - offset]
-  | { type: "global"; label: string }; // data: [label]
+import type { VariableType } from "../parser/expression/variableDeclarationExpr";
+
+export interface VarInfo {
+  type: "local" | "global";
+  offset: string;
+  varType: VariableType;
+}
 
 export type ContextType =
   | { type: "function"; label: string; endLabel: string }
@@ -8,16 +12,45 @@ export type ContextType =
   | { type: "LHS" }
   | null;
 
+export type TypeInfo = {
+  name: string;
+  isPointer: number;
+  isArray: number[];
+  size: number;
+  isPrimitive: boolean;
+  members: Map<string, TypeInfo>;
+  info: InfoType;
+};
+
+export type InfoType = {
+  description: string;
+  signed?: boolean;
+  [key: string]: any;
+};
+
+export type FunctionInfo = {
+  name: string;
+  label: string;
+  startLabel: string;
+  endLabel: string;
+  args: { type: VariableType; name: string }[];
+  returnType: VariableType | null;
+};
+
 export default class Scope {
+  private types = new Map<string, TypeInfo>();
   private vars = new Map<string, VarInfo>();
-  private functions = new Map<string, any>();
   public stackOffset = 0; // Tracks stack usage for this function
+  private functions = new Map<string, FunctionInfo>();
   public currentContext: ContextType[] = [];
 
-  constructor(private parent: Scope | null = null) {}
+  constructor(public readonly parent: Scope | null = null) {}
 
+  // #region Context Management
   removeCurrentContext(type: "loop" | "function" | "LHS") {
-    const index = this.currentContext.findIndex((ctx) => ctx?.type === type);
+    const index = this.currentContext.findLastIndex(
+      (ctx) => ctx?.type === type,
+    );
     if (index !== -1) {
       this.currentContext.splice(index, 1);
     }
@@ -28,7 +61,7 @@ export default class Scope {
   }
 
   getCurrentContext(type: "loop" | "function" | "LHS"): ContextType {
-    const current = this.currentContext.find((ctx) => ctx?.type === type);
+    const current = this.currentContext.findLast((ctx) => ctx?.type === type);
     if (current) {
       return current;
     } else if (this.parent) {
@@ -37,8 +70,9 @@ export default class Scope {
       return null;
     }
   }
+  // #endregion
 
-  // Find a variable recursively
+  // #region Variables
   resolve(name: string): VarInfo | null {
     return this.vars.get(name) || this.parent?.resolve(name) || null;
   }
@@ -54,17 +88,10 @@ export default class Scope {
     return this.stackOffset;
   }
 
-  resolveFunction(name: string): any | null {
-    if (this.parent) {
-      return this.parent.resolveFunction(name);
-    } else if (!this.functions.has(name)) {
-      return null;
-    } else {
-      return this.functions.get(name);
-    }
-  }
+  // #endregion
 
-  defineFunction(name: string, info: any) {
+  // #region functions
+  defineFunction(name: string, info: FunctionInfo) {
     if (this.parent) {
       this.parent.defineFunction(name, info);
     } else if (this.functions.has(name)) {
@@ -73,4 +100,61 @@ export default class Scope {
       this.functions.set(name, info);
     }
   }
+
+  resolveFunction(name: string): FunctionInfo | null {
+    if (this.parent) {
+      return this.parent.resolveFunction(name);
+    } else if (this.functions.has(name)) {
+      return this.functions.get(name)!;
+    }
+    return null;
+  }
+  // #endregion
+
+  // #region Types
+  defineType(name: string, info: TypeInfo) {
+    if (this.parent) {
+      throw new Error("Types can only be defined in the global scope.");
+    }
+
+    if (this.types.has(name)) {
+      throw new Error(`Type ${name} is already defined.`);
+    }
+    const size = this.calculateSizeOfType(info);
+    info.size = size;
+    this.types.set(name, info);
+  }
+  resolveType(name: string): TypeInfo | null {
+    return this.types.get(name) || this.parent?.resolveType(name) || null;
+  }
+  calculateSizeOfType(type: TypeInfo): number {
+    if (type.isPrimitive) {
+      return type.size;
+    }
+
+    if (type.isPointer > 0) {
+      return 8; // Assuming 64-bit pointers
+    }
+
+    if (type.isArray.length > 0) {
+      let baseSize = this.calculateSizeOfType({
+        ...type,
+        isArray: [],
+      });
+      for (let dim of type.isArray) {
+        baseSize *= dim;
+      }
+      return baseSize;
+    }
+
+    let totalSize = 0;
+    for (let member of type.members.values()) {
+      if (!this.types.has(member.name)) {
+        throw new Error(`Type ${member.name} not defined.`);
+      }
+      totalSize += this.types.get(member.name)!.size;
+    }
+    return totalSize;
+  }
+  // #endregion
 }
