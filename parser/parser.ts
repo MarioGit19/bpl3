@@ -38,7 +38,7 @@ export class Parser {
   private tokens: Token[];
   private current: number;
 
-  public parse(): Expression {
+  public parse(): ProgramExpr {
     const program = new ProgramExpr();
 
     while (this.current < this.tokens.length) {
@@ -437,14 +437,22 @@ export class Parser {
 
   parseImportExpression(): Expression {
     this.consume(TokenType.IDENTIFIER);
-    const importNames: string[] = [];
+    const importNames: { name: string; type: "type" | "function" }[] = [];
 
     while (
-      this.peek()?.type === TokenType.IDENTIFIER &&
+      (this.peek()?.type === TokenType.IDENTIFIER ||
+        this.peek()?.type === TokenType.OPEN_BRACKET) &&
       this.peek()?.value !== "from"
     ) {
-      const importNameToken = this.consume(TokenType.IDENTIFIER);
-      importNames.push(importNameToken.value);
+      if (this.peek()?.type === TokenType.OPEN_BRACKET) {
+        this.consume(TokenType.OPEN_BRACKET);
+        const importNameToken = this.consume(TokenType.IDENTIFIER);
+        this.consume(TokenType.CLOSE_BRACKET);
+        importNames.push({ name: importNameToken.value, type: "type" });
+      } else {
+        const importNameToken = this.consume(TokenType.IDENTIFIER);
+        importNames.push({ name: importNameToken.value, type: "function" });
+      }
       if (this.peek()?.type === TokenType.COMMA) {
         this.consume(TokenType.COMMA);
       } else if (
@@ -482,8 +490,16 @@ export class Parser {
 
   parseExportExpression(): Expression {
     this.consume(TokenType.IDENTIFIER);
+    let exportType: "type" | "function" = "function";
+    if (this.peek()?.type === TokenType.OPEN_BRACKET) {
+      this.consume(TokenType.OPEN_BRACKET);
+      exportType = "type";
+    }
     const name = this.consume(TokenType.IDENTIFIER);
-    return new ExportExpr(name.value);
+    if (exportType === "type") {
+      this.consume(TokenType.CLOSE_BRACKET, "Expected ']' after export type.");
+    }
+    return new ExportExpr(name.value, exportType);
   }
 
   parseFunctionReturn(): Expression {

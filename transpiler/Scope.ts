@@ -98,6 +98,9 @@ export default class Scope {
     if (this.parent) {
       this.parent.defineFunction(name, info);
     } else if (this.functions.has(name)) {
+      if (this.functions.get(name)!.isExternal && info.isExternal) {
+        return; // Allow re-definition of external functions
+      }
       throw new Error(`Function ${name} is already defined.`);
     } else {
       this.functions.set(name, info);

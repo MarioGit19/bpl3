@@ -3,3 +3,11 @@ frame multiply_xx(a:u8, b:u8) ret u8{
 }
 
 export multiply_xx;
+
+
+struct Point {
+    x: u32,
+    y: u32,
+}
+
+export [Point];

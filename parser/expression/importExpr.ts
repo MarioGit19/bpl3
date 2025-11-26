@@ -6,7 +6,7 @@ import Expression from "./expr";
 export default class ImportExpr extends Expression {
   constructor(
     public moduleName: string,
-    public importName: string[],
+    public importName: { name: string; type: "function" | "type" }[],
   ) {
     super(ExpressionType.ImportExpression);
   }
@@ -17,7 +17,7 @@ export default class ImportExpr extends Expression {
     output += " [Import Expression]\n";
     this.depth++;
     output += `${this.getDepth()} Module Name: ${this.moduleName}\n`;
-    output += `${this.getDepth()} Import Names: ${this.importName.join(", ")}\n`;
+    output += `${this.getDepth()} Import Names: ${this.importName.map((i) => `${i.name} (${i.type})`).join(", ")}\n`;
     this.depth--;
     output += `${this.getDepth()}`;
     output += "/[ Import Expression ]\n";
@@ -29,8 +29,13 @@ export default class ImportExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    gen.emitImportStatement(`extern ${this.importName.join(", ")}`);
-    this.importName.forEach((name) => {
+    for (const importItem of this.importName) {
+      if (importItem.type === "type") {
+        return;
+      }
+      const name = importItem.name;
+      gen.emitImportStatement(`extern ${name}`);
+
       scope.defineFunction(name, {
         name: name,
         label: name,
@@ -40,6 +45,6 @@ export default class ImportExpr extends Expression {
         endLabel: name,
         isExternal: true,
       });
-    });
+    }
   }
 }

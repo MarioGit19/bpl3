@@ -30,7 +30,28 @@ export default class ProgramExpr extends Expression {
     console.log(this.toString(depth));
   }
 
+  validate(): void {
+    // Ensure only few expr types are at the top level
+    const allowedTopLevelTypes = new Set<ExpressionType>([
+      ExpressionType.FunctionDeclaration,
+      ExpressionType.VariableDeclaration,
+      ExpressionType.ImportExpression,
+      ExpressionType.ExportExpression,
+      ExpressionType.StructureDeclaration,
+      ExpressionType.EOF,
+    ]);
+
+    for (const expr of this.expressions) {
+      if (!allowedTopLevelTypes.has(expr.type)) {
+        throw new Error(
+          `Invalid expression type at top level: ${ExpressionType[expr.type]}`,
+        );
+      }
+    }
+  }
+
   transpile(gen: AsmGenerator, scope: Scope): void {
+    this.validate();
     const weHaveExportStmt = this.expressions.find(
       (expr) => expr.type === ExpressionType.ExportExpression,
     );

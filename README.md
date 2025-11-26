@@ -6,7 +6,7 @@ BPL is a simple programming language that compiles to x86-64 assembly. It is des
 
 ## Installation
 
-To install BPL, you need to have `Bun`, `nasm` and `gcc` installed on your system.
+To install BPL, you need to have `bun`, `nasm` and `gcc` installed on your system.
 
 - Clone the repository
 - Install the dependencies
@@ -16,7 +16,7 @@ To install BPL, you need to have `Bun`, `nasm` and `gcc` installed on your syste
 git clone https://github.com/pr0h0/bpl3.git
 cd bpl3
 bun install
-./cmp.sh example/hello-world.x
+bun index.ts example/hello-world.x
 ./example/hello-world
 ```
 
@@ -28,7 +28,7 @@ More examples can be found in the `example` directory.
 - Variables and Data Types: Supports integers, strings, pointers, and arrays.
 - Control Flow: Includes if-else statements, loops.
 - Functions: Allows defining and calling functions with parameters and return values.
-- Import/Export: Supports modular programming through import and export statements.
+- Import/Export: Supports modular programming through import and export statements with automatic dependency compilation.
 - Inline Assembly: Allows embedding raw assembly code within BPL code for low-level operations with interpolation of BPL variables.
 - Structures and Arrays: Supports user-defined structures and arrays for complex data management.
 - Standard Library: Provides built-in functions for `print`, `exit`, `exec`, `str_len`.
@@ -49,10 +49,10 @@ frame main() ret u8 {
 
 ## Compilation
 
-To compile a BPL program, use the provided `cmp.sh` script:
+To compile a BPL program, use `bun index.ts`:
 
 ```bash
-./cmp.sh path/to/your/file.x
+bun index.ts path/to/your/file.x
 ```
 
 This will generate an executable file in the same directory as the source file.
@@ -67,57 +67,56 @@ There are several options you can pass to the compiler:
 - `-d|--dynamic`: Compile as a dynamically linked executable (default).
 - `-s|--static`: Compile as a static executable (no dynamic linking).
 
-### Linking Modes
-
-BPL supports both static and dynamic linking.
-
-- **Dynamic Linking (Default)**: Uses shared libraries (`libc`, etc.). Resulting binaries are smaller but require system libraries to be present.
-- **Static Linking (`-s`)**: Bundles all dependencies into the executable. Resulting binaries are larger but portable across Linux systems without dependency issues.
-
-You can add cmp.sh to your PATH for easier access by adding the following line to your shell configuration file (e.g., `.bashrc`, `.zshrc`):
-
-```bash
-   export PATH="$PATH:/path/to/bpl3"
-```
-
-After adding this line, run `source ~/.bashrc` or `source ~/.zshrc` to apply the changes. Then you can use `cmp.sh` from any directory.
-
 ### Import/Export
 
-BPL supports modular programming through import and export statements. You can define functions in one file and use them in another. For example, you can create a file `math.x` with the following content:
+BPL supports modular programming through import and export statements. You can split your code into multiple files and import functions and types between them. The compiler automatically handles the compilation of imported files.
+
+**Exporting:**
+To make a function or type available to other files, use the `export` keyword.
 
 ```bpl
-frame add(a u8, b u8) ret u8 {
+struct Point {
+    x: u64,
+    y: u64
+}
+export [Point]; # export type using square brackets
+
+frame add(a: u64, b: u64) ret u64 {
     return a + b;
 }
-export add;
+export add; # export function
 ```
 
-Then, in another file, you can import and use the `add` function:
+**Importing:**
+You can import functions and types from other BPL files using relative paths.
 
 ```bpl
-import add, printf;
+import [Point] from "./types.x";
+import add from "./math.x";
 
 frame main() ret u8 {
-    local result: u8 = call add(5, 10);
-    call printf("Result: %d\n", result);
+    local p: Point;
+    call add(1, 2);
     return 0;
 }
 ```
 
-If you have export in your file, no main method should be present and file should not be compiled as executable but only as library.
-When compiling, make sure to include the path to the imported files.
+**Syntax:**
 
-```bash
-./cmp.sh -l path/to/your/math.x
-./cmp.sh path/to/your/main.x path/to/your/math.o
-```
+- `import [Type1, Type2] from "./path/to/file.x";` - Import types.
+- `import func1, func2 from "./path/to/file.x";` - Import functions.
+- `import func1, func2 from "./path/to/file.o"; ` - Import functions from compiled object files.
+- `import printf;` - Import external functions (like libc functions).
+
+The compiler recursively resolves imports, compiles the dependencies, and links them into the final executable.
 
 #### Valid syntax for import/export
 
-- `export functionName;` - Export can export only single function at a time, multiple export statements can be used.
-- `import functionName1, functionName2, ...;` - Import can import multiple functions at once. Functions are resolved during compilation so functions from the multiple files can be imported in one statement.
-- `import functionName1, functionName2, ... from "some/path/to/file.x";` - From clause is ignored during compilation, it is only for better readability.
+- `export functionName;` - Export a function.
+- `export [TypeName];` - Export a type (struct).
+- `import functionName1, functionName2, ...;` - Import external functions.
+- `import functionName1, functionName2 from "./path/to/file.x";` - Import functions from a local file.
+- `import [Type1], [Type2] from "./path/to/file.x";` - Import types from a local file.
 
 ### Functions/Frames
 

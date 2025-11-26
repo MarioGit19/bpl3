@@ -4,7 +4,10 @@ import ExpressionType from "../expressionType";
 import Expression from "./expr";
 
 export default class ExportExpr extends Expression {
-  constructor(public methodName: string) {
+  constructor(
+    public exportName: string,
+    public exportType: "type" | "function" = "function",
+  ) {
     super(ExpressionType.ExportExpression);
   }
 
@@ -13,7 +16,8 @@ export default class ExportExpr extends Expression {
     let output = `${this.getDepth()}`;
     output += " [ Export Expression]\n";
     this.depth++;
-    output += `${this.getDepth()} Method Name: ${this.methodName}\n`;
+    output += `${this.getDepth()} Export Name: ${this.exportName}\n`;
+    output += `${this.getDepth()} Type: ${this.exportType}\n`;
     this.depth--;
     output += `${this.getDepth()}`;
     output += "/[ Export Expression ]\n";
@@ -25,11 +29,19 @@ export default class ExportExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    const func = scope.resolveFunction(this.methodName);
-    if (!func) {
-      throw new Error(`Exporting undefined function: ${this.methodName}`);
+    if (this.exportType === "type") {
+      const type = scope.resolveType(this.exportName);
+      if (!type) {
+        throw new Error(`Exporting undefined type: ${this.exportName}`);
+      }
+      return;
     }
-    gen.emitGlobalDefinition(`global ${this.methodName}`);
-    gen.emitGlobalDefinition(`${this.methodName} equ ${func.label}`);
+
+    const func = scope.resolveFunction(this.exportName);
+    if (!func) {
+      throw new Error(`Exporting undefined function: ${this.exportName}`);
+    }
+    gen.emitGlobalDefinition(`global ${this.exportName}`);
+    gen.emitGlobalDefinition(`${this.exportName} equ ${func.label}`);
   }
 }

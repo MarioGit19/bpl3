@@ -13,42 +13,42 @@ FAILED_TESTS=()
 run_test() {
     FILE="$1"
     LIBS="$2"
-    
+
     echo "---------------------------------------------------"
     echo "Testing $FILE..."
-    
+
     # Compile the file
     # Usage: ./cmp.sh <source.x> [libs...]
     if [ -n "$LIBS" ]; then
-        ./cmp.sh -q "$FILE" $LIBS
+        bun index.ts -q "$FILE" $LIBS
     else
-        ./cmp.sh -q "$FILE"
+        bun index.ts -q "$FILE"
     fi
-    
+
     COMPILE_RES=$?
     if [ $COMPILE_RES -ne 0 ]; then
         echo "❌ Compilation failed for $FILE"
         FAILED_TESTS+=("$FILE (Compilation)")
         return
     fi
-    
+
     # Determine executable name
     BASENAME=$(basename "$FILE" .x)
     DIRNAME=$(dirname "$FILE")
     EXE="$DIRNAME/$BASENAME"
-    
+
     # Determine input for specific tests
     INPUT=""
     case "$BASENAME" in
         "fib")
             INPUT="93"
-            ;;
+        ;;
         "collatz")
             INPUT="27"
-            ;;
+        ;;
         "sort_input")
             INPUT="5 3 8 1 2 7"
-            ;;
+        ;;
     esac
 
     # Run the executable
@@ -65,7 +65,7 @@ run_test() {
         else
             echo "✅ Test passed for $FILE"
         fi
-        
+
         # Cleanup executable
         rm -f "$EXE"
     else
@@ -80,29 +80,48 @@ echo "Starting tests..."
 echo "---------------------------------------------------"
 echo "Building library lib.x..."
 # Use -l to keep object file and remove executable (since it's a lib)
-./cmp.sh -q -l example/lib.x
+bun index.ts -q -l example/lib.x
 if [ $? -ne 0 ]; then
     echo "❌ Failed to build lib.x"
     FAILED_TESTS+=("example/lib.x (Build)")
 else
     echo "✅ Built lib.x"
-    
+
     # Run test_lib.x which depends on lib.x
     # We pass example/lib.o as a library dependency
-    run_test "example/test_lib.x" "example/lib.o"
-    
+    run_test "example/test_lib.x"
+
     # Cleanup lib.o
     rm -f example/lib.o
 fi
 
+# 1. Special handling for library tests
+echo "---------------------------------------------------"
+echo "Building library test lib_example/main.x..."
+run_test "example/lib_example/main.x"
+# Use -l to keep object file and remove executable (since it's a lib)
+bun index.ts -q example/lib_example/main.x
+if [ $? -ne 0 ]; then
+    echo "❌ Failed to build lib_example/main.x"
+    FAILED_TESTS+=("example/lib_example/main.x (Build)")
+else
+    echo "✅ Built lib_example/main.x"
+
+    # Run test_lib.x which depends on lib.x
+    # We pass example/lib.o as a library dependency
+
+    # Cleanup lib.o
+    rm -f example/lib_example/main.o
+fi
+
 # 2. Run all other standalone tests
-FILES=$(find ./example -name "*.x" | sort)
+FILES=$(find ./example -name "*.x" -type f | sort)
 for FILE in $FILES; do
     # Skip files we've already handled or that shouldn't be run directly
-    if [[ "$FILE" == *"lib.x" ]] || [[ "$FILE" == *"test_lib.x" ]]; then
+    if [[ "$FILE" == *"lib.x" ]] || [[ "$FILE" == *"test_lib.x" ]] || [[ "$FILE" == *"lib_example/"* ]]; then
         continue
     fi
-    
+
     run_test "$FILE" ""
     [ $SKIP_PROMPT -eq 0 ] && read -p "Press Enter to continue to the next test..."
 done

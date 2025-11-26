@@ -1,5 +1,12 @@
 #!/bin/bash
 
+
+bun index.ts $*
+
+exit $?;
+
+# Keep the code below for reference and debugging purposes, remove it later.
+
 # --- Configuration Defaults ---
 # Default to dynamic linking (requires dynamic linker path)
 LINK_MODE="dynamic"
@@ -20,35 +27,35 @@ while :; do
     case "$1" in
         -s|--static)
             LINK_MODE="static"
-            ;;
+        ;;
         -d|--dynamic)
             LINK_MODE="dynamic"
-            ;;
+        ;;
         -q|--quiet)
             QUIET_TRANSPILE="> /dev/null"
-            ;;
+        ;;
         -p|--print-asm)
             PRINT_ASM="true"
             SHOULD_CLEANUP_ASM="false"
-            ;;
+        ;;
         -r|--run)
             SHOULD_RUN="true"
-            ;;
+        ;;
         -g|--gdb)
             SHOULD_GDB="true"
-            ;;
+        ;;
         -l|--lib)
             SHOULD_CLEANUP_O="false"
             SHOULD_CLEANUP_EXE="true"
             SKIP_LINKING="true"
-            ;;
+        ;;
         --) # End of all options
             shift
             break
-            ;;
+        ;;
         -?*) # Handle invalid options
             echo "Warning: Unknown option (ignored): $1" >&2
-            ;;
+        ;;
         *) # End of flags
             break
     esac
@@ -163,7 +170,7 @@ if [ "$SHOULD_GDB" == "true" ]; then
     gdb -q ./${outputFile};
 else
     [ "$QUIET_TRANSPILE" == "" ] && echo "-----------------------------------";
-    ./${outputFile}; 
+    ./${outputFile};
     EXIT_CODE="$?";
     [ "$QUIET_TRANSPILE" == "" ] && echo "-----------------------------------";
 
