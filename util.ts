@@ -103,6 +103,7 @@ export function transpileProgram(
     scope = new Scope();
   }
 
+  program.optimize();
   program.transpile(gen, scope);
   return gen.build();
 }

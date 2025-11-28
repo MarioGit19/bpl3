@@ -1,7 +1,7 @@
 [ ] - Implement robust lexing with clear token definitions
 [ ] - Add AST validation and semantic analysis layer
-[ ] - Improve error reporting with codes and hints
-[ ] - Implement constant folding optimization
+[x] - Improve error reporting with codes and hints
+[x] - Implement constant folding optimization
 [x] - Add dead code elimination pass
 [x] - Support configurable optimization levels (O0-O3)
 [ ] - Introduce intermediate representation (IR) for transformations

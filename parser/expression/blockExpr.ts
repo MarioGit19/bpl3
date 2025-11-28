@@ -22,6 +22,11 @@ export default class BlockExpr extends Expression {
     console.log(this.toString(depth));
   }
 
+  optimize(): Expression {
+    this.expressions = this.expressions.map((expr) => expr.optimize());
+    return this;
+  }
+
   transpile(gen: AsmGenerator, scope: Scope): void {
     for (const expr of this.expressions) {
       expr.transpile(gen, scope);

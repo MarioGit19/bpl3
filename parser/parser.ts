@@ -29,6 +29,7 @@ import ContinueExpr from "./expression/continueExpr";
 import ImportExpr from "./expression/importExpr";
 import ExportExpr from "./expression/exportExpr";
 import ArrayLiteralExpr from "./expression/arrayLiteralExpr";
+import { CompilerError } from "../errors";
 
 export class Parser {
   constructor(tokens: Token[]) {
@@ -278,9 +279,9 @@ export class Parser {
   parseUnary(): Expression {
     const nextToken = this.peek();
     if (!nextToken)
-      throw new Error(
-        "Unexpected end of input on unary parse @" +
-          this.tokens[this.current]?.line,
+      throw new CompilerError(
+        "Unexpected end of input on unary parse",
+        this.tokens[this.current]?.line || 0,
       );
 
     if (
@@ -335,7 +336,11 @@ export class Parser {
 
   parseGrouping(): Expression {
     const nextToken = this.peek();
-    if (!nextToken) throw new Error("Unexpected end of input");
+    if (!nextToken)
+      throw new CompilerError(
+        "Unexpected end of input",
+        this.peek(-1)?.line || 0,
+      );
 
     if (nextToken.type === TokenType.OPEN_PAREN) {
       this.consume(TokenType.OPEN_PAREN);
@@ -350,7 +355,11 @@ export class Parser {
 
   parsePrimary(): Expression {
     const token = this.peek();
-    if (!token) throw new Error("Unexpected end of input");
+    if (!token)
+      throw new CompilerError(
+        "Unexpected end of input",
+        this.peek(-1)?.line || 0,
+      );
 
     switch (token.type) {
       case TokenType.IDENTIFIER:
@@ -368,7 +377,7 @@ export class Parser {
         return new EOFExpr();
     }
 
-    throw new Error(`Unexpected token: ${token.type} @${token.line}`);
+    throw new CompilerError(`Unexpected token: ${token.type}`, token.line);
   }
 
   parseArrayLiteral(): Expression {
@@ -383,8 +392,9 @@ export class Parser {
         this.peek()?.type !== TokenType.CLOSE_BRACKET &&
         this.peek()?.type !== TokenType.COMMA
       ) {
-        throw new Error(
-          `Expected ',' or ']' after array element @${this.peek()?.line}`,
+        throw new CompilerError(
+          "Expected ',' or ']' after array element",
+          this.peek()?.line || 0,
         );
       }
 
@@ -459,13 +469,17 @@ export class Parser {
         this.peek()?.type === TokenType.IDENTIFIER &&
         this.peek()?.value !== "from"
       ) {
-        throw new Error(`Expected ',' between imports @${this.peek()?.line}`);
+        throw new CompilerError(
+          "Expected ',' between imports",
+          this.peek()?.line || 0,
+        );
       }
     }
 
     if (importNames.length === 0) {
-      throw new Error(
-        `Expected at least one import name after 'import' @${this.peek(-1)?.line}`,
+      throw new CompilerError(
+        "Expected at least one import name after 'import'",
+        this.peek(-1)?.line || 0,
       );
     }
 
@@ -478,8 +492,9 @@ export class Parser {
         (nextToken?.type !== TokenType.IDENTIFIER &&
           nextToken.type !== TokenType.STRING_LITERAL)
       ) {
-        throw new Error(
-          `Expected module name after 'from' @${this.peek(-1)?.line}`,
+        throw new CompilerError(
+          "Expected module name after 'from'",
+          this.peek(-1)?.line || 0,
         );
       }
       moduleNameToken = this.consume(nextToken!.type);
@@ -529,8 +544,9 @@ export class Parser {
         this.peek()?.type !== TokenType.CLOSE_PAREN &&
         this.peek()?.type !== TokenType.COMMA
       ) {
-        throw new Error(
-          `Expected ',' or ')' after function argument @${this.peek()?.line}`,
+        throw new CompilerError(
+          "Expected ',' or ')' after function argument",
+          this.peek()?.line || 0,
         );
       }
       if (this.peek() && this.peek()!.type === TokenType.COMMA) {
@@ -628,8 +644,9 @@ export class Parser {
         this.peek()?.type !== TokenType.COMMA &&
         this.peek(1)!.type !== TokenType.CLOSE_PAREN
       ) {
-        throw new Error(
-          `Expected ',' or ')' after function argument @${this.peek()?.line}`,
+        throw new CompilerError(
+          "Expected ',' or ')' after function argument",
+          this.peek()?.line || 0,
         );
       }
 
@@ -650,8 +667,9 @@ export class Parser {
         "Expected ret keyword after function arguments.",
       );
       if (retToken.value !== "ret") {
-        throw new Error(
-          `Expected 'ret' keyword, but got '${retToken.value}' @${retToken.line}`,
+        throw new CompilerError(
+          "Expected 'ret' keyword, but got '" + retToken.value + "'",
+          retToken.line,
         );
       }
       returnType = this.parseType();
@@ -713,8 +731,9 @@ export class Parser {
 
     if (this.peek() && this.peek()!.type !== TokenType.ASSIGN) {
       if (isConst) {
-        throw new Error(
-          `Constant variable '${varNameToken.value}' must be initialized. @${varNameToken.line}`,
+        throw new CompilerError(
+          `Constant variable '${varNameToken.value}' must be initialized.`,
+          varNameToken.line,
         );
       }
       return new VariableDeclarationExpr(
@@ -778,8 +797,9 @@ export class Parser {
         const sizeToken = this.consume(TokenType.NUMBER_LITERAL);
         size = Number(sizeToken.value);
       } else if (this.peek()?.type === TokenType.CLOSE_BRACKET) {
-        throw new Error(
+        throw new CompilerError(
           "Array size must be specified as a number literal or numeric expression.",
+          this.peek()?.line || 0,
         );
       }
 
@@ -804,10 +824,11 @@ export class Parser {
       return token;
     }
 
-    throw new Error(
+    throw new CompilerError(
       errorMessage
-        ? `${errorMessage} @${token ? token.line : "EOF"}`
-        : `Expected token of type ${type}, but got ${token?.type} @${token ? token.line : "EOF"}`,
+        ? errorMessage
+        : `Expected token of type ${type}, but got ${token?.type}`,
+      token ? token.line : 0,
     );
   }
 }

@@ -55,6 +55,13 @@ export default class VariableDeclarationExpr extends Expression {
     console.log(this.toString(depth));
   }
 
+  optimize(): Expression {
+    if (this.value) {
+      this.value = this.value.optimize();
+    }
+    return this;
+  }
+
   transpile(gen: AsmGenerator, scope: Scope): void {
     if (this.scope === "global") {
       this.parseGlobalVariableDeclaration(gen, scope);

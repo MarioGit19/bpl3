@@ -1,5 +1,6 @@
 import Token from "./token";
 import TokenType from "./tokenType";
+import { CompilerError } from "../errors";
 
 class Lexer {
   constructor(input: string) {
@@ -36,7 +37,7 @@ class Lexer {
   parseToken(): Token {
     const char = this.consume();
     if (!char) {
-      throw new Error("End of input reached");
+      throw new CompilerError("End of input reached", this.line);
     }
 
     if (char === "\n") {
@@ -82,9 +83,10 @@ class Lexer {
       return this.parseIdentifier(char);
     }
 
-    throw new Error(
-      "Detected invalid token: " +
-        new Token(TokenType.UNKNOWN, char ?? "", this.line).toString(),
+    throw new CompilerError(
+      "Detected invalid token: " + char,
+      this.line,
+      "Check for typos or unsupported characters.",
     );
   }
 
@@ -137,18 +139,20 @@ class Lexer {
 
         return new Token(TokenType.STRING_LITERAL, str, this.line);
       } else if (char === "\n") {
-        throw new Error(
-          "Strings cannot span multiple lines" +
-            new Token(TokenType.STRING_LITERAL, str, this.line).toString(),
+        throw new CompilerError(
+          "Strings cannot span multiple lines",
+          this.line,
+          "Use \\n for newlines.",
         );
       } else {
         str += char;
       }
     }
 
-    throw new Error(
-      "Detected unterminated string literal token: " +
-        new Token(TokenType.STRING_LITERAL, str, this.line).toString(),
+    throw new CompilerError(
+      "Detected unterminated string literal",
+      this.line,
+      "Did you forget a closing quote?",
     );
   }
 
@@ -171,8 +175,10 @@ class Lexer {
     };
 
     if (Number.isNaN(value)) {
-      throw new Error(
-        `Detected invalid ${error_message_key[numberStr.slice(0, 2) as keyof typeof error_message_key] || ""} number token: ${new Token(TokenType.NUMBER_LITERAL, numberStr, this.line).toString()}`,
+      throw new CompilerError(
+        `Detected invalid ${error_message_key[numberStr.slice(0, 2) as keyof typeof error_message_key] || ""} number token: ${numberStr}`,
+        this.line,
+        "Check number format.",
       );
     }
 
@@ -203,9 +209,9 @@ class Lexer {
         }
         return new Token(TokenType.PIPE, "|", this.line);
       default:
-        throw new Error(
-          "Detected invalid logical operator token: " +
-            new Token(TokenType.UNKNOWN, char ?? "", this.line).toString(),
+        throw new CompilerError(
+          "Detected invalid logical operator: " + char,
+          this.line,
         );
     }
   }
@@ -261,9 +267,9 @@ class Lexer {
       case ">":
         return this.parseGreaterThanOperator();
       default:
-        throw new Error(
-          "Detected invalid equality operator token: " +
-            new Token(TokenType.UNKNOWN, char ?? "", this.line).toString(),
+        throw new CompilerError(
+          "Detected invalid equality operator: " + char,
+          this.line,
         );
     }
   }
@@ -285,9 +291,9 @@ class Lexer {
       case "~":
         return new Token(TokenType.TILDE, "~", this.line);
       default:
-        throw new Error(
-          "Detected invalid operator token: " +
-            new Token(TokenType.UNKNOWN, char ?? "", this.line).toString(),
+        throw new CompilerError(
+          "Detected invalid operator: " + char,
+          this.line,
         );
     }
   }
@@ -371,9 +377,9 @@ class Lexer {
       case "?":
         return new Token(TokenType.QUESTION, char, this.line);
       default:
-        throw new Error(
-          "Detected invalid punctuation token: " +
-            new Token(TokenType.UNKNOWN, char ?? "", this.line).toString(),
+        throw new CompilerError(
+          "Detected invalid punctuation: " + char,
+          this.line,
         );
     }
   }
@@ -393,9 +399,9 @@ class Lexer {
       case "]":
         return new Token(TokenType.CLOSE_BRACKET, char, this.line);
       default:
-        throw new Error(
-          "Detected invalid parenthesis token: " +
-            new Token(TokenType.UNKNOWN, char ?? "", this.line).toString(),
+        throw new CompilerError(
+          "Detected invalid parenthesis: " + char,
+          this.line,
         );
     }
   }

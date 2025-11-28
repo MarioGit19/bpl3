@@ -4,6 +4,7 @@ import * as util from "./util";
 import { execSync, spawnSync } from "child_process";
 import { existsSync, unlinkSync, readFileSync } from "fs";
 import { resolve } from "path";
+import { ErrorReporter } from "./errors";
 
 // --- Configuration Defaults ---
 let linkMode: "dynamic" | "static" = "dynamic";
@@ -117,26 +118,37 @@ if (!sourceFile) {
 
 const fileName = sourceFile;
 
-// --- 1. Transpile ---
+// --- 1. Transpiling ---
 debug(`--- 1. Transpiling ${fileName} ---`);
 
-const tokens = util.getFileTokens(fileName);
-const ast = util.parseTokens(tokens);
+let asmContent = "";
+let asmFilePath = "";
+let objectsToLink: Set<string> = new Set(extraLibs);
 
-const gen = new AsmGenerator(optimizationLevel);
-const scope = new Scope();
-const objectsToLink: Set<string> = new Set(extraLibs);
+try {
+  const tokens = util.getFileTokens(fileName);
+  const ast = util.parseTokens(tokens);
 
-const imports = util.parseImportExpressions(util.extractImportStatements(ast));
-if (imports.length) {
-  // We rely on parseLibraryFile to handle recursive compilation and return object files
-  const objectFiles = util.parseLibraryFile(fileName, scope);
-  objectFiles.forEach((obj) => objectsToLink.add(obj));
+  const gen = new AsmGenerator(optimizationLevel);
+  const scope = new Scope();
+
+  const imports = util.parseImportExpressions(
+    util.extractImportStatements(ast),
+  );
+  if (imports.length) {
+    // We rely on parseLibraryFile to handle recursive compilation and return object files
+    const objectFiles = util.parseLibraryFile(fileName, scope);
+    objectFiles.forEach((obj) => objectsToLink.add(obj));
+  }
+
+  asmContent = util.transpileProgram(ast, gen, scope);
+  asmFilePath = util.getOutputFileName(fileName, ".asm");
+  util.saveToFile(asmFilePath, asmContent);
+} catch (e) {
+  ErrorReporter.report(e);
 }
 
-const asmContent = util.transpileProgram(ast, gen, scope);
-const asmFilePath = util.getOutputFileName(fileName, ".asm");
-util.saveToFile(asmFilePath, asmContent);
+// --- 2. Print Assembly ---
 
 // --- 2. Print Assembly ---
 if (printAsm) {

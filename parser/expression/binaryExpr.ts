@@ -4,6 +4,7 @@ import type AsmGenerator from "../../transpiler/AsmGenerator";
 import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
+import NumberLiteralExpr from "./numberLiteralExpr";
 import type { VariableType } from "./variableDeclarationExpr";
 
 export default class BinaryExpr extends Expression {
@@ -28,6 +29,58 @@ export default class BinaryExpr extends Expression {
 
   log(depth: number = 0): void {
     console.log(this.toString(depth));
+  }
+
+  optimize(): Expression {
+    this.left = this.left.optimize();
+    this.right = this.right.optimize();
+
+    if (
+      this.left instanceof NumberLiteralExpr &&
+      this.right instanceof NumberLiteralExpr
+    ) {
+      const leftVal = Number(this.left.value);
+      const rightVal = Number(this.right.value);
+      let result: number | null = null;
+
+      switch (this.operator.type) {
+        case TokenType.PLUS:
+          result = leftVal + rightVal;
+          break;
+        case TokenType.MINUS:
+          result = leftVal - rightVal;
+          break;
+        case TokenType.STAR:
+          result = leftVal * rightVal;
+          break;
+        case TokenType.SLASH:
+          if (rightVal !== 0) result = Math.floor(leftVal / rightVal);
+          break;
+        case TokenType.PERCENT:
+          if (rightVal !== 0) result = leftVal % rightVal;
+          break;
+        case TokenType.CARET:
+          result = leftVal ^ rightVal;
+          break;
+        case TokenType.AMPERSAND:
+          result = leftVal & rightVal;
+          break;
+        case TokenType.PIPE:
+          result = leftVal | rightVal;
+          break;
+        case TokenType.BITSHIFT_LEFT:
+          result = leftVal << rightVal;
+          break;
+        case TokenType.BITSHIFT_RIGHT:
+          result = leftVal >> rightVal;
+          break;
+      }
+
+      if (result !== null) {
+        return new NumberLiteralExpr(result.toString(), this.operator); // Reusing operator token for location info if needed, though ideally should be a new token
+      }
+    }
+    return this;
   }
 
   assignmentOperators: TokenType[] = [

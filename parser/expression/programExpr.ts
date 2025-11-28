@@ -30,6 +30,11 @@ export default class ProgramExpr extends Expression {
     console.log(this.toString(depth));
   }
 
+  optimize(): Expression {
+    this.expressions = this.expressions.map((expr) => expr.optimize());
+    return this;
+  }
+
   validate(): void {
     // Ensure only few expr types are at the top level
     const allowedTopLevelTypes = new Set<ExpressionType>([

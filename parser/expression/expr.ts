@@ -25,6 +25,10 @@ export default class Expression {
     throw new Error("Method not implemented.");
   }
 
+  optimize(): Expression {
+    return this;
+  }
+
   getDepth(): string {
     return " ".repeat(this.depth * 2);
   }

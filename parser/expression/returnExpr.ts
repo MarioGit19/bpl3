@@ -31,6 +31,13 @@ export default class ReturnExpr extends Expression {
     console.log(this.toString(depth));
   }
 
+  optimize(): Expression {
+    if (this.value) {
+      this.value = this.value.optimize();
+    }
+    return this;
+  }
+
   transpile(gen: AsmGenerator, scope: Scope): void {
     const context = scope.getCurrentContext("function");
     if (!context) {

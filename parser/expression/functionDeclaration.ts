@@ -46,6 +46,11 @@ export default class FunctionDeclarationExpr extends Expression {
     console.log(this.toString(depth));
   }
 
+  optimize(): Expression {
+    this.body = this.body.optimize();
+    return this;
+  }
+
   transpile(gen: AsmGenerator, scope: Scope): void {
     const label = gen.generateLabel(`func_${this.name}_`);
     const endLabel = label + "_end";
