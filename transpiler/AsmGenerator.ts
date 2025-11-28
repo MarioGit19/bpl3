@@ -1,3 +1,5 @@
+import { Optimizer } from "./optimizer/Optimizer";
+
 export default class AsmGenerator {
   private text: string[] = []; // Code
   private data: string[] = []; // Globals
@@ -8,9 +10,11 @@ export default class AsmGenerator {
   private importDefinitions: string[] = [];
   private labelCount: number = 0;
   private initLabel: string;
+  private optimizer: Optimizer;
 
   constructor() {
     this.initLabel = "_init_" + Math.random().toString(36).substring(2, 15);
+    this.optimizer = new Optimizer();
   }
 
   isPrecomputeBlock: boolean = false;
@@ -88,7 +92,7 @@ export default class AsmGenerator {
       "section .text",
       ...this.globalDefinitions,
       ...precomputeBlock,
-      ...this.text,
+      ...this.optimizer.optimize(this.text),
     ].join("\n");
   }
 }
