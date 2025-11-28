@@ -362,6 +362,7 @@ local max: u8 = a > b ? a : b;
 BPL includes a built-in peephole optimizer that automatically improves the generated assembly code. The optimizer runs during the compilation process and applies various rules to reduce code size and improve performance.
 
 **Optimizations include:**
+
 - **Redundant Push/Pop Removal**: Eliminates unnecessary stack operations.
 - **Move Optimization**: Simplifies `mov` instructions (e.g., `mov rax, rax` is removed).
 - **Zeroing Idioms**: Replaces `mov reg, 0` with `xor reg, reg`.

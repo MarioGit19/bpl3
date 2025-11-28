@@ -2,7 +2,8 @@ import AsmGenerator from "./transpiler/AsmGenerator";
 import Scope from "./transpiler/Scope";
 import * as util from "./util";
 import { execSync, spawnSync } from "child_process";
-import { existsSync, unlinkSync } from "fs";
+import { existsSync, unlinkSync, readFileSync } from "fs";
+import { resolve } from "path";
 
 // --- Configuration Defaults ---
 let linkMode: "dynamic" | "static" = "dynamic";
@@ -13,16 +14,40 @@ let shouldGdb = false;
 let compileLib = false;
 let cleanupAsm = true;
 let cleanupO = true;
+let optimizationLevel = 3;
+const extraLibs: string[] = [];
 
 function debug(...args: any[]) {
   if (quiet) return;
   console.log(...args);
 }
 
+// --- Load Configuration File ---
+const configPath = resolve("transpiler.config.json");
+if (existsSync(configPath)) {
+  try {
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    if (config.linkMode) linkMode = config.linkMode;
+    if (config.quiet !== undefined) quiet = config.quiet;
+    if (config.printAsm !== undefined) printAsm = config.printAsm;
+    if (config.shouldRun !== undefined) shouldRun = config.shouldRun;
+    if (config.shouldGdb !== undefined) shouldGdb = config.shouldGdb;
+    if (config.compileLib !== undefined) compileLib = config.compileLib;
+    if (config.cleanupAsm !== undefined) cleanupAsm = config.cleanupAsm;
+    if (config.cleanupO !== undefined) cleanupO = config.cleanupO;
+    if (config.optimizationLevel !== undefined)
+      optimizationLevel = config.optimizationLevel;
+    if (config.extraLibs && Array.isArray(config.extraLibs)) {
+      extraLibs.push(...config.extraLibs);
+    }
+  } catch (e) {
+    console.warn("Warning: Failed to parse transpiler.config.json");
+  }
+}
+
 // --- Parse Command Line Arguments ---
 const args = process.argv.slice(2);
 let sourceFile: string | null = null;
-const extraLibs: string[] = [];
 
 for (const arg of args) {
   if (arg.startsWith("-")) {
@@ -57,6 +82,18 @@ for (const arg of args) {
         compileLib = true;
         cleanupO = false;
         break;
+      case "-O0":
+        optimizationLevel = 0;
+        break;
+      case "-O1":
+        optimizationLevel = 1;
+        break;
+      case "-O2":
+        optimizationLevel = 2;
+        break;
+      case "-O3":
+        optimizationLevel = 3;
+        break;
       default:
         console.warn(`Warning: Unknown option (ignored): ${arg}`);
         break;
@@ -86,7 +123,7 @@ debug(`--- 1. Transpiling ${fileName} ---`);
 const tokens = util.getFileTokens(fileName);
 const ast = util.parseTokens(tokens);
 
-const gen = new AsmGenerator();
+const gen = new AsmGenerator(optimizationLevel);
 const scope = new Scope();
 const objectsToLink: Set<string> = new Set(extraLibs);
 

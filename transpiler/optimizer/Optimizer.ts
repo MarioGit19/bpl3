@@ -11,24 +11,34 @@ import { MulByOneRule } from "./rules/MulByOneRule";
 import { MulByZeroRule } from "./rules/MulByZeroRule";
 import { IncDecRule } from "./rules/IncDecRule";
 import { PushPopMoveRule } from "./rules/PushPopMoveRule";
+import { DeadCodeRule } from "./rules/DeadCodeRule";
 
 export class Optimizer {
   private rules: IOptimizationRule[] = [];
 
-  constructor() {
-    // Order matters!
-    this.rules.push(new MovToPushPopRule());
-    this.rules.push(new MovToPushRule());
-    this.rules.push(new RedundantPushPopRule());
-    this.rules.push(new PushPopMoveRule());
-    this.rules.push(new MovZeroRule());
-    this.rules.push(new MovRegToSameRegRule());
-    this.rules.push(new AddSubZeroRule());
-    this.rules.push(new JmpNextLabelRule());
-    this.rules.push(new CmpZeroRule());
-    this.rules.push(new MulByOneRule());
-    this.rules.push(new MulByZeroRule());
-    this.rules.push(new IncDecRule());
+  constructor(level: number = 3) {
+    if (level >= 1) {
+      this.rules.push(new MovRegToSameRegRule());
+      this.rules.push(new MovZeroRule());
+      this.rules.push(new AddSubZeroRule());
+      this.rules.push(new MulByOneRule());
+      this.rules.push(new MulByZeroRule());
+      this.rules.push(new IncDecRule());
+    }
+
+    if (level >= 2) {
+      this.rules.push(new JmpNextLabelRule());
+      this.rules.push(new CmpZeroRule());
+      this.rules.push(new RedundantPushPopRule());
+      this.rules.push(new DeadCodeRule());
+    }
+
+    if (level >= 3) {
+      this.rules.push(new MovToPushPopRule());
+      this.rules.push(new MovToPushRule());
+      this.rules.push(new PushPopMoveRule());
+    }
+
     this.sortRules();
   }
   public addRule(rule: IOptimizationRule) {

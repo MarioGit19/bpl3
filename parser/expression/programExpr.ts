@@ -64,14 +64,14 @@ export default class ProgramExpr extends Expression {
       gen.emit("mov rbp, rsp", "standard function prologue");
 
       // Save argc, argv, and envp
-      gen.emit("push rdi", "save argc");
-      gen.emit("push rsi", "save argv");
-      gen.emit("push rdx", "save envp");
+      // gen.emit("push rdi", "save argc");
+      // gen.emit("push rsi", "save argv");
+      // gen.emit("push rdx", "save envp");
 
       // Restore argc, argv, and envp
-      gen.emit("pop rdx", "restore envp");
-      gen.emit("pop rsi", "restore argv");
-      gen.emit("pop rdi", "restore argc");
+      // gen.emit("pop rdx", "restore envp");
+      // gen.emit("pop rsi", "restore argv");
+      // gen.emit("pop rdi", "restore argc");
 
       gen.emit("call _user_main", "call main function");
       gen.emit("pop rbp", "standard function epilogue");

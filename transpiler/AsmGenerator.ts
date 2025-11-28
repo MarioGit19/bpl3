@@ -12,9 +12,9 @@ export default class AsmGenerator {
   private initLabel: string;
   private optimizer: Optimizer;
 
-  constructor() {
+  constructor(optimizationLevel: number = 3) {
     this.initLabel = "_init_" + Math.random().toString(36).substring(2, 15);
-    this.optimizer = new Optimizer();
+    this.optimizer = new Optimizer(optimizationLevel);
   }
 
   isPrecomputeBlock: boolean = false;

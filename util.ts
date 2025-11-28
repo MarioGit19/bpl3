@@ -114,9 +114,12 @@ export function transpileFile(filePath: string): string {
 
 export function saveToFile(filePath: string, content: string): void {
   const normalizedPath = normalize(filePath);
-  const dir = normalizedPath.substring(0, normalizedPath.lastIndexOf("/"));
-  if (!existsSync(dir)) {
-    throw new Error(`Directory does not exist: ${dir}`);
+  const lastSlash = normalizedPath.lastIndexOf("/");
+  if (lastSlash !== -1) {
+    const dir = normalizedPath.substring(0, lastSlash);
+    if (!existsSync(dir)) {
+      throw new Error(`Directory does not exist: ${dir}`);
+    }
   }
   writeFileSync(normalizedPath, content, { encoding: "utf-8" });
 }
