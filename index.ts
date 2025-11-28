@@ -3,7 +3,7 @@ import Scope from "./transpiler/Scope";
 import * as util from "./util";
 import { execSync, spawnSync } from "child_process";
 import { existsSync, unlinkSync, readFileSync } from "fs";
-import { resolve } from "path";
+import { resolve, isAbsolute } from "path";
 import { ErrorReporter } from "./errors";
 
 // --- Configuration Defaults ---
@@ -205,12 +205,14 @@ if (cleanupO && existsSync(objFilePath)) {
 if (shouldRun || shouldGdb) {
   debug(`--- 5. Running ${outputExe} ---`);
 
+  const runPath = isAbsolute(outputExe) ? outputExe : `./${outputExe}`;
+
   if (shouldGdb) {
-    spawnSync("gdb", ["-q", `./${outputExe}`], { stdio: "inherit" });
+    spawnSync("gdb", ["-q", runPath], { stdio: "inherit" });
   } else {
     debug("-----------------------------------");
     try {
-      execSync(`./${outputExe}`, { stdio: "inherit" });
+      execSync(runPath, { stdio: "inherit" });
       debug("-----------------------------------");
       debug(`Program exited with code: 0`);
     } catch (e: any) {
