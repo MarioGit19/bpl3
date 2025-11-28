@@ -26,6 +26,8 @@ RES=$?
 rm -f "$EXE"
 # Also cleanup the object file generated for lib.x
 rm -f "lib.o" 
+# Also cleanup the assembly file generated for lib.x
+rm -f "lib.asm"
 
 if [ $RES -ne 0 ]; then
     exit 1

@@ -27,6 +27,8 @@ RES=$?
 rm -f "$EXE"
 # Cleanup any object files that might have been created
 rm -f *.o
+# Cleanup any asm files that might have been created
+rm -f *.asm
 
 if [ $RES -ne 0 ]; then
     exit 1

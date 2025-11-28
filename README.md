@@ -25,14 +25,16 @@ More examples can be found in the `example` directory.
 
 ## Language Features
 
-- Variables and Data Types: Supports integers, strings, pointers, and arrays.
-- Control Flow: Includes if-else statements, loops.
-- Functions: Allows defining and calling functions with parameters and return values.
-- Import/Export: Supports modular programming through import and export statements with automatic dependency compilation.
-- Inline Assembly: Allows embedding raw assembly code within BPL code for low-level operations with interpolation of BPL variables.
-- Structures and Arrays: Supports user-defined structures and arrays for complex data management.
-- Standard Library: Provides built-in functions for `print`, `exit`, `exec`, `str_len`.
-- Simple Syntax: Designed to be easy to read and write, with a syntax similar to C, Go, and Python.
+- **Variables and Data Types**: Supports integers (`u8`-`u64`, `i8`-`i64`), strings, pointers, and arrays.
+- **Control Flow**: Includes `if`, `else`, `else if`, `loop`, `break`, `continue`.
+- **Functions**: Allows defining and calling functions with parameters and return values.
+- **Import/Export**: Supports modular programming through import and export statements with automatic dependency compilation.
+- **Inline Assembly**: Allows embedding raw assembly code within BPL code for low-level operations with interpolation of BPL variables.
+- **Structures and Arrays**: Supports user-defined structures and arrays for complex data management.
+- **Array Literals**: Supports initializing arrays with literals `[1, 2, 3]`.
+- **Standard Library**: Provides built-in functions for `print`, `exit`, `exec`, `str_len`.
+- **Optimization**: Built-in peephole optimizer to generate efficient assembly code.
+- **Simple Syntax**: Designed to be easy to read and write, with a syntax similar to C, Go, and Python.
 
 ## Example
 
@@ -52,20 +54,20 @@ frame main() ret u8 {
 To compile a BPL program, use `bun index.ts`:
 
 ```bash
-bun index.ts path/to/your/file.x
+bun index.ts [options] path/to/your/file.x [lib1.o ...]
 ```
 
 This will generate an executable file in the same directory as the source file.
 
-There are several options you can pass to the compiler:
+### CLI Options
 
-- `-q|--quiet`: Suppress all output except for errors.
-- `-p|--print-asm`: Print the generated assembly code to the console and preseve the file.
-- `-r|--run`: Automatically run the compiled program after successful compilation.
-- `-g|--gdb`: Run the compiled program inside GDB for debugging.
-- `-l|--lib`: Compile as a shared library instead of an executable, preserve .o file.
-- `-d|--dynamic`: Compile as a dynamically linked executable (default).
-- `-s|--static`: Compile as a static executable (no dynamic linking).
+- `-q | --quiet`: Suppress all output except for errors.
+- `-p | --print-asm`: Print the generated assembly code to the console and preserve the `.asm` file.
+- `-r | --run`: Automatically run the compiled program after successful compilation.
+- `-g | --gdb`: Run the compiled program inside GDB for debugging.
+- `-l | --lib`: Compile as a shared library instead of an executable, preserve `.o` file.
+- `-d | --dynamic`: Compile as a dynamically linked executable (default).
+- `-s | --static`: Compile as a static executable (no dynamic linking).
 
 ### Import/Export
 
@@ -354,6 +356,18 @@ local derefValue: u8 = *(ptr); // Dereference Operation
 # Ternary Operator -------------------------------------
 local max: u8 = a > b ? a : b;
 ```
+
+### Optimization
+
+BPL includes a built-in peephole optimizer that automatically improves the generated assembly code. The optimizer runs during the compilation process and applies various rules to reduce code size and improve performance.
+
+**Optimizations include:**
+- **Redundant Push/Pop Removal**: Eliminates unnecessary stack operations.
+- **Move Optimization**: Simplifies `mov` instructions (e.g., `mov rax, rax` is removed).
+- **Zeroing Idioms**: Replaces `mov reg, 0` with `xor reg, reg`.
+- **Arithmetic Simplification**: Optimizes operations like adding/subtracting zero or multiplying by one/zero.
+- **Jump Optimization**: Removes jumps to the immediately following label.
+- **Instruction Strength Reduction**: Replaces expensive operations with cheaper ones (e.g., `add reg, 1` -> `inc reg`).
 
 ### Standard Library
 
