@@ -41,9 +41,16 @@ export default class IdentifierExpr extends Expression {
     const isArray = symbol.varType.isArray.length > 0;
 
     if (context || isStruct || isArray) {
-      gen.emit(
-        `lea rax, [${symbol.type === "global" ? "rel " + symbol.offset : "rbp - " + symbol.offset}]`,
-      );
+      if ((isStruct || isArray) && symbol.isParameter) {
+        gen.emit(
+          `mov rax, [rbp - ${symbol.offset}]`,
+          `Load address of parameter ${this.name}`,
+        );
+      } else {
+        gen.emit(
+          `lea rax, [${symbol.type === "global" ? "rel " + symbol.offset : "rbp - " + symbol.offset}]`,
+        );
+      }
     } else {
       let size = 8;
       let isSigned = false;

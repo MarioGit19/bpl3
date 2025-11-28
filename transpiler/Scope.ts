@@ -4,10 +4,16 @@ export interface VarInfo {
   type: "local" | "global";
   offset: string;
   varType: VariableType;
+  isParameter?: boolean;
 }
 
 export type ContextType =
-  | { type: "function"; label: string; endLabel: string }
+  | {
+      type: "function";
+      label: string;
+      endLabel: string;
+      returnType: VariableType | null;
+    }
   | { type: "loop"; breakLabel: string; continueLabel: string }
   | { type: "LHS" }
   | null;

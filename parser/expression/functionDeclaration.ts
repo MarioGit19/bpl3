@@ -68,30 +68,65 @@ export default class FunctionDeclarationExpr extends Expression {
       type: "function",
       label: label,
       endLabel: endLabel,
+      returnType: this.returnType,
     });
 
     // Function prologue
     gen.emit("push rbp", "save base pointer");
     gen.emit("mov rbp, rsp", "set new base pointer");
-    // funcScope.allocLocal(8); // RBP - Removed to fix stack offset
+
+    let isStructReturn = false;
+    if (
+      this.returnType &&
+      !this.returnType.isPointer &&
+      !this.returnType.isArray.length
+    ) {
+      const typeInfo = scope.resolveType(this.returnType.name);
+      if (typeInfo && !typeInfo.isPrimitive) {
+        isStructReturn = true;
+      }
+    }
 
     // Set up function arguments in the new scope
-    if (this.args.length > 0) {
-      gen.emit(
-        `sub rsp, ${this.args.length * 8}`,
-        "allocate space for arguments",
-      );
+    if (this.args.length > 0 || isStructReturn) {
+      const stackSpace = (this.args.length + (isStructReturn ? 1 : 0)) * 8;
+      gen.emit(`sub rsp, ${stackSpace}`, "allocate space for arguments");
     }
+
+    if (isStructReturn) {
+      const offset = funcScope.allocLocal(8);
+      gen.emit(`mov [rbp - ${offset}], rdi`, `store hidden return pointer`);
+      funcScope.define("__return_slot__", {
+        offset: offset.toString(),
+        type: "local",
+        varType: { name: "u64", isPointer: 1, isArray: [] }, // Treat as pointer
+      });
+    }
+
     this.args.forEach((arg, index) => {
       const offset = funcScope.allocLocal(8);
-      gen.emit(
-        `mov [rbp - ${offset}], ${this.argOrders[index]}`,
-        `store argument ${arg.name}`,
-      );
+      const regIndex = index + (isStructReturn ? 1 : 0);
+      const reg = this.argOrders[regIndex];
+
+      if (reg) {
+        gen.emit(`mov [rbp - ${offset}], ${reg}`, `store argument ${arg.name}`);
+      } else {
+        // Handle arguments passed on stack (if > 6 args)
+        // For now, assume < 6 args + return pointer
+        // Stack args are at [rbp + 16 + (index - 6) * 8]
+        // But we need to account for return pointer shifting registers
+        // This is getting complicated for > 6 args.
+        // Let's assume < 6 args for now.
+        throw new Error(
+          "Too many arguments (stack passing not fully implemented with struct return)",
+        );
+      }
+
       funcScope.define(arg.name, {
         offset: offset.toString(),
         type: "local",
         varType: arg.type,
+        isParameter: true,
       });
     });
 

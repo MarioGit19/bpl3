@@ -122,7 +122,24 @@ export default class VariableDeclarationExpr extends Expression {
       }
     } else if (this.value) {
       this.value.transpile(gen, scope);
-      if (baseSize === 1) {
+
+      let isStruct = false;
+      if (!this.varType.isPointer && !this.varType.isArray.length) {
+        const typeInfo = scope.resolveType(this.varType.name);
+        if (typeInfo && !typeInfo.isPrimitive) {
+          isStruct = true;
+        }
+      }
+
+      if (isStruct) {
+        gen.emit(`mov rsi, rax`, "Source address (from expression)");
+        gen.emit(
+          `lea rdi, [ rbp - ${offset} ]`,
+          "Destination address (local variable)",
+        );
+        gen.emit(`mov rcx, ${baseSize}`, "Size to copy");
+        gen.emit("rep movsb", "Copy struct to local variable");
+      } else if (baseSize === 1) {
         gen.emit(
           `mov [ rbp - ${offset} ], al`,
           "Initialize local variable " + this.name,

@@ -39,6 +39,28 @@ export default class ReturnExpr extends Expression {
 
     if (this.value) {
       this.value.transpile(gen, scope);
+
+      const funcContext = scope.getCurrentContext("function");
+      if (funcContext && funcContext.type === "function") {
+        const returnSlot = scope.resolve("__return_slot__");
+        if (returnSlot && funcContext.returnType) {
+          const typeInfo = scope.resolveType(funcContext.returnType.name);
+          if (typeInfo) {
+            gen.emit("push rax", "Save source address");
+            gen.emit(
+              `mov rdi, [rbp - ${returnSlot.offset}]`,
+              "Destination address",
+            );
+            gen.emit("pop rsi", "Source address");
+            gen.emit(`mov rcx, ${typeInfo.size}`, "Size to copy");
+            gen.emit("rep movsb", "Copy struct to return slot");
+            gen.emit(
+              `mov rax, [rbp - ${returnSlot.offset}]`,
+              "Return address of result",
+            );
+          }
+        }
+      }
     } else {
       gen.emit("xor rax, rax", "set return value to 0 (void)");
     }
