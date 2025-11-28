@@ -2,7 +2,8 @@ import [Point] from "./types.x";
 import [Rectangle] from "./shapes.x";
 import magnitudeSquared from "./vector.x";
 import rectArea from "./area.x";
-import logNumber from "./printer.x";
+import logNumber, logGlobal from "./printer.x";
+import printf from "libc";
 
 frame main() ret u8 {
     local p: Point;
@@ -17,5 +18,7 @@ frame main() ret u8 {
     local area: u64 = call rectArea(r);
     call logNumber(area);
 
+
+    call logGlobal();
     return 0;
 }

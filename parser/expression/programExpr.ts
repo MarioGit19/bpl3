@@ -68,8 +68,6 @@ export default class ProgramExpr extends Expression {
       gen.emit("push rsi", "save argv");
       gen.emit("push rdx", "save envp");
 
-      gen.emit("call _precompute", "call precompute function");
-
       // Restore argc, argv, and envp
       gen.emit("pop rdx", "restore envp");
       gen.emit("pop rsi", "restore argv");
@@ -80,8 +78,6 @@ export default class ProgramExpr extends Expression {
       gen.emit("mov rdi, rax", "move return value into rdi for exit");
       gen.emit("call exit", "call exit function");
       gen.emit("", "end of main");
-    } else {
-      gen.emit("call _precompute", "call precompute function");
     }
 
     for (const expr of this.expressions) {

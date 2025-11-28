@@ -3,6 +3,8 @@ import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import ArrayLiteralExpr from "./arrayLiteralExpr";
 import Expression from "./expr";
+import NullLiteralExpr from "./nullLiteralExpr";
+import NumberLiteralExpr from "./numberLiteralExpr";
 import StringLiteralExpr from "./stringLiteralExpr";
 
 export type VariableType = {
@@ -205,6 +207,10 @@ export default class VariableDeclarationExpr extends Expression {
         );
       });
       gen.endPrecomputeBlock();
+    } else if (this.value instanceof NumberLiteralExpr) {
+      gen.emitData(label, "dq", this.value.value);
+    } else if (this.value instanceof NullLiteralExpr) {
+      gen.emitData(label, "dq", 0);
     } else {
       gen.emitBss(label, "resq", 1);
       gen.startPrecomputeBlock();

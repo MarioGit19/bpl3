@@ -7,6 +7,11 @@ export default class AsmGenerator {
   private globalDefinitions: string[] = [];
   private importDefinitions: string[] = [];
   private labelCount: number = 0;
+  private initLabel: string;
+
+  constructor() {
+    this.initLabel = "_init_" + Math.random().toString(36).substring(2, 15);
+  }
 
   isPrecomputeBlock: boolean = false;
   startPrecomputeBlock() {
@@ -57,6 +62,20 @@ export default class AsmGenerator {
   }
 
   build(): string {
+    const hasPrecompute = this.precompute.length > 0;
+
+    if (hasPrecompute) {
+      this.globalDefinitions.push(`global ${this.initLabel}`);
+    }
+
+    const initSection = hasPrecompute
+      ? ["section .init_array", `dq ${this.initLabel}`]
+      : [];
+
+    const precomputeBlock = hasPrecompute
+      ? [`${this.initLabel}:`, ...this.precompute, "    ret"]
+      : [];
+
     return [
       ...this.importDefinitions,
       "section .rodata",
@@ -65,11 +84,10 @@ export default class AsmGenerator {
       ...this.data,
       "section .bss",
       ...this.bss,
+      ...initSection,
       "section .text",
       ...this.globalDefinitions,
-      "_precompute:",
-      ...this.precompute,
-      "    ret",
+      ...precomputeBlock,
       ...this.text,
     ].join("\n");
   }
