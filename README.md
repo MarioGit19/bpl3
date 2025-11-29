@@ -417,4 +417,4 @@ Contributions to BPL are welcome! If you find a bug or want to add a new feature
 
 ## License
 
-BPL is licensed under the MIT License. See the LICENSE file for more information.
+BPL is licensed under the Apache 2.0 License. See the LICENSE file for more information.
