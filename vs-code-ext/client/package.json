@@ -1,14 +1,30 @@
 {
-  "name": "bpl-highlight",
-  "displayName": "BPL Highlight",
-  "description": "Syntax highlighting for BPL (The Best Programming Language)",
-  "scripts": {
-    "build-vsix": "vsce package"
-  },
+  "name": "bpl-vscode",
+  "displayName": "BPL Language Support",
+  "description": "Language support for BPL (The Best Programming Language)",
+  "version": "0.1.0",
   "publisher": "pr0h0",
-  "version": "0.0.14",
   "engines": {
     "vscode": "^1.74.0"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:bpl"
+  ],
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -b",
+    "watch": "tsc -b -w",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0",
+    "@vscode/vsce": "^3.7.1"
   },
   "repository": {
     "type": "git",
@@ -128,8 +144,5 @@
         ]
       }
     }
-  },
-  "devDependencies": {
-    "@vscode/vsce": "^3.7.1"
   }
 }

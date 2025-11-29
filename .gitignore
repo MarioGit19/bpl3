@@ -39,3 +39,6 @@ example/**
 !example/**/
 !example/**/*.x
 !example/**/test.sh
+
+lib/*.asm
+lib/*.o

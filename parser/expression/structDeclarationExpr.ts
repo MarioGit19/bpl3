@@ -144,6 +144,7 @@ export default class StructDeclarationExpr extends Expression {
       (maxAlignment - (currentOffset % maxAlignment)) % maxAlignment;
     structTypeInfo.size = currentOffset + structPadding;
     structTypeInfo.alignment = maxAlignment;
+    structTypeInfo.declaration = this.startToken;
 
     scope.defineType(this.name, structTypeInfo);
   }

@@ -134,6 +134,7 @@ export default class FunctionCallExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
+    this.contextScope = scope;
     const func = scope.resolveFunction(this.functionName);
     if (!func) {
       throw new Error(`Function ${this.functionName} not found`);

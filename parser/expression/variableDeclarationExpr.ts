@@ -7,11 +7,13 @@ import Expression from "./expr";
 import NullLiteralExpr from "./nullLiteralExpr";
 import NumberLiteralExpr from "./numberLiteralExpr";
 import StringLiteralExpr from "./stringLiteralExpr";
+import Token from "../../lexer/token";
 
 export type VariableType = {
   name: string;
   isPointer: number;
   isArray: number[];
+  token?: Token;
 };
 
 export default class VariableDeclarationExpr extends Expression {
@@ -21,6 +23,7 @@ export default class VariableDeclarationExpr extends Expression {
     public name: string,
     public varType: VariableType,
     public value: Expression | null,
+    public nameToken?: Token,
   ) {
     super(ExpressionType.VariableDeclaration);
   }
@@ -89,6 +92,7 @@ export default class VariableDeclarationExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
+    this.contextScope = scope;
     if (this.scope === "global") {
       this.parseGlobalVariableDeclaration(gen, scope);
       return;
@@ -120,6 +124,7 @@ export default class VariableDeclarationExpr extends Expression {
       offset: offset.toString(),
       type: "local",
       varType: this.varType,
+      declaration: this.startToken,
     });
 
     if (this.value && this.varType.isArray.length) {
@@ -263,6 +268,7 @@ export default class VariableDeclarationExpr extends Expression {
       offset: label,
       type: "global",
       varType: this.varType,
+      declaration: this.startToken,
     });
 
     if (!this.value && !this.varType.isArray.length) {

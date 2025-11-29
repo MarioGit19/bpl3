@@ -1,10 +1,13 @@
 import type { VariableType } from "../parser/expression/variableDeclarationExpr";
+import Token from "../lexer/token";
 
 export interface VarInfo {
   type: "local" | "global";
   offset: string;
   varType: VariableType;
   isParameter?: boolean;
+  declaration?: Token;
+  sourceFile?: string;
 }
 
 export type ContextType =
@@ -33,6 +36,8 @@ export type TypeInfo = {
   isPrimitive: boolean;
   members: Map<string, TypeInfo>;
   info: InfoType;
+  declaration?: Token;
+  sourceFile?: string;
 };
 
 export type InfoType = {
@@ -49,13 +54,15 @@ export type FunctionInfo = {
   args: { type: VariableType; name: string }[];
   returnType: VariableType | null;
   isExternal?: boolean;
+  declaration?: Token;
+  sourceFile?: string;
 };
 
 export default class Scope {
-  private types = new Map<string, TypeInfo>();
-  private vars = new Map<string, VarInfo>();
+  public types = new Map<string, TypeInfo>();
+  public vars = new Map<string, VarInfo>();
   public stackOffset = 0; // Tracks stack usage for this function
-  private functions = new Map<string, FunctionInfo>();
+  public functions = new Map<string, FunctionInfo>();
   public currentContext: ContextType[] = [];
 
   constructor(public readonly parent: Scope | null = null) {}

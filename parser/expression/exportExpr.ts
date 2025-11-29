@@ -2,11 +2,13 @@ import type AsmGenerator from "../../transpiler/AsmGenerator";
 import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
+import Token from "../../lexer/token";
 
 export default class ExportExpr extends Expression {
   constructor(
     public exportName: string,
     public exportType: "type" | "function" = "function",
+    public nameToken?: Token,
   ) {
     super(ExpressionType.ExportExpression);
   }

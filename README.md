@@ -25,14 +25,13 @@ More examples can be found in the `example` directory.
 
 ## VS Code Extension
 
-BPL includes a VS Code extension for syntax highlighting.
+BPL includes a full-featured VS Code extension providing syntax highlighting, code completion, go-to-definition, and hover information.
 
 To install it:
 
-1. Navigate to `vs-code-ext/highlight`.
-2. Install dependencies: `bun install`.
-3. Build the extension: `bun run build-vsix`.
-4. Install the generated `.vsix` file in VS Code (e.g. `code --install-extension bpl-highlight-0.0.10.vsix`).
+1. Navigate to `vs-code-ext`.
+2. Run the build script: `./build_extension.sh`.
+3. Install the generated `.vsix` file located in `vs-code-ext/client/` (e.g., `code --install-extension vs-code-ext/client/bpl-vscode-0.1.0.vsix`).
 
 ## Language Features
 

@@ -214,7 +214,7 @@
     "variables": {
       "patterns": [
         {
-          "match": "\\b(local|global|const)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+          "match": "\\b(local|global|const|argument)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
           "captures": {
             "1": { "name": "keyword.other.bpl" },
             "2": { "name": "variable.name.bpl" }

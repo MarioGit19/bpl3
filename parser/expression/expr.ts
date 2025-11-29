@@ -2,6 +2,7 @@ import type AsmGenerator from "../../transpiler/AsmGenerator";
 import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import type { VariableType } from "./variableDeclarationExpr";
+import Token from "../../lexer/token";
 
 export default class Expression {
   constructor(type: ExpressionType) {
@@ -10,6 +11,9 @@ export default class Expression {
   public type: ExpressionType;
   public depth: number = 0;
   public requiresSemicolon: boolean = true;
+  public startToken?: Token;
+  public endToken?: Token;
+  public contextScope?: Scope;
 
   public argOrders: string[] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 

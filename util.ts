@@ -69,7 +69,7 @@ export function parseImportExpression(importExpr: ImportExpr) {
 }
 
 export function parseImportExpressions(exprs: ImportExpr[]) {
-  const imports = [];
+  const imports: ReturnType<typeof parseImportExpression>[] = [];
   for (const expr of exprs) {
     imports.push(parseImportExpression(expr));
   }
@@ -84,7 +84,7 @@ export function parseExportExpression(exportExpr: ExportExpr) {
 }
 
 export function parseExportExpressions(exprs: ExportExpr[]) {
-  const exports = [];
+  const exports: ReturnType<typeof parseExportExpression>[] = [];
   for (const expr of exprs) {
     exports.push(parseExportExpression(expr));
   }

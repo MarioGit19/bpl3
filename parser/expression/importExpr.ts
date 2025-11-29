@@ -3,10 +3,17 @@ import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
 
+import Token from "../../lexer/token";
+
 export default class ImportExpr extends Expression {
   constructor(
     public moduleName: string,
-    public importName: { name: string; type: "function" | "type" }[],
+    public importName: {
+      name: string;
+      type: "function" | "type";
+      token?: Token;
+    }[],
+    public moduleNameToken?: Token,
   ) {
     super(ExpressionType.ImportExpression);
   }
@@ -29,13 +36,17 @@ export default class ImportExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
-    const finalImports = [];
+    const finalImports: string[] = [];
     for (const importItem of this.importName) {
       if (importItem.type === "type") {
         continue;
       }
       const name = importItem.name;
       finalImports.push(name);
+
+      if (scope.resolveFunction(name)) {
+        continue;
+      }
 
       scope.defineFunction(name, {
         name: name,

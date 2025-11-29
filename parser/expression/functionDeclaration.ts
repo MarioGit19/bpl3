@@ -3,6 +3,7 @@ import Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
 import type { VariableType } from "./variableDeclarationExpr";
+import Token from "../../lexer/token";
 
 export default class FunctionDeclarationExpr extends Expression {
   constructor(
@@ -10,6 +11,7 @@ export default class FunctionDeclarationExpr extends Expression {
     public args: { type: VariableType; name: string }[],
     public returnType: VariableType | null,
     public body: Expression,
+    public nameToken?: Token,
   ) {
     super(ExpressionType.FunctionDeclaration);
     this.requiresSemicolon = false;
@@ -62,6 +64,7 @@ export default class FunctionDeclarationExpr extends Expression {
       label: label,
       name: this.name,
       startLabel: label,
+      declaration: this.startToken,
     });
 
     if (this.name === "main") {

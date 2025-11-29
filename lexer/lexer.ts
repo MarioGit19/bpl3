@@ -10,6 +10,8 @@ class Lexer {
 
   index: number = 0;
   line: number = 1;
+  column: number = 1;
+  tokenStartColumn: number = 1;
   input: string;
   tokens = [] as Token[];
 
@@ -30,21 +32,27 @@ class Lexer {
         this.tokens.push(token);
       }
     }
-    this.tokens.push(new Token(TokenType.EOF, "EOF", ++this.line));
+    this.tokens.push(new Token(TokenType.EOF, "EOF", ++this.line, 1));
     return this.tokens;
   }
 
   parseToken(): Token {
+    this.tokenStartColumn = this.column;
     const char = this.consume();
     if (!char) {
       throw new CompilerError("End of input reached", this.line);
     }
 
     if (char === "\n") {
-      return new Token(TokenType.NOOP, char, this.line++);
+      return new Token(
+        TokenType.NOOP,
+        char,
+        this.line++,
+        this.tokenStartColumn,
+      );
     }
     if (char === " " || char === "\t" || char === "\r") {
-      return new Token(TokenType.NOOP, char, this.line);
+      return new Token(TokenType.NOOP, char, this.line, this.tokenStartColumn);
     }
 
     if (Lexer.PARENTHESIS_REGEX.test(char)) {
@@ -99,7 +107,12 @@ class Lexer {
       identifierStr += this.consume();
     }
 
-    return new Token(TokenType.IDENTIFIER, identifierStr, this.line);
+    return new Token(
+      TokenType.IDENTIFIER,
+      identifierStr,
+      this.line,
+      this.tokenStartColumn,
+    );
   }
 
   parseComment(): Token {
@@ -110,7 +123,7 @@ class Lexer {
         break;
       }
     }
-    return new Token(TokenType.NOOP, "#", this.line);
+    return new Token(TokenType.NOOP, "#", this.line, this.tokenStartColumn);
   }
 
   parseStringLiteral(startToken: string): Token {
@@ -134,10 +147,16 @@ class Lexer {
             TokenType.NUMBER_LITERAL,
             str.charCodeAt(0).toString(),
             this.line,
+            this.tokenStartColumn,
           );
         }
 
-        return new Token(TokenType.STRING_LITERAL, str, this.line);
+        return new Token(
+          TokenType.STRING_LITERAL,
+          str,
+          this.line,
+          this.tokenStartColumn,
+        );
       } else if (char === "\n") {
         throw new CompilerError(
           "Strings cannot span multiple lines",
@@ -204,9 +223,15 @@ class Lexer {
         TokenType.NUMBER_LITERAL,
         "0x" + value.toString(16),
         this.line,
+        this.tokenStartColumn,
       );
     } else {
-      return new Token(TokenType.NUMBER_LITERAL, numberStr, this.line);
+      return new Token(
+        TokenType.NUMBER_LITERAL,
+        numberStr,
+        this.line,
+        this.tokenStartColumn,
+      );
     }
   }
 
@@ -215,23 +240,48 @@ class Lexer {
       case "&":
         if (this.peek(0) === "&") {
           this.consume();
-          return new Token(TokenType.AND, "&&", this.line);
+          return new Token(
+            TokenType.AND,
+            "&&",
+            this.line,
+            this.tokenStartColumn,
+          );
         }
         if (this.peek(0) === "=") {
           this.consume();
-          return new Token(TokenType.AMPERSAND_ASSIGN, "&=", this.line);
+          return new Token(
+            TokenType.AMPERSAND_ASSIGN,
+            "&=",
+            this.line,
+            this.tokenStartColumn,
+          );
         }
-        return new Token(TokenType.AMPERSAND, "&", this.line);
+        return new Token(
+          TokenType.AMPERSAND,
+          "&",
+          this.line,
+          this.tokenStartColumn,
+        );
       case "|":
         if (this.peek(0) === "|") {
           this.consume();
-          return new Token(TokenType.OR, "||", this.line);
+          return new Token(
+            TokenType.OR,
+            "||",
+            this.line,
+            this.tokenStartColumn,
+          );
         }
         if (this.peek(0) === "=") {
           this.consume();
-          return new Token(TokenType.PIPE_ASSIGN, "|=", this.line);
+          return new Token(
+            TokenType.PIPE_ASSIGN,
+            "|=",
+            this.line,
+            this.tokenStartColumn,
+          );
         }
-        return new Token(TokenType.PIPE, "|", this.line);
+        return new Token(TokenType.PIPE, "|", this.line, this.tokenStartColumn);
       default:
         throw new CompilerError(
           "Detected invalid logical operator: " + char,
@@ -243,41 +293,76 @@ class Lexer {
   parseAssignOperator(): Token {
     if (this.peek(0) === "=") {
       this.consume();
-      return new Token(TokenType.EQUAL, "==", this.line);
+      return new Token(TokenType.EQUAL, "==", this.line, this.tokenStartColumn);
     }
-    return new Token(TokenType.ASSIGN, "=", this.line);
+    return new Token(TokenType.ASSIGN, "=", this.line, this.tokenStartColumn);
   }
 
   parseNotOperator(): Token {
     if (this.peek(0) === "=") {
       this.consume();
-      return new Token(TokenType.NOT_EQUAL, "!=", this.line);
+      return new Token(
+        TokenType.NOT_EQUAL,
+        "!=",
+        this.line,
+        this.tokenStartColumn,
+      );
     }
-    return new Token(TokenType.NOT, "!", this.line);
+    return new Token(TokenType.NOT, "!", this.line, this.tokenStartColumn);
   }
 
   parseLessThanOperator(): Token {
     if (this.peek(0) === "=") {
       this.consume();
-      return new Token(TokenType.LESS_EQUAL, "<=", this.line);
+      return new Token(
+        TokenType.LESS_EQUAL,
+        "<=",
+        this.line,
+        this.tokenStartColumn,
+      );
     }
     if (this.peek(0) === "<") {
       this.consume();
-      return new Token(TokenType.BITSHIFT_LEFT, "<<", this.line);
+      return new Token(
+        TokenType.BITSHIFT_LEFT,
+        "<<",
+        this.line,
+        this.tokenStartColumn,
+      );
     }
-    return new Token(TokenType.LESS_THAN, "<", this.line);
+    return new Token(
+      TokenType.LESS_THAN,
+      "<",
+      this.line,
+      this.tokenStartColumn,
+    );
   }
 
   parseGreaterThanOperator(): Token {
     if (this.peek(0) === "=") {
       this.consume();
-      return new Token(TokenType.GREATER_EQUAL, ">=", this.line);
+      return new Token(
+        TokenType.GREATER_EQUAL,
+        ">=",
+        this.line,
+        this.tokenStartColumn,
+      );
     }
     if (this.peek(0) === ">") {
       this.consume();
-      return new Token(TokenType.BITSHIFT_RIGHT, ">>", this.line);
+      return new Token(
+        TokenType.BITSHIFT_RIGHT,
+        ">>",
+        this.line,
+        this.tokenStartColumn,
+      );
     }
-    return new Token(TokenType.GREATER_THAN, ">", this.line);
+    return new Token(
+      TokenType.GREATER_THAN,
+      ">",
+      this.line,
+      this.tokenStartColumn,
+    );
   }
 
   parseEqualityOperator(char: string): Token {
@@ -313,7 +398,12 @@ class Lexer {
       case "^":
         return this.parseCaretOperator();
       case "~":
-        return new Token(TokenType.TILDE, "~", this.line);
+        return new Token(
+          TokenType.TILDE,
+          "~",
+          this.line,
+          this.tokenStartColumn,
+        );
       default:
         throw new CompilerError(
           "Detected invalid operator: " + char,
@@ -325,17 +415,27 @@ class Lexer {
   parseCaretOperator(): Token {
     if (this.peek() === "=") {
       this.consume();
-      return new Token(TokenType.CARET_ASSIGN, "^=", this.line);
+      return new Token(
+        TokenType.CARET_ASSIGN,
+        "^=",
+        this.line,
+        this.tokenStartColumn,
+      );
     }
-    return new Token(TokenType.CARET, "^", this.line);
+    return new Token(TokenType.CARET, "^", this.line, this.tokenStartColumn);
   }
 
   parsePercentOperator(): Token {
     if (this.peek() === "=") {
       this.consume();
-      return new Token(TokenType.PERCENT_ASSIGN, "%=", this.line);
+      return new Token(
+        TokenType.PERCENT_ASSIGN,
+        "%=",
+        this.line,
+        this.tokenStartColumn,
+      );
     }
-    return new Token(TokenType.PERCENT, "%", this.line);
+    return new Token(TokenType.PERCENT, "%", this.line, this.tokenStartColumn);
   }
 
   parseSlashOperator(): Token {
@@ -345,9 +445,14 @@ class Lexer {
     // }
     if (this.peek() === "=") {
       this.consume();
-      return new Token(TokenType.SLASH_ASSIGN, "/=", this.line);
+      return new Token(
+        TokenType.SLASH_ASSIGN,
+        "/=",
+        this.line,
+        this.tokenStartColumn,
+      );
     }
-    return new Token(TokenType.SLASH, "/", this.line);
+    return new Token(TokenType.SLASH, "/", this.line, this.tokenStartColumn);
   }
 
   parseStarOperator(): Token {
@@ -357,49 +462,99 @@ class Lexer {
     // }
     if (this.peek() === "=") {
       this.consume();
-      return new Token(TokenType.STAR_ASSIGN, "*=", this.line);
+      return new Token(
+        TokenType.STAR_ASSIGN,
+        "*=",
+        this.line,
+        this.tokenStartColumn,
+      );
     }
-    return new Token(TokenType.STAR, "*", this.line);
+    return new Token(TokenType.STAR, "*", this.line, this.tokenStartColumn);
   }
 
   parseMinusOperator(): Token {
     if (this.peek() === "-") {
       this.consume();
-      return new Token(TokenType.DECREMENT, "--", this.line);
+      return new Token(
+        TokenType.DECREMENT,
+        "--",
+        this.line,
+        this.tokenStartColumn,
+      );
     }
     if (this.peek() === "=") {
       this.consume();
-      return new Token(TokenType.MINUS_ASSIGN, "-=", this.line);
+      return new Token(
+        TokenType.MINUS_ASSIGN,
+        "-=",
+        this.line,
+        this.tokenStartColumn,
+      );
     }
-    return new Token(TokenType.MINUS, "-", this.line);
+    return new Token(TokenType.MINUS, "-", this.line, this.tokenStartColumn);
   }
 
   parsePlusOperator(): Token {
     if (this.peek() === "+") {
       this.consume();
-      return new Token(TokenType.INCREMENT, "++", this.line);
+      return new Token(
+        TokenType.INCREMENT,
+        "++",
+        this.line,
+        this.tokenStartColumn,
+      );
     }
     if (this.peek() === "=") {
       this.consume();
-      return new Token(TokenType.PLUS_ASSIGN, "+=", this.line);
+      return new Token(
+        TokenType.PLUS_ASSIGN,
+        "+=",
+        this.line,
+        this.tokenStartColumn,
+      );
     }
-    return new Token(TokenType.PLUS, "+", this.line);
+    return new Token(TokenType.PLUS, "+", this.line, this.tokenStartColumn);
   }
 
   parsePunctuation(char: string): Token {
     switch (char) {
       case ",":
-        return new Token(TokenType.COMMA, char, this.line);
+        return new Token(
+          TokenType.COMMA,
+          char,
+          this.line,
+          this.tokenStartColumn,
+        );
       case ";":
-        return new Token(TokenType.SEMICOLON, char, this.line);
+        return new Token(
+          TokenType.SEMICOLON,
+          char,
+          this.line,
+          this.tokenStartColumn,
+        );
       case ".":
-        return new Token(TokenType.DOT, char, this.line);
+        return new Token(TokenType.DOT, char, this.line, this.tokenStartColumn);
       case ":":
-        return new Token(TokenType.COLON, char, this.line);
+        return new Token(
+          TokenType.COLON,
+          char,
+          this.line,
+          this.tokenStartColumn,
+        );
       case "_":
-        return new Token(TokenType.UNDERSCORE, char, this.line);
+        return new Token(
+          TokenType.UNDERSCORE,
+          char,
+          this.line,
+          this.tokenStartColumn,
+        );
       case "?":
-        return new Token(TokenType.QUESTION, char, this.line);
+        return new Token(
+          TokenType.QUESTION,
+          char,
+          this.line,
+          this.tokenStartColumn,
+        );
       default:
         throw new CompilerError(
           "Detected invalid punctuation: " + char,
@@ -411,17 +566,47 @@ class Lexer {
   parseParenthesis(char: string): Token {
     switch (char) {
       case "(":
-        return new Token(TokenType.OPEN_PAREN, char, this.line);
+        return new Token(
+          TokenType.OPEN_PAREN,
+          char,
+          this.line,
+          this.tokenStartColumn,
+        );
       case ")":
-        return new Token(TokenType.CLOSE_PAREN, char, this.line);
+        return new Token(
+          TokenType.CLOSE_PAREN,
+          char,
+          this.line,
+          this.tokenStartColumn,
+        );
       case "{":
-        return new Token(TokenType.OPEN_BRACE, char, this.line);
+        return new Token(
+          TokenType.OPEN_BRACE,
+          char,
+          this.line,
+          this.tokenStartColumn,
+        );
       case "}":
-        return new Token(TokenType.CLOSE_BRACE, char, this.line);
+        return new Token(
+          TokenType.CLOSE_BRACE,
+          char,
+          this.line,
+          this.tokenStartColumn,
+        );
       case "[":
-        return new Token(TokenType.OPEN_BRACKET, char, this.line);
+        return new Token(
+          TokenType.OPEN_BRACKET,
+          char,
+          this.line,
+          this.tokenStartColumn,
+        );
       case "]":
-        return new Token(TokenType.CLOSE_BRACKET, char, this.line);
+        return new Token(
+          TokenType.CLOSE_BRACKET,
+          char,
+          this.line,
+          this.tokenStartColumn,
+        );
       default:
         throw new CompilerError(
           "Detected invalid parenthesis: " + char,
@@ -440,6 +625,11 @@ class Lexer {
 
   consume(): string {
     const char = this.isEof() ? "" : this.input[this.index++];
+    if (char === "\n") {
+      this.column = 1;
+    } else {
+      this.column++;
+    }
     return char!;
   }
 }

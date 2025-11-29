@@ -24,6 +24,7 @@ export default class IdentifierExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
+    this.contextScope = scope;
     const symbol = scope.resolve(this.name);
     if (!symbol) {
       throw new Error(`Undefined identifier: ${this.name}`);
