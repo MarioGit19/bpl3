@@ -42,13 +42,7 @@ describe("Optimizer", () => {
   describe("Full Optimizer", () => {
     it("should apply multiple rules", () => {
       const optimizer = new Optimizer(3); // O3 includes all rules
-      const input = [
-        "mov rax, rax",
-        "jmp end",
-        "mov rbx, 1",
-        "end:",
-        "ret",
-      ];
+      const input = ["mov rax, rax", "jmp end", "mov rbx, 1", "end:", "ret"];
       const output = optimizer.optimize(input);
       // mov rax, rax -> removed
       // jmp end -> removed (JmpNextLabelRule)

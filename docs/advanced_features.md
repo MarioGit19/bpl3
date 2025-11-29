@@ -31,7 +31,7 @@ frame main() ret u8 {
         add rax, (b)      ; Add 'b' to RAX
         mov (result), rax ; Store result
     }
-    
+
     return 0;
 }
 ```
@@ -57,6 +57,7 @@ frame write_stdout(msg: *u8, len: u64) {
 BPL does not have a garbage collector. Memory management is manual when using heap allocation.
 
 ### Stack Allocation
+
 Local variables are allocated on the stack and automatically freed when the function returns.
 
 ```bpl
@@ -66,6 +67,7 @@ frame foo() {
 ```
 
 ### Heap Allocation
+
 Use `malloc` and `free` from `libc` for dynamic memory.
 
 ```bpl
@@ -74,9 +76,9 @@ import malloc, free from "libc";
 frame main() ret u8 {
     # Allocate 1024 bytes
     local buffer: *u8 = call malloc(1024);
-    
+
     # ... use buffer ...
-    
+
     # Free memory
     call free(buffer);
     return 0;
@@ -115,7 +117,7 @@ When importing from `.x` files, BPL knows the function signatures. However, for 
 import printf from "libc";
 
 # Without extern, BPL might not know how to handle arguments or return types correctly
-extern printf(fmt: *u8); 
+extern printf(fmt: *u8);
 
 frame main() {
     call printf("Hello C!\n");
@@ -123,6 +125,7 @@ frame main() {
 ```
 
 **Why use `extern`?**
+
 1.  **Type Checking**: Ensures you pass the correct types to C functions.
 2.  **Return Values**: Tells the compiler what type the function returns (e.g., `ret *u8` for `malloc`), so it can be assigned to variables correctly.
 
@@ -135,7 +138,7 @@ frame main(argc: u32, argv: **u8, envp: **u8) ret u8 {
     # argc: Number of arguments
     # argv: Array of argument strings
     # envp: Array of environment strings
-    
+
     if argc > 1 {
         call print(argv[1]); # Print first argument
     }

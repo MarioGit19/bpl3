@@ -11,6 +11,7 @@ To use BPL, you need the following tools installed on your system:
 - **GCC**: The GNU Compiler Collection, used for linking.
 
 On Ubuntu/Debian, you can install NASM and GCC with:
+
 ```bash
 sudo apt update
 sudo apt install nasm gcc
@@ -19,6 +20,7 @@ sudo apt install nasm gcc
 ## Installation
 
 1.  **Clone the repository:**
+
     ```bash
     git clone https://github.com/pr0h0/bpl3.git
     cd bpl3/transpiler
@@ -42,9 +44,9 @@ frame main() ret u8 {
 
 ### Explanation
 
--   `frame main() ret u8`: Defines the entry point function `main` which returns a `u8` (unsigned 8-bit integer).
--   `call print(...)`: Calls the built-in `print` function.
--   `return 0`: Returns the exit code 0 (success).
+- `frame main() ret u8`: Defines the entry point function `main` which returns a `u8` (unsigned 8-bit integer).
+- `call print(...)`: Calls the built-in `print` function.
+- `return 0`: Returns the exit code 0 (success).
 
 ## Compiling and Running
 
@@ -53,12 +55,15 @@ To compile and run your program, use the `index.ts` script:
 ```bash
 bun index.ts hello.x
 ```
+
 or
+
 ```bash
 ./cmp.sh hello.x
 ```
 
 This command will:
+
 1.  Transpile `hello.x` to `hello.asm`.
 2.  Assemble `hello.asm` to `hello.o`.
 3.  Link `hello.o` to create the executable `hello`.
@@ -70,6 +75,7 @@ To run the executable:
 ```
 
 You should see:
+
 ```
 Hello, BPL!
 ```
@@ -86,12 +92,12 @@ bun index.ts -r hello.x
 
 Run `bun index.ts --help` to see all available options:
 
--   `-q | --quiet`: Suppress output.
--   `-p | --print-asm`: Print generated assembly.
--   `-r | --run`: Run after compilation.
--   `-g | --gdb`: Run inside GDB.
--   `-l | --lib`: Compile as a shared library.
--   `-s | --static`: Compile as a static executable.
+- `-q | --quiet`: Suppress output.
+- `-p | --print-asm`: Print generated assembly.
+- `-r | --run`: Run after compilation.
+- `-g | --gdb`: Run inside GDB.
+- `-l | --lib`: Compile as a shared library.
+- `-s | --static`: Compile as a static executable.
 
 ## VS Code Extension
 

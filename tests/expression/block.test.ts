@@ -24,6 +24,8 @@ describe("BlockExpr", () => {
 
     expect(outerBlock.type).toBe(ExpressionType.BlockExpression);
     expect(outerBlock.expressions.length).toBe(1);
-    expect(outerBlock.expressions[0]?.type).toBe(ExpressionType.VariableDeclaration);
+    expect(outerBlock.expressions[0]?.type).toBe(
+      ExpressionType.VariableDeclaration,
+    );
   });
 });

@@ -23,7 +23,7 @@ describe("Module Expressions", () => {
   });
 
   it("should parse export statement", () => {
-    const input = 'export func;';
+    const input = "export func;";
     const program = parse(input);
     const exportExpr = program.expressions[0] as ExportExpr;
 

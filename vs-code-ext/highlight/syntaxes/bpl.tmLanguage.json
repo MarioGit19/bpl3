@@ -97,7 +97,7 @@
       "patterns": [
         {
           "name": "keyword.control.bpl",
-          "match": "\\b(if|else|loop|break|continue|return|import|from|export)\\b"
+          "match": "\\b(if|else|loop|break|continue|return|import|from|export|extern)\\b"
         },
         {
           "name": "keyword.other.bpl",
@@ -123,67 +123,67 @@
           }
         },
         {
-            "begin": "\\b(import)\\b",
-            "beginCaptures": {
-                "1": { "name": "keyword.control.bpl" }
+          "begin": "\\b(import)\\b",
+          "beginCaptures": {
+            "1": { "name": "keyword.control.bpl" }
+          },
+          "end": "\\b(from)\\b",
+          "endCaptures": {
+            "1": { "name": "keyword.control.bpl" }
+          },
+          "patterns": [
+            {
+              "match": "\\[\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\]",
+              "captures": {
+                "1": { "name": "entity.name.type.imported.bpl" }
+              }
             },
-            "end": "\\b(from)\\b",
-            "endCaptures": {
-                "1": { "name": "keyword.control.bpl" }
+            {
+              "match": ",",
+              "name": "punctuation.separator.bpl"
             },
-            "patterns": [
-                {
-                    "match": "\\[\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\]",
-                    "captures": {
-                        "1": { "name": "entity.name.type.imported.bpl" }
-                    }
-                },
-                {
-                    "match": ",",
-                    "name": "punctuation.separator.bpl"
-                },
-                {
-                    "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b",
-                    "name": "entity.name.function.imported.bpl"
-                }
-            ]
-        },
-        {
-            "begin": "\\b(export)\\s*(\\[)",
-            "beginCaptures": {
-                "1": { "name": "keyword.control.bpl" },
-                "2": { "name": "punctuation.section.brackets.begin.bpl" }
-            },
-            "end": "(\\])",
-            "endCaptures": {
-                "1": { "name": "punctuation.section.brackets.end.bpl" }
-            },
-            "patterns": [
-                {
-                    "match": "[a-zA-Z_][a-zA-Z0-9_]*",
-                    "name": "entity.name.type.exported.bpl"
-                },
-                {
-                    "match": ",",
-                    "name": "punctuation.separator.bpl"
-                }
-            ]
-        },
-        {
-            "match": "(:)\\s*((?:\\*\\s*)*)([a-zA-Z_][a-zA-Z0-9_]*)",
-            "captures": {
-                "1": { "name": "keyword.operator.bpl" },
-                "2": { "name": "keyword.operator.bpl" },
-                "3": { "name": "entity.name.type.bpl" }
+            {
+              "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b",
+              "name": "entity.name.function.imported.bpl"
             }
+          ]
         },
         {
-            "match": "\\b(ret)\\s+((?:\\*\\s*)*)([a-zA-Z_][a-zA-Z0-9_]*)",
-            "captures": {
-                "1": { "name": "keyword.other.bpl" },
-                "2": { "name": "keyword.operator.bpl" },
-                "3": { "name": "entity.name.type.bpl" }
+          "begin": "\\b(export)\\s*(\\[)",
+          "beginCaptures": {
+            "1": { "name": "keyword.control.bpl" },
+            "2": { "name": "punctuation.section.brackets.begin.bpl" }
+          },
+          "end": "(\\])",
+          "endCaptures": {
+            "1": { "name": "punctuation.section.brackets.end.bpl" }
+          },
+          "patterns": [
+            {
+              "match": "[a-zA-Z_][a-zA-Z0-9_]*",
+              "name": "entity.name.type.exported.bpl"
+            },
+            {
+              "match": ",",
+              "name": "punctuation.separator.bpl"
             }
+          ]
+        },
+        {
+          "match": "(:)\\s*((?:\\*\\s*)*)([a-zA-Z_][a-zA-Z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.operator.bpl" },
+            "2": { "name": "keyword.operator.bpl" },
+            "3": { "name": "entity.name.type.bpl" }
+          }
+        },
+        {
+          "match": "\\b(ret)\\s+((?:\\*\\s*)*)([a-zA-Z_][a-zA-Z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.other.bpl" },
+            "2": { "name": "keyword.operator.bpl" },
+            "3": { "name": "entity.name.type.bpl" }
+          }
         }
       ]
     },

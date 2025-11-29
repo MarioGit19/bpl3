@@ -11,6 +11,7 @@ You can run all tests using the `tests.sh` script in the root directory:
 ```
 
 This script will:
+
 1.  Run modular tests defined in `example/**/test.sh`.
 2.  Compile and run standalone `.x` files in `example/`.
 3.  Report pass/fail status.
@@ -32,8 +33,9 @@ Integration tests are actual BPL programs located in the `example/` directory.
 ### Structure of an Integration Test
 
 For a complex example (like `fib` or `hotel`), create a directory in `example/` containing:
--   `source.x`: The BPL source code.
--   `test.sh`: A shell script that compiles and runs the program, verifying the output.
+
+- `source.x`: The BPL source code.
+- `test.sh`: A shell script that compiles and runs the program, verifying the output.
 
 ### Example `test.sh`
 

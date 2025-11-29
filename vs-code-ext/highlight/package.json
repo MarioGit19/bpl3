@@ -6,7 +6,7 @@
     "build-vsix": "vsce package"
   },
   "publisher": "pr0h0",
-  "version": "0.0.10",
+  "version": "0.0.14",
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -46,6 +46,12 @@
         "language": "bpl",
         "scopeName": "source.bpl",
         "path": "./syntaxes/bpl.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "bpl",
+        "path": "./snippets/bpl.json"
       }
     ],
     "configurationDefaults": {

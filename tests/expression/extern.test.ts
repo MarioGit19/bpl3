@@ -69,19 +69,19 @@ describe("Extern Declaration", () => {
       // Looking at ExternDeclarationExpr.ts:
       // const existingFunc = scope.resolveFunction(this.name);
       // if (!existingFunc || !existingFunc.isExternal) { throw ... }
-      
+
       // So we must import it first.
       const input = `
         import printf from "libc";
         extern printf(fmt: *u8);
       `;
-      
+
       // We can't easily inspect the scope after generation with the helper function,
       // but if it doesn't throw, it means it worked.
       // And we can check if calls use the correct signature?
-      // Actually, the generator doesn't use the signature for validation yet, 
+      // Actually, the generator doesn't use the signature for validation yet,
       // but the scope update is what we care about.
-      
+
       expect(() => generate(input)).not.toThrow();
     });
 

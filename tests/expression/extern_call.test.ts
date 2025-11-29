@@ -28,7 +28,7 @@ describe("Extern Call", () => {
     `;
 
     const asm = generate(code);
-    
+
     expect(asm).not.toContain("cvtss2sd");
   });
 
@@ -50,7 +50,7 @@ describe("Extern Call", () => {
   });
 
   test("Extern declaration enforces argument types in generation", () => {
-     const code = `
+    const code = `
       import pow from "libc";
       extern pow(base: f64, exp: f64) ret f64;
       
@@ -84,7 +84,7 @@ describe("Extern Call", () => {
   });
 
   test("Extern declaration enforces argument types in generation", () => {
-     const code = `
+    const code = `
       import pow from "libc";
       extern pow(base: f64, exp: f64) ret f64;
       

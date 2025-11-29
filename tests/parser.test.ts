@@ -85,10 +85,12 @@ describe("Parser", () => {
       const program = parse(input);
       const varDecl = program.expressions[0] as VariableDeclarationExpr;
       const binaryExpr = varDecl.value as BinaryExpr;
-      
+
       expect(binaryExpr.type).toBe(ExpressionType.BinaryExpression);
       expect(binaryExpr.operator.type).toBe(TokenType.PLUS);
-      expect((binaryExpr.right as BinaryExpr).operator.type).toBe(TokenType.STAR);
+      expect((binaryExpr.right as BinaryExpr).operator.type).toBe(
+        TokenType.STAR,
+      );
     });
 
     it("should parse function call", () => {

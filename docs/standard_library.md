@@ -7,7 +7,9 @@ BPL comes with a set of built-in functions and a standard library implemented in
 These functions are available in every BPL program without any imports.
 
 ### `print(value: *u8)`
+
 Prints a string to the standard output (stdout).
+
 - **Arguments**: `value` - A pointer to a null-terminated string.
 - **Returns**: `void`
 
@@ -16,7 +18,9 @@ call print("Hello, World!\n");
 ```
 
 ### `exit(status: u64)`
+
 Terminates the program with the specified exit code.
+
 - **Arguments**: `status` - The exit code (0 for success).
 - **Returns**: `void`
 
@@ -25,7 +29,9 @@ call exit(1);
 ```
 
 ### `exec(command: *u8)`
+
 Executes a shell command and returns the output.
+
 - **Arguments**: `command` - The shell command to execute.
 - **Returns**: `*u8` - A pointer to the output string (allocated on heap).
 
@@ -35,7 +41,9 @@ call print(output);
 ```
 
 ### `str_len(str: *u8)`
+
 Calculates the length of a null-terminated string.
+
 - **Arguments**: `str` - The string.
 - **Returns**: `u64` - The length of the string.
 
@@ -48,6 +56,7 @@ local len: u64 = call str_len("Hello");
 The standard library provides additional functionality. You can import these modules into your program.
 
 ### `utils.x`
+
 Common utility functions.
 
 - `print_u64(n: u64)`: Print an unsigned 64-bit integer.
@@ -60,6 +69,7 @@ Common utility functions.
 - `println()`: Print a newline.
 
 ### `string.x`
+
 String manipulation functions.
 
 - `strlen(str: *u8) ret u64`: Get string length.
@@ -74,6 +84,7 @@ String manipulation functions.
 - `atoi(str: *u8) ret i64`: Convert string to integer.
 
 ### `math.x`
+
 Mathematical functions.
 
 - `min_u64(a: u64, b: u64) ret u64`: Returns the smaller of two numbers.
@@ -85,6 +96,7 @@ Mathematical functions.
 - `lcm(a: u64, b: u64) ret u64`: Calculates the least common multiple.
 
 ### `array.x`
+
 Array utilities.
 
 - `array_fill_u64(arr: *u64, len: u64, val: u64)`: Fills an array with a specific value.
@@ -103,7 +115,7 @@ import malloc, free from "libc";
 
 frame main() ret u8 {
     call printf("Number: %d\n", 42);
-    
+
     local ptr: *u8 = call malloc(100);
     call free(ptr);
     return 0;

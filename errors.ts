@@ -12,7 +12,9 @@ export class CompilerError extends Error {
 export class ErrorReporter {
   static report(error: any) {
     if (error instanceof CompilerError) {
-      console.error(`\x1b[31mError:\x1b[0m ${error.message} @ line ${error.line}`);
+      console.error(
+        `\x1b[31mError:\x1b[0m ${error.message} @ line ${error.line}`,
+      );
       if (error.hint) {
         console.error(`\x1b[36mHint:\x1b[0m ${error.hint}`);
       }

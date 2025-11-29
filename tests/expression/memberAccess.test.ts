@@ -27,7 +27,7 @@ describe("MemberAccessExpr", () => {
     const input = "local x: u64 = arr[0];";
     const program = parse(input);
     const varDecl = program.expressions[0] as VariableDeclarationExpr;
-    
+
     const access = varDecl.value as any;
 
     expect(access.type).toBe(ExpressionType.MemberAccessExpression);

@@ -17,8 +17,9 @@ frame fib_recursive(n: u64) ret u64 {
 ```
 
 **Key Concepts:**
--   **Recursion**: Functions calling themselves.
--   **Input**: Using `scanf` from C standard library.
+
+- **Recursion**: Functions calling themselves.
+- **Input**: Using `scanf` from C standard library.
 
 ## 2. Structs and Arrays (`example/structs_arrays/structs_arrays.x`)
 
@@ -34,9 +35,10 @@ global points: Point[5];
 ```
 
 **Key Concepts:**
--   **Structs**: Grouping data (`x`, `y`).
--   **Arrays**: Fixed-size collections.
--   **Access**: `points[i].x` syntax.
+
+- **Structs**: Grouping data (`x`, `y`).
+- **Arrays**: Fixed-size collections.
+- **Access**: `points[i].x` syntax.
 
 ## 3. Linked List (`example/linked_list/linked_list.x`)
 
@@ -57,24 +59,26 @@ frame create_node(val: u64) ret *Node {
 ```
 
 **Key Concepts:**
--   **Pointers**: `*Node` to link structures.
--   **Malloc**: Allocating memory on the heap.
--   **Null**: Checking for end of list.
+
+- **Pointers**: `*Node` to link structures.
+- **Malloc**: Allocating memory on the heap.
+- **Null**: Checking for end of list.
 
 ## 4. Hotel Management System (`example/hotel/`)
 
 A multi-file project demonstrating modular architecture.
 
--   `hotel.x`: Main entry point.
--   `rooms.x`: Room management logic.
--   `reservations.x`: Reservation handling.
--   `auth.x`: User authentication.
--   `types.x`: Shared struct definitions.
+- `hotel.x`: Main entry point.
+- `rooms.x`: Room management logic.
+- `reservations.x`: Reservation handling.
+- `auth.x`: User authentication.
+- `types.x`: Shared struct definitions.
 
 **Key Concepts:**
--   **Modules**: Splitting code into logical units.
--   **Imports**: `import ... from "./file.x"`.
--   **State Management**: Managing global state across modules.
+
+- **Modules**: Splitting code into logical units.
+- **Imports**: `import ... from "./file.x"`.
+- **State Management**: Managing global state across modules.
 
 ## 5. Inline Assembly (`example/asm_demo/asm_demo.x`)
 
@@ -88,6 +92,7 @@ asm {
 ```
 
 **Key Concepts:**
--   **`asm` block**: Writing raw assembly.
--   **Interpolation**: Accessing BPL variables `(rnd)` inside assembly.
--   **System Calls**: Direct kernel interaction.
+
+- **`asm` block**: Writing raw assembly.
+- **Interpolation**: Accessing BPL variables `(rnd)` inside assembly.
+- **System Calls**: Direct kernel interaction.

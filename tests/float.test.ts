@@ -30,7 +30,7 @@ describe("Floating Point Support", () => {
       const input = "3.14 0.5 -10.5 1.0";
       const lexer = new Lexer(input);
       const tokens = lexer.tokenize();
-      
+
       // Note: Negative numbers are usually parsed as MINUS then NUMBER in many lexers,
       // but let's check how this lexer handles them.
       // Based on typical lexer behavior:
@@ -38,17 +38,17 @@ describe("Floating Point Support", () => {
       // 0.5 -> NUMBER_LITERAL
       // -10.5 -> MINUS, NUMBER_LITERAL
       // 1.0 -> NUMBER_LITERAL
-      
+
       expect(tokens[0]!.type).toBe(TokenType.NUMBER_LITERAL);
       expect(tokens[0]!.value).toBe("3.14");
-      
+
       expect(tokens[1]!.type).toBe(TokenType.NUMBER_LITERAL);
       expect(tokens[1]!.value).toBe("0.5");
-      
+
       expect(tokens[2]!.type).toBe(TokenType.MINUS);
       expect(tokens[3]!.type).toBe(TokenType.NUMBER_LITERAL);
       expect(tokens[3]!.value).toBe("10.5");
-      
+
       expect(tokens[4]!.type).toBe(TokenType.NUMBER_LITERAL);
       expect(tokens[4]!.value).toBe("1.0");
     });
@@ -57,11 +57,11 @@ describe("Floating Point Support", () => {
       const input = "f32 f64";
       const lexer = new Lexer(input);
       const tokens = lexer.tokenize();
-      
+
       // Types are usually identifiers in the lexer phase
       expect(tokens[0]!.type).toBe(TokenType.IDENTIFIER);
       expect(tokens[0]!.value).toBe("f32");
-      
+
       expect(tokens[1]!.type).toBe(TokenType.IDENTIFIER);
       expect(tokens[1]!.value).toBe("f64");
     });
@@ -71,7 +71,7 @@ describe("Floating Point Support", () => {
     it("should parse f64 variable declaration", () => {
       const program = parse("global pi: f64 = 3.14159;");
       const expr = program.expressions[0] as VariableDeclarationExpr;
-      
+
       expect(expr.type).toBe(ExpressionType.VariableDeclaration);
       expect(expr.name).toBe("pi");
       expect(expr.varType.name).toBe("f64");
@@ -83,7 +83,7 @@ describe("Floating Point Support", () => {
     it("should parse f32 variable declaration", () => {
       const program = parse("global f: f32 = 1.5;");
       const expr = program.expressions[0] as VariableDeclarationExpr;
-      
+
       expect(expr.varType.name).toBe("f32");
     });
 
@@ -91,10 +91,10 @@ describe("Floating Point Support", () => {
       const program = parse("global x: f64 = 1.5 + 2.5 * 3.0;");
       const expr = program.expressions[0] as VariableDeclarationExpr;
       const binary = expr.value as BinaryExpr;
-      
+
       expect(binary.type).toBe(ExpressionType.BinaryExpression);
       expect(binary.operator.type).toBe(TokenType.PLUS);
-      
+
       const right = binary.right as BinaryExpr;
       expect(right.operator.type).toBe(TokenType.STAR);
     });
@@ -103,7 +103,7 @@ describe("Floating Point Support", () => {
       const program = parse("global res: u8 = 1.5 < 2.5;");
       const expr = program.expressions[0] as VariableDeclarationExpr;
       const binary = expr.value as BinaryExpr;
-      
+
       expect(binary.operator.type).toBe(TokenType.LESS_THAN);
     });
   });
@@ -127,7 +127,7 @@ describe("Floating Point Support", () => {
         }
       `;
       const asm = generate(input);
-      
+
       // Should see movsd (move scalar double) and addsd (add scalar double)
       expect(asm).toContain("movsd");
       expect(asm).toContain("addsd");
@@ -144,13 +144,13 @@ describe("Floating Point Support", () => {
         }
       `;
       const asm = generate(input);
-      
+
       // Should see ucomisd (unordered compare scalar double)
       expect(asm).toContain("ucomisd");
       // Should see setcc instruction (seta, setae, setb, setbe, etc.)
       // For < (less than), it's usually setb (below) or seta (above) depending on operand order
       // The implementation uses setcc
-      expect(asm).toMatch(/set[a-z]+/); 
+      expect(asm).toMatch(/set[a-z]+/);
     });
 
     it("should generate float negation", () => {
@@ -161,28 +161,28 @@ describe("Floating Point Support", () => {
         }
       `;
       const asm = generate(input);
-      
+
       // Should see xorpd (exclusive OR packed double) for negation
       expect(asm).toContain("xorpd");
       // Should see the mask loading we fixed
       // movss xmm1, [rel label] or similar for the mask
       // Since it's f64, it might be movsd or movq
       // The fix was specifically about loading the mask to a register first
-      expect(asm).toMatch(/xorpd xmm0, xmm1/); 
+      expect(asm).toMatch(/xorpd xmm0, xmm1/);
     });
-    
+
     it("should generate mixed type operations", () => {
-        const input = `
+      const input = `
           frame test() {
               local a: f64 = 1.5;
               local b: u64 = 10;
               local c: f64 = a + b;
           }
         `;
-        const asm = generate(input);
-        
-        // Should see conversion instruction cvtsi2sd (convert signed integer to scalar double)
-        expect(asm).toContain("cvtsi2sd");
+      const asm = generate(input);
+
+      // Should see conversion instruction cvtsi2sd (convert signed integer to scalar double)
+      expect(asm).toContain("cvtsi2sd");
     });
 
     it("should generate f32 specific instructions", () => {
@@ -194,7 +194,7 @@ describe("Floating Point Support", () => {
         }
       `;
       const asm = generate(input);
-      
+
       // The current implementation promotes f32 to f64 for arithmetic
       // So we should see conversion instructions
       expect(asm).toContain("cvtss2sd"); // Convert single to double
@@ -211,10 +211,10 @@ describe("Floating Point Support", () => {
         }
       `;
       const asm = generate(input);
-      
+
       // Arguments passed in xmm0, xmm1 for floats
       // We expect to see moves to xmm registers before call
-      expect(asm).toContain("movsd xmm0"); 
+      expect(asm).toContain("movsd xmm0");
       // Note: exact register allocation might vary, but xmm0 is standard for first float arg/return
       expect(asm).toContain("call func_add_");
     });
@@ -228,13 +228,13 @@ describe("Floating Point Support", () => {
         }
       `;
       const asm = generate(input);
-      
+
       // Should see movsd used for array element access
       expect(asm).toContain("movsd");
     });
 
     it("should generate struct float member access", () => {
-        const input = `
+      const input = `
             struct Point {
                 x: f64,
                 y: f64
@@ -245,14 +245,14 @@ describe("Floating Point Support", () => {
                 local val: f64 = p.x;
             }
         `;
-        const asm = generate(input);
-        
-        // Should see movsd used for struct member access
-        expect(asm).toContain("movsd");
+      const asm = generate(input);
+
+      // Should see movsd used for struct member access
+      expect(asm).toContain("movsd");
     });
 
     it("should generate complex float expressions", () => {
-        const input = `
+      const input = `
             frame test() {
                 local a: f64 = 1.0;
                 local b: f64 = 2.0;
@@ -260,11 +260,11 @@ describe("Floating Point Support", () => {
                 local res: f64 = a * b + c / a;
             }
         `;
-        const asm = generate(input);
-        
-        expect(asm).toContain("mulsd");
-        expect(asm).toContain("divsd");
-        expect(asm).toContain("addsd");
+      const asm = generate(input);
+
+      expect(asm).toContain("mulsd");
+      expect(asm).toContain("divsd");
+      expect(asm).toContain("addsd");
     });
 
     it("should generate float return values", () => {
@@ -274,7 +274,7 @@ describe("Floating Point Support", () => {
         }
       `;
       const asm = generate(input);
-      
+
       // Return value should be in xmm0
       expect(asm).toContain("movsd xmm0");
     });
@@ -287,23 +287,23 @@ describe("Floating Point Support", () => {
         }
       `;
       const asm = generate(input);
-      
+
       // The generator pushes args to stack then pops to registers
       // We verify that the correct registers are populated from the stack
-      
+
       // 1 -> rdi
       expect(asm).toContain("pop rdi");
-      
+
       // 2.0 -> xmm0
       // It pops to rax then moves to xmm0
       expect(asm).toContain("movq xmm0, rax");
-      
+
       // 3 -> rsi
       expect(asm).toContain("pop rsi");
-      
+
       // 4.0 -> xmm1
       expect(asm).toContain("movq xmm1, rax");
-      
+
       expect(asm).toContain("call func_mixed_");
     });
 
@@ -317,7 +317,7 @@ describe("Floating Point Support", () => {
         }
       `;
       const asm = generate(input);
-      
+
       expect(asm).toContain("ucomisd");
       // The generator evaluates condition to boolean (0/1) then jumps
       // So we expect setcc instruction
@@ -332,7 +332,7 @@ describe("Floating Point Support", () => {
         }
       `;
       const asm = generate(input);
-      
+
       // Should load from global label
       // It might use mov rax, [rel label] for simple moves
       expect(asm).toMatch(/mov rax, \[rel global_var_g\d+\]/);
@@ -347,7 +347,7 @@ describe("Floating Point Support", () => {
         }
       `;
       const asm = generate(input);
-      
+
       // Should see address loading and dereferencing
       expect(asm).toContain("lea"); // Load effective address
       expect(asm).toContain("movsd"); // Move scalar double

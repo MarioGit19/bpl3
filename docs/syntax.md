@@ -15,11 +15,11 @@ local x: u64 = 10; # Inline comment
 
 BPL supports the following primitive types:
 
--   **Unsigned Integers**: `u8`, `u16`, `u32`, `u64`
--   **Signed Integers**: `i8`, `i16`, `i32`, `i64` (Note: currently mostly treated as unsigned in some contexts, but syntax is supported)
--   **Pointers**: `*Type` (e.g., `*u8` for a string/byte pointer)
--   **Arrays**: `Type[Size]` (e.g., `u64[10]`)
--   **Structs**: User-defined types.
+- **Unsigned Integers**: `u8`, `u16`, `u32`, `u64`
+- **Signed Integers**: `i8`, `i16`, `i32`, `i64` (Note: currently mostly treated as unsigned in some contexts, but syntax is supported)
+- **Pointers**: `*Type` (e.g., `*u8` for a string/byte pointer)
+- **Arrays**: `Type[Size]` (e.g., `u64[10]`)
+- **Structs**: User-defined types.
 
 ## Variables
 
@@ -145,7 +145,7 @@ global numbers: u64[5];
 frame main() ret u8 {
     numbers[0] = 100;
     local val: u64 = numbers[0];
-    
+
     # Array of structs
     local points: Point[3];
     points[0].x = 1;
@@ -166,21 +166,27 @@ local val: u64 = *ptr;
 ## Operators
 
 ### Arithmetic
+
 `+`, `-`, `*`, `/`, `%`
 
 ### Comparison
+
 `==`, `!=`, `<`, `>`, `<=`, `>=`
 
 ### Logical
+
 `&&`, `||`, `!`
 
 ### Bitwise
+
 `&`, `|`, `^`, `~`, `<<`, `>>`
 
 ### Assignment
+
 `=`, `+=`, `-=`, `*=`, `/=`, `%=`, `&=`, `|=`, `^=`
 
 ### Ternary
+
 `condition ? true_val : false_val`
 
 ```bpl
