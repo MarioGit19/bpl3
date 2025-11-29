@@ -23,6 +23,16 @@ bun index.ts example/hello-world.x
 You should see "Hello, World!" printed to the console.
 More examples can be found in the `example` directory.
 
+## VS Code Extension
+
+BPL includes a VS Code extension for syntax highlighting.
+
+To install it:
+1. Navigate to `vs-code-ext/highlight`.
+2. Install dependencies: `bun install`.
+3. Build the extension: `bun run build-vsix`.
+4. Install the generated `.vsix` file in VS Code (e.g. `code --install-extension bpl-highlight-0.0.10.vsix`).
+
 ## Language Features
 
 - **Variables and Data Types**: Supports integers (`u8`-`u64`, `i8`-`i64`), strings, pointers, and arrays.

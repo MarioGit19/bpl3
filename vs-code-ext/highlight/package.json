@@ -1,0 +1,129 @@
+{
+  "name": "bpl-highlight",
+  "displayName": "BPL Highlight",
+  "description": "Syntax highlighting for BPL (The Best Programming Language)",
+  "scripts": {
+    "build-vsix": "vsce package"
+  },
+  "publisher": "pr0h0",
+  "version": "0.0.10",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pr0h0/bpl3"
+  },
+  "author": {
+    "name": "pr0h0",
+    "url": "https://pr0h0.me",
+    "email": "abdulahproho@gmail.com"
+  },
+  "license": "Apache-2.0",
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "bpl",
+        "aliases": [
+          "BPL",
+          "bpl"
+        ],
+        "extensions": [
+          ".x"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/bpl.svg",
+          "dark": "./icons/bpl.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "bpl",
+        "scopeName": "source.bpl",
+        "path": "./syntaxes/bpl.tmLanguage.json"
+      }
+    ],
+    "configurationDefaults": {
+      "editor.tokenColorCustomizations": {
+        "textMateRules": [
+          {
+            "scope": "entity.name.type.exported.bpl",
+            "settings": {
+              "foreground": "#4EC9B0",
+              "fontStyle": "bold"
+            }
+          },
+          {
+            "scope": "entity.name.type.imported.bpl",
+            "settings": {
+              "foreground": "#4EC9B0",
+              "fontStyle": "italic"
+            }
+          },
+          {
+            "scope": "entity.name.type.struct.bpl",
+            "settings": {
+              "foreground": "#4EC9B0"
+            }
+          },
+          {
+            "scope": "entity.name.type.bpl",
+            "settings": {
+              "foreground": "#4EC9B0"
+            }
+          },
+          {
+            "scope": "entity.name.function.bpl",
+            "settings": {
+              "foreground": "#DCDCAA"
+            }
+          },
+          {
+            "scope": "variable.name.bpl",
+            "settings": {
+              "foreground": "#9CDCFE"
+            }
+          },
+          {
+            "scope": "variable.other.bpl",
+            "settings": {
+              "foreground": "#9CDCFE"
+            }
+          },
+          {
+            "scope": "constant.language.bpl",
+            "settings": {
+              "foreground": "#569CD6"
+            }
+          },
+          {
+            "scope": "keyword.control.bpl",
+            "settings": {
+              "foreground": "#C586C0"
+            }
+          },
+          {
+            "scope": "keyword.other.bpl",
+            "settings": {
+              "foreground": "#569CD6"
+            }
+          },
+          {
+            "scope": "storage.type.bpl",
+            "settings": {
+              "foreground": "#569CD6"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.7.1"
+  }
+}
