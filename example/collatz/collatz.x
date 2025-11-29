@@ -1,7 +1,5 @@
 import scanf, printf from "c";
 
-global d: u64 = 0;
-
 frame get_input() ret u64 {
   local n: u64;
   call print("Enter the number: ");

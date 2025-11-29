@@ -1,4 +1,4 @@
-import printf;
+import printf from "libc";
 
 struct Vector3 {
     x: u64,

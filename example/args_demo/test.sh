@@ -6,7 +6,7 @@ SOURCE_FILE="args_demo.x"
 INPUT=""
 ARGS="arg1 arg2 arg3"
 ENV_VARS=""
-EXPECTED=("Argc: 4" "Arg 1: arg1" "Arg 2: arg2" "Arg 3: arg3")
+EXPECTED=("(argc): 4" "Arg 1: arg1" "Arg 2: arg2" "Arg 3: arg3")
 
 # Compile
 compile "$SOURCE_FILE"

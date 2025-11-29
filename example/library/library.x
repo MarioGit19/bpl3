@@ -1,4 +1,4 @@
-import printf, strcpy;
+import printf, strcpy from "libc";
 
 # --- Constants (Global/Compile-Time) ---
 global const MAX_TITLE_LEN: u32 = 64;

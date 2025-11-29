@@ -1,4 +1,4 @@
-import printf;
+import printf from "libc";
 
 frame main() ret u64 {
     local a: u64 = 10;

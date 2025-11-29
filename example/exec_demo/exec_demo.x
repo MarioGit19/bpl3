@@ -1,4 +1,4 @@
-import printf, sprintf, malloc, free;
+import printf, sprintf, malloc, free from "libc";
 
 frame main() ret u64 {
     call printf("=== Exec Demo ===\n");

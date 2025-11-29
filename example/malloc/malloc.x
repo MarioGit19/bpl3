@@ -1,4 +1,4 @@
-import printf, malloc, free;
+import printf, malloc, free from "libc";
 
 frame main() {
     local arr: *u64 = call malloc(5 * 8); # Allocate memory for 5 u64 integers
@@ -26,6 +26,12 @@ frame main() {
         if (i >= 5) {
             break;
         }
+        # Pointer arithmetic: accessing memory directly
+        # Note: In BPL, pointer arithmetic might not automatically scale by type size depending on implementation,
+        # but here we demonstrate accessing the value.
+        # If 'arr' is a pointer, arr[i] is equivalent to *(arr + i * sizeof(type)) if handled by compiler,
+        # or we can do manual pointer arithmetic if needed.
+        
         arr[i] = *(arr + i * 8) + 1;
         call printf("arr[%d] = %d\n", i, arr[i]);
         i = i + 1;

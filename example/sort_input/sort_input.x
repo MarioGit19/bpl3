@@ -1,4 +1,4 @@
-import printf, scanf, malloc, free;
+import printf, scanf, malloc, free from "libc";
 
 frame main() ret u64 {
     local n: u64 = 0;
@@ -27,7 +27,8 @@ frame main() ret u64 {
         i = i + 1;
     }
 
-    # Bubble Sort
+    # Bubble Sort Algorithm
+    # Time Complexity: O(n^2)
     local j: u64 = 0;
     i = 0;
     loop {
@@ -40,6 +41,7 @@ frame main() ret u64 {
                 break;
             }
             
+            # Swap if the element found is greater than the next element
             if arr[j] > arr[j+1] {
                 local temp: u64 = arr[j];
                 arr[j] = arr[j+1];

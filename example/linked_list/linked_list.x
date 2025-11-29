@@ -1,4 +1,4 @@
-import printf, malloc, free;
+import printf, malloc, free from "libc";
 
 struct Node {
     value: u64,
@@ -6,7 +6,8 @@ struct Node {
 }
 
 frame create_node(val: u64) ret *Node {
-    local node: *Node = call malloc(16); # Size of Node (8 bytes value + 8 bytes pointer)
+    # Manually calculating size: 8 bytes (u64 value) + 8 bytes (*Node next) = 16 bytes
+    local node: *Node = call malloc(16); 
     if node == NULL {
         call print("Memory allocation failed\n");
         call exit(1);

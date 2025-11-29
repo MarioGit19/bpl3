@@ -1,4 +1,4 @@
-import printf;
+import printf from "libc";
 
 struct Point {
     x: u64,
@@ -9,6 +9,7 @@ global points: Point[5];
 
 frame get_rnd_u64(min: u64, max: u64) ret u64 {
     local rnd : u64 = 0;
+    # Use inline assembly to get a random number from the hardware
     asm {
         rdrand rax;
         mov (rnd), rax;

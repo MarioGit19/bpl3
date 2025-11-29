@@ -12,9 +12,9 @@
 # - Imports
 # ==================================================================================
 
-import printf, malloc, free, strcpy;
+import printf, malloc, free, strcpy from "libc";
 
-# --- Enterprise Structures ---
+#  Enterprise Structures
 
 struct Task {
     id: u64,

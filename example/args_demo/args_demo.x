@@ -1,9 +1,9 @@
-import printf;
+import printf from "libc";
 
-frame main(argc: u8, argv: **u8) ret u8 {
-    call printf("Argc: %d\n", argc);
+frame main(argc: u32, argv: **u8) ret u8 {
+    call printf("Number of arguments (argc): %d\n", argc);
     
-    local i: u8 = 0;
+    local i: u32 = 0;
     loop {
         if i >= argc {
             break;

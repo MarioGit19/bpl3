@@ -1,5 +1,5 @@
 frame main () ret u8 {
-    # This is a comment line
+    # 'print' is a built-in function in BPL standard library
     call print("Hello, World!\n");
     return 0;
 }

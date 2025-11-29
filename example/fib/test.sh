@@ -3,7 +3,7 @@ source ../test_utils.sh
 
 # Configuration
 SOURCE_FILE="fib.x"
-INPUT="93"
+INPUT="93 10"
 EXPECTED="12200160415121876738"
 
 # Compile

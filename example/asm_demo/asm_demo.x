@@ -1,4 +1,4 @@
-import printf;
+import printf from "libc";
 
 frame get_rnd_u64() ret u64 {
     local rnd : u64 = 0;

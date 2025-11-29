@@ -1,4 +1,4 @@
-import printf, malloc, free, strcpy, strcat, strcmp, strlen;
+import printf, malloc, free, strcpy, strcat, strcmp, strlen from "libc";
 
 frame to_upper(str: *u8) {
     local i: u64 = 0;
