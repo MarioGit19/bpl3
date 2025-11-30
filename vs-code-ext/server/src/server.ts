@@ -17,6 +17,7 @@ import {
   HoverParams,
   Hover,
   MarkupKind,
+  TextEdit,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 
@@ -28,6 +29,7 @@ import Scope, { TypeInfo } from "../../../transpiler/Scope";
 import AsmGenerator from "../../../transpiler/AsmGenerator";
 import HelperGenerator from "../../../transpiler/HelperGenerator";
 import { CompilerError } from "../../../errors";
+import { Formatter } from "../../../transpiler/formatter/Formatter";
 
 import ProgramExpr from "../../../parser/expression/programExpr";
 import BlockExpr from "../../../parser/expression/blockExpr";
@@ -50,6 +52,7 @@ import StructDeclarationExpr from "../../../parser/expression/structDeclarationE
 import ExternDeclarationExpr from "../../../parser/expression/externDeclarationExpr";
 import Expression from "../../../parser/expression/expr";
 import Token from "../../../lexer/token";
+import TokenType from "../../../lexer/tokenType";
 
 import * as fs from "fs";
 import * as path from "path";
@@ -94,6 +97,8 @@ connection.onInitialize((params: InitializeParams) => {
       definitionProvider: true,
       // Tell the client that this server supports hover.
       hoverProvider: true,
+      // Tell the client that this server supports formatting.
+      documentFormattingProvider: true,
     },
   };
   if (hasWorkspaceFolderCapability) {
@@ -307,6 +312,40 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 connection.onDidChangeWatchedFiles((_change) => {
   // Monitored files have change in VSCode
   connection.console.log("We received an file change event");
+});
+
+connection.onDocumentFormatting((params) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) {
+    return [];
+  }
+
+  const text = document.getText();
+  try {
+    const lexer = new Lexer(text);
+    const allTokens = lexer.tokenize(true);
+    const comments = allTokens.filter((t) => t.type === TokenType.COMMENT);
+    // Parser expects tokens without comments
+    const parserTokens = allTokens.filter((t) => t.type !== TokenType.COMMENT);
+    
+    const parser = new Parser(parserTokens);
+    const program = parser.parse();
+
+    // Use 4 spaces or params.options.tabSize
+    const indentString = " ".repeat(params.options.tabSize || 4);
+    const formatter = new Formatter(indentString, comments, text);
+    const formatted = formatter.format(program);
+
+    return [
+      TextEdit.replace(
+        Range.create(document.positionAt(0), document.positionAt(text.length)),
+        formatted,
+      ),
+    ];
+  } catch (e: any) {
+    connection.console.error(`Formatting error: ${e.message}`);
+    return [];
+  }
 });
 
 // This handler provides the initial list of the completion items.
