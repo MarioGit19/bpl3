@@ -379,7 +379,8 @@ local b: u8 = 5;
 local sum: u8 = a + b; // Addition
 local sub: u8 = a - b; // Subtraction
 local prod: u8 = a * b; // Multiplication
-local quot: u8 = a / b; // Integer Division with truncation
+local quot: u8 = a / b; // Float Division (returns float)
+local intQuot: u8 = a // b; // Integer Division (truncating for int, floor for float)
 local rem: u8 = a % b; // Modulus
 # Comparison Operations --------------------------------
 local isEq: u8 = (a == b); // Equality Comparison
@@ -458,6 +459,7 @@ The `example` directory contains several programs demonstrating various features
 - `else_if_demo.x`: Demonstrates `else if` control flow.
 - `args_demo.x`: Demonstrates command line arguments handling.
 - `env_demo.x`: Demonstrates environment variables handling.
+- `division_demo.x`: Demonstrates the difference between float (`/`) and integer (`//`) division.
 
 ## Contributing
 

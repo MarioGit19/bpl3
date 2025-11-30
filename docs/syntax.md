@@ -185,7 +185,7 @@ local val: u64 = *ptr;
 
 ### Arithmetic
 
-`+`, `-`, `*`, `/`, `%`
+`+`, `-`, `*`, `/` (float division), `//` (integer/floor division), `%`
 
 ### Comparison
 

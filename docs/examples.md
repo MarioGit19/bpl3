@@ -96,3 +96,29 @@ asm {
 - **`asm` block**: Writing raw assembly.
 - **Interpolation**: Accessing BPL variables `(rnd)` inside assembly.
 - **System Calls**: Direct kernel interaction.
+
+## 6. Division Semantics (`example/division_demo/division_demo.x`)
+
+Demonstrates the difference between float division (`/`) and integer/floor division (`//`).
+
+```bpl
+local a: u64 = 10;
+local b: u64 = 3;
+
+# Float Division (always returns float)
+local f_res: f64 = a / b; # 3.333...
+
+# Integer Division (truncating for integers)
+local i_res: u64 = a // b; # 3
+
+# Floor Division (for floats)
+local x: f64 = 10.5;
+local y: f64 = 3.2;
+local floor_res: f64 = x // y; # 3.0
+```
+
+**Key Concepts:**
+
+- **`/` Operator**: Performs floating-point division, promoting integers to floats if necessary.
+- **`//` Operator**: Performs integer division for integers (truncating) and floor division for floats.
+
