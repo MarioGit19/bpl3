@@ -54,6 +54,9 @@ export default class BinaryExpr extends Expression {
           result = leftVal * rightVal;
           break;
         case TokenType.SLASH:
+          if (rightVal !== 0) result = leftVal / rightVal;
+          break;
+        case TokenType.SLASH_SLASH:
           if (rightVal !== 0) result = Math.floor(leftVal / rightVal);
           break;
         case TokenType.PERCENT:
@@ -108,7 +111,8 @@ export default class BinaryExpr extends Expression {
       leftType?.name === "f64" ||
       leftType?.name === "f32" ||
       rightType?.name === "f64" ||
-      rightType?.name === "f32";
+      rightType?.name === "f32" ||
+      this.operator.type === TokenType.SLASH;
 
     const isLHS = scope.getCurrentContext("LHS");
     if (isLHS) scope.removeCurrentContext("LHS");
@@ -152,6 +156,10 @@ export default class BinaryExpr extends Expression {
         case TokenType.SLASH:
           gen.emit("divsd xmm0, xmm1", "Float Division");
           break;
+        case TokenType.SLASH_SLASH:
+          gen.emit("divsd xmm0, xmm1", "Float Division");
+          gen.emit("roundsd xmm0, xmm0, 1", "Floor (Round down)");
+          break;
         case TokenType.EQUAL:
           gen.emit("ucomisd xmm0, xmm1", "Float Compare ==");
           gen.emit("setnp al", "Set al if not NaN");
@@ -191,7 +199,14 @@ export default class BinaryExpr extends Expression {
             `Operator ${this.operator.value} not supported for floating point numbers`,
           );
       }
-      gen.emit("movq rax, xmm0", "Move result back to RAX");
+
+      const resultType = this.resolveExpressionType(this, scope);
+      if (resultType?.name === "f32") {
+        gen.emit("cvtsd2ss xmm0, xmm0", "Convert result f64 to f32");
+        gen.emit("movd eax, xmm0", "Move f32 bits to EAX");
+      } else {
+        gen.emit("movq rax, xmm0", "Move result back to RAX");
+      }
       return;
     }
 
@@ -206,7 +221,7 @@ export default class BinaryExpr extends Expression {
       case TokenType.STAR:
         gen.emit("imul rax, rbx", "Multiplication");
         break;
-      case TokenType.SLASH:
+      case TokenType.SLASH_SLASH:
         gen.emit(
           "cqo",
           "Sign-extend RAX into RDX:RAX for 128-bit signed dividend",
@@ -307,6 +322,29 @@ export default class BinaryExpr extends Expression {
     }
   }
 
+  private getIntSize(typeName: string): number {
+    switch (typeName) {
+      case "i8":
+      case "u8":
+      case "char":
+      case "bool":
+        return 1;
+      case "i16":
+      case "u16":
+        return 2;
+      case "i32":
+      case "u32":
+        return 4;
+      case "i64":
+      case "u64":
+      case "int":
+      case "usize":
+        return 8;
+      default:
+        return 8;
+    }
+  }
+
   private resolveExpressionType(
     expr: Expression,
     scope: Scope,
@@ -356,6 +394,28 @@ export default class BinaryExpr extends Expression {
 
       if (leftType && leftType.isPointer > 0) return leftType;
       if (rightType && rightType.isPointer > 0) return rightType;
+
+      if (binExpr.operator.type === TokenType.SLASH) {
+        const leftSize = leftType ? this.getIntSize(leftType.name) : 8;
+        const rightSize = rightType ? this.getIntSize(rightType.name) : 8;
+
+        if (leftType?.name === "f64" || rightType?.name === "f64")
+          return { name: "f64", isPointer: 0, isArray: [] };
+        if (leftType?.name === "f32" || rightType?.name === "f32")
+          return { name: "f32", isPointer: 0, isArray: [] };
+
+        if (leftSize <= 4 && rightSize <= 4)
+          return { name: "f32", isPointer: 0, isArray: [] };
+        return { name: "f64", isPointer: 0, isArray: [] };
+      }
+
+      if (binExpr.operator.type === TokenType.SLASH_SLASH) {
+        if (leftType?.name === "f64" || rightType?.name === "f64")
+          return { name: "f64", isPointer: 0, isArray: [] };
+        if (leftType?.name === "f32" || rightType?.name === "f32")
+          return { name: "f32", isPointer: 0, isArray: [] };
+        return leftType || { name: "u64", isPointer: 0, isArray: [] };
+      }
 
       if (leftType?.name === "f64" || rightType?.name === "f64")
         return { name: "f64", isPointer: 0, isArray: [] };

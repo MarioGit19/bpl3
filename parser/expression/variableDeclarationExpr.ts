@@ -8,6 +8,7 @@ import NullLiteralExpr from "./nullLiteralExpr";
 import NumberLiteralExpr from "./numberLiteralExpr";
 import StringLiteralExpr from "./stringLiteralExpr";
 import Token from "../../lexer/token";
+import TokenType from "../../lexer/tokenType";
 
 export type VariableType = {
   name: string;
@@ -76,17 +77,58 @@ export default class VariableDeclarationExpr extends Expression {
       const sym = scope.resolve((expr as any).name);
       return sym ? sym.varType.name : null;
     }
+    if (expr.type === ExpressionType.FunctionCall) {
+      const call = expr as any;
+      const func = scope.resolveFunction(call.functionName);
+      return func && func.returnType ? func.returnType.name : null;
+    }
     if (expr.type === ExpressionType.BinaryExpression) {
       const binExpr = expr as BinaryExpr;
       const leftType = this.resolveExprType(binExpr.left, scope);
       const rightType = this.resolveExprType(binExpr.right, scope);
+
+      if (binExpr.operator.type === TokenType.SLASH) {
+        if (leftType === "f64" || rightType === "f64") return "f64";
+        if (leftType === "f32" && rightType === "f32") return "f32";
+        // Integers -> f64 (unless small ints -> f32, but let's be safe or consistent with SemanticAnalyzer)
+        // SemanticAnalyzer: if leftSize > 4 || rightSize > 4 -> f64, else f32.
+        // Here we don't have sizes easily.
+        // But if we return f64, and it was f32, we might have issues.
+        // However, BinaryExpr logic for SLASH:
+        // if leftSize <= 4 && rightSize <= 4 -> f32
+        // else -> f64
+        // We need to match that.
+        // But we don't have sizes.
+        // Let's assume f64 for now as it's safer? No, if it returns f32 bits in eax, and we think f64, we fail.
+        // We MUST match BinaryExpr logic.
+        // We can try to resolve types fully using scope.
+        // But resolveExprType returns string.
+        // Let's try to get sizes.
+        const getIntSize = (name: string | null) => {
+          if (!name) return 8;
+          if (["u8", "i8", "bool", "char"].includes(name)) return 1;
+          if (["u16", "i16"].includes(name)) return 2;
+          if (["u32", "i32"].includes(name)) return 4;
+          return 8;
+        };
+        const leftSize = getIntSize(leftType);
+        const rightSize = getIntSize(rightType);
+
+        if (leftType === "f64" || rightType === "f64") return "f64";
+        if (leftType === "f32" || rightType === "f32") return "f32"; // f32 / f32 -> f32
+
+        if (leftSize <= 4 && rightSize <= 4) return "f32";
+        return "f64";
+      }
+
       if (
         leftType === "f64" ||
-        leftType === "f32" ||
-        rightType === "f64" ||
-        rightType === "f32"
+        rightType === "f64"
       ) {
         return "f64";
+      }
+      if (leftType === "f32" || rightType === "f32") {
+        return "f32";
       }
       return null;
     }

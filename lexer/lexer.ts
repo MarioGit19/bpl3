@@ -550,10 +550,17 @@ class Lexer {
   }
 
   parseSlashOperator(start: number): Token {
-    // if (this.peek() === "/") {
-    //   this.consume();
-    //   return new Token(TokenType.SLASH_SLASH, "//", this.line);
-    // }
+    if (this.peek() === "/") {
+      this.consume();
+      return new Token(
+        TokenType.SLASH_SLASH,
+        "//",
+        this.line,
+        this.tokenStartColumn,
+        start,
+        "//",
+      );
+    }
     if (this.peek() === "=") {
       this.consume();
       return new Token(

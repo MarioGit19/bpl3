@@ -118,6 +118,43 @@ export class SemanticAnalyzer {
           return { name: "u8", isPointer: 0, isArray: [] };
         }
 
+        // Division operators
+        if (binExpr.operator.type === TokenType.SLASH) {
+          // Float division: always returns float
+          if (leftType.name === "f64" || rightType.name === "f64") {
+            return { name: "f64", isPointer: 0, isArray: [] };
+          }
+          // If both are f32, return f32
+          if (leftType.name === "f32" && rightType.name === "f32") {
+            return { name: "f32", isPointer: 0, isArray: [] };
+          }
+          // If integers
+          const leftSize = this.getIntSize(leftType.name);
+          const rightSize = this.getIntSize(rightType.name);
+          if (leftSize > 4 || rightSize > 4) {
+            // 64-bit int involved
+            return { name: "f64", isPointer: 0, isArray: [] };
+          }
+          // Default to f32 for smaller ints
+          return { name: "f32", isPointer: 0, isArray: [] };
+        }
+
+        if (binExpr.operator.type === TokenType.SLASH_SLASH) {
+          // Integer division
+          // If floats involved, return float (floor)
+          if (leftType.name === "f64" || rightType.name === "f64") {
+            return { name: "f64", isPointer: 0, isArray: [] };
+          }
+          if (leftType.name === "f32" || rightType.name === "f32") {
+            return { name: "f32", isPointer: 0, isArray: [] };
+          }
+          // Integers -> Integer
+          // Return larger type
+          const leftSize = this.getIntSize(leftType.name);
+          const rightSize = this.getIntSize(rightType.name);
+          return leftSize >= rightSize ? leftType : rightType;
+        }
+
         // Arithmetic operators
         // If either is float, result is float (f64 takes precedence)
         if (leftType.name === "f64" || rightType.name === "f64") {
