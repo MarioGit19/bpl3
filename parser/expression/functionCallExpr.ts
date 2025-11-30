@@ -135,6 +135,7 @@ export default class FunctionCallExpr extends Expression {
   }
 
   transpile(gen: AsmGenerator, scope: Scope): void {
+    const initialStackOffset = scope.stackOffset;
     if (this.startToken) gen.emitSourceLocation(this.startToken.line);
     this.contextScope = scope;
     const func = scope.resolveFunction(this.functionName);
@@ -405,7 +406,8 @@ export default class FunctionCallExpr extends Expression {
     }
 
     const stackAlignment = 16;
-    const currentStackDisplacement = scope.stackOffset + extraStackAllocated;
+    const currentStackDisplacement =
+      scope.stackOffset - initialStackOffset + extraStackAllocated;
     const stackOffset = currentStackDisplacement % stackAlignment;
     if (stackOffset !== 0) {
       gen.emit(

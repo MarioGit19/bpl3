@@ -121,4 +121,3 @@ local floor_res: f64 = x // y; # 3.0
 
 - **`/` Operator**: Performs floating-point division, promoting integers to floats if necessary.
 - **`//` Operator**: Performs integer division for integers (truncating) and floor division for floats.
-

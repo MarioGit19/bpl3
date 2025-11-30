@@ -327,7 +327,7 @@ connection.onDocumentFormatting((params) => {
     const comments = allTokens.filter((t) => t.type === TokenType.COMMENT);
     // Parser expects tokens without comments
     const parserTokens = allTokens.filter((t) => t.type !== TokenType.COMMENT);
-    
+
     const parser = new Parser(parserTokens);
     const program = parser.parse();
 

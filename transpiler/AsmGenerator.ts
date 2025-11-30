@@ -76,6 +76,17 @@ export default class AsmGenerator {
     return `${prefix}${this.labelCount++}`;
   }
 
+  getCurrentLineIndex(): number {
+    return this.text.length;
+  }
+
+  patchLine(index: number, instr: string, comment: string = "") {
+    const cmt = comment ? ` ; ${comment}` : "";
+    if (index >= 0 && index < this.text.length) {
+      this.text[index] = `    ${instr}${cmt}`;
+    }
+  }
+
   build(): string {
     const hasPrecompute = this.precompute.length > 0;
 

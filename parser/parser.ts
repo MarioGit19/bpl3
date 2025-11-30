@@ -195,6 +195,12 @@ export class Parser {
       let nextToken = this.peek();
 
       while (nextToken?.type === TokenType.AMPERSAND) {
+        if (
+          this.isBlockExpr(expr) &&
+          nextToken.line > (expr.endToken?.line || 0)
+        ) {
+          break;
+        }
         const operator = this.consume(nextToken.type);
 
         const right = this.parseEquality();
@@ -280,6 +286,12 @@ export class Parser {
         nextToken?.type === TokenType.PLUS ||
         nextToken?.type === TokenType.MINUS
       ) {
+        if (
+          this.isBlockExpr(expr) &&
+          nextToken.line > (expr.endToken?.line || 0)
+        ) {
+          break;
+        }
         const operator = this.consume(nextToken.type);
         const right = this.parseMultiplication();
 
@@ -302,6 +314,12 @@ export class Parser {
         nextToken?.type === TokenType.PERCENT ||
         nextToken?.type === TokenType.SLASH_SLASH
       ) {
+        if (
+          this.isBlockExpr(expr) &&
+          nextToken.line > (expr.endToken?.line || 0)
+        ) {
+          break;
+        }
         const operator = this.consume(nextToken.type);
         const right = this.parseUnary();
 
@@ -948,7 +966,10 @@ export class Parser {
     return this.withRange(() => {
       this.consume(TokenType.IDENTIFIER); // consume 'switch'
       const discriminant = this.parseTernary();
-      this.consume(TokenType.OPEN_BRACE, "Expected '{' after switch discriminant.");
+      this.consume(
+        TokenType.OPEN_BRACE,
+        "Expected '{' after switch discriminant.",
+      );
 
       const cases: SwitchCase[] = [];
       let defaultCase: BlockExpr | null = null;
@@ -959,20 +980,32 @@ export class Parser {
           this.consume(TokenType.IDENTIFIER);
           const valueExpr = this.parsePrimary();
           if (!(valueExpr instanceof NumberLiteralExpr)) {
-             throw new CompilerError("Switch case value must be a number literal.", token.line);
+            throw new CompilerError(
+              "Switch case value must be a number literal.",
+              token.line,
+            );
           }
           this.consume(TokenType.COLON, "Expected ':' after case value.");
           const body = this.parseCodeBlock();
           cases.push({ value: valueExpr, body });
-        } else if (token.type === TokenType.IDENTIFIER && token.value === "default") {
+        } else if (
+          token.type === TokenType.IDENTIFIER &&
+          token.value === "default"
+        ) {
           this.consume(TokenType.IDENTIFIER);
           this.consume(TokenType.COLON, "Expected ':' after default.");
           if (defaultCase) {
-             throw new CompilerError("Multiple default cases in switch.", token.line);
+            throw new CompilerError(
+              "Multiple default cases in switch.",
+              token.line,
+            );
           }
           defaultCase = this.parseCodeBlock();
         } else {
-           throw new CompilerError("Expected 'case' or 'default' inside switch block.", token.line);
+          throw new CompilerError(
+            "Expected 'case' or 'default' inside switch block.",
+            token.line,
+          );
         }
       }
 
@@ -1138,6 +1171,17 @@ export class Parser {
         ? errorMessage
         : `Expected token of type ${type}, but got ${token?.type}`,
       token ? token.line : 0,
+    );
+  }
+
+  private isBlockExpr(expr: Expression): boolean {
+    return (
+      expr instanceof LoopExpr ||
+      expr instanceof IfExpr ||
+      expr instanceof SwitchExpr ||
+      expr instanceof AsmBlockExpr ||
+      expr instanceof BlockExpr ||
+      expr instanceof FunctionDeclarationExpr
     );
   }
 }

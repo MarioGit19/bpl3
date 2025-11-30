@@ -32,7 +32,11 @@ export class Formatter {
   private currentCommentIndex = 0;
   private sourceCode: string = "";
 
-  constructor(indentString: string = "    ", comments: Token[] = [], sourceCode: string = "") {
+  constructor(
+    indentString: string = "    ",
+    comments: Token[] = [],
+    sourceCode: string = "",
+  ) {
     this.indentString = indentString;
     this.comments = comments;
     this.sourceCode = sourceCode;
@@ -245,12 +249,12 @@ export class Formatter {
     output += expr.args
       .map((arg) => `${arg.name}: ${this.formatType(arg.type)}`)
       .join(", ");
-    
+
     if (expr.isVariadic) {
-        if (expr.args.length > 0) output += ", ";
-        output += `...:${this.formatType(expr.variadicType!)}`;
+      if (expr.args.length > 0) output += ", ";
+      output += `...:${this.formatType(expr.variadicType!)}`;
     }
-    
+
     output += ")";
     if (expr.returnType) {
       output += ` ret ${this.formatType(expr.returnType)}`;
@@ -263,7 +267,7 @@ export class Formatter {
   private visitBlockExpr(expr: BlockExpr): string {
     let output = "{";
     if (expr.startToken) {
-        output += this.getTrailingComment(expr.startToken.line);
+      output += this.getTrailingComment(expr.startToken.line);
     }
     output += "\n";
     this.indentLevel++;
@@ -289,9 +293,7 @@ export class Formatter {
         firstExpr &&
         firstExpr.type === ExpressionType.IfExpression
       ) {
-        output +=
-          " else " +
-          this.visitIfExpr(firstExpr as IfExpr);
+        output += " else " + this.visitIfExpr(firstExpr as IfExpr);
       } else {
         output += " else " + this.visitBlockExpr(expr.elseBranch as BlockExpr);
       }
@@ -360,15 +362,15 @@ export class Formatter {
     let output = "import ";
     const items: string[] = [];
     for (const item of expr.importName) {
-        if (item.type === "type") {
-            items.push(`[${item.name}]`);
-        } else {
-            items.push(item.name);
-        }
+      if (item.type === "type") {
+        items.push(`[${item.name}]`);
+      } else {
+        items.push(item.name);
+      }
     }
     output += items.join(", ");
     if (expr.moduleName) {
-        output += ` from "${expr.moduleName}"`;
+      output += ` from "${expr.moduleName}"`;
     }
     return output + ";";
   }
@@ -376,9 +378,9 @@ export class Formatter {
   private visitExportExpr(expr: ExportExpr): string {
     let output = "export ";
     if (expr.exportType === "type") {
-        output += `[${expr.exportName}]`;
+      output += `[${expr.exportName}]`;
     } else {
-        output += expr.exportName;
+      output += expr.exportName;
     }
     return output + ";";
   }
@@ -389,8 +391,8 @@ export class Formatter {
       .map((arg) => `${arg.name}: ${this.formatType(arg.type)}`)
       .join(", ");
     if (expr.isVariadic) {
-        if (expr.args.length > 0) output += ", ";
-        output += "...";
+      if (expr.args.length > 0) output += ", ";
+      output += "...";
     }
     output += ")";
     if (expr.returnType) {
@@ -420,24 +422,25 @@ export class Formatter {
     }
     output += " {";
     if (expr.startToken) {
-        output += this.getTrailingComment(expr.startToken.line);
+      output += this.getTrailingComment(expr.startToken.line);
     }
     output += "\n";
 
     this.indentLevel++;
     for (const field of expr.fields) {
       if (field.token) {
-         output += this.printCommentsUntil(field.token.line);
+        output += this.printCommentsUntil(field.token.line);
       }
-      output += this.indent() + `${field.name}: ${this.formatType(field.type)},`;
+      output +=
+        this.indent() + `${field.name}: ${this.formatType(field.type)},`;
       if (field.token) {
-          output += this.getTrailingComment(field.token.line);
+        output += this.getTrailingComment(field.token.line);
       }
       output += "\n";
     }
-    
+
     if (expr.endToken) {
-        output += this.printCommentsUntil(expr.endToken.line);
+      output += this.printCommentsUntil(expr.endToken.line);
     }
 
     this.indentLevel--;
@@ -457,12 +460,14 @@ export class Formatter {
   }
 
   private escapeString(value: string): string {
-    return value
-      // .replaceAll('\\', "\\\\")
-      .replaceAll('"', '\\"')
-      .replaceAll('\n', "\\n")
-      .replaceAll('\r', "\\r")
-      .replaceAll('\t', "\\t");
+    return (
+      value
+        // .replaceAll('\\', "\\\\")
+        .replaceAll('"', '\\"')
+        .replaceAll("\n", "\\n")
+        .replaceAll("\r", "\\r")
+        .replaceAll("\t", "\\t")
+    );
   }
 
   private visitStringLiteral(expr: StringLiteralExpr): string {
@@ -494,19 +499,21 @@ export class Formatter {
 
   private visitAsmBlock(expr: AsmBlockExpr): string {
     if (this.sourceCode && expr.startToken && expr.endToken) {
-        // Preserve exact formatting for ASM blocks
-        const start = expr.startToken.start;
-        const end = expr.endToken.start + (expr.endToken.raw ? expr.endToken.raw.length : 1);
+      // Preserve exact formatting for ASM blocks
+      const start = expr.startToken.start;
+      const end =
+        expr.endToken.start +
+        (expr.endToken.raw ? expr.endToken.raw.length : 1);
 
-        // Skip comments that are inside the block to avoid duplication
-        while (
-            this.currentCommentIndex < this.comments.length &&
-            this.comments[this.currentCommentIndex]!.start < expr.endToken.start
-        ) {
-            this.currentCommentIndex++;
-        }
+      // Skip comments that are inside the block to avoid duplication
+      while (
+        this.currentCommentIndex < this.comments.length &&
+        this.comments[this.currentCommentIndex]!.start < expr.endToken.start
+      ) {
+        this.currentCommentIndex++;
+      }
 
-        return this.sourceCode.slice(start, end);
+      return this.sourceCode.slice(start, end);
     }
 
     let output = "asm {\n";
@@ -581,21 +588,21 @@ export class Formatter {
   private visitSwitchExpr(expr: SwitchExpr): string {
     let output = `switch ${this.visit(expr.discriminant)} {`;
     if (expr.startToken) {
-        output += this.getTrailingComment(expr.startToken.line);
+      output += this.getTrailingComment(expr.startToken.line);
     }
     output += "\n";
     this.indentLevel++;
 
     for (const c of expr.cases) {
-        output += this.indent() + `case ${c.value.value}: `;
-        output += this.visitBlockExpr(c.body);
-        output += "\n";
+      output += this.indent() + `case ${c.value.value}: `;
+      output += this.visitBlockExpr(c.body);
+      output += "\n";
     }
 
     if (expr.defaultCase) {
-        output += this.indent() + "default: ";
-        output += this.visitBlockExpr(expr.defaultCase);
-        output += "\n";
+      output += this.indent() + "default: ";
+      output += this.visitBlockExpr(expr.defaultCase);
+      output += "\n";
     }
 
     this.indentLevel--;

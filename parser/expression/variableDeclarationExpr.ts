@@ -121,10 +121,7 @@ export default class VariableDeclarationExpr extends Expression {
         return "f64";
       }
 
-      if (
-        leftType === "f64" ||
-        rightType === "f64"
-      ) {
+      if (leftType === "f64" || rightType === "f64") {
         return "f64";
       }
       if (leftType === "f32" || rightType === "f32") {
@@ -172,7 +169,6 @@ export default class VariableDeclarationExpr extends Expression {
       ? baseSize * this.varType.isArray.reduce((a, b) => a * b, 1)
       : baseSize;
     const offset = scope.allocLocal(totalBytes);
-    gen.emit("sub rsp, " + totalBytes, "Allocate space for local variable");
 
     scope.define(this.name, {
       offset: offset.toString(),

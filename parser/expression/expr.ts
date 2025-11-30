@@ -41,7 +41,8 @@ export default class Expression {
     let output = "";
     output += "Type: " + type.name;
     if (type.genericArgs && type.genericArgs.length > 0) {
-      output += "<" + type.genericArgs.map(t => this.printType(t)).join(", ") + ">";
+      output +=
+        "<" + type.genericArgs.map((t) => this.printType(t)).join(", ") + ">";
     }
     output +=
       ", IsPointer: " +

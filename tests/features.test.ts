@@ -11,56 +11,61 @@ import { join } from "path";
 const TEST_DIR = "/tmp/bpl_feature_tests";
 
 function runCode(code: string): string {
-    if (!existsSync(TEST_DIR)) {
-        mkdirSync(TEST_DIR);
-    }
-    const filename = join(TEST_DIR, `test_${Date.now()}_${Math.floor(Math.random() * 1000)}.x`);
-    writeFileSync(filename, code);
-    
+  if (!existsSync(TEST_DIR)) {
+    mkdirSync(TEST_DIR);
+  }
+  const filename = join(
+    TEST_DIR,
+    `test_${Date.now()}_${Math.floor(Math.random() * 1000)}.x`,
+  );
+  writeFileSync(filename, code);
+
+  try {
+    const scope = new Scope();
+    const objectFiles = parseLibraryFile(filename, scope);
+
+    const program = parseFile(filename) as any; // Cast to any to avoid type issues in test
+    const gen = new AsmGenerator();
+    gen.setSourceFile(filename);
+
+    const asm = transpileProgram(program, gen, scope);
+    const asmFile = filename.replace(".x", ".asm");
+    writeFileSync(asmFile, asm);
+
+    const objFile = compileAsmFile(asmFile);
+    const exeFile = filename.replace(".x", "");
+
+    linkObjectFile(objFile, objectFiles, exeFile);
+
+    // console.log("Running:", exeFile);
+    const output = execSync(exeFile, { encoding: "utf-8" });
+    // console.log("Output:", output);
+
+    // Cleanup
+    unlinkSync(filename);
+    unlinkSync(asmFile);
+    unlinkSync(objFile);
+    unlinkSync(exeFile);
+    objectFiles.forEach((f) => {
+      if (f.endsWith(".o") && existsSync(f)) unlinkSync(f);
+    });
+
+    return output.trim();
+  } catch (e: any) {
+    console.error("Error in runCode:", e.message);
+    if (e.stdout) console.log("Stdout:", e.stdout.toString());
+    if (e.stderr) console.log("Stderr:", e.stderr.toString());
+    // Cleanup on error
     try {
-        const scope = new Scope();
-        const objectFiles = parseLibraryFile(filename, scope);
-        
-        const program = parseFile(filename) as any; // Cast to any to avoid type issues in test
-        const gen = new AsmGenerator();
-        gen.setSourceFile(filename);
-        
-        const asm = transpileProgram(program, gen, scope);
-        const asmFile = filename.replace(".x", ".asm");
-        writeFileSync(asmFile, asm);
-        
-        const objFile = compileAsmFile(asmFile);
-        const exeFile = filename.replace(".x", "");
-        
-        linkObjectFile(objFile, objectFiles, exeFile);
-        
-        // console.log("Running:", exeFile);
-        const output = execSync(exeFile, { encoding: 'utf-8' });
-        // console.log("Output:", output);
-        
-        // Cleanup
-        unlinkSync(filename);
-        unlinkSync(asmFile);
-        unlinkSync(objFile);
-        unlinkSync(exeFile);
-        objectFiles.forEach(f => {
-            if (f.endsWith(".o") && existsSync(f)) unlinkSync(f);
-        });
-        
-        return output.trim();
-    } catch (e: any) {
-        console.error("Error in runCode:", e.message);
-        if (e.stdout) console.log("Stdout:", e.stdout.toString());
-        if (e.stderr) console.log("Stderr:", e.stderr.toString());
-        // Cleanup on error
-        try { unlinkSync(filename); } catch {}
-        throw e;
-    }
+      unlinkSync(filename);
+    } catch {}
+    throw e;
+  }
 }
 
 describe("New Features Integration", () => {
-    it("should handle switch statements", () => {
-        const code = `
+  it("should handle switch statements", () => {
+    const code = `
             import print from "std";
             
             frame main() ret u64 {
@@ -73,11 +78,11 @@ describe("New Features Integration", () => {
                 return 0;
             }
         `;
-        expect(runCode(code)).toBe("Two");
-    });
+    expect(runCode(code)).toBe("Two");
+  });
 
-    it("should handle switch with default", () => {
-        const code = `
+  it("should handle switch with default", () => {
+    const code = `
             import print from "std";
             
             frame main() ret u64 {
@@ -90,11 +95,11 @@ describe("New Features Integration", () => {
                 return 0;
             }
         `;
-        expect(runCode(code)).toBe("Default");
-    });
+    expect(runCode(code)).toBe("Default");
+  });
 
-    it("should handle float operations", () => {
-        const code = `
+  it("should handle float operations", () => {
+    const code = `
             import printf, fflush from "libc";
             extern printf(fmt: *u8, ...) ret i32;
             extern fflush(stream: *u8) ret i32;
@@ -108,11 +113,11 @@ describe("New Features Integration", () => {
                 return 0;
             }
         `;
-        expect(runCode(code)).toBe("13.0");
-    });
+    expect(runCode(code)).toBe("13.0");
+  });
 
-    it("should handle generic structs", () => {
-        const code = `
+  it("should handle generic structs", () => {
+    const code = `
             import printf, fflush from "libc";
             extern printf(fmt: *u8, ...) ret i32;
             extern fflush(stream: *u8) ret i32;
@@ -129,11 +134,11 @@ describe("New Features Integration", () => {
                 return 0;
             }
         `;
-        expect(runCode(code)).toBe("42");
-    });
+    expect(runCode(code)).toBe("42");
+  });
 
-    it("should handle nested generic structs", () => {
-        const code = `
+  it("should handle nested generic structs", () => {
+    const code = `
             import printf, fflush from "libc";
             extern printf(fmt: *u8, ...) ret i32;
             extern fflush(stream: *u8) ret i32;
@@ -154,6 +159,6 @@ describe("New Features Integration", () => {
                 return 0;
             }
         `;
-        expect(runCode(code)).toBe("123");
-    });
+    expect(runCode(code)).toBe("123");
+  });
 });

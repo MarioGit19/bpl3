@@ -49,7 +49,9 @@ describe("Generics", () => {
     expect(variable).toBeDefined();
     expect(variable?.varType.name).toBe("Container");
     expect(variable?.varType.genericArgs?.[0]?.name).toBe("Box");
-    expect(variable?.varType.genericArgs?.[0]?.genericArgs?.[0]?.name).toBe("u64");
+    expect(variable?.varType.genericArgs?.[0]?.genericArgs?.[0]?.name).toBe(
+      "u64",
+    );
   });
 
   it("should handle multiple generic parameters", () => {
@@ -67,13 +69,13 @@ describe("Generics", () => {
     expect(variable?.varType.genericArgs?.[0]?.name).toBe("u64");
     expect(variable?.varType.genericArgs?.[1]?.name).toBe("u8");
   });
-  
+
   it("should parse nested generics with >> token", () => {
-      const input = `
+    const input = `
         struct Box<T> { value: T, }
         global x: Box<Box<u64>>;
       `;
-      expect(() => analyze(input)).not.toThrow();
+    expect(() => analyze(input)).not.toThrow();
   });
 
   it("should fail with wrong number of generic arguments", () => {

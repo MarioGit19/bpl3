@@ -24,14 +24,14 @@ describe("DWARF Debug Info", () => {
       }
     `;
     const asm = generate(input, "main.bpl");
-    
+
     // Check for %line directive
     // The format is %line <line_number> "<filename>"
     expect(asm).toMatch(/%line \d+ "main.bpl"/);
   });
 
   it("should generate correct line numbers", () => {
-     const input = `
+    const input = `
 frame main() {
     local x: u64 = 10;
 }
@@ -40,7 +40,7 @@ frame main() {
     // Line 2: frame main() {
     // Line 3:     local x: u64 = 10;
     // Line 4: }
-    
+
     const asm = generate(input, "lines.bpl");
     // We expect a directive for line 3 where the variable is declared/initialized
     expect(asm).toMatch(/%line 3 "lines.bpl"/);

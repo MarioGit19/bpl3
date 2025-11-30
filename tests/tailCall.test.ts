@@ -11,13 +11,13 @@ function generate(input: string) {
   const parser = new Parser(lexer.tokenize());
   const program = parser.parse();
   program.optimize();
-  
+
   const scope = new Scope();
   HelperGenerator.generateBaseTypes(null as any, scope);
-  
+
   const analyzer = new SemanticAnalyzer();
   analyzer.analyze(program, scope);
-  
+
   const gen = new AsmGenerator(0);
   program.transpile(gen, scope);
   return gen.build();

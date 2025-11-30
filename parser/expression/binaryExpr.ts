@@ -108,10 +108,12 @@ export default class BinaryExpr extends Expression {
     const leftType = this.resolveExpressionType(this.left, scope);
     const rightType = this.resolveExpressionType(this.right, scope);
     const isFloat =
-      leftType?.name === "f64" ||
-      leftType?.name === "f32" ||
-      rightType?.name === "f64" ||
-      rightType?.name === "f32" ||
+      ((leftType?.name === "f64" || leftType?.name === "f32") &&
+        !leftType?.isPointer &&
+        !leftType?.isArray.length) ||
+      ((rightType?.name === "f64" || rightType?.name === "f32") &&
+        !rightType?.isPointer &&
+        !rightType?.isArray.length) ||
       this.operator.type === TokenType.SLASH;
 
     const isLHS = scope.getCurrentContext("LHS");
@@ -123,6 +125,47 @@ export default class BinaryExpr extends Expression {
     gen.emit("pop rbx", "Pop right operand into rbx");
 
     if (isLHS) scope.setCurrentContext({ type: "LHS" });
+
+    // Pointer Arithmetic
+    let scale = 1;
+    if (
+      !isFloat &&
+      (this.operator.type === TokenType.PLUS ||
+        this.operator.type === TokenType.MINUS)
+    ) {
+      if (
+        leftType?.isPointer &&
+        leftType.isPointer > 0 &&
+        !rightType?.isPointer
+      ) {
+        // Pointer +/- Int
+        if (leftType.isPointer > 1) {
+          scale = 8;
+        } else {
+          const typeInfo = scope.resolveType(leftType.name);
+          if (typeInfo) scale = typeInfo.size;
+        }
+        if (scale > 1) {
+          gen.emit(`imul rbx, ${scale}`, `Scale index by ${scale}`);
+        }
+      } else if (
+        rightType?.isPointer &&
+        rightType.isPointer > 0 &&
+        !leftType?.isPointer &&
+        this.operator.type === TokenType.PLUS
+      ) {
+        // Int + Pointer
+        if (rightType.isPointer > 1) {
+          scale = 8;
+        } else {
+          const typeInfo = scope.resolveType(rightType.name);
+          if (typeInfo) scale = typeInfo.size;
+        }
+        if (scale > 1) {
+          gen.emit(`imul rax, ${scale}`, `Scale index by ${scale}`);
+        }
+      }
+    }
 
     if (isFloat) {
       if (leftType?.name !== "f64" && leftType?.name !== "f32") {
@@ -485,11 +528,29 @@ export default class BinaryExpr extends Expression {
     const leftType = this.resolveExpressionType(this.left, scope);
     const rightType = this.resolveExpressionType(this.right, scope);
 
+    // Check for pointer arithmetic in assignment
+    let scale = 1;
+    if (
+      leftType?.isPointer &&
+      leftType.isPointer > 0 &&
+      (this.operator.type === TokenType.PLUS_ASSIGN ||
+        this.operator.type === TokenType.MINUS_ASSIGN)
+    ) {
+      if (leftType.isPointer > 1) {
+        scale = 8;
+      } else {
+        const typeInfo = scope.resolveType(leftType.name);
+        if (typeInfo) scale = typeInfo.size;
+      }
+    }
+
     const isFloat =
-      leftType?.name === "f64" ||
-      leftType?.name === "f32" ||
-      rightType?.name === "f64" ||
-      rightType?.name === "f32";
+      ((leftType?.name === "f64" || leftType?.name === "f32") &&
+        !leftType?.isPointer &&
+        !leftType?.isArray.length) ||
+      ((rightType?.name === "f64" || rightType?.name === "f32") &&
+        !rightType?.isPointer &&
+        !rightType?.isArray.length);
 
     if (isFloat) {
       // Ensure Right is in XMM1 (as f64)
@@ -591,9 +652,11 @@ export default class BinaryExpr extends Expression {
         gen.emit("mov [rax], rbx", "Simple assignment");
         break;
       case TokenType.PLUS_ASSIGN:
+        if (scale > 1) gen.emit(`imul rbx, ${scale}`, `Scale RHS by ${scale}`);
         gen.emit("add [rax], rbx", "Addition assignment");
         break;
       case TokenType.MINUS_ASSIGN:
+        if (scale > 1) gen.emit(`imul rbx, ${scale}`, `Scale RHS by ${scale}`);
         gen.emit("sub [rax], rbx", "Subtraction assignment");
         break;
       case TokenType.STAR_ASSIGN:

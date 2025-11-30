@@ -181,7 +181,13 @@ export default class MemberAccessExpr extends Expression {
 
     const objectType = this.resolveExpressionType(this.object, scope);
     if (!objectType) {
-      throw new Error("Could not resolve type of object in member access");
+      if (this.object instanceof IdentifierExpr) {
+        console.error(
+          `Could not resolve type of object '${this.object.name}' in member access`,
+        );
+        console.error("Is it defined?");
+      }
+      throw new Error(`Could not resolve type of object in member access`);
     }
 
     // If object is NOT a pointer (struct instance or array), we need its address (LHS context)

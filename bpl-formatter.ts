@@ -39,7 +39,7 @@ for (const file of files) {
 
   try {
     const originalContent = readFile(file);
-    
+
     // Get comments
     const lexer = new Lexer(originalContent);
     const tokens = lexer.tokenize(true);
@@ -47,7 +47,7 @@ for (const file of files) {
 
     // Parse the file
     const program = parseFile(file);
-    
+
     // Format the AST
     const formatter = new Formatter("    ", comments, originalContent);
     const formattedContent = formatter.format(program);
@@ -55,15 +55,15 @@ for (const file of files) {
     // Check if content changed
     // We trim both to avoid issues with trailing newlines if any
     if (originalContent === formattedContent) {
-       if (write) {
-           console.log(`\x1b[90m${file} - unchanged\x1b[0m`);
-       } else {
-           // If not writing, we just output the formatted content
-           // But if we have multiple files, concatenating them might be what is expected
-           // or maybe just processing one by one.
-           // Standard prettier outputs to stdout.
-           console.log(formattedContent);
-       }
+      if (write) {
+        console.log(`\x1b[90m${file} - unchanged\x1b[0m`);
+      } else {
+        // If not writing, we just output the formatted content
+        // But if we have multiple files, concatenating them might be what is expected
+        // or maybe just processing one by one.
+        // Standard prettier outputs to stdout.
+        console.log(formattedContent);
+      }
     } else {
       if (write) {
         saveToFile(file, formattedContent);

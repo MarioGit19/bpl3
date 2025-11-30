@@ -22,9 +22,7 @@ frame main() ret u64 {
     movsd xmm2, (res3)
     movsd xmm3, (res4)
     mov rax, 4
-    sub rsp, 4
     call printf WRT ..plt
-    add rsp, 4
   }
 
     return 0;

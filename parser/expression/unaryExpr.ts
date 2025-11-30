@@ -135,7 +135,26 @@ export default class UnaryExpr extends Expression {
       if (isLHS) {
         scope.setCurrentContext({ type: "LHS" });
       } else {
-        gen.emit("mov rax, [rax]", "dereference pointer");
+        const resultType = this.resolveExpressionType(this, scope);
+        let size = 8;
+        if (resultType) {
+          if (resultType.isPointer > 0 || resultType.isArray.length > 0) {
+            size = 8;
+          } else {
+            const typeInfo = scope.resolveType(resultType.name);
+            if (typeInfo) size = typeInfo.size;
+          }
+        }
+
+        if (size === 1) {
+          gen.emit("movzx rax, byte [rax]", "dereference pointer (u8)");
+        } else if (size === 2) {
+          gen.emit("movzx rax, word [rax]", "dereference pointer (u16)");
+        } else if (size === 4) {
+          gen.emit("mov eax, dword [rax]", "dereference pointer (u32)");
+        } else {
+          gen.emit("mov rax, [rax]", "dereference pointer (u64)");
+        }
       }
       return;
     }

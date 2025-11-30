@@ -28,8 +28,8 @@ export default class SwitchExpr extends Expression {
     output += this.discriminant.toString(depth + 1);
 
     for (const c of this.cases) {
-        output += this.getDepth() + ` Case ${c.value.value}:\n`;
-        output += c.body.toString(depth + 1);
+      output += this.getDepth() + ` Case ${c.value.value}:\n`;
+      output += c.body.toString(depth + 1);
     }
 
     if (this.defaultCase) {
@@ -54,18 +54,18 @@ export default class SwitchExpr extends Expression {
     // Result is in RAX
 
     // 2. Analyze cases for Jump Table
-    const caseValues = this.cases.map(c => ({
-        val: Number(c.value.value),
-        block: c.body,
-        label: gen.generateLabel(`${label}_case_${c.value.value}_`)
+    const caseValues = this.cases.map((c) => ({
+      val: Number(c.value.value),
+      block: c.body,
+      label: gen.generateLabel(`${label}_case_${c.value.value}_`),
     }));
 
     // Sort by value
     caseValues.sort((a, b) => a.val - b.val);
 
     if (caseValues.length === 0) {
-        // No cases, just evaluate discriminant (for side effects) and exit
-        return;
+      // No cases, just evaluate discriminant (for side effects) and exit
+      return;
     }
 
     const minVal = caseValues[0]!.val;
@@ -77,62 +77,71 @@ export default class SwitchExpr extends Expression {
     // 1. Range is not too huge (e.g. < 1024) to avoid massive tables for sparse cases like 0 and 1000000
     // 2. Density is reasonable (e.g. > 50%) OR range is small enough (< 64) that density doesn't matter much.
     // For now, let's be generous with jump tables as requested.
-    const useJumpTable = range < 256 || (range < 2048 && (count / range) > 0.5);
+    const useJumpTable = range < 256 || (range < 2048 && count / range > 0.5);
 
     if (useJumpTable) {
-        const tableLabel = `${label}_jumptable`;
+      const tableLabel = `${label}_jumptable`;
 
-        // Calculate offset
-        gen.emit(`sub rax, ${minVal}`, `Switch: normalize discriminant (min: ${minVal})`);
-        gen.emit(`cmp rax, ${range}`, `Switch: check range (max-min: ${range})`);
-        gen.emit(`ja ${defaultLabel}`, `Switch: jump to default if out of range`);
+      // Calculate offset
+      gen.emit(
+        `sub rax, ${minVal}`,
+        `Switch: normalize discriminant (min: ${minVal})`,
+      );
+      gen.emit(`cmp rax, ${range}`, `Switch: check range (max-min: ${range})`);
+      gen.emit(`ja ${defaultLabel}`, `Switch: jump to default if out of range`);
 
-        gen.emit(`lea rbx, [rel ${tableLabel}]`, `Switch: load jump table address`);
-        gen.emit(`jmp [rbx + rax * 8]`, `Switch: indirect jump`);
+      gen.emit(
+        `lea rbx, [rel ${tableLabel}]`,
+        `Switch: load jump table address`,
+      );
+      gen.emit(`jmp [rbx + rax * 8]`, `Switch: indirect jump`);
 
-        // Generate Jump Table
-        const tableEntries: string[] = [];
-        let currentVal = minVal;
-        let caseIdx = 0;
+      // Generate Jump Table
+      const tableEntries: string[] = [];
+      let currentVal = minVal;
+      let caseIdx = 0;
 
-        for (let i = 0; i <= range; i++) {
-            const targetVal = minVal + i;
-            if (caseIdx < caseValues.length && caseValues[caseIdx]!.val === targetVal) {
-                tableEntries.push(caseValues[caseIdx]!.label);
-                caseIdx++;
-            } else {
-                tableEntries.push(defaultLabel);
-            }
+      for (let i = 0; i <= range; i++) {
+        const targetVal = minVal + i;
+        if (
+          caseIdx < caseValues.length &&
+          caseValues[caseIdx]!.val === targetVal
+        ) {
+          tableEntries.push(caseValues[caseIdx]!.label);
+          caseIdx++;
+        } else {
+          tableEntries.push(defaultLabel);
         }
+      }
 
-        gen.emitData(tableLabel, "dq", tableEntries.join(", "));
+      gen.emitData(tableLabel, "dq", tableEntries.join(", "));
     } else {
-        // Fallback: Linear scan (or Binary Search could be implemented here)
-        // For now, simple linear scan (O(N))
-        // Or better: Binary Search (O(log N))?
-        // Let's do linear for simplicity if jump table fails, as user asked for O(1) dispatch specifically.
-        // If they asked for O(1), they probably provide dense keys.
+      // Fallback: Linear scan (or Binary Search could be implemented here)
+      // For now, simple linear scan (O(N))
+      // Or better: Binary Search (O(log N))?
+      // Let's do linear for simplicity if jump table fails, as user asked for O(1) dispatch specifically.
+      // If they asked for O(1), they probably provide dense keys.
 
-        // Linear scan implementation:
-        for (const c of caseValues) {
-            gen.emit(`cmp rax, ${c.val}`, `Switch: check case ${c.val}`);
-            gen.emit(`je ${c.label}`, `Switch: jump to case ${c.val}`);
-        }
-        gen.emit(`jmp ${defaultLabel}`, `Switch: jump to default`);
+      // Linear scan implementation:
+      for (const c of caseValues) {
+        gen.emit(`cmp rax, ${c.val}`, `Switch: check case ${c.val}`);
+        gen.emit(`je ${c.label}`, `Switch: jump to case ${c.val}`);
+      }
+      gen.emit(`jmp ${defaultLabel}`, `Switch: jump to default`);
     }
 
     // 3. Generate Case Bodies
     for (const c of caseValues) {
-        gen.emitLabel(c.label);
-        c.block.transpile(gen, scope);
-        gen.emit(`jmp ${endLabel}`, `Switch: break`);
+      gen.emitLabel(c.label);
+      c.block.transpile(gen, scope);
+      gen.emit(`jmp ${endLabel}`, `Switch: break`);
     }
 
     // 4. Generate Default Body
     if (this.defaultCase) {
-        gen.emitLabel(defaultLabel);
-        this.defaultCase.transpile(gen, scope);
-        gen.emit(`jmp ${endLabel}`, `Switch: break`);
+      gen.emitLabel(defaultLabel);
+      this.defaultCase.transpile(gen, scope);
+      gen.emit(`jmp ${endLabel}`, `Switch: break`);
     }
 
     gen.emitLabel(endLabel);

@@ -311,8 +311,30 @@ export default class FunctionDeclarationExpr extends Expression {
       }
     }
 
+    // Reserve space for locals
+    const localsStackIndex = gen.getCurrentLineIndex();
+    gen.emit("sub rsp, 0", "reserve space for locals (placeholder)");
+    const startStackOffset = funcScope.stackOffset;
+
     // body
     this.body.transpile(gen, funcScope);
+
+    // Calculate locals size and patch
+    const localsSize = funcScope.stackOffset - startStackOffset;
+    const totalStackSize = funcScope.stackOffset;
+    const padding = (16 - (totalStackSize % 16)) % 16;
+    const totalLocalsAllocation = localsSize + padding;
+
+    if (totalLocalsAllocation > 0) {
+      gen.patchLine(
+        localsStackIndex,
+        `sub rsp, ${totalLocalsAllocation}`,
+        `allocate space for locals (size: ${localsSize}, align: ${padding})`,
+      );
+    } else {
+      // If no locals, we can remove the instruction or make it a comment
+      gen.patchLine(localsStackIndex, `nop`, `no locals to allocate`);
+    }
 
     funcScope.removeCurrentContext("function");
 
