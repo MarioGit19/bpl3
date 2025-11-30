@@ -3,12 +3,12 @@ import printf, malloc, free from "libc";
 
 struct Node {
     value: u64,
-    next: *Node
+    next: *Node,
 }
 
 frame create_node(val: u64) ret *Node {
     # Manually calculating size: 8 bytes (u64 value) + 8 bytes (*Node next) = 16 bytes
-    local node: *Node = call malloc(16); 
+    local node: *Node = call malloc(16);
     if node == NULL {
         call print("Memory allocation failed\n");
         call exit(1);
@@ -29,7 +29,7 @@ frame append(head: *Node, val: u64) {
     current.next = call create_node(val);
 }
 
-frame insert(node: *Node, val: u64)ret *Node {
+frame insert(node: *Node, val: u64) ret *Node {
     local new_node: *Node = call create_node(val);
     new_node.next = node.next;
     node.next = new_node;
@@ -64,7 +64,7 @@ frame free_list(head: *Node) {
 frame main() ret u8 {
     local head: *Node = call create_node(1);
     local head2: *Node = call create_node(10);
-    
+
     call append(head, 4);
     call append(head, 5);
 
@@ -74,7 +74,6 @@ frame main() ret u8 {
     call insert(head.next, 3);
 
     call print_list(head);
-
 
     call append(head2, 40);
     call append(head2, 50);
@@ -88,6 +87,6 @@ frame main() ret u8 {
 
     call free_list(head);
     call free_list(head2);
-    
+
     return 0;
 }

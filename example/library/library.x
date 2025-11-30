@@ -12,16 +12,16 @@ global g_total_books: u32 = 0;
 
 struct Book {
     id: u64,
-    title: u8[64],         # Fixed size buffer
+    title: u8[64], # Fixed size buffer
     author: u8[64],
-    is_checked_out: u8   # 0 or 1
+    is_checked_out: u8, # 0 or 1
 }
 
 struct User {
     user_id: u64,
-    name: u8[64],       # Fixed size buffer
-    health: i32,        # An unused health metric
-    checked_out_books: *Book # Pointer to a single book (for simplicity)
+    name: u8[64], # Fixed size buffer
+    health: i32, # An unused health metric
+    checked_out_books: *Book, # Pointer to a single book (for simplicity)
 }
 
 frame Book_print(book: *Book) {
@@ -57,7 +57,6 @@ frame Book_Checkout(book: *Book, user: *User) {
         call print("Book is available for checkout.\n");
     }
 
-
     # Single comparison check
     if can_checkout == 1 {
         # Update Book status (auto-dereference on both sides)
@@ -90,7 +89,7 @@ frame main() ret u8 {
     call strcpy(user1.name, "John Smith");
 
     # user1.name = "Jane Doe";
-    user1.health = 100;#DEFAULT_USER_HEALTH;
+    user1.health = 100; #DEFAULT_USER_HEALTH;
     user1.checked_out_books = NULL; # Use the built-in NULL keyword
 
     # Update the global count
@@ -105,7 +104,6 @@ frame main() ret u8 {
     # Pass the addresses (pointers) of the stack variables
     call Book_Checkout(&book1, &user1);
 
-
     # --- Verification and Pointer Arithmetic ---
 
     local check_ptr: *Book = &book1;
@@ -115,13 +113,13 @@ frame main() ret u8 {
     loop {
         # Comparison check: uses pointer arithmetic (check_ptr + count)
         # and dereferencing (*)
-        
+
         local ptr_val: *Book = check_ptr + count;
-        
+
         if ptr_val.id == 101 {
-             break; # Found it!
+            break; # Found it!
         }
-        
+
         count = count + 1;
 
         # Simple safety check for infinite loop
@@ -129,7 +127,6 @@ frame main() ret u8 {
             break;
         }
     }
-
 
     # --- Final Output and Exit ---
     call print("\n--- Final Status ---\n");

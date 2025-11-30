@@ -16,17 +16,17 @@ frame main() ret u64 {
 
     # 2. Dynamic command with sprintf
     call printf("\n[2] Running 'ls -la' on current directory...\n");
-    
+
     # Allocate buffer for command string
     local cmd_buffer: *u8 = call malloc(128);
     call sprintf(cmd_buffer, "ls -la %s", ".");
-    
+
     local output2: *u8 = call exec(cmd_buffer);
     if output2 != NULL {
         call printf("Output:\n%s", output2);
         call free(output2);
     }
-    
+
     call free(cmd_buffer);
 
     # 3. Command with pipes

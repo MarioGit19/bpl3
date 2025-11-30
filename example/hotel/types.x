@@ -1,9 +1,8 @@
-
 struct User {
     id: u64,
     username: u8[32],
     password: u8[32],
-    next: *User
+    next: *User,
 }
 
 struct Room {
@@ -11,7 +10,7 @@ struct Room {
     capacity: u8,
     price: u32,
     is_reserved: u8,
-    next: *Room
+    next: *Room,
 }
 
 struct Reservation {
@@ -20,7 +19,7 @@ struct Reservation {
     room_number: u32,
     nights: u32,
     total_price: u32,
-    next: *Reservation
+    next: *Reservation,
 }
 
 export [User];

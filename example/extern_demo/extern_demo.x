@@ -6,6 +6,6 @@ import printf from "libc";
 extern printf(fmt: string, ...);
 
 frame main() ret u64 {
-  call printf("Hello from extern printf! %d\n", 42);
-  return 0;
+    call printf("Hello from extern printf! %d\n", 42);
+    return 0;
 }

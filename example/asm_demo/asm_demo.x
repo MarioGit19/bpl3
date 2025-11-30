@@ -1,7 +1,7 @@
 import printf from "libc";
 
 frame get_rnd_u64() ret u64 {
-    local rnd : u64 = 0;
+    local rnd: u64 = 0;
     asm {
         rdrand rax;
         mov (rnd), rax;
@@ -27,7 +27,7 @@ frame main() ret u8 {
     # Another example: direct syscall using asm
     # We will write "Hi\n" to stdout (fd 1)
     # This bypasses the standard library 'print' function
-    
+
     local msg: *u8 = "Hi from ASM!\n";
     local len: u64 = 13;
 

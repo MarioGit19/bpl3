@@ -3,7 +3,7 @@ import printf from "libc";
 struct Vector3 {
     x: u64,
     y: u64,
-    z: u64
+    z: u64,
 }
 
 # Feature 1: Pass by Value
@@ -36,11 +36,11 @@ frame main() ret u8 {
     myVec.x = 10;
     myVec.y = 20;
     myVec.z = 30;
-    
+
     call printf("  [Main] Original before call: (%d, %d, %d)\n", myVec.x, myVec.y, myVec.z);
     call modifyVector(myVec);
     call printf("  [Main] Original after call: (%d, %d, %d) (Should be unchanged)\n", myVec.x, myVec.y, myVec.z);
-    
+
     call printf("\n");
 
     # 2. Demonstrate Return by Value

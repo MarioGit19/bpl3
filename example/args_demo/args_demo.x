@@ -2,7 +2,7 @@ import printf from "libc";
 
 frame main(argc: u32, argv: **u8) ret u8 {
     call printf("Number of arguments (argc): %d\n", argc);
-    
+
     local i: u32 = 0;
     loop {
         if i >= argc {

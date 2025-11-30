@@ -2,13 +2,13 @@ import printf from "libc";
 
 struct Point {
     x: u64,
-    y: u64
+    y: u64,
 }
 
 global points: Point[5];
 
 frame get_rnd_u64(min: u64, max: u64) ret u64 {
-    local rnd : u64 = 0;
+    local rnd: u64 = 0;
     # Use inline assembly to get a random number from the hardware
     asm {
         rdrand rax;
@@ -35,9 +35,9 @@ frame initialize_points() {
 }
 
 frame shuffle_points() {
-   local i: u64 = 0;
-   local j: u64 = 0;
-   local temp: Point;
+    local i: u64 = 0;
+    local j: u64 = 0;
+    local temp: Point;
 
     # Shuffle array of structs
     local counter: u64 = 0;
@@ -49,15 +49,14 @@ frame shuffle_points() {
         j = call get_rnd_u64(0, 5);
 
         if i == j {
-           continue;
+            continue;
         }
 
         temp = points[i];
         points[i] = points[j];
         points[j] = temp;
 
-
-        counter+=1;
+        counter += 1;
     }
 }
 

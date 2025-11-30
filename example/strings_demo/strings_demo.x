@@ -30,7 +30,7 @@ frame main() ret u64 {
 
     # We can modify it:
     stack_str[0] = 'h'; # Lowercase 'h'
-    stack_str[12] = '?'; 
+    stack_str[12] = '?';
     call printf("[2] Modified:     %s\n", stack_str);
 
     # 3. Stack Buffer (Manually populated)
@@ -42,17 +42,17 @@ frame main() ret u64 {
     local heap_str: *u8 = call malloc(128);
     call strcpy(heap_str, "Hello, Heap!");
     call printf("[4] Heap String:  %s\n", heap_str);
-    
+
     # Modify heap string
     heap_str[7] = 'h';
     call printf("[4] Modified:     %s\n", heap_str);
-    
+
     call free(heap_str);
 
     # 5. Concatenation (using strcat)
     local cat_buf: *u8 = call malloc(128);
     # Initialize first!
-    call strcpy(cat_buf, "Part 1"); 
+    call strcpy(cat_buf, "Part 1");
     call strcat(cat_buf, " + Part 2");
     call printf("[5] Concat:       %s\n", cat_buf);
     call free(cat_buf);
@@ -61,7 +61,7 @@ frame main() ret u64 {
     local s1: *u8 = "apple";
     local s2: *u8 = "banana";
     local res: i32 = call strcmp(s1, s2);
-    
+
     call printf("[6] Compare:      'apple' vs 'banana' = %d\n", res);
     if res < 0 {
         call printf("    -> 'apple' comes before 'banana'\n");

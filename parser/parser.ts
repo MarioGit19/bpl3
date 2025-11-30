@@ -9,7 +9,7 @@ import IdentifierExpr from "./expression/identifierExpr";
 import NumberLiteralExpr from "./expression/numberLiteralExpr";
 import StringLiteralExpr from "./expression/stringLiteralExpr";
 import LoopExpr from "./expression/loopExpr";
-import { AsmBlockExpr } from "./expression/asmBlockExpr";
+import AsmBlockExpr from "./expression/asmBlockExpr";
 import VariableDeclarationExpr, {
   type VariableType,
 } from "./expression/variableDeclarationExpr";
@@ -764,6 +764,7 @@ export class Parser {
         fields.push({
           name: fieldNameToken.value,
           type: fieldTypeToken,
+          token: fieldNameToken,
         });
       }
 

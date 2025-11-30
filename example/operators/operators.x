@@ -27,8 +27,8 @@ frame main() ret u8 {
     call printf("a < b  : %d\n", a < b);
 
     # Logical (returns 1 for true, 0 for false)
-    call printf("(a > 5) && (b < 5) : %d\n", (a > 5) && (b < 5));
-    call printf("(a < 5) || (b < 5) : %d\n", (a < 5) || (b < 5));
+    call printf("(a > 5) && (b < 5) : %d\n", a > 5 && b < 5);
+    call printf("(a < 5) || (b < 5) : %d\n", a < 5 || b < 5);
     call printf("!a : %d\n", !a);
 
     # Assignment operators
@@ -37,6 +37,6 @@ frame main() ret u8 {
     call printf("c += 5 -> %d\n", c);
     c *= 2;
     call printf("c *= 2 -> %d\n", c);
-    
+
     return 0;
 }

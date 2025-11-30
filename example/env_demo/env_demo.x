@@ -2,7 +2,7 @@ import printf, getenv from "libc";
 
 frame main(argc: u32, argv: **u8, envp: **u8) ret u8 {
     call printf("--- Environment Variables (from main arg) ---\"\n");
-    
+
     local i: u32 = 0;
     loop {
         local env_str: *u8 = envp[i];

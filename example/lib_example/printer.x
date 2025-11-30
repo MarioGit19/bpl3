@@ -8,9 +8,9 @@ export logNumber;
 global value: u64 = 69;
 frame logGlobal() {
     if value == 69 {
-      call printf("NICE\n");
+        call printf("NICE\n");
     } else {
-      call printf("NOT NICE\n");
+        call printf("NOT NoICE\n");
     }
 }
 export logGlobal;

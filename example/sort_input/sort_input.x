@@ -40,12 +40,12 @@ frame main() ret u64 {
             if j >= n - i - 1 {
                 break;
             }
-            
+
             # Swap if the element found is greater than the next element
-            if arr[j] > arr[j+1] {
+            if arr[j] > arr[j + 1] {
                 local temp: u64 = arr[j];
-                arr[j] = arr[j+1];
-                arr[j+1] = temp;
+                arr[j] = arr[j + 1];
+                arr[j + 1] = temp;
             }
             j = j + 1;
         }

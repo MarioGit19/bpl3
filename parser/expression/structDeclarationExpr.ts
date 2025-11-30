@@ -1,3 +1,4 @@
+import type Token from "../../lexer/token";
 import type AsmGenerator from "../../transpiler/AsmGenerator";
 import type { TypeInfo } from "../../transpiler/Scope";
 import type Scope from "../../transpiler/Scope";
@@ -8,6 +9,7 @@ import type { VariableType } from "./variableDeclarationExpr";
 export type StructField = {
   name: string;
   type: VariableType;
+  token?: Token;
 };
 
 export default class StructDeclarationExpr extends Expression {

@@ -21,15 +21,15 @@ struct Task {
     id: u64,
     description: u8[64],
     priority: u8, # 1-5
-    next: *Task   # Linked list of tasks
+    next: *Task, # Linked list of tasks
 }
 
 struct Employee {
     id: u64,
     name: u8[64],
     salary: u64,
-    tasks: *Task,   # Head of task list
-    next: *Employee # Linked list of employees
+    tasks: *Task, # Head of task list
+    next: *Employee, # Linked list of employees
 }
 
 # --- Global State ---
@@ -54,8 +54,8 @@ frame generate_id() ret u64 {
 
 frame create_employee(name: *u8, salary: u64) ret *Employee {
     # u64 id (8) + u8[64] name (64) + u64 salary (8) + *Task (8) + *Employee (8) = 96 bytes.
-    local emp: *Employee = call malloc(96); 
-    
+    local emp: *Employee = call malloc(96);
+
     if emp == NULL {
         call printf("CRITICAL ERROR: Enterprise Out Of Memory!\n");
         call exit(1);
@@ -91,13 +91,13 @@ frame add_employee(emp: *Employee) {
 
 frame add_task(emp: *Employee, desc: *u8, priority: u8) {
     # 8 + 64 + 1 + 8 = 81 -> 88 aligned
-    local task: *Task = call malloc(88); 
-    
+    local task: *Task = call malloc(88);
+
     task.id = call generate_id();
     call strcpy(task.description, desc);
     task.priority = priority;
     task.next = emp.tasks; # Prepend to list
-    
+
     emp.tasks = task;
     call printf("[LOG] Assigned Task '%s' to %s\n", desc, emp.name);
 }
@@ -122,20 +122,18 @@ frame print_payroll_report() {
     call printf("\n=== ENTERPRISE PAYROLL REPORT ===\n");
     local current: *Employee = head_employee;
     local total_payout: u64 = 0;
-    
+
     loop {
         if current == NULL {
             break;
         }
-        
+
         local tax: u64 = call calculate_tax(current.salary);
         local net: u64 = current.salary - tax;
-        
-        call printf("ID: %d | Name: %s | Gross: $%d | Tax: $%d | ", 
-            current.id, current.name, current.salary, tax);
-        call printf("Net: $%d | Role: %s\n", 
-            net, current.salary > 100000 ? "Executive" : "Staff");
-            
+
+        call printf("ID: %d | Name: %s | Gross: $%d | Tax: $%d | ", current.id, current.name, current.salary, tax);
+        call printf("Net: $%d | Role: %s\n", net, current.salary > 100000 ? "Executive" : "Staff");
+
         # Print Tasks
         local t: *Task = current.tasks;
         loop {
@@ -145,7 +143,7 @@ frame print_payroll_report() {
             call printf("  - [Priority %d] Task: %s\n", t.priority, t.description);
             t = t.next;
         }
-        
+
         total_payout = total_payout + current.salary;
         current = current.next;
     }
@@ -162,10 +160,10 @@ frame main() ret u64 {
     # Hire Employees
     local emp1: *Employee = call create_employee("Alice CEO", 150000);
     call add_employee(emp1);
-    
+
     local emp2: *Employee = call create_employee("Bob Engineer", 90000);
     call add_employee(emp2);
-    
+
     local emp3: *Employee = call create_employee("Charlie Intern", 30000);
     call add_employee(emp3);
 
@@ -180,4 +178,3 @@ frame main() ret u64 {
 
     return 0;
 }
-

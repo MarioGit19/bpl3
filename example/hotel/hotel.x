@@ -8,7 +8,7 @@ import exit from "std";
 
 frame main() ret u64 {
     call init_rooms();
-    
+
     local choice: u32 = 0;
     local username: u8[32];
     local password: u8[32];

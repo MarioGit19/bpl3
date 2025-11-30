@@ -18,7 +18,6 @@ frame main() ret u8 {
     local area: u64 = call rectArea(r);
     call logNumber(area);
 
-
     call logGlobal();
     return 0;
 }

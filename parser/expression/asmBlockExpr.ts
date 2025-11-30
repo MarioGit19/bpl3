@@ -5,7 +5,7 @@ import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
 
-export class AsmBlockExpr extends Expression {
+export default class AsmBlockExpr extends Expression {
   constructor(code: Token[]) {
     super(ExpressionType.AsmBlockExpression);
     this.code = code;
