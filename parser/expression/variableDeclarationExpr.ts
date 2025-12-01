@@ -73,7 +73,11 @@ export default class VariableDeclarationExpr extends Expression {
 
   private resolveExprType(expr: Expression, scope: Scope): VariableType | null {
     if (expr.type === ExpressionType.NumberLiteralExpr) {
-      return (expr as NumberLiteralExpr).value.includes(".")
+      const val = (expr as NumberLiteralExpr).value;
+      const isHexBinOct =
+        val.startsWith("0x") || val.startsWith("0b") || val.startsWith("0o");
+      return !isHexBinOct &&
+        (val.includes(".") || val.toLowerCase().includes("e"))
         ? { name: "f64", isPointer: 0, isArray: [] }
         : { name: "u64", isPointer: 0, isArray: [] };
     }
@@ -88,6 +92,20 @@ export default class VariableDeclarationExpr extends Expression {
     }
     if (expr.type === ExpressionType.BinaryExpression) {
       const binExpr = expr as BinaryExpr;
+
+      // Comparison operators always return u64 (bool)
+      const op = binExpr.operator.type;
+      if (
+        op === TokenType.EQUAL ||
+        op === TokenType.NOT_EQUAL ||
+        op === TokenType.LESS_THAN ||
+        op === TokenType.LESS_EQUAL ||
+        op === TokenType.GREATER_THAN ||
+        op === TokenType.GREATER_EQUAL
+      ) {
+        return { name: "u64", isPointer: 0, isArray: [] };
+      }
+
       const leftType = this.resolveExprType(binExpr.left, scope);
       const rightType = this.resolveExprType(binExpr.right, scope);
 
@@ -461,6 +479,30 @@ export default class VariableDeclarationExpr extends Expression {
         if (this.value.value.includes(".")) {
           // Float literal
         }
+      } else if (this.value instanceof StringLiteralExpr) {
+        const unescaped = this.value.value
+          .replace(/\\n/g, "\n")
+          .replace(/\\t/g, "\t")
+          .replace(/\\r/g, "\r")
+          .replace(/\\"/g, '"')
+          .replace(/\\\\/g, "\\");
+        init = gen.addStringConstant(unescaped);
+      } else if (this.value instanceof ArrayLiteralExpr) {
+        const elemType = {
+          name: this.varType.name,
+          isPointer: this.varType.isPointer,
+          isArray: this.varType.isArray.slice(1),
+        };
+        const elemLlvmType = gen.mapType(elemType);
+
+        const elements = (this.value as ArrayLiteralExpr).elements.map((e) => {
+          if (e instanceof NumberLiteralExpr) {
+            return `${elemLlvmType} ${e.value}`;
+          }
+          // Handle other constant types?
+          return `${elemLlvmType} 0`;
+        });
+        init = `[${elements.join(", ")}]`;
       }
 
       gen.emitGlobal(`${name} = global ${type} ${init}`);
@@ -500,6 +542,117 @@ export default class VariableDeclarationExpr extends Expression {
           gen.emit(
             `  call void @llvm.memcpy.p0.p0.i64(ptr align 1 ${destPtr}, ptr align 1 ${srcPtr}, i64 ${byteLength}, i1 false)`,
           );
+        } else if (
+          this.varType.isArray.length > 0 &&
+          this.value instanceof ArrayLiteralExpr
+        ) {
+          const arrayLit = this.value as ArrayLiteralExpr;
+          const destPtr = `%${ptr}`;
+          const llvmArrayType = gen.mapType(this.varType);
+
+          // Determine element type
+          const elemType = {
+            name: this.varType.name,
+            isPointer: this.varType.isPointer,
+            isArray: this.varType.isArray.slice(1),
+          };
+          const elemLlvmType = gen.mapType(elemType);
+
+          const getIntSize = (name: string) => {
+            if (["u8", "i8"].includes(name)) return 1;
+            if (["u16", "i16"].includes(name)) return 2;
+            if (["u32", "i32"].includes(name)) return 4;
+            return 8;
+          };
+
+          arrayLit.elements.forEach((elem, index) => {
+            let val = elem.generateIR(gen, scope);
+            const valType = this.resolveExprType(elem, scope);
+
+            let valIsI64 = false;
+            if (
+              (elem.type === ExpressionType.BinaryExpression ||
+                elem.type === ExpressionType.NumberLiteralExpr) &&
+              (!valType ||
+                (valType.isPointer === 0 && valType.isArray.length === 0))
+            ) {
+              const isFloat =
+                valType?.name === "f64" ||
+                valType?.name === "f32" ||
+                (elem as any).operator?.type === TokenType.SLASH;
+              if (!isFloat) valIsI64 = true;
+            }
+
+            if (valIsI64) {
+              const destSize = getIntSize(elemType.name);
+              if (destSize < 8 && !elemType.isPointer) {
+                const trunc = gen.generateReg("trunc");
+                gen.emit(`  ${trunc} = trunc i64 ${val} to ${elemLlvmType}`);
+                val = trunc;
+              } else if (elemType.isPointer > 0) {
+                const inttoptr = gen.generateReg("inttoptr");
+                gen.emit(`  ${inttoptr} = inttoptr i64 ${val} to ptr`);
+                val = inttoptr;
+              }
+            } else if (valType && valType.name !== elemType.name) {
+              const srcSize = getIntSize(valType.name);
+              const destSize = getIntSize(elemType.name);
+              const srcType = gen.mapType({
+                name: valType.name,
+                isPointer: 0,
+                isArray: [],
+              });
+
+              const isSrcFloat =
+                valType.name === "f64" || valType.name === "f32";
+              const isDestFloat =
+                elemType.name === "f64" || elemType.name === "f32";
+
+              if (isSrcFloat && !isDestFloat) {
+                const conv = gen.generateReg("fptosi");
+                gen.emit(
+                  `  ${conv} = fptosi ${srcType} ${val} to ${elemLlvmType}`,
+                );
+                val = conv;
+              } else if (!isSrcFloat && isDestFloat) {
+                const conv = gen.generateReg("sitofp");
+                gen.emit(
+                  `  ${conv} = sitofp ${srcType} ${val} to ${elemLlvmType}`,
+                );
+                val = conv;
+              } else if (isSrcFloat && isDestFloat) {
+                if (valType.name === "f64" && elemType.name === "f32") {
+                  const conv = gen.generateReg("fptrunc");
+                  gen.emit(`  ${conv} = fptrunc double ${val} to float`);
+                  val = conv;
+                } else if (valType.name === "f32" && elemType.name === "f64") {
+                  const conv = gen.generateReg("fpext");
+                  gen.emit(`  ${conv} = fpext float ${val} to double`);
+                  val = conv;
+                }
+              } else if (srcSize < destSize) {
+                const isSigned = ["i8", "i16", "i32"].includes(valType.name);
+                const castOp = isSigned ? "sext" : "zext";
+                const ext = gen.generateReg("ext");
+                gen.emit(
+                  `  ${ext} = ${castOp} ${srcType} ${val} to ${elemLlvmType}`,
+                );
+                val = ext;
+              } else if (srcSize > destSize) {
+                const trunc = gen.generateReg("trunc");
+                gen.emit(
+                  `  ${trunc} = trunc ${srcType} ${val} to ${elemLlvmType}`,
+                );
+                val = trunc;
+              }
+            }
+
+            const elemPtr = gen.generateReg("elem_ptr");
+            gen.emit(
+              `  ${elemPtr} = getelementptr ${llvmArrayType}, ptr ${destPtr}, i64 0, i64 ${index}`,
+            );
+            gen.emit(`  store ${elemLlvmType} ${val}, ptr ${elemPtr}`);
+          });
         } else {
           let val = this.value.generateIR(gen, scope);
           const valType = this.resolveExprType(this.value, scope);
@@ -609,6 +762,20 @@ export default class VariableDeclarationExpr extends Expression {
 
           gen.emit(`  store ${type} ${val}, ptr %${ptr}`);
         }
+      } else if (this.varType.isArray.length > 0) {
+        const llvmType = gen.mapType(this.varType);
+        const sizePtr = gen.generateReg("size_ptr");
+        gen.emit(`  ${sizePtr} = getelementptr ${llvmType}, ptr null, i32 1`);
+        const size = gen.generateReg("size");
+        gen.emit(`  ${size} = ptrtoint ptr ${sizePtr} to i64`);
+
+        const align = gen.getAlignment(this.varType);
+        gen.emitGlobal(
+          "declare void @llvm.memset.p0.i64(ptr nocapture writeonly, i8, i64, i1 immarg)",
+        );
+        gen.emit(
+          `  call void @llvm.memset.p0.i64(ptr align ${align} %${ptr}, i8 0, i64 ${size}, i1 false)`,
+        );
       }
 
       scope.define(this.name, {

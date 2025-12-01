@@ -154,7 +154,13 @@ export default class UnaryExpr extends Expression {
       return null;
     } else if (expr.type === ExpressionType.NumberLiteralExpr) {
       const numExpr = expr as NumberLiteralExpr;
-      if (numExpr.value.includes(".")) {
+      const val = numExpr.value;
+      const isHexBinOct =
+        val.startsWith("0x") || val.startsWith("0b") || val.startsWith("0o");
+      if (
+        !isHexBinOct &&
+        (val.includes(".") || val.toLowerCase().includes("e"))
+      ) {
         return { name: "f64", isPointer: 0, isArray: [] };
       }
       return { name: "u64", isPointer: 0, isArray: [] };

@@ -48,7 +48,18 @@ export default class NumberLiteralExpr extends Expression {
     // For LLVM, we can return the literal value directly.
     // If it's a float, we might need to ensure it has a decimal point or is in scientific notation if required?
     // LLVM accepts standard float formats.
-    if (this.value.includes(".")) {
+    const isHexBinOct =
+      this.value.startsWith("0x") ||
+      this.value.startsWith("0b") ||
+      this.value.startsWith("0o");
+
+    if (
+      !isHexBinOct &&
+      (this.value.includes(".") || this.value.toLowerCase().includes("e"))
+    ) {
+      if (!this.value.includes(".")) {
+        return this.value.replace(/e/i, ".0e");
+      }
       return this.value;
     }
     // Convert hex/bin/oct to decimal for LLVM IR

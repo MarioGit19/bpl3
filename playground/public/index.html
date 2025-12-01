@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BPL Playground</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>BPL Playground</h1>
+      <div class="controls">
+        <button id="runBtn" class="primary">Run ▶</button>
+        <button id="compileBtn">Show ASM / LLVM IR</button>
+      </div>
+    </header>
+
+    <main>
+      <aside class="sidebar">
+        <h2>Tutorials</h2>
+        <ul id="tutorialList">
+          <!-- Populated by JS -->
+        </ul>
+        <div id="tutorialContent" class="tutorial-content">
+          <h3 id="tutTitle">Select a tutorial</h3>
+          <p id="tutDesc"></p>
+        </div>
+      </aside>
+
+      <section class="editor-container">
+        <div class="editor-header">Source Code (main.x)</div>
+        <textarea id="codeEditor" spellcheck="false"></textarea>
+      </section>
+
+      <section class="output-container">
+        <div class="tabs">
+          <button class="tab active" data-target="output">Output</button>
+          <button class="tab" data-target="ir">LLVM IR</button>
+          <button class="tab" data-target="asm">Assembly</button>
+        </div>
+        <div id="output" class="tab-content active">
+          <pre id="consoleOutput">// Run code to see output</pre>
+        </div>
+        <div id="ir" class="tab-content">
+          <pre id="irOutput">// Compile to see LLVM IR</pre>
+        </div>
+        <div id="asm" class="tab-content">
+          <pre id="asmOutput">// Compile to see Assembly</pre>
+        </div>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>

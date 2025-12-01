@@ -6,6 +6,9 @@ import Expression from "./expr";
 import StringLiteralExpr from "./stringLiteralExpr";
 import NumberLiteralExpr from "./numberLiteralExpr";
 import IdentifierExpr from "./identifierExpr";
+import FunctionCallExpr from "./functionCallExpr";
+import BinaryExpr from "./binaryExpr";
+import TokenType from "../../lexer/tokenType";
 import type { VariableType } from "./variableDeclarationExpr";
 
 export default class TernaryExpr extends Expression {
@@ -64,13 +67,41 @@ export default class TernaryExpr extends Expression {
       return { name: "u8", isPointer: 1, isArray: [] };
     }
     if (expr instanceof NumberLiteralExpr) {
-      return expr.value.includes(".")
+      const val = expr.value;
+      const isHexBinOct =
+        val.startsWith("0x") || val.startsWith("0b") || val.startsWith("0o");
+      return !isHexBinOct &&
+        (val.includes(".") || val.toLowerCase().includes("e"))
         ? { name: "f64", isPointer: 0, isArray: [] }
         : { name: "u64", isPointer: 0, isArray: [] };
     }
     if (expr instanceof IdentifierExpr) {
       const resolved = scope.resolve(expr.name);
       return resolved ? resolved.varType : null;
+    }
+    if (expr instanceof FunctionCallExpr) {
+      const func = scope.resolveFunction(expr.functionName);
+      return func ? func.returnType : null;
+    }
+    if (expr instanceof BinaryExpr) {
+      const op = expr.operator.type;
+      if (
+        op === TokenType.EQUAL ||
+        op === TokenType.NOT_EQUAL ||
+        op === TokenType.LESS_THAN ||
+        op === TokenType.LESS_EQUAL ||
+        op === TokenType.GREATER_THAN ||
+        op === TokenType.GREATER_EQUAL
+      ) {
+        return { name: "u64", isPointer: 0, isArray: [] };
+      }
+      const leftType = this.resolveExpressionType(expr.left, scope);
+      const rightType = this.resolveExpressionType(expr.right, scope);
+      if (leftType?.name === "f64" || rightType?.name === "f64")
+        return { name: "f64", isPointer: 0, isArray: [] };
+      if (leftType?.name === "f32" || rightType?.name === "f32")
+        return { name: "f32", isPointer: 0, isArray: [] };
+      return leftType;
     }
     return null;
   }

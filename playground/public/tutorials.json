@@ -1,0 +1,184 @@
+{
+  "tutorials": [
+    {
+      "id": "hello-world",
+      "title": "1. Hello World",
+      "description": "Our first program will print the classic \"Hello World\" message. This is the entry point of any BPL program.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    call printf(\"Hello, World!\\n\");\n}\n"
+    },
+    {
+      "id": "values",
+      "title": "2. Values",
+      "description": "BPL has various value types including strings, integers, floats, and booleans. Strings are pointers to characters (`*u8`). Integers can be signed (`i64`) or unsigned (`u64`). Floats are `f64` or `f32`.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    call printf(\"String: %s\\n\", \"BPL Rocks\");\n    call printf(\"Integer: %d\\n\", 1 + 1);\n    call printf(\"Float: %f\\n\", 7.0 / 3.0);\n    \n    if 1 {\n        call printf(\"Boolean true\\n\");\n    }\n}\n"
+    },
+    {
+      "id": "variables",
+      "title": "3. Variables",
+      "description": "Variables are declared using `local` (or `global`) followed by the name, type, and optional initialization.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    local a: *u8 = \"initial\";\n    call printf(\"%s\\n\", a);\n\n    local b: u64 = 1;\n    local c: u64 = 2;\n    call printf(\"%d\\n\", b + c);\n\n    local d: u64 = 0;\n    call printf(\"%d\\n\", d);\n}\n"
+    },
+    {
+      "id": "constants",
+      "title": "4. Constants",
+      "description": "BPL supports constants using the `const` keyword. Constants must be initialized and cannot be changed.",
+      "code": "import printf, sin from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern sin(x: f64) ret f64;\n\nglobal const s: *u8 = \"constant\";\n\nframe main() {\n    call printf(\"%s\\n\", s);\n\n    local const n: u64 = 500000000;\n    local d: f64 = 3e20 / n;\n    call printf(\"%f\\n\", d);\n\n    call printf(\"%f\\n\", call sin(n));\n}\n"
+    },
+    {
+      "id": "for",
+      "title": "5. For (Loops)",
+      "description": "BPL has only one looping construct, `loop`, which creates an infinite loop. You can simulate `while` and `for` loops using `break` and `continue`.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    local i: u64 = 1;\n    # Basic loop (while i <= 3)\n    loop {\n        if i > 3 { break; }\n        call printf(\"%d\\n\", i);\n        i = i + 1;\n    }\n\n    # Loop with continue\n    local j: u64 = 7;\n    loop {\n        if j > 9 { break; }\n        if j % 2 == 0 {\n            j = j + 1;\n            continue;\n        }\n        call printf(\"%d\\n\", j);\n        j = j + 1;\n    }\n\n    # Infinite loop\n    loop {\n        call printf(\"loop\\n\");\n        break;\n    }\n}\n"
+    },
+    {
+      "id": "if-else",
+      "title": "6. If/Else",
+      "description": "Branching with `if` and `else` is straightforward. Braces `{}` are required.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    if 7 % 2 == 0 {\n        call printf(\"7 is even\\n\");\n    } else {\n        call printf(\"7 is odd\\n\");\n    }\n\n    if 8 % 4 == 0 {\n        call printf(\"8 is divisible by 4\\n\");\n    }\n\n    local num: u64 = 9;\n    if num < 0 {\n        call printf(\"%d is negative\\n\", num);\n    } else if num < 10 {\n        call printf(\"%d has 1 digit\\n\", num);\n    } else {\n        call printf(\"%d has multiple digits\\n\", num);\n    }\n}\n"
+    },
+    {
+      "id": "switch",
+      "title": "7. Switch",
+      "description": "Switch statements express conditionals across many branches.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    local i: u64 = 2;\n    call printf(\"Write %d as \", i);\n    switch i {\n        case 1: { call printf(\"one\\n\"); }\n        case 2: { call printf(\"two\\n\"); }\n        case 3: { call printf(\"three\\n\"); }\n        default: { call printf(\"unknown\\n\"); }\n    }\n}\n"
+    },
+    {
+      "id": "arrays",
+      "title": "8. Arrays",
+      "description": "Arrays are fixed-size sequences of elements of a specific type.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    local a: u64[5];\n    call printf(\"emp: %d %d\\n\", a[0], a[4]);\n\n    a[4] = 100;\n    call printf(\"set: %d\\n\", a[4]);\n    call printf(\"len: 5\\n\");\n\n    local b: u64[5] = [1, 2, 3, 4, 5];\n    call printf(\"dcl: %d %d %d %d %d\\n\", b[0], b[1], b[2], b[3], b[4]);\n}\n"
+    },
+    {
+      "id": "functions",
+      "title": "9. Functions",
+      "description": "Functions are central in BPL. Use `frame` to declare them and `call` to invoke them.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe plus(a: u64, b: u64) ret u64 {\n    return a + b;\n}\n\nframe plusPlus(a: u64, b: u64, c: u64) ret u64 {\n    return call plus(a, call plus(b, c));\n}\n\nframe main() {\n    local res: u64 = call plus(1, 2);\n    call printf(\"1+2 = %d\\n\", res);\n\n    res = call plusPlus(1, 2, 3);\n    call printf(\"1+2+3 = %d\\n\", res);\n}\n"
+    },
+    {
+      "id": "recursion",
+      "title": "10. Recursion",
+      "description": "BPL supports recursive functions.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe fact(n: u64) ret u64 {\n    if n == 0 {\n        return 1;\n    }\n    return n * call fact(n - 1);\n}\n\nframe main() {\n    call printf(\"7! = %d\\n\", call fact(7));\n}\n"
+    },
+    {
+      "id": "pointers",
+      "title": "11. Pointers",
+      "description": "BPL supports pointers, allowing you to pass references to values.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe zeroval(ival: u64) {\n    ival = 0;\n}\n\nframe zeroptr(iptr: *u64) {\n    *iptr = 0;\n}\n\nframe main() {\n    local i: u64 = 1;\n    call printf(\"initial: %d\\n\", i);\n\n    call zeroval(i);\n    call printf(\"zeroval: %d\\n\", i);\n\n    call zeroptr(&i);\n    call printf(\"zeroptr: %d\\n\", i);\n\n    call printf(\"pointer: %p\\n\", &i);\n}\n"
+    },
+    {
+      "id": "strings",
+      "title": "12. Strings",
+      "description": "Strings are pointers to null-terminated byte arrays (`*u8`).",
+      "code": "import printf, strlen from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern strlen(s: *u8) ret u64;\n\nframe main() {\n    local s: *u8 = \"hello\";\n    call printf(\"%s\\n\", s);\n    call printf(\"len: %d\\n\", call strlen(s));\n    call printf(\"char: %c\\n\", s[1]);\n}\n"
+    },
+    {
+      "id": "structs",
+      "title": "13. Structs",
+      "description": "Structs are typed collections of fields.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nstruct Person {\n    name: *u8,\n    age: u64,\n}\n\nframe newPerson(name: *u8) ret Person {\n    local p: Person;\n    p.name = name;\n    p.age = 42;\n    return p;\n}\n\nframe main() {\n    local bob: Person;\n    bob.name = \"Bob\";\n    bob.age = 20;\n    call printf(\"%s %d\\n\", bob.name, bob.age);\n\n    local alice: Person = call newPerson(\"Alice\");\n    call printf(\"%s %d\\n\", alice.name, alice.age);\n}\n"
+    },
+    {
+      "id": "methods",
+      "title": "14. Methods",
+      "description": "BPL doesn't have classes, but you can define functions that take a struct as the first argument, simulating methods.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nstruct Rect {\n    width: u64,\n    height: u64,\n}\n\nframe area(r: Rect) ret u64 {\n    return r.width * r.height;\n}\n\nframe perim(r: Rect) ret u64 {\n    return 2 * r.width + 2 * r.height;\n}\n\nframe main() {\n    local r: Rect;\n    r.width = 10;\n    r.height = 5;\n\n    call printf(\"area: %d\\n\", call area(r));\n    call printf(\"perim: %d\\n\", call perim(r));\n}\n"
+    },
+    {
+      "id": "generics",
+      "title": "15. Generics",
+      "description": "BPL supports generic structs.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nstruct Box<T> {\n    val: T,\n}\n\nframe main() {\n    local intBox: Box<u64>;\n    intBox.val = 123;\n    call printf(\"Box<u64>: %d\\n\", intBox.val);\n\n    local strBox: Box<*u8>;\n    strBox.val = \"Generic\";\n    call printf(\"Box<*u8>: %s\\n\", strBox.val);\n}\n"
+    },
+    {
+      "id": "errors",
+      "title": "16. Errors",
+      "description": "It's idiomatic to return errors as a separate return value (e.g. via a struct) or status code.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nstruct Result {\n    val: u64,\n    err: u64, # 0 = ok, 1 = error\n}\n\nframe f(arg: u64) ret Result {\n    local res: Result;\n    if arg == 42 {\n        res.err = 1;\n        return res;\n    }\n    res.val = arg + 3;\n    res.err = 0;\n    return res;\n}\n\nframe main() {\n    local r: Result = call f(42);\n    if r.err != 0 {\n        call printf(\"f failed\\n\");\n    } else {\n        call printf(\"f worked: %d\\n\", r.val);\n    }\n\n    r = call f(7);\n    if r.err != 0 {\n        call printf(\"f failed\\n\");\n    } else {\n        call printf(\"f worked: %d\\n\", r.val);\n    }\n}\n"
+    },
+    {
+      "id": "variadic",
+      "title": "17. Variadic Functions",
+      "description": "Variadic functions can be called with any number of trailing arguments.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe sum(count: u64, ...:u64) ret u64 {\n    local total: u64 = 0;\n    local i: u64 = 0;\n    loop {\n        if i >= count { break; }\n        total = total + args[i];\n        i = i + 1;\n    }\n    return total;\n}\n\nframe main() {\n    call printf(\"%d\\n\", call sum(2, 1, 2));\n    call printf(\"%d\\n\", call sum(3, 1, 2, 3));\n    local nums: u64[4] = [1, 2, 3, 4];\n    call printf(\"%d\\n\", call sum(4, nums[0], nums[1], nums[2], nums[3]));\n}\n"
+    },
+    {
+      "id": "sorting",
+      "title": "18. Sorting",
+      "description": "Implementing a simple sort algorithm.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    local arr: u64[5] = [4, 2, 5, 1, 3];\n    local i: u64 = 0;\n    local j: u64 = 0;\n    local temp: u64 = 0;\n\n    # Bubble sort\n    loop {\n        if i >= 5 { break; }\n        j = 0;\n        loop {\n            if j >= 4 - i { break; }\n            if arr[j] > arr[j+1] {\n                temp = arr[j];\n                arr[j] = arr[j+1];\n                arr[j+1] = temp;\n            }\n            j = j + 1;\n        }\n        i = i + 1;\n    }\n\n    call printf(\"Sorted: %d %d %d %d %d\\n\", arr[0], arr[1], arr[2], arr[3], arr[4]);\n}\n"
+    },
+    {
+      "id": "panic",
+      "title": "19. Panic",
+      "description": "Use `exit` to immediately terminate the program with an error code.",
+      "code": "import printf, exit from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern exit(code: i32);\n\nframe main() {\n    call printf(\"Before panic\\n\");\n    call exit(1);\n    call printf(\"After panic (unreachable)\\n\");\n}\n"
+    },
+    {
+      "id": "string-functions",
+      "title": "20. String Functions",
+      "description": "Standard library string functions.",
+      "code": "import printf, strlen, strcmp, strcpy, malloc from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern strlen(s: *u8) ret u64;\nextern strcmp(s1: *u8, s2: *u8) ret i32;\nextern strcpy(dest: *u8, src: *u8) ret *u8;\nextern malloc(size: u64) ret *u8;\n\nframe main() {\n    local s: *u8 = \"test\";\n    call printf(\"Contains: %d\\n\", call strcmp(s, \"test\") == 0);\n    call printf(\"Len: %d\\n\", call strlen(s));\n    \n    local buf: *u8 = call malloc(10);\n    call strcpy(buf, s);\n    call printf(\"Copy: %s\\n\", buf);\n}\n"
+    },
+    {
+      "id": "string-formatting",
+      "title": "21. String Formatting",
+      "description": "String formatting via `printf`.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nstruct Point {\n    x: u64,\n    y: u64,\n}\n\nframe main() {\n    local p: Point;\n    p.x = 1;\n    p.y = 2;\n    call printf(\"struct: {x:%d y:%d}\\n\", p.x, p.y);\n    call printf(\"int: %d\\n\", 123);\n    call printf(\"bin: %b\\n\", 0b1100101);\n    call printf(\"char: %c\\n\", 33);\n    call printf(\"hex: %x\\n\", 0x456);\n    call printf(\"float: %.2f\\n\", 7.891234e3);\n    call printf(\"str: %s\\n\", \"string\");\n    call printf(\"ptr: %p\\n\", &p);\n}\n"
+    },
+    {
+      "id": "time",
+      "title": "22. Time",
+      "description": "Using `time` from libc.",
+      "code": "import printf, time from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern time(t: *u64) ret u64;\n\nframe main() {\n    local now: u64 = call time(NULL);\n    call printf(\"Current timestamp: %d\\n\", now);\n}\n"
+    },
+    {
+      "id": "random-numbers",
+      "title": "23. Random Numbers",
+      "description": "Using `rand` and `srand`.",
+      "code": "import printf, rand, srand, time from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern rand() ret i32;\nextern srand(seed: u32);\nextern time(t: *u64) ret u64;\n\nframe main() {\n    call srand(call time(NULL));\n    call printf(\"%d\\n\", call rand() % 100);\n    call printf(\"%d\\n\", call rand() % 100);\n}\n"
+    },
+    {
+      "id": "number-parsing",
+      "title": "24. Number Parsing",
+      "description": "Parsing numbers from strings using `atoi` and `strtod`.",
+      "code": "import printf, atoi, strtod from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern atoi(s: *u8) ret i32;\nextern strtod(s: *u8, endptr: **u8) ret f64;\n\nframe main() {\n    local f: f64 = call strtod(\"1.234\", NULL);\n    call printf(\"%f\\n\", f);\n\n    local i: i32 = call atoi(\"123\");\n    call printf(\"%d\\n\", i);\n\n    local k: i32 = call atoi(\"bad\");\n    call printf(\"%d\\n\", k);\n}\n"
+    },
+    {
+      "id": "writing-files",
+      "title": "25. Writing Files",
+      "description": "Writing files using C standard library functions.",
+      "code": "import printf, fopen, fwrite, fclose from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern fopen(filename: *u8, mode: *u8) ret *u8;\nextern fwrite(ptr: *u8, size: u64, nmemb: u64, stream: *u8) ret u64;\nextern fclose(stream: *u8) ret i32;\n\nframe main() {\n    local f: *u8 = call fopen(\"/tmp/output.txt\", \"w\");\n    if f == NULL {\n        call printf(\"Failed to open file\\n\");\n        return 1;\n    }\n\n    local s: *u8 = \"hello\\n\";\n    call fwrite(s, 1, 6, f);\n    call printf(\"Wrote to /tmp/output.txt\\n\");\n\n    call fclose(f);\n}\n"
+    },
+    {
+      "id": "reading-files",
+      "title": "26. Reading Files",
+      "description": "Reading files using C standard library functions.",
+      "code": "import printf, fopen, fread, fclose from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern fopen(filename: *u8, mode: *u8) ret *u8;\nextern fread(ptr: *u8, size: u64, nmemb: u64, stream: *u8) ret u64;\nextern fclose(stream: *u8) ret i32;\n\nframe main() ret u8 {\n    local f: *u8 = call fopen(\"/tmp/output.txt\", \"r\");\n    if f == NULL {\n        call printf(\"Failed to open file (make sure /tmp/output.txt exists)\\n\");\n        return 1;\n    }\n\n    local buf: u8[100];\n    local n: u64 = call fread(buf, 1, 99, f);\n    buf[n] = 0;\n    call printf(\"Read %d bytes: %s\\n\", n, buf);\n\n    call fclose(f);\n    return 0;\n}\n"
+    },
+    {
+      "id": "command-line-arguments",
+      "title": "27. Command-Line Arguments",
+      "description": "Accessing command-line arguments via `argc` and `argv`.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main(argc: i32, argv: **u8) {\n    local i: i32 = 0;\n    loop {\n        if i >= argc { break; }\n        call printf(\"Arg %d: %s\\n\", i, argv[i]);\n        i = i + 1;\n    }\n}\n"
+    },
+    {
+      "id": "environment-variables",
+      "title": "28. Environment Variables",
+      "description": "Accessing environment variables using `getenv`.",
+      "code": "import printf, getenv from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern getenv(name: *u8) ret *u8;\n\nframe main() {\n    local path: *u8 = call getenv(\"PATH\");\n    call printf(\"PATH: %s\\n\", path);\n}\n"
+    },
+    {
+      "id": "spawning-processes",
+      "title": "29. Spawning Processes",
+      "description": "Running external commands using `system`.",
+      "code": "import printf, system from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern system(cmd: *u8) ret i32;\n\nframe main() {\n    call printf(\"Running 'ls -l'\\n\");\n    call system(\"ls -l\");\n}\n"
+    },
+    {
+      "id": "exit",
+      "title": "30. Exit",
+      "description": "Exiting the program with a status code.",
+      "code": "import printf, exit from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern exit(code: i32);\n\nframe main() {\n    call printf(\"Exiting with code 3\\n\");\n    call exit(3);\n}\n"
+    }
+  ]
+}

@@ -981,6 +981,20 @@ export default class BinaryExpr extends Expression {
       }
     } else if (expr.type === ExpressionType.BinaryExpression) {
       const binExpr = expr as any;
+
+      // Comparison operators always return u64 (bool)
+      const op = binExpr.operator.type;
+      if (
+        op === TokenType.EQUAL ||
+        op === TokenType.NOT_EQUAL ||
+        op === TokenType.LESS_THAN ||
+        op === TokenType.LESS_EQUAL ||
+        op === TokenType.GREATER_THAN ||
+        op === TokenType.GREATER_EQUAL
+      ) {
+        return { name: "u64", isPointer: 0, isArray: [] };
+      }
+
       const leftType = this.resolveExpressionType(binExpr.left, scope);
       const rightType = this.resolveExpressionType(binExpr.right, scope);
 
@@ -1043,7 +1057,13 @@ export default class BinaryExpr extends Expression {
       return func ? func.returnType : null;
     } else if (expr.type === ExpressionType.NumberLiteralExpr) {
       const numExpr = expr as NumberLiteralExpr;
-      if (numExpr.value.includes(".")) {
+      const val = numExpr.value;
+      const isHexBinOct =
+        val.startsWith("0x") || val.startsWith("0b") || val.startsWith("0o");
+      if (
+        !isHexBinOct &&
+        (val.includes(".") || val.toLowerCase().includes("e"))
+      ) {
         return { name: "f64", isPointer: 0, isArray: [] };
       }
       return { name: "u64", isPointer: 0, isArray: [] };

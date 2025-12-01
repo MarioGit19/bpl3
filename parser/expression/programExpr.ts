@@ -106,7 +106,8 @@ export default class ProgramExpr extends Expression {
 
     if (!weHaveExportStmt) {
       gen.emit("");
-      gen.emit("define i32 @main(i32 %argc, ptr %argv) {");
+      // Standard C main signature with envp extension: int main(int argc, char **argv, char **envp)
+      gen.emit("define i32 @main(i32 %argc, ptr %argv, ptr %envp) {");
       gen.emit("entry:");
 
       const mainFunc = scope.resolveFunction("main");
@@ -114,16 +115,54 @@ export default class ProgramExpr extends Expression {
         const retType = mainFunc.returnType
           ? gen.mapType(mainFunc.returnType)
           : "void";
+
+        // Prepare arguments for user_main
+        const callArgs: string[] = [];
+        if (mainFunc.args) {
+          mainFunc.args.forEach((arg, index) => {
+            const argType = gen.mapType(arg.type);
+            if (index === 0) {
+              // argc
+              if (argType === "i32") {
+                callArgs.push(`i32 %argc`);
+              } else if (argType === "i64") {
+                const argc64 = gen.generateReg("argc_ext");
+                gen.emit(`  ${argc64} = zext i32 %argc to i64`);
+                callArgs.push(`i64 ${argc64}`);
+              } else {
+                // Fallback or error? Assuming i32 for now if unknown
+                callArgs.push(`i32 %argc`);
+              }
+            } else if (index === 1) {
+              // argv
+              callArgs.push(`${argType} %argv`);
+            } else if (index === 2) {
+              // envp
+              callArgs.push(`${argType} %envp`);
+            }
+          });
+        }
+
+        const argsStr = callArgs.join(", ");
+
         if (retType === "void") {
-          gen.emit("  call void @user_main()");
+          gen.emit(`  call void @user_main(${argsStr})`);
           gen.emit("  ret i32 0");
         } else {
           const res = gen.generateReg("res");
-          gen.emit(`  ${res} = call ${retType} @user_main()`);
+          gen.emit(`  ${res} = call ${retType} @user_main(${argsStr})`);
           // If retType is not i32, we might need to cast or ignore.
           // Assuming i32 or compatible.
           if (retType === "i32") {
             gen.emit(`  ret i32 ${res}`);
+          } else if (retType === "i64") {
+            const res32 = gen.generateReg("res_trunc");
+            gen.emit(`  ${res32} = trunc i64 ${res} to i32`);
+            gen.emit(`  ret i32 ${res32}`);
+          } else if (retType === "i8") {
+            const res32 = gen.generateReg("res_ext");
+            gen.emit(`  ${res32} = zext i8 ${res} to i32`);
+            gen.emit(`  ret i32 ${res32}`);
           } else {
             gen.emit("  ret i32 0");
           }

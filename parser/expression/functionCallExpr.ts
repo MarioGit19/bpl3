@@ -57,6 +57,9 @@ export default class FunctionCallExpr extends Expression {
     if (expr instanceof IdentifierExpr) {
       const resolved = scope.resolve(expr.name);
       return resolved ? resolved.varType : null;
+    } else if (expr instanceof FunctionCallExpr) {
+      const func = scope.resolveFunction(expr.functionName);
+      return func ? func.returnType : null;
     } else if (expr instanceof MemberAccessExpr) {
       const objectType = this.resolveExpressionType(expr.object, scope);
       if (!objectType) return null;
@@ -100,6 +103,19 @@ export default class FunctionCallExpr extends Expression {
         };
       }
     } else if (expr instanceof BinaryExpr) {
+      // Comparison operators always return u64 (bool)
+      const op = expr.operator.type;
+      if (
+        op === TokenType.EQUAL ||
+        op === TokenType.NOT_EQUAL ||
+        op === TokenType.LESS_THAN ||
+        op === TokenType.LESS_EQUAL ||
+        op === TokenType.GREATER_THAN ||
+        op === TokenType.GREATER_EQUAL
+      ) {
+        return { name: "u64", isPointer: 0, isArray: [] };
+      }
+
       const leftType = this.resolveExpressionType(expr.left, scope);
       const rightType = this.resolveExpressionType(expr.right, scope);
 
@@ -157,7 +173,11 @@ export default class FunctionCallExpr extends Expression {
       }
       return null;
     } else if (expr instanceof NumberLiteralExpr) {
-      return expr.value.includes(".")
+      const val = expr.value;
+      const isHexBinOct =
+        val.startsWith("0x") || val.startsWith("0b") || val.startsWith("0o");
+      return !isHexBinOct &&
+        (val.includes(".") || val.toLowerCase().includes("e"))
         ? { name: "f64", isPointer: 0, isArray: [] }
         : { name: "u64", isPointer: 0, isArray: [] };
     } else if (expr instanceof StringLiteralExpr) {
@@ -506,7 +526,43 @@ export default class FunctionCallExpr extends Expression {
         const exprSize = this.getIntSize(exprTypeName);
 
         if (!isPointer && !isArray.length && !exprIsPointer && !exprIsArray) {
-          if (paramSize < exprSize) {
+          const isParamFloat = typeName === "f64" || typeName === "f32";
+          const isExprFloat = exprTypeName === "f64" || exprTypeName === "f32";
+
+          if (isParamFloat && !isExprFloat) {
+            // Int to Float
+            const conv = gen.generateReg("sitofp");
+            const destType = gen.mapType(paramType);
+            const srcType = gen.mapType({
+              name: exprTypeName,
+              isPointer: 0,
+              isArray: [],
+            });
+            gen.emit(`${conv} = sitofp ${srcType} ${val} to ${destType}`);
+            argValues[index] = conv;
+          } else if (!isParamFloat && isExprFloat) {
+            // Float to Int
+            const conv = gen.generateReg("fptosi");
+            const destType = gen.mapType(paramType);
+            const srcType = gen.mapType({
+              name: exprTypeName,
+              isPointer: 0,
+              isArray: [],
+            });
+            gen.emit(`${conv} = fptosi ${srcType} ${val} to ${destType}`);
+            argValues[index] = conv;
+          } else if (isParamFloat && isExprFloat) {
+            // Float to Float
+            if (typeName === "f64" && exprTypeName === "f32") {
+              const conv = gen.generateReg("fpext");
+              gen.emit(`${conv} = fpext float ${val} to double`);
+              argValues[index] = conv;
+            } else if (typeName === "f32" && exprTypeName === "f64") {
+              const conv = gen.generateReg("fptrunc");
+              gen.emit(`${conv} = fptrunc double ${val} to float`);
+              argValues[index] = conv;
+            }
+          } else if (paramSize < exprSize) {
             // Truncate
             let valIsI64 = false;
             if (
