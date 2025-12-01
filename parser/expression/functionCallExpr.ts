@@ -65,7 +65,104 @@ export default class FunctionCallExpr extends Expression {
       throw new Error(`Function ${this.functionName} not found`);
     }
 
-    // 1. Calculate struct allocation sizes
+    const {
+      returnStructSize,
+      isStructReturn,
+      argStructsSize,
+      argIsStruct,
+      argSizes,
+      totalStructAllocation,
+    } = this.calculateStructAllocations(func, scope);
+
+    if (totalStructAllocation > 0) {
+      gen.emit(
+        `sub rsp, ${totalStructAllocation}`,
+        `Allocate stack for structs (Return: ${returnStructSize}, Args: ${argStructsSize})`,
+      );
+    }
+
+    let pushedBytes = 0;
+
+    // 3. Push Hidden Return Pointer (if needed)
+    if (isStructReturn) {
+      // Address of return slot = RSP + pushedBytes + argStructsSize
+      gen.emit(
+        `lea rax, [rsp + ${pushedBytes + argStructsSize}]`,
+        `Address of return value slot`,
+      );
+      gen.emit(`push rax`, `Push return value slot address`);
+      pushedBytes += 8;
+      scope.stackOffset += 8;
+    }
+
+    const { argTypes, pushedBytes: newPushedBytes } = this.processArguments(
+      gen,
+      scope,
+      func,
+      totalStructAllocation,
+      argIsStruct,
+      argSizes,
+      pushedBytes,
+    );
+    pushedBytes = newPushedBytes;
+
+    const { assignments, currentFloat } = this.assignRegisters(
+      argTypes,
+      isStructReturn,
+    );
+
+    const { hasSpill, pushedBytesPopped } = this.emitPopArguments(
+      gen,
+      scope,
+      assignments,
+      isStructReturn,
+    );
+    pushedBytes -= pushedBytesPopped;
+
+    const doTailCall =
+      this.isTailCall && totalStructAllocation === 0 && !hasSpill;
+
+    this.emitCall(
+      gen,
+      scope,
+      func,
+      totalStructAllocation,
+      currentFloat,
+      doTailCall,
+    );
+
+    if (doTailCall) return;
+
+    // 6. Cleanup Struct Copies (Args only)
+    // We keep Return Slot (if any).
+    if (argStructsSize > 0) {
+      gen.emit(
+        `add rsp, ${argStructsSize}`,
+        `Deallocate stack space for argument structs`,
+      );
+    }
+
+    // Note: Return Slot remains on stack.
+    // We need to update scope.stackOffset to reflect this, so future pushes don't overwrite it.
+    if (isStructReturn) {
+      scope.stackOffset += returnStructSize;
+    }
+
+    scope.stackOffset =
+      initialStackOffset + (isStructReturn ? returnStructSize : 0);
+  }
+
+  private calculateStructAllocations(
+    func: any,
+    scope: Scope,
+  ): {
+    returnStructSize: number;
+    isStructReturn: boolean;
+    argStructsSize: number;
+    argIsStruct: boolean[];
+    argSizes: number[];
+    totalStructAllocation: number;
+  } {
     let returnStructSize = 0;
     let isStructReturn = false;
 
@@ -129,30 +226,28 @@ export default class FunctionCallExpr extends Expression {
     });
 
     const totalStructAllocation = returnStructSize + argStructsSize;
-    if (totalStructAllocation > 0) {
-      gen.emit(
-        `sub rsp, ${totalStructAllocation}`,
-        `Allocate stack for structs (Return: ${returnStructSize}, Args: ${argStructsSize})`,
-      );
-    }
+    return {
+      returnStructSize,
+      isStructReturn,
+      argStructsSize,
+      argIsStruct,
+      argSizes,
+      totalStructAllocation,
+    };
+  }
 
-    let pushedBytes = 0;
-    let currentArgStructOffset = 0;
-
-    // 3. Push Hidden Return Pointer (if needed)
-    if (isStructReturn) {
-      // Address of return slot = RSP + pushedBytes + argStructsSize
-      gen.emit(
-        `lea rax, [rsp + ${pushedBytes + argStructsSize}]`,
-        `Address of return value slot`,
-      );
-      gen.emit(`push rax`, `Push return value slot address`);
-      pushedBytes += 8;
-      scope.stackOffset += 8;
-    }
-
-    // 4. Process Arguments
+  private processArguments(
+    gen: AsmGenerator,
+    scope: Scope,
+    func: any,
+    totalStructAllocation: number,
+    argIsStruct: boolean[],
+    argSizes: number[],
+    pushedBytes: number,
+  ): { argTypes: string[]; pushedBytes: number } {
     const argTypes: string[] = [];
+    let currentArgStructOffset = 0;
+    let currentPushedBytes = pushedBytes;
 
     this.args.forEach((arg, index) => {
       // Determine type
@@ -182,7 +277,7 @@ export default class FunctionCallExpr extends Expression {
         // Slot address = RSP + pushedBytes + currentArgStructOffset
         gen.emit(`mov rsi, rax`, `Source address`);
         gen.emit(
-          `lea rdi, [rsp + ${pushedBytes + currentArgStructOffset}]`,
+          `lea rdi, [rsp + ${currentPushedBytes + currentArgStructOffset}]`,
           `Destination address (stack slot)`,
         );
         gen.emit(`mov rcx, ${size}`, `Size to copy`);
@@ -190,7 +285,7 @@ export default class FunctionCallExpr extends Expression {
 
         // Push address of the copy
         gen.emit(
-          `lea rax, [rsp + ${pushedBytes + currentArgStructOffset}]`,
+          `lea rax, [rsp + ${currentPushedBytes + currentArgStructOffset}]`,
           `Address of copy`,
         );
         gen.emit(`push rax`, `Push address of copy`);
@@ -202,15 +297,20 @@ export default class FunctionCallExpr extends Expression {
           `Push argument ${index} for function call ${this.functionName}`,
         );
       }
-      pushedBytes += 8;
+      currentPushedBytes += 8;
       scope.stackOffset += 8;
     });
 
-    // 5. Pop arguments into registers
-    let intArgIndex = 0;
-    let floatArgIndex = 0;
+    return { argTypes, pushedBytes: currentPushedBytes };
+  }
 
-    // Assign registers
+  private assignRegisters(
+    argTypes: string[],
+    isStructReturn: boolean,
+  ): {
+    assignments: { type: "int" | "float"; index: number; regIndex: number }[];
+    currentFloat: number;
+  } {
     const assignments: {
       type: "int" | "float";
       index: number;
@@ -229,7 +329,20 @@ export default class FunctionCallExpr extends Expression {
         assignments.push({ type: "int", index: i, regIndex: currentInt++ });
       }
     }
+    return { assignments, currentFloat };
+  }
 
+  private emitPopArguments(
+    gen: AsmGenerator,
+    scope: Scope,
+    assignments: {
+      type: "int" | "float";
+      index: number;
+      regIndex: number;
+    }[],
+    isStructReturn: boolean,
+  ): { hasSpill: boolean; pushedBytesPopped: number } {
+    let pushedBytesPopped = 0;
     // Pop in reverse order
     for (let i = this.args.length - 1; i >= 0; i--) {
       const assign = assignments[i]!;
@@ -254,26 +367,33 @@ export default class FunctionCallExpr extends Expression {
         }
       }
       scope.stackOffset -= 8;
-      pushedBytes -= 8;
+      pushedBytesPopped += 8;
     }
 
     // Pop Hidden Return Pointer if needed
     if (isStructReturn) {
       gen.emit(`pop rdi`, `Pop hidden return pointer into RDI`);
       scope.stackOffset -= 8;
-      pushedBytes -= 8;
+      pushedBytesPopped += 8;
     }
 
-    // Check for spills (not fully implemented in this fix)
     let hasSpill = false;
     for (const assign of assignments) {
       if (assign.type === "float" && assign.regIndex >= 8) hasSpill = true;
       if (assign.type === "int" && assign.regIndex >= 6) hasSpill = true;
     }
 
-    const doTailCall =
-      this.isTailCall && totalStructAllocation === 0 && !hasSpill;
+    return { hasSpill, pushedBytesPopped };
+  }
 
+  private emitCall(
+    gen: AsmGenerator,
+    scope: Scope,
+    func: any,
+    totalStructAllocation: number,
+    currentFloat: number,
+    doTailCall: boolean,
+  ): void {
     if (doTailCall) {
       // Set RAX to number of vector registers used (for varargs)
       gen.emit(`mov rax, ${currentFloat}`, "Number of vector registers used");
@@ -329,24 +449,6 @@ export default class FunctionCallExpr extends Expression {
         `Restore stack after calling function ${this.functionName}`,
       );
     }
-
-    // 6. Cleanup Struct Copies (Args only)
-    // We keep Return Slot (if any).
-    if (argStructsSize > 0) {
-      gen.emit(
-        `add rsp, ${argStructsSize}`,
-        `Deallocate stack space for argument structs`,
-      );
-    }
-
-    // Note: Return Slot remains on stack.
-    // We need to update scope.stackOffset to reflect this, so future pushes don't overwrite it.
-    if (isStructReturn) {
-      scope.stackOffset += returnStructSize;
-    }
-
-    scope.stackOffset =
-      initialStackOffset + (isStructReturn ? returnStructSize : 0);
   }
 
   generateIR(gen: LlvmGenerator, scope: Scope): string {

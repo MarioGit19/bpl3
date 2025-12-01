@@ -143,14 +143,6 @@ export default class BinaryExpr extends Expression {
 
     const leftType = resolveExpressionType(this.left, scope);
     const rightType = resolveExpressionType(this.right, scope);
-    const isFloat =
-      ((leftType?.name === "f64" || leftType?.name === "f32") &&
-        !leftType?.isPointer &&
-        !leftType?.isArray.length) ||
-      ((rightType?.name === "f64" || rightType?.name === "f32") &&
-        !rightType?.isPointer &&
-        !rightType?.isArray.length) ||
-      this.operator.type === TokenType.SLASH;
 
     const isLHS = scope.getCurrentContext("LHS");
     if (isLHS) scope.removeCurrentContext("LHS");
@@ -162,7 +154,37 @@ export default class BinaryExpr extends Expression {
 
     if (isLHS) scope.setCurrentContext({ type: "LHS" });
 
-    // Pointer Arithmetic
+    this.preparePointerArithmetic(gen, scope, leftType, rightType);
+
+    if (this.isFloatOperation(leftType, rightType)) {
+      this.transpileFloat(gen, scope, leftType, rightType);
+    } else {
+      this.transpileInt(gen, scope);
+    }
+  }
+
+  private isFloatOperation(
+    leftType: VariableType | null,
+    rightType: VariableType | null,
+  ): boolean {
+    return (
+      ((leftType?.name === "f64" || leftType?.name === "f32") &&
+        !leftType?.isPointer &&
+        !leftType?.isArray.length) ||
+      ((rightType?.name === "f64" || rightType?.name === "f32") &&
+        !rightType?.isPointer &&
+        !rightType?.isArray.length) ||
+      this.operator.type === TokenType.SLASH
+    );
+  }
+
+  private preparePointerArithmetic(
+    gen: AsmGenerator,
+    scope: Scope,
+    leftType: VariableType | null,
+    rightType: VariableType | null,
+  ): void {
+    const isFloat = this.isFloatOperation(leftType, rightType);
     let scale = 1;
     if (
       !isFloat &&
@@ -202,93 +224,99 @@ export default class BinaryExpr extends Expression {
         }
       }
     }
+  }
 
-    if (isFloat) {
-      if (leftType?.name !== "f64" && leftType?.name !== "f32") {
-        gen.emit("cvtsi2sd xmm0, rax", "Convert left int to float");
-      } else if (leftType?.name === "f32") {
-        gen.emit("movd xmm0, eax", "Move left f32 bits to xmm0");
-        gen.emit("cvtss2sd xmm0, xmm0", "Convert left f32 to f64");
-      } else {
-        gen.emit("movq xmm0, rax", "Move left float bits to xmm0");
-      }
-
-      if (rightType?.name !== "f64" && rightType?.name !== "f32") {
-        gen.emit("cvtsi2sd xmm1, rbx", "Convert right int to float");
-      } else if (rightType?.name === "f32") {
-        gen.emit("movd xmm1, ebx", "Move right f32 bits to xmm1");
-        gen.emit("cvtss2sd xmm1, xmm1", "Convert right f32 to f64");
-      } else {
-        gen.emit("movq xmm1, rbx", "Move right float bits to xmm1");
-      }
-
-      switch (this.operator.type) {
-        case TokenType.PLUS:
-          gen.emit("addsd xmm0, xmm1", "Float Addition");
-          break;
-        case TokenType.MINUS:
-          gen.emit("subsd xmm0, xmm1", "Float Subtraction");
-          break;
-        case TokenType.STAR:
-          gen.emit("mulsd xmm0, xmm1", "Float Multiplication");
-          break;
-        case TokenType.SLASH:
-          gen.emit("divsd xmm0, xmm1", "Float Division");
-          break;
-        case TokenType.SLASH_SLASH:
-          gen.emit("divsd xmm0, xmm1", "Float Division");
-          gen.emit("roundsd xmm0, xmm0, 1", "Floor (Round down)");
-          break;
-        case TokenType.EQUAL:
-          gen.emit("ucomisd xmm0, xmm1", "Float Compare ==");
-          gen.emit("setnp al", "Set al if not NaN");
-          gen.emit("sete ah", "Set ah if equal");
-          gen.emit("and al, ah", "Result = !NaN && Equal");
-          gen.emit("movzx rax, al", "Zero extend");
-          return;
-        case TokenType.NOT_EQUAL:
-          gen.emit("ucomisd xmm0, xmm1", "Float Compare !=");
-          gen.emit("setp al", "Set al if NaN");
-          gen.emit("setne ah", "Set ah if not equal");
-          gen.emit("or al, ah", "Result = NaN || NotEqual");
-          gen.emit("movzx rax, al", "Zero extend");
-          return;
-        case TokenType.GREATER_THAN:
-          gen.emit("ucomisd xmm0, xmm1", "Float Compare >");
-          gen.emit("seta al", "Set al if >");
-          gen.emit("movzx rax, al", "Zero extend");
-          return;
-        case TokenType.GREATER_EQUAL:
-          gen.emit("ucomisd xmm0, xmm1", "Float Compare >=");
-          gen.emit("setae al", "Set al if >=");
-          gen.emit("movzx rax, al", "Zero extend");
-          return;
-        case TokenType.LESS_THAN:
-          gen.emit("ucomisd xmm1, xmm0", "Float Compare < (swapped >)");
-          gen.emit("seta al", "Set al if <");
-          gen.emit("movzx rax, al", "Zero extend");
-          return;
-        case TokenType.LESS_EQUAL:
-          gen.emit("ucomisd xmm1, xmm0", "Float Compare <= (swapped >=)");
-          gen.emit("setae al", "Set al if <=");
-          gen.emit("movzx rax, al", "Zero extend");
-          return;
-        default:
-          throw new Error(
-            `Operator ${this.operator.value} not supported for floating point numbers`,
-          );
-      }
-
-      const resultType = resolveExpressionType(this, scope);
-      if (resultType?.name === "f32") {
-        gen.emit("cvtsd2ss xmm0, xmm0", "Convert result f64 to f32");
-        gen.emit("movd eax, xmm0", "Move f32 bits to EAX");
-      } else {
-        gen.emit("movq rax, xmm0", "Move result back to RAX");
-      }
-      return;
+  private transpileFloat(
+    gen: AsmGenerator,
+    scope: Scope,
+    leftType: VariableType | null,
+    rightType: VariableType | null,
+  ): void {
+    if (leftType?.name !== "f64" && leftType?.name !== "f32") {
+      gen.emit("cvtsi2sd xmm0, rax", "Convert left int to float");
+    } else if (leftType?.name === "f32") {
+      gen.emit("movd xmm0, eax", "Move left f32 bits to xmm0");
+      gen.emit("cvtss2sd xmm0, xmm0", "Convert left f32 to f64");
+    } else {
+      gen.emit("movq xmm0, rax", "Move left float bits to xmm0");
     }
 
+    if (rightType?.name !== "f64" && rightType?.name !== "f32") {
+      gen.emit("cvtsi2sd xmm1, rbx", "Convert right int to float");
+    } else if (rightType?.name === "f32") {
+      gen.emit("movd xmm1, ebx", "Move right f32 bits to xmm1");
+      gen.emit("cvtss2sd xmm1, xmm1", "Convert right f32 to f64");
+    } else {
+      gen.emit("movq xmm1, rbx", "Move right float bits to xmm1");
+    }
+
+    switch (this.operator.type) {
+      case TokenType.PLUS:
+        gen.emit("addsd xmm0, xmm1", "Float Addition");
+        break;
+      case TokenType.MINUS:
+        gen.emit("subsd xmm0, xmm1", "Float Subtraction");
+        break;
+      case TokenType.STAR:
+        gen.emit("mulsd xmm0, xmm1", "Float Multiplication");
+        break;
+      case TokenType.SLASH:
+        gen.emit("divsd xmm0, xmm1", "Float Division");
+        break;
+      case TokenType.SLASH_SLASH:
+        gen.emit("divsd xmm0, xmm1", "Float Division");
+        gen.emit("roundsd xmm0, xmm0, 1", "Floor (Round down)");
+        break;
+      case TokenType.EQUAL:
+        gen.emit("ucomisd xmm0, xmm1", "Float Compare ==");
+        gen.emit("setnp al", "Set al if not NaN");
+        gen.emit("sete ah", "Set ah if equal");
+        gen.emit("and al, ah", "Result = !NaN && Equal");
+        gen.emit("movzx rax, al", "Zero extend");
+        return;
+      case TokenType.NOT_EQUAL:
+        gen.emit("ucomisd xmm0, xmm1", "Float Compare !=");
+        gen.emit("setp al", "Set al if NaN");
+        gen.emit("setne ah", "Set ah if not equal");
+        gen.emit("or al, ah", "Result = NaN || NotEqual");
+        gen.emit("movzx rax, al", "Zero extend");
+        return;
+      case TokenType.GREATER_THAN:
+        gen.emit("ucomisd xmm0, xmm1", "Float Compare >");
+        gen.emit("seta al", "Set al if >");
+        gen.emit("movzx rax, al", "Zero extend");
+        return;
+      case TokenType.GREATER_EQUAL:
+        gen.emit("ucomisd xmm0, xmm1", "Float Compare >=");
+        gen.emit("setae al", "Set al if >=");
+        gen.emit("movzx rax, al", "Zero extend");
+        return;
+      case TokenType.LESS_THAN:
+        gen.emit("ucomisd xmm1, xmm0", "Float Compare < (swapped >)");
+        gen.emit("seta al", "Set al if <");
+        gen.emit("movzx rax, al", "Zero extend");
+        return;
+      case TokenType.LESS_EQUAL:
+        gen.emit("ucomisd xmm1, xmm0", "Float Compare <= (swapped >=)");
+        gen.emit("setae al", "Set al if <=");
+        gen.emit("movzx rax, al", "Zero extend");
+        return;
+      default:
+        throw new Error(
+          `Operator ${this.operator.value} not supported for floating point numbers`,
+        );
+    }
+
+    const resultType = resolveExpressionType(this, scope);
+    if (resultType?.name === "f32") {
+      gen.emit("cvtsd2ss xmm0, xmm0", "Convert result f64 to f32");
+      gen.emit("movd eax, xmm0", "Move f32 bits to EAX");
+    } else {
+      gen.emit("movq rax, xmm0", "Move result back to RAX");
+    }
+  }
+
+  private transpileInt(gen: AsmGenerator, scope: Scope): void {
     switch (this.operator.type) {
       // Arithmetic Operators
       case TokenType.PLUS:
@@ -425,222 +453,236 @@ export default class BinaryExpr extends Expression {
       rightType?.name === "f32" ||
       this.operator.type === TokenType.SLASH;
 
-    const resultReg = gen.generateReg("binop");
-
     if (isFloat) {
-      let lVal = leftVal;
-      let rVal = rightVal;
-      let opType = "double";
+      return this.generateFloatIR(gen, leftVal, rightVal, leftType, rightType);
+    } else {
+      return this.generateIntIR(gen, leftVal, rightVal, leftType, rightType);
+    }
+  }
 
-      if (leftType?.name === "f64" || rightType?.name === "f64") {
-        opType = "double";
-      } else if (this.operator.type === TokenType.SLASH) {
-        // Division defaults to f64 unless operands are small
-        const leftSize = leftType ? getIntSize(leftType.name) : 8;
-        const rightSize = rightType ? getIntSize(rightType.name) : 8;
-        if (leftSize <= 4 && rightSize <= 4) {
-          opType = "float";
-        } else {
-          opType = "double";
-        }
-      } else {
+  private generateFloatIR(
+    gen: LlvmGenerator,
+    leftVal: string,
+    rightVal: string,
+    leftType: VariableType | null,
+    rightType: VariableType | null,
+  ): string {
+    const resultReg = gen.generateReg("binop");
+    let lVal = leftVal;
+    let rVal = rightVal;
+    let opType = "double";
+
+    if (leftType?.name === "f64" || rightType?.name === "f64") {
+      opType = "double";
+    } else if (this.operator.type === TokenType.SLASH) {
+      // Division defaults to f64 unless operands are small
+      const leftSize = leftType ? getIntSize(leftType.name) : 8;
+      const rightSize = rightType ? getIntSize(rightType.name) : 8;
+      if (leftSize <= 4 && rightSize <= 4) {
         opType = "float";
-      }
-
-      if (opType === "float") {
-        // Ensure both are float
-        if (leftType?.name !== "f32") {
-          // Int to float
-          const conv = gen.generateReg("conv");
-          gen.emit(`${conv} = sitofp i64 ${lVal} to float`);
-          lVal = conv;
-        }
-        if (rightType?.name !== "f32") {
-          // Int to float
-          const conv = gen.generateReg("conv");
-          gen.emit(`${conv} = sitofp i64 ${rVal} to float`);
-          rVal = conv;
-        }
       } else {
-        // Promote to double
-        if (leftType?.name === "f32") {
-          const ext = gen.generateReg("ext");
-          gen.emit(`${ext} = fpext float ${lVal} to double`);
-          lVal = ext;
-        } else if (leftType?.name !== "f64") {
-          // Int to double
-          const conv = gen.generateReg("conv");
-          gen.emit(`${conv} = sitofp i64 ${lVal} to double`); // Assuming i64
-          lVal = conv;
-        }
-
-        if (rightType?.name === "f32") {
-          const ext = gen.generateReg("ext");
-          gen.emit(`${ext} = fpext float ${rVal} to double`);
-          rVal = ext;
-        } else if (rightType?.name !== "f64") {
-          // Int to double
-          const conv = gen.generateReg("conv");
-          gen.emit(`${conv} = sitofp i64 ${rVal} to double`);
-          rVal = conv;
-        }
-      }
-
-      if (this.operator.type === TokenType.SLASH_SLASH) {
-        const divReg = gen.generateReg("div");
-        gen.emit(`${divReg} = fdiv ${opType} ${lVal}, ${rVal}`);
-        const floorReg = gen.generateReg("floor");
-        const floorFunc =
-          opType === "float" ? "@llvm.floor.f32" : "@llvm.floor.f64";
-        gen.emitGlobal(
-          `declare ${opType} ${floorFunc}(${opType}) memory(none)`,
-        );
-        gen.emit(
-          `${floorReg} = call ${opType} ${floorFunc}(${opType} ${divReg})`,
-        );
-        return floorReg;
-      }
-
-      const op = this.getFloatOp(this.operator.type);
-      // Assuming double for now
-      if (
-        ["fcmp", "fadd", "fsub", "fmul", "fdiv"].some((o) => op.startsWith(o))
-      ) {
-        if (op.startsWith("fcmp")) {
-          gen.emit(`${resultReg} = ${op} ${opType} ${lVal}, ${rVal}`);
-          // fcmp returns i1, we might need to zext to i8 if used as value?
-          // But usually conditions consume i1.
-          // If used as value (e.g. x = a == b), we need zext.
-          const zext = gen.generateReg("zext");
-          gen.emit(`${zext} = zext i1 ${resultReg} to i8`);
-          return zext;
-        }
-        gen.emit(`${resultReg} = ${op} ${opType} ${lVal}, ${rVal}`);
+        opType = "double";
       }
     } else {
-      // Check for pointer comparison
-      if (
-        leftType?.isPointer ||
-        rightType?.isPointer ||
-        leftVal === "null" ||
-        rightVal === "null"
-      ) {
-        if (
-          this.operator.type === TokenType.EQUAL ||
-          this.operator.type === TokenType.NOT_EQUAL
-        ) {
-          const pred = this.operator.type === TokenType.EQUAL ? "eq" : "ne";
-          let l = leftVal;
-          let r = rightVal;
-          if (l === "0") l = "null";
-          if (r === "0") r = "null";
-          gen.emit(`${resultReg} = icmp ${pred} ptr ${l}, ${r}`);
-          const zext = gen.generateReg("zext");
-          gen.emit(`${zext} = zext i1 ${resultReg} to i8`);
-          return zext;
-        }
+      opType = "float";
+    }
+
+    if (opType === "float") {
+      // Ensure both are float
+      if (leftType?.name !== "f32") {
+        // Int to float
+        const conv = gen.generateReg("conv");
+        gen.emit(`${conv} = sitofp i64 ${lVal} to float`);
+        lVal = conv;
+      }
+      if (rightType?.name !== "f32") {
+        // Int to float
+        const conv = gen.generateReg("conv");
+        gen.emit(`${conv} = sitofp i64 ${rVal} to float`);
+        rVal = conv;
+      }
+    } else {
+      // Promote to double
+      if (leftType?.name === "f32") {
+        const ext = gen.generateReg("ext");
+        gen.emit(`${ext} = fpext float ${lVal} to double`);
+        lVal = ext;
+      } else if (leftType?.name !== "f64") {
+        // Int to double
+        const conv = gen.generateReg("conv");
+        gen.emit(`${conv} = sitofp i64 ${lVal} to double`); // Assuming i64
+        lVal = conv;
       }
 
-      // Check for pointer arithmetic
-      if (
-        this.operator.type === TokenType.PLUS ||
-        this.operator.type === TokenType.MINUS
-      ) {
-        if (leftType?.isPointer && !rightType?.isPointer) {
-          // ptr + int
-          const ptr = leftVal;
-          let idx = rightVal;
-
-          // Ensure idx is i64
-          if (rightType && getIntSize(rightType.name) < 8) {
-            const isSigned = ["i8", "i16", "i32"].includes(rightType.name);
-            const castOp = isSigned ? "sext" : "zext";
-            const srcType = gen.mapType(rightType);
-            const ext = gen.generateReg("ext");
-            gen.emit(`${ext} = ${castOp} ${srcType} ${idx} to i64`);
-            idx = ext;
-          }
-
-          const pointedType = {
-            ...leftType,
-            isPointer: leftType.isPointer - 1,
-          };
-          const llvmPointedType = gen.mapType(pointedType);
-
-          if (this.operator.type === TokenType.MINUS) {
-            const negIdx = gen.generateReg("neg_idx");
-            gen.emit(`${negIdx} = sub i64 0, ${idx}`);
-            gen.emit(
-              `${resultReg} = getelementptr ${llvmPointedType}, ptr ${ptr}, i64 ${negIdx}`,
-            );
-          } else {
-            gen.emit(
-              `${resultReg} = getelementptr ${llvmPointedType}, ptr ${ptr}, i64 ${idx}`,
-            );
-          }
-          return resultReg;
-        }
+      if (rightType?.name === "f32") {
+        const ext = gen.generateReg("ext");
+        gen.emit(`${ext} = fpext float ${rVal} to double`);
+        rVal = ext;
+      } else if (rightType?.name !== "f64") {
+        // Int to double
+        const conv = gen.generateReg("conv");
+        gen.emit(`${conv} = sitofp i64 ${rVal} to double`);
+        rVal = conv;
       }
+    }
 
-      // Promote operands to i64 if needed
-      let lVal = leftVal;
-      let rVal = rightVal;
-      let opType = "i64";
+    if (this.operator.type === TokenType.SLASH_SLASH) {
+      const divReg = gen.generateReg("div");
+      gen.emit(`${divReg} = fdiv ${opType} ${lVal}, ${rVal}`);
+      const floorReg = gen.generateReg("floor");
+      const floorFunc =
+        opType === "float" ? "@llvm.floor.f32" : "@llvm.floor.f64";
+      gen.emitGlobal(`declare ${opType} ${floorFunc}(${opType}) memory(none)`);
+      gen.emit(
+        `${floorReg} = call ${opType} ${floorFunc}(${opType} ${divReg})`,
+      );
+      return floorReg;
+    }
 
-      const isLogical = [
-        TokenType.AND,
-        TokenType.OR,
-        TokenType.AMPERSAND,
-        TokenType.PIPE,
-        TokenType.CARET,
-      ].includes(this.operator.type);
-
-      if (
-        isLogical &&
-        leftType &&
-        rightType &&
-        getIntSize(leftType.name) === 1 &&
-        getIntSize(rightType.name) === 1 &&
-        !leftType.isPointer &&
-        !rightType.isPointer
-      ) {
-        opType = "i8";
-      } else {
-        if (leftType && getIntSize(leftType.name) < 8 && !leftType.isPointer) {
-          const isSigned = ["i8", "i16", "i32"].includes(leftType.name);
-          const castOp = isSigned ? "sext" : "zext";
-          const srcType = gen.mapType(leftType);
-          const ext = gen.generateReg("ext");
-          gen.emit(`${ext} = ${castOp} ${srcType} ${lVal} to i64`);
-          lVal = ext;
-        }
-
-        if (
-          rightType &&
-          getIntSize(rightType.name) < 8 &&
-          !rightType.isPointer
-        ) {
-          const isSigned = ["i8", "i16", "i32"].includes(rightType.name);
-          const castOp = isSigned ? "sext" : "zext";
-          const srcType = gen.mapType(rightType);
-          const ext = gen.generateReg("ext");
-          gen.emit(`${ext} = ${castOp} ${srcType} ${rVal} to i64`);
-          rVal = ext;
-        }
-      }
-
-      const op = this.getIntOp(this.operator.type);
-
-      if (op.startsWith("icmp")) {
-        gen.emit(`${resultReg} = ${op} i64 ${lVal}, ${rVal}`);
+    const op = this.getFloatOp(this.operator.type);
+    // Assuming double for now
+    if (
+      ["fcmp", "fadd", "fsub", "fmul", "fdiv"].some((o) => op.startsWith(o))
+    ) {
+      if (op.startsWith("fcmp")) {
+        gen.emit(`${resultReg} = ${op} ${opType} ${lVal}, ${rVal}`);
+        // fcmp returns i1, we might need to zext to i8 if used as value?
+        // But usually conditions consume i1.
+        // If used as value (e.g. x = a == b), we need zext.
         const zext = gen.generateReg("zext");
         gen.emit(`${zext} = zext i1 ${resultReg} to i8`);
         return zext;
       }
-
       gen.emit(`${resultReg} = ${op} ${opType} ${lVal}, ${rVal}`);
     }
+    return resultReg;
+  }
 
+  private generateIntIR(
+    gen: LlvmGenerator,
+    leftVal: string,
+    rightVal: string,
+    leftType: VariableType | null,
+    rightType: VariableType | null,
+  ): string {
+    const resultReg = gen.generateReg("binop");
+    // Check for pointer comparison
+    if (
+      leftType?.isPointer ||
+      rightType?.isPointer ||
+      leftVal === "null" ||
+      rightVal === "null"
+    ) {
+      if (
+        this.operator.type === TokenType.EQUAL ||
+        this.operator.type === TokenType.NOT_EQUAL
+      ) {
+        const pred = this.operator.type === TokenType.EQUAL ? "eq" : "ne";
+        let l = leftVal;
+        let r = rightVal;
+        if (l === "0") l = "null";
+        if (r === "0") r = "null";
+        gen.emit(`${resultReg} = icmp ${pred} ptr ${l}, ${r}`);
+        const zext = gen.generateReg("zext");
+        gen.emit(`${zext} = zext i1 ${resultReg} to i8`);
+        return zext;
+      }
+    }
+
+    // Check for pointer arithmetic
+    if (
+      this.operator.type === TokenType.PLUS ||
+      this.operator.type === TokenType.MINUS
+    ) {
+      if (leftType?.isPointer && !rightType?.isPointer) {
+        // ptr + int
+        const ptr = leftVal;
+        let idx = rightVal;
+
+        // Ensure idx is i64
+        if (rightType && getIntSize(rightType.name) < 8) {
+          const isSigned = ["i8", "i16", "i32"].includes(rightType.name);
+          const castOp = isSigned ? "sext" : "zext";
+          const srcType = gen.mapType(rightType);
+          const ext = gen.generateReg("ext");
+          gen.emit(`${ext} = ${castOp} ${srcType} ${idx} to i64`);
+          idx = ext;
+        }
+
+        const pointedType = {
+          ...leftType,
+          isPointer: leftType.isPointer - 1,
+        };
+        const llvmPointedType = gen.mapType(pointedType);
+
+        if (this.operator.type === TokenType.MINUS) {
+          const negIdx = gen.generateReg("neg_idx");
+          gen.emit(`${negIdx} = sub i64 0, ${idx}`);
+          gen.emit(
+            `${resultReg} = getelementptr ${llvmPointedType}, ptr ${ptr}, i64 ${negIdx}`,
+          );
+        } else {
+          gen.emit(
+            `${resultReg} = getelementptr ${llvmPointedType}, ptr ${ptr}, i64 ${idx}`,
+          );
+        }
+        return resultReg;
+      }
+    }
+
+    // Promote operands to i64 if needed
+    let lVal = leftVal;
+    let rVal = rightVal;
+    let opType = "i64";
+
+    const isLogical = [
+      TokenType.AND,
+      TokenType.OR,
+      TokenType.AMPERSAND,
+      TokenType.PIPE,
+      TokenType.CARET,
+    ].includes(this.operator.type);
+
+    if (
+      isLogical &&
+      leftType &&
+      rightType &&
+      getIntSize(leftType.name) === 1 &&
+      getIntSize(rightType.name) === 1 &&
+      !leftType.isPointer &&
+      !rightType.isPointer
+    ) {
+      opType = "i8";
+    } else {
+      if (leftType && getIntSize(leftType.name) < 8 && !leftType.isPointer) {
+        const isSigned = ["i8", "i16", "i32"].includes(leftType.name);
+        const castOp = isSigned ? "sext" : "zext";
+        const srcType = gen.mapType(leftType);
+        const ext = gen.generateReg("ext");
+        gen.emit(`${ext} = ${castOp} ${srcType} ${lVal} to i64`);
+        lVal = ext;
+      }
+
+      if (rightType && getIntSize(rightType.name) < 8 && !rightType.isPointer) {
+        const isSigned = ["i8", "i16", "i32"].includes(rightType.name);
+        const castOp = isSigned ? "sext" : "zext";
+        const srcType = gen.mapType(rightType);
+        const ext = gen.generateReg("ext");
+        gen.emit(`${ext} = ${castOp} ${srcType} ${rVal} to i64`);
+        rVal = ext;
+      }
+    }
+
+    const op = this.getIntOp(this.operator.type);
+
+    if (op.startsWith("icmp")) {
+      gen.emit(`${resultReg} = ${op} i64 ${lVal}, ${rVal}`);
+      const zext = gen.generateReg("zext");
+      gen.emit(`${zext} = zext i1 ${resultReg} to i8`);
+      return zext;
+    }
+
+    gen.emit(`${resultReg} = ${op} ${opType} ${lVal}, ${rVal}`);
     return resultReg;
   }
 
@@ -950,6 +992,108 @@ export default class BinaryExpr extends Expression {
     const leftType = resolveExpressionType(this.left, scope);
     const rightType = resolveExpressionType(this.right, scope);
 
+    const isFloat =
+      ((leftType?.name === "f64" || leftType?.name === "f32") &&
+        !leftType?.isPointer &&
+        !leftType?.isArray.length) ||
+      ((rightType?.name === "f64" || rightType?.name === "f32") &&
+        !rightType?.isPointer &&
+        !rightType?.isArray.length);
+
+    if (isFloat) {
+      this.transpileFloatAssignment(gen, scope, leftType, rightType);
+    } else {
+      this.transpileIntAssignment(gen, scope, leftType, rightType);
+    }
+  }
+
+  private transpileFloatAssignment(
+    gen: AsmGenerator,
+    scope: Scope,
+    leftType: VariableType | null,
+    rightType: VariableType | null,
+  ): void {
+    // Ensure Right is in XMM1 (as f64)
+    if (rightType?.name !== "f64" && rightType?.name !== "f32") {
+      gen.emit("cvtsi2sd xmm1, rbx", "Convert right int to float");
+    } else if (rightType?.name === "f32") {
+      gen.emit("movd xmm1, ebx", "Move right f32 bits to xmm1");
+      gen.emit("cvtss2sd xmm1, xmm1", "Convert right f32 to f64");
+    } else {
+      gen.emit("movq xmm1, rbx", "Move right float bits to xmm1");
+    }
+
+    // Load Left into XMM0 (as f64) if needed
+    if (this.operator.type !== TokenType.ASSIGN) {
+      if (leftType?.name === "f32") {
+        gen.emit("movss xmm0, [rax]", "Load f32 from left");
+        gen.emit("cvtss2sd xmm0, xmm0", "Convert f32 to f64");
+      } else if (leftType?.name === "f64") {
+        gen.emit("movsd xmm0, [rax]", "Load f64 from left");
+      } else {
+        // Left is int, load and convert
+        const typeInfo = scope.resolveType(leftType!.name);
+        if (typeInfo?.size === 1) {
+          gen.emit("movzx rcx, byte [rax]", "Load 8-bit int");
+        } else if (typeInfo?.size === 2) {
+          gen.emit("movzx rcx, word [rax]", "Load 16-bit int");
+        } else if (typeInfo?.size === 4) {
+          gen.emit("movsxd rcx, dword [rax]", "Load 32-bit int");
+        } else {
+          gen.emit("mov rcx, [rax]", "Load 64-bit int");
+        }
+        gen.emit("cvtsi2sd xmm0, rcx", "Convert left int to float");
+      }
+    }
+
+    switch (this.operator.type) {
+      case TokenType.ASSIGN:
+        gen.emit("movapd xmm0, xmm1", "Move right to result");
+        break;
+      case TokenType.PLUS_ASSIGN:
+        gen.emit("addsd xmm0, xmm1", "Float Add Assign");
+        break;
+      case TokenType.MINUS_ASSIGN:
+        gen.emit("subsd xmm0, xmm1", "Float Sub Assign");
+        break;
+      case TokenType.STAR_ASSIGN:
+        gen.emit("mulsd xmm0, xmm1", "Float Mul Assign");
+        break;
+      case TokenType.SLASH_ASSIGN:
+        gen.emit("divsd xmm0, xmm1", "Float Div Assign");
+        break;
+      default:
+        throw new Error(
+          `Unsupported float assignment operator: ${this.operator.value}`,
+        );
+    }
+
+    // Store Result (XMM0) back to Left ([RAX])
+    if (leftType?.name === "f32") {
+      gen.emit("cvtsd2ss xmm0, xmm0", "Convert result f64 to f32");
+      gen.emit("movss [rax], xmm0", "Store f32");
+      gen.emit("movd eax, xmm0", "Move f32 bits to RAX");
+    } else if (leftType?.name === "f64") {
+      gen.emit("movsd [rax], xmm0", "Store f64");
+      gen.emit("movq rax, xmm0", "Move f64 result to RAX");
+    } else {
+      // Store into int
+      gen.emit("cvttsd2si rbx, xmm0", "Convert result to int");
+      const typeInfo = scope.resolveType(leftType!.name);
+      if (typeInfo?.size === 1) gen.emit("mov [rax], bl");
+      else if (typeInfo?.size === 2) gen.emit("mov [rax], bx");
+      else if (typeInfo?.size === 4) gen.emit("mov [rax], ebx");
+      else gen.emit("mov [rax], rbx");
+      gen.emit("mov rax, rbx", "Move int result to RAX");
+    }
+  }
+
+  private transpileIntAssignment(
+    gen: AsmGenerator,
+    scope: Scope,
+    leftType: VariableType | null,
+    rightType: VariableType | null,
+  ): void {
     // Check for pointer arithmetic in assignment
     let scale = 1;
     if (
@@ -966,94 +1110,8 @@ export default class BinaryExpr extends Expression {
       }
     }
 
-    const isFloat =
-      ((leftType?.name === "f64" || leftType?.name === "f32") &&
-        !leftType?.isPointer &&
-        !leftType?.isArray.length) ||
-      ((rightType?.name === "f64" || rightType?.name === "f32") &&
-        !rightType?.isPointer &&
-        !rightType?.isArray.length);
-
-    if (isFloat) {
-      // Ensure Right is in XMM1 (as f64)
-      if (rightType?.name !== "f64" && rightType?.name !== "f32") {
-        gen.emit("cvtsi2sd xmm1, rbx", "Convert right int to float");
-      } else if (rightType?.name === "f32") {
-        gen.emit("movd xmm1, ebx", "Move right f32 bits to xmm1");
-        gen.emit("cvtss2sd xmm1, xmm1", "Convert right f32 to f64");
-      } else {
-        gen.emit("movq xmm1, rbx", "Move right float bits to xmm1");
-      }
-
-      // Load Left into XMM0 (as f64) if needed
-      if (this.operator.type !== TokenType.ASSIGN) {
-        if (leftType?.name === "f32") {
-          gen.emit("movss xmm0, [rax]", "Load f32 from left");
-          gen.emit("cvtss2sd xmm0, xmm0", "Convert f32 to f64");
-        } else if (leftType?.name === "f64") {
-          gen.emit("movsd xmm0, [rax]", "Load f64 from left");
-        } else {
-          // Left is int, load and convert
-          const typeInfo = scope.resolveType(leftType!.name);
-          if (typeInfo?.size === 1) {
-            gen.emit("movzx rcx, byte [rax]", "Load 8-bit int");
-          } else if (typeInfo?.size === 2) {
-            gen.emit("movzx rcx, word [rax]", "Load 16-bit int");
-          } else if (typeInfo?.size === 4) {
-            gen.emit("movsxd rcx, dword [rax]", "Load 32-bit int");
-          } else {
-            gen.emit("mov rcx, [rax]", "Load 64-bit int");
-          }
-          gen.emit("cvtsi2sd xmm0, rcx", "Convert left int to float");
-        }
-      }
-
-      switch (this.operator.type) {
-        case TokenType.ASSIGN:
-          gen.emit("movapd xmm0, xmm1", "Move right to result");
-          break;
-        case TokenType.PLUS_ASSIGN:
-          gen.emit("addsd xmm0, xmm1", "Float Add Assign");
-          break;
-        case TokenType.MINUS_ASSIGN:
-          gen.emit("subsd xmm0, xmm1", "Float Sub Assign");
-          break;
-        case TokenType.STAR_ASSIGN:
-          gen.emit("mulsd xmm0, xmm1", "Float Mul Assign");
-          break;
-        case TokenType.SLASH_ASSIGN:
-          gen.emit("divsd xmm0, xmm1", "Float Div Assign");
-          break;
-        default:
-          throw new Error(
-            `Unsupported float assignment operator: ${this.operator.value}`,
-          );
-      }
-
-      // Store Result (XMM0) back to Left ([RAX])
-      if (leftType?.name === "f32") {
-        gen.emit("cvtsd2ss xmm0, xmm0", "Convert result f64 to f32");
-        gen.emit("movss [rax], xmm0", "Store f32");
-        gen.emit("movd eax, xmm0", "Move f32 bits to RAX");
-      } else if (leftType?.name === "f64") {
-        gen.emit("movsd [rax], xmm0", "Store f64");
-        gen.emit("movq rax, xmm0", "Move f64 result to RAX");
-      } else {
-        // Store into int
-        gen.emit("cvttsd2si rbx, xmm0", "Convert result to int");
-        const typeInfo = scope.resolveType(leftType!.name);
-        if (typeInfo?.size === 1) gen.emit("mov [rax], bl");
-        else if (typeInfo?.size === 2) gen.emit("mov [rax], bx");
-        else if (typeInfo?.size === 4) gen.emit("mov [rax], ebx");
-        else gen.emit("mov [rax], rbx");
-        gen.emit("mov rax, rbx", "Move int result to RAX");
-      }
-      return;
-    }
-
     switch (this.operator.type) {
       case TokenType.ASSIGN:
-        const leftType = resolveExpressionType(this.left, scope);
         if (leftType && !leftType.isPointer && !leftType.isArray.length) {
           const typeInfo = scope.resolveType(leftType.name);
           if (typeInfo && !typeInfo.isPrimitive) {

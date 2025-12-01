@@ -17,7 +17,7 @@ serve({
     // API: Run Code
     if (url.pathname === "/api/run" && req.method === "POST") {
       try {
-        const { code } = await req.json();
+        const { code } = (await req.json()) as { code: string };
         const tempFile = join(ROOT_DIR, "playground_temp.x");
 
         writeFileSync(tempFile, code);
@@ -54,7 +54,7 @@ serve({
     // API: Compile Code (Get IR and ASM)
     if (url.pathname === "/api/compile" && req.method === "POST") {
       try {
-        const { code } = await req.json();
+        const { code } = (await req.json()) as { code: string };
         const tempFile = join(ROOT_DIR, "playground_temp.x");
 
         writeFileSync(tempFile, code);

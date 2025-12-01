@@ -65,6 +65,66 @@ export default class FunctionDeclarationExpr extends Expression {
     const label = gen.generateLabel(`func_${this.name}_`);
     const endLabel = label + "_end";
 
+    if (this.name === "main") {
+      gen.emitGlobalDefinition(`_user_main equ ${label}`);
+    }
+    gen.emitLabel(label);
+
+    const funcScope = this.setupFunctionScope(scope, label, endLabel);
+
+    // Function prologue
+    if (this.startToken) gen.emitSourceLocation(this.startToken.line);
+    gen.emit("push rbp", "save base pointer");
+    gen.emit("mov rbp, rsp", "set new base pointer");
+
+    const { intArgIndex, floatArgIndex } = this.handleArguments(
+      gen,
+      scope,
+      funcScope,
+    );
+
+    this.handleVariadicArguments(gen, funcScope, intArgIndex, floatArgIndex);
+
+    // Reserve space for locals
+    const localsStackIndex = gen.getCurrentLineIndex();
+    gen.emit("sub rsp, 0", "reserve space for locals (placeholder)");
+    const startStackOffset = funcScope.stackOffset;
+
+    // body
+    this.body.transpile(gen, funcScope);
+
+    // Calculate locals size and patch
+    const localsSize = funcScope.stackOffset - startStackOffset;
+    const totalStackSize = funcScope.stackOffset;
+    const padding = (16 - (totalStackSize % 16)) % 16;
+    const totalLocalsAllocation = localsSize + padding;
+
+    if (totalLocalsAllocation > 0) {
+      gen.patchLine(
+        localsStackIndex,
+        `sub rsp, ${totalLocalsAllocation}`,
+        `allocate space for locals (size: ${localsSize}, align: ${padding})`,
+      );
+    } else {
+      // If no locals, we can remove the instruction or make it a comment
+      gen.patchLine(localsStackIndex, `nop`, `no locals to allocate`);
+    }
+
+    funcScope.removeCurrentContext("function");
+
+    // Function epilogue
+    gen.emitLabel(endLabel);
+    gen.emit("mov rsp, rbp", "reset stack pointer");
+    gen.emit("pop rbp", "restore base pointer");
+    gen.emit("ret", "return from function");
+    // funcScope.allocLocal(-8); // RBP
+  }
+
+  private setupFunctionScope(
+    scope: Scope,
+    label: string,
+    endLabel: string,
+  ): Scope {
     const existingFunc = scope.resolveFunction(this.name);
     if (existingFunc) {
       // Update existing function definition (e.g. from SemanticAnalyzer or forward declaration)
@@ -103,10 +163,6 @@ export default class FunctionDeclarationExpr extends Expression {
       );
     }
 
-    if (this.name === "main") {
-      gen.emitGlobalDefinition(`_user_main equ ${label}`);
-    }
-    gen.emitLabel(label);
     const funcScope = new Scope(scope);
     funcScope.setCurrentContext({
       type: "function",
@@ -114,12 +170,14 @@ export default class FunctionDeclarationExpr extends Expression {
       endLabel: endLabel,
       returnType: this.returnType,
     });
+    return funcScope;
+  }
 
-    // Function prologue
-    if (this.startToken) gen.emitSourceLocation(this.startToken.line);
-    gen.emit("push rbp", "save base pointer");
-    gen.emit("mov rbp, rsp", "set new base pointer");
-
+  private handleArguments(
+    gen: AsmGenerator,
+    scope: Scope,
+    funcScope: Scope,
+  ): { intArgIndex: number; floatArgIndex: number } {
     let isStructReturn = false;
     if (
       this.returnType &&
@@ -199,6 +257,15 @@ export default class FunctionDeclarationExpr extends Expression {
       });
     });
 
+    return { intArgIndex, floatArgIndex };
+  }
+
+  private handleVariadicArguments(
+    gen: AsmGenerator,
+    funcScope: Scope,
+    intArgIndex: number,
+    floatArgIndex: number,
+  ): void {
     if (this.isVariadic && this.variadicType) {
       // Spill remaining registers to stack for variadic access
       // We only support u64 variadic args for now (GP registers)
@@ -311,40 +378,6 @@ export default class FunctionDeclarationExpr extends Expression {
         }
       }
     }
-
-    // Reserve space for locals
-    const localsStackIndex = gen.getCurrentLineIndex();
-    gen.emit("sub rsp, 0", "reserve space for locals (placeholder)");
-    const startStackOffset = funcScope.stackOffset;
-
-    // body
-    this.body.transpile(gen, funcScope);
-
-    // Calculate locals size and patch
-    const localsSize = funcScope.stackOffset - startStackOffset;
-    const totalStackSize = funcScope.stackOffset;
-    const padding = (16 - (totalStackSize % 16)) % 16;
-    const totalLocalsAllocation = localsSize + padding;
-
-    if (totalLocalsAllocation > 0) {
-      gen.patchLine(
-        localsStackIndex,
-        `sub rsp, ${totalLocalsAllocation}`,
-        `allocate space for locals (size: ${localsSize}, align: ${padding})`,
-      );
-    } else {
-      // If no locals, we can remove the instruction or make it a comment
-      gen.patchLine(localsStackIndex, `nop`, `no locals to allocate`);
-    }
-
-    funcScope.removeCurrentContext("function");
-
-    // Function epilogue
-    gen.emitLabel(endLabel);
-    gen.emit("mov rsp, rbp", "reset stack pointer");
-    gen.emit("pop rbp", "restore base pointer");
-    gen.emit("ret", "return from function");
-    // funcScope.allocLocal(-8); // RBP
   }
 
   generateIR(gen: LlvmGenerator, scope: Scope): string {
