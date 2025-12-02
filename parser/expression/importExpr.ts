@@ -1,5 +1,6 @@
-import type AsmGenerator from "../../transpiler/AsmGenerator";
-import type LlvmGenerator from "../../transpiler/LlvmGenerator";
+import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
+import { IRFunction } from "../../transpiler/ir/IRFunction";
+import { IRVoid } from "../../transpiler/ir/IRType";
 import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
@@ -37,35 +38,7 @@ export default class ImportExpr extends Expression {
     console.log(this.toString(depth));
   }
 
-  transpile(gen: AsmGenerator, scope: Scope): void {
-    const finalImports: string[] = [];
-    for (const importItem of this.importName) {
-      if (importItem.type === "type") {
-        continue;
-      }
-      const name = importItem.name;
-      finalImports.push(name);
-
-      if (scope.resolveFunction(name)) {
-        continue;
-      }
-
-      scope.defineFunction(name, {
-        name: name,
-        label: name,
-        args: [],
-        returnType: null,
-        startLabel: name,
-        endLabel: name,
-        isExternal: true,
-      });
-    }
-    if (finalImports.length) {
-      gen.emitImportStatement(`extern ${finalImports.join(", ")}`);
-    }
-  }
-
-  generateIR(gen: LlvmGenerator, scope: Scope): string {
+  toIR(gen: IRGenerator, scope: Scope): string {
     for (const importItem of this.importName) {
       if (importItem.type === "type") {
         continue;
@@ -74,24 +47,21 @@ export default class ImportExpr extends Expression {
 
       const existingFunc = scope.resolveFunction(name);
       if (existingFunc) {
-        const ret = existingFunc.returnType
-          ? gen.mapType(existingFunc.returnType)
-          : "void";
-        const args = existingFunc.args
-          .map((a) => gen.mapType(a.type))
-          .join(", ");
-        const vararg = existingFunc.isVariadic
-          ? args.length > 0
-            ? ", ..."
-            : "..."
-          : "";
+        const retType = existingFunc.returnType
+          ? gen.getIRType(existingFunc.returnType)
+          : IRVoid;
+        const args = existingFunc.args.map((a) => ({
+          name: a.name,
+          type: gen.getIRType(a.type),
+        }));
 
-        gen.emitGlobal(`declare ${ret} @${name}(${args}${vararg})`);
+        const func = new IRFunction(name, args, retType);
+        gen.module.addFunction(func);
         continue;
       }
 
       const returnType: VariableType = {
-        name: "i32",
+        name: "i64",
         isPointer: 0,
         isArray: [],
       };
@@ -105,8 +75,11 @@ export default class ImportExpr extends Expression {
         endLabel: name,
         isExternal: true,
         isVariadic: true,
-        llvmName: `@${name}`,
+        irName: name,
       });
+
+      const func = new IRFunction(name, [], gen.getIRType(returnType));
+      gen.module.addFunction(func);
     }
     return "";
   }

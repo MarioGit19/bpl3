@@ -1,8 +1,8 @@
 import type Token from "../../lexer/token";
 import TokenType from "../../lexer/tokenType";
-import type AsmGenerator from "../../transpiler/AsmGenerator";
 import type Scope from "../../transpiler/Scope";
-import type LlvmGenerator from "../../transpiler/LlvmGenerator";
+import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
+import { IROpcode } from "../../transpiler/ir/IRInstruction";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
 import NumberLiteralExpr from "./numberLiteralExpr";
@@ -168,147 +168,61 @@ export default class UnaryExpr extends Expression {
     return null;
   }
 
-  transpile(gen: AsmGenerator, scope: Scope): void {
+  toIR(gen: IRGenerator, scope: Scope): string {
     if (this.operator.type === TokenType.AMPERSAND) {
-      scope.setCurrentContext({ type: "LHS" });
-      this.right.transpile(gen, scope);
-      scope.removeCurrentContext("LHS");
-      return;
+      return this.right.getAddress(gen, scope);
     }
 
     if (this.operator.type === TokenType.STAR) {
       const isLHS = scope.getCurrentContext("LHS");
       if (isLHS) scope.removeCurrentContext("LHS");
 
-      this.right.transpile(gen, scope);
+      const ptr = this.right.toIR(gen, scope);
 
       if (isLHS) {
         scope.setCurrentContext({ type: "LHS" });
-      } else {
-        const resultType = this.resolveExpressionType(this, scope);
-        let size = 8;
-        if (resultType) {
-          if (resultType.isPointer > 0 || resultType.isArray.length > 0) {
-            size = 8;
-          } else {
-            const typeInfo = scope.resolveType(resultType.name);
-            if (typeInfo) size = typeInfo.size;
-          }
-        }
-
-        if (size === 1) {
-          gen.emit("movzx rax, byte [rax]", "dereference pointer (u8)");
-        } else if (size === 2) {
-          gen.emit("movzx rax, word [rax]", "dereference pointer (u16)");
-        } else if (size === 4) {
-          gen.emit("mov eax, dword [rax]", "dereference pointer (u32)");
-        } else {
-          gen.emit("mov rax, [rax]", "dereference pointer (u64)");
-        }
+        return ptr;
       }
-      return;
+
+      const resultType = this.resolveExpressionType(this, scope);
+      if (!resultType)
+        throw new Error("Cannot resolve result type for dereference");
+
+      const type = gen.getIRType(resultType);
+      return gen.emitLoad(type, ptr);
     }
 
-    this.right.transpile(gen, scope);
+    const val = this.right.toIR(gen, scope);
     const type = this.resolveExpressionType(this.right, scope);
     const isFloat = type?.name === "f64" || type?.name === "f32";
+    const irType = type ? gen.getIRType(type) : "i64";
 
     switch (this.operator.type) {
       case TokenType.MINUS:
         if (isFloat) {
-          const label = gen.generateLabel("float_sign_mask_");
-          if (type?.name === "f32") {
-            gen.emitRoData(label, "dd", "0x80000000");
-            gen.emit("movd xmm0, eax", "Move f32 to xmm0");
-            gen.emit(`movss xmm1, [rel ${label}]`, "Load sign mask");
-            gen.emit(`xorps xmm0, xmm1`, "Toggle sign bit");
-            gen.emit("movd eax, xmm0", "Move back to eax");
-          } else {
-            gen.emitRoData(label, "dq", "0x8000000000000000");
-            gen.emit("movq xmm0, rax", "Move f64 to xmm0");
-            gen.emit(`movsd xmm1, [rel ${label}]`, "Load sign mask");
-            gen.emit(`xorpd xmm0, xmm1`, "Toggle sign bit");
-            gen.emit("movq rax, xmm0", "Move back to rax");
-          }
+          const zero = type?.name === "f32" ? "-0.0" : "-0.0";
+          return gen.emitBinary(IROpcode.FSUB, irType, zero, val);
         } else {
-          gen.emit("neg rax", "unary minus");
+          return gen.emitBinary("sub", irType, "0", val);
         }
-        break;
       case TokenType.PLUS:
-        gen.emit("noop", "unary plus (no operation)");
-        break;
-      case TokenType.NOT:
-        gen.emit("cmp rax, 0", "compare rax to 0 for logical NOT");
-        gen.emit("sete al", "set al to 1 if zero, else 0");
-        gen.emit("movzx rax, al", "zero-extend al to rax");
-        break;
-      case TokenType.TILDE:
-        gen.emit("not rax", "bitwise NOT");
-        break;
+        return val;
+      case TokenType.NOT: {
+        const res = gen.emitBinary("eq", irType, val, "0");
+        return gen.emitCast(IROpcode.ZEXT, res, { type: "i8" }, { type: "i1" });
+      }
+      case TokenType.TILDE: {
+        return gen.emitBinary("xor", irType, val, "-1");
+      }
       default:
         throw new Error(`Unsupported unary operator: ${this.operator.value}`);
     }
   }
 
-  generateIR(gen: LlvmGenerator, scope: Scope): string {
-    if (this.operator.type === TokenType.AMPERSAND) {
-      scope.setCurrentContext({ type: "LHS" });
-      const ptr = this.right.generateIR(gen, scope);
-      scope.removeCurrentContext("LHS");
-      return ptr;
-    }
-
+  getAddress(gen: IRGenerator, scope: Scope): string {
     if (this.operator.type === TokenType.STAR) {
-      const isLHS = scope.getCurrentContext("LHS");
-      if (isLHS) scope.removeCurrentContext("LHS");
-
-      const ptr = this.right.generateIR(gen, scope);
-
-      if (isLHS) {
-        scope.setCurrentContext({ type: "LHS" });
-        return ptr;
-      } else {
-        const type = this.resolveExpressionType(this, scope);
-        if (!type) throw new Error("Cannot resolve type for dereference");
-        const llvmType = gen.mapType(type);
-        const reg = gen.generateReg("deref");
-        gen.emit(`${reg} = load ${llvmType}, ptr ${ptr}`);
-        return reg;
-      }
+      return this.right.toIR(gen, scope);
     }
-
-    const val = this.right.generateIR(gen, scope);
-    const type = this.resolveExpressionType(this.right, scope);
-    const isFloat = type?.name === "f64" || type?.name === "f32";
-    const llvmType = type ? gen.mapType(type) : "i64";
-
-    switch (this.operator.type) {
-      case TokenType.MINUS:
-        if (isFloat) {
-          const reg = gen.generateReg("fneg");
-          gen.emit(`${reg} = fneg ${llvmType} ${val}`);
-          return reg;
-        } else {
-          const reg = gen.generateReg("neg");
-          gen.emit(`${reg} = sub ${llvmType} 0, ${val}`);
-          return reg;
-        }
-      case TokenType.PLUS:
-        return val;
-      case TokenType.NOT: {
-        const reg = gen.generateReg("not");
-        gen.emit(`${reg} = icmp eq ${llvmType} ${val}, 0`);
-        const zext = gen.generateReg("zext");
-        gen.emit(`${zext} = zext i1 ${reg} to ${llvmType}`);
-        return zext;
-      }
-      case TokenType.TILDE: {
-        const reg = gen.generateReg("xor");
-        gen.emit(`${reg} = xor ${llvmType} ${val}, -1`);
-        return reg;
-      }
-      default:
-        throw new Error(`Unsupported unary operator: ${this.operator.value}`);
-    }
+    throw new Error("Cannot take address of this unary expression");
   }
 }

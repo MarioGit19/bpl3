@@ -2,28 +2,28 @@ import {
   createConnection,
   TextDocuments,
   ProposedFeatures,
-  InitializeParams,
+  type InitializeParams,
   DidChangeConfigurationNotification,
   CompletionItem,
   CompletionItemKind,
-  TextDocumentPositionParams,
+  type TextDocumentPositionParams,
   TextDocumentSyncKind,
-  InitializeResult,
+  type InitializeResult,
   Diagnostic,
   DiagnosticSeverity,
-  DefinitionParams,
+  type DefinitionParams,
   Location,
   Range,
-  HoverParams,
+  type HoverParams,
   Hover,
   MarkupKind,
   TextEdit,
-  CodeActionParams,
+  type CodeActionParams,
   CodeAction,
   CodeActionKind,
   WorkspaceEdit,
-  ReferenceParams,
-  RenameParams,
+  type ReferenceParams,
+  type RenameParams,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 
@@ -31,8 +31,9 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 // Note: These paths depend on the tsconfig.json setup
 import Lexer from "../../../lexer/lexer";
 import { Parser } from "../../../parser/parser";
-import Scope, { TypeInfo } from "../../../transpiler/Scope";
-import AsmGenerator from "../../../transpiler/AsmGenerator";
+import Scope from "../../../transpiler/Scope";
+import type { TypeInfo } from "../../../transpiler/Scope";
+import { IRGenerator } from "../../../transpiler/ir/IRGenerator";
 import HelperGenerator from "../../../transpiler/HelperGenerator";
 import { SemanticAnalyzer } from "../../../transpiler/analysis/SemanticAnalyzer";
 import { CompilerError, CompilerWarning } from "../../../errors";
@@ -46,9 +47,8 @@ import LoopExpr from "../../../parser/expression/loopExpr";
 import BinaryExpr from "../../../parser/expression/binaryExpr";
 import UnaryExpr from "../../../parser/expression/unaryExpr";
 import FunctionCallExpr from "../../../parser/expression/functionCallExpr";
-import VariableDeclarationExpr, {
-  VariableType,
-} from "../../../parser/expression/variableDeclarationExpr";
+import VariableDeclarationExpr from "../../../parser/expression/variableDeclarationExpr";
+import type { VariableType } from "../../../parser/expression/variableDeclarationExpr";
 import IdentifierExpr from "../../../parser/expression/identifierExpr";
 import MemberAccessExpr from "../../../parser/expression/memberAccessExpr";
 import ReturnExpr from "../../../parser/expression/returnExpr";
@@ -166,11 +166,11 @@ function processImport(filePath: string): Scope | null {
     const parser = new Parser(tokens);
     const program = parser.parse();
 
-    const gen = new AsmGenerator(0);
+    const gen = new IRGenerator();
     const scope = new Scope();
 
     try {
-      HelperGenerator.generateBaseTypes(gen, scope);
+      HelperGenerator.generateBaseTypes(scope);
     } catch (e) {
       // Ignore
     }
@@ -179,7 +179,7 @@ function processImport(filePath: string): Scope | null {
     // For now, let's just process declarations in this file
     for (const expr of program.expressions) {
       try {
-        expr.transpile(gen, scope);
+        expr.toIR(gen, scope);
       } catch (e) {
         // Ignore errors in imported files
       }
@@ -218,12 +218,12 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
     documentASTs.set(textDocument.uri, program);
 
     // Run transpilation (without emitting) to check for semantic errors and build scope
-    const gen = new AsmGenerator(0);
+    const gen = new IRGenerator();
     const scope = new Scope();
     documentScopes.set(textDocument.uri, scope);
 
     try {
-      HelperGenerator.generateBaseTypes(gen, scope);
+      HelperGenerator.generateBaseTypes(scope);
     } catch (e) {
       // Ignore base type generation errors
     }
@@ -476,6 +476,7 @@ connection.onCodeAction((params: CodeActionParams): CodeAction[] => {
       const match = diagnostic.message.match(/'([^']+)'/);
       if (match) {
         const varName = match[1];
+        if (!varName) continue;
         const newName = `_${varName}`;
 
         // Let's try to find the token in the line.
@@ -830,87 +831,99 @@ connection.onRenameRequest((params: RenameParams): WorkspaceEdit | null => {
     if (expr instanceof IdentifierExpr) {
       if (expr.name === targetName && !isFunction) {
         if (expr.startToken) {
-          changes[params.textDocument.uri].push(
-            TextEdit.replace(
-              {
-                start: {
-                  line: expr.startToken.line - 1,
-                  character: expr.startToken.column - 1,
+          const edits = changes[params.textDocument.uri];
+          if (edits) {
+            edits.push(
+              TextEdit.replace(
+                {
+                  start: {
+                    line: expr.startToken.line - 1,
+                    character: expr.startToken.column - 1,
+                  },
+                  end: {
+                    line: expr.startToken.line - 1,
+                    character:
+                      expr.startToken.column - 1 + expr.startToken.value.length,
+                  },
                 },
-                end: {
-                  line: expr.startToken.line - 1,
-                  character:
-                    expr.startToken.column - 1 + expr.startToken.value.length,
-                },
-              },
-              params.newName,
-            ),
-          );
+                params.newName,
+              ),
+            );
+          }
         }
       }
     } else if (expr instanceof FunctionCallExpr) {
       if (expr.functionName === targetName && isFunction) {
         if (expr.startToken) {
-          changes[params.textDocument.uri].push(
-            TextEdit.replace(
-              {
-                start: {
-                  line: expr.startToken.line - 1,
-                  character: expr.startToken.column - 1,
+          const edits = changes[params.textDocument.uri];
+          if (edits) {
+            edits.push(
+              TextEdit.replace(
+                {
+                  start: {
+                    line: expr.startToken.line - 1,
+                    character: expr.startToken.column - 1,
+                  },
+                  end: {
+                    line: expr.startToken.line - 1,
+                    character:
+                      expr.startToken.column - 1 + expr.startToken.value.length,
+                  },
                 },
-                end: {
-                  line: expr.startToken.line - 1,
-                  character:
-                    expr.startToken.column - 1 + expr.startToken.value.length,
-                },
-              },
-              params.newName,
-            ),
-          );
+                params.newName,
+              ),
+            );
+          }
         }
       }
       for (const arg of expr.args) findUsagesAndRename(arg);
     } else if (expr instanceof VariableDeclarationExpr) {
       if (expr.name === targetName && !isFunction) {
         if (expr.nameToken) {
-          changes[params.textDocument.uri].push(
-            TextEdit.replace(
-              {
-                start: {
-                  line: expr.nameToken.line - 1,
-                  character: expr.nameToken.column - 1,
+          const edits = changes[params.textDocument.uri];
+          if (edits) {
+            edits.push(
+              TextEdit.replace(
+                {
+                  start: {
+                    line: expr.nameToken.line - 1,
+                    character: expr.nameToken.column - 1,
+                  },
+                  end: {
+                    line: expr.nameToken.line - 1,
+                    character:
+                      expr.nameToken.column - 1 + expr.nameToken.value.length,
+                  },
                 },
-                end: {
-                  line: expr.nameToken.line - 1,
-                  character:
-                    expr.nameToken.column - 1 + expr.nameToken.value.length,
-                },
-              },
-              params.newName,
-            ),
-          );
+                params.newName,
+              ),
+            );
+          }
         }
       }
       if (expr.value) findUsagesAndRename(expr.value);
     } else if (expr instanceof FunctionDeclarationExpr) {
       if (expr.name === targetName && isFunction) {
         if (expr.nameToken) {
-          changes[params.textDocument.uri].push(
-            TextEdit.replace(
-              {
-                start: {
-                  line: expr.nameToken.line - 1,
-                  character: expr.nameToken.column - 1,
+          const edits = changes[params.textDocument.uri];
+          if (edits) {
+            edits.push(
+              TextEdit.replace(
+                {
+                  start: {
+                    line: expr.nameToken.line - 1,
+                    character: expr.nameToken.column - 1,
+                  },
+                  end: {
+                    line: expr.nameToken.line - 1,
+                    character:
+                      expr.nameToken.column - 1 + expr.nameToken.value.length,
+                  },
                 },
-                end: {
-                  line: expr.nameToken.line - 1,
-                  character:
-                    expr.nameToken.column - 1 + expr.nameToken.value.length,
-                },
-              },
-              params.newName,
-            ),
-          );
+                params.newName,
+              ),
+            );
+          }
         }
       }
       findUsagesAndRename(expr.body);

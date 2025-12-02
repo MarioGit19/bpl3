@@ -30,6 +30,8 @@ import AsmBlockExpr from "../../parser/expression/asmBlockExpr";
 export class SemanticAnalyzer {
   private currentReturnType: VariableType | null = null;
   private rootScope: Scope | null = null;
+  private initializedVars: Set<string> = new Set();
+  private currentFunction: string | null = null;
   public warnings: CompilerWarning[] = [];
 
   public analyze(program: ProgramExpr, parentScope?: Scope): Scope {
@@ -85,7 +87,11 @@ export class SemanticAnalyzer {
     }
   }
 
-  private analyzeExpression(expr: Expression, scope: Scope): void {
+  private analyzeExpression(
+    expr: Expression,
+    scope: Scope,
+    expectedType?: VariableType,
+  ): void {
     switch (expr.type) {
       case ExpressionType.VariableDeclaration:
         this.analyzeVariableDeclaration(expr as VariableDeclarationExpr, scope);
@@ -100,7 +106,7 @@ export class SemanticAnalyzer {
         this.analyzeIdentifier(expr as IdentifierExpr, scope);
         break;
       case ExpressionType.BinaryExpression:
-        this.analyzeBinaryExpr(expr as BinaryExpr, scope);
+        this.analyzeBinaryExpr(expr as BinaryExpr, scope, expectedType);
         break;
       case ExpressionType.FunctionCall:
         this.analyzeFunctionCall(expr as FunctionCallExpr, scope);
@@ -379,7 +385,67 @@ export class SemanticAnalyzer {
     return null;
   }
 
-  private analyzeBinaryExpr(expr: BinaryExpr, scope: Scope): void {
+  private analyzeBinaryExpr(
+    expr: BinaryExpr,
+    scope: Scope,
+    expectedType?: VariableType,
+  ): void {
+    // Handle assignment operators
+    const assignmentOperators = [
+      TokenType.ASSIGN,
+      TokenType.PLUS_ASSIGN,
+      TokenType.MINUS_ASSIGN,
+      TokenType.STAR_ASSIGN,
+      TokenType.SLASH_ASSIGN,
+      TokenType.PERCENT_ASSIGN,
+      TokenType.CARET_ASSIGN,
+      TokenType.AMPERSAND_ASSIGN,
+      TokenType.PIPE_ASSIGN,
+    ];
+
+    if (assignmentOperators.includes(expr.operator.type)) {
+      // For assignments, analyze value first
+      this.analyzeExpression(expr.right, scope);
+
+      // Then analyze target, but DON'T warn about uninitialized use
+      // since we're about to initialize it
+      // We'll check the target identifier directly without the warning
+      if (expr.left.type === ExpressionType.IdentifierExpr) {
+        const targetName = (expr.left as IdentifierExpr).name;
+        const resolved = scope.resolve(targetName);
+        if (
+          !resolved &&
+          !scope.resolveFunction(targetName) &&
+          !scope.resolveType(targetName)
+        ) {
+          this.warnings.push(
+            new CompilerWarning(
+              `Identifier '${targetName}' is not defined`,
+              expr.left.startToken?.line || 0,
+            ),
+          );
+        }
+        // Mark as initialized
+        this.initializedVars.add(targetName);
+      } else {
+        // For complex left sides (member access, array index, etc.), analyze normally
+        this.analyzeExpression(expr.left, scope);
+      }
+
+      // Check type compatibility
+      const leftType = this.inferType(expr.left, scope);
+      const rightType = this.inferType(expr.right, scope);
+
+      if (leftType && rightType) {
+        this.checkTypeCompatibilityOrThrow(
+          leftType,
+          rightType,
+          expr.operator.line,
+        );
+      }
+      return;
+    }
+
     this.analyzeExpression(expr.left, scope);
     this.analyzeExpression(expr.right, scope);
 
@@ -387,6 +453,90 @@ export class SemanticAnalyzer {
     const rightType = this.inferType(expr.right, scope);
 
     if (leftType && rightType) {
+      // Check for shift operations with negative or too large shift amounts
+      if (
+        expr.operator.type === TokenType.BITSHIFT_LEFT ||
+        expr.operator.type === TokenType.BITSHIFT_RIGHT
+      ) {
+        // Use expected type if available (from variable declaration), otherwise use inferred left type
+        const actualLeftType = expectedType || leftType;
+
+        // Check if right operand is a constant we can evaluate
+        let shiftAmount: number | null = null;
+        if (expr.right.type === ExpressionType.NumberLiteralExpr) {
+          shiftAmount = parseInt((expr.right as NumberLiteralExpr).value);
+        } else if (expr.right.type === ExpressionType.UnaryExpression) {
+          // Handle -1, -2, etc.
+          const unaryExpr = expr.right as UnaryExpr;
+          if (
+            unaryExpr.operator.type === TokenType.MINUS &&
+            unaryExpr.right.type === ExpressionType.NumberLiteralExpr
+          ) {
+            const val = parseInt((unaryExpr.right as NumberLiteralExpr).value);
+            shiftAmount = -val;
+          }
+        }
+
+        if (shiftAmount !== null) {
+          const leftSize = this.getIntSize(actualLeftType.name) * 8; // in bits
+
+          if (shiftAmount < 0) {
+            throw new CompilerError(
+              `Shift by negative amount ${shiftAmount} is undefined behavior`,
+              expr.operator.line,
+            );
+          }
+
+          if (leftSize > 0 && shiftAmount >= leftSize) {
+            throw new CompilerError(
+              `Shift amount ${shiftAmount} >= width of type ${actualLeftType.name} (${leftSize} bits) is undefined behavior`,
+              expr.operator.line,
+            );
+          }
+        } else {
+          this.warnings.push(
+            new CompilerWarning(
+              `Shift amount should be checked at runtime: ensure 0 <= amount < type_width`,
+              expr.operator.line,
+              "Add bounds check for shift amount to prevent undefined behavior",
+            ),
+          );
+        }
+
+        // Check that we're shifting an integer type (use inferred left type)
+        if (leftType.name === "f32" || leftType.name === "f64") {
+          throw new CompilerError(
+            `Cannot perform bitwise shift on floating-point type ${leftType.name}`,
+            expr.operator.line,
+          );
+        }
+      } // Check for modulo by zero
+      if (expr.operator.type === TokenType.PERCENT) {
+        if (
+          expr.right.type === ExpressionType.NumberLiteralExpr &&
+          (expr.right as NumberLiteralExpr).value === "0"
+        ) {
+          throw new CompilerError(
+            `Modulo by zero is undefined behavior`,
+            expr.operator.line,
+          );
+        }
+      }
+
+      // Check for signed integer overflow in left shift
+      if (
+        expr.operator.type === TokenType.BITSHIFT_LEFT &&
+        this.isSignedInteger(expectedType || leftType)
+      ) {
+        this.warnings.push(
+          new CompilerWarning(
+            `Left shift on signed integer type ${(expectedType || leftType).name} may cause overflow`,
+            expr.operator.line,
+            "Use unsigned types for bitwise operations or ensure no overflow occurs",
+          ),
+        );
+      }
+
       // Pointer Arithmetic Check
       if (
         (expr.operator.type === TokenType.PLUS ||
@@ -401,9 +551,39 @@ export class SemanticAnalyzer {
         }
       }
 
+      // Check for pointer-pointer subtraction (valid but should be same type)
+      if (
+        expr.operator.type === TokenType.MINUS &&
+        leftType.isPointer > 0 &&
+        rightType.isPointer > 0
+      ) {
+        if (leftType.name !== rightType.name) {
+          this.warnings.push(
+            new CompilerWarning(
+              `Subtracting pointers of different types (*${leftType.name} - *${rightType.name}) may not produce meaningful result`,
+              expr.operator.line,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Check for invalid pointer arithmetic
+      if (
+        leftType.isPointer > 0 &&
+        rightType.isPointer > 0 &&
+        (expr.operator.type === TokenType.PLUS ||
+          expr.operator.type === TokenType.STAR ||
+          expr.operator.type === TokenType.SLASH ||
+          expr.operator.type === TokenType.PERCENT)
+      ) {
+        throw new CompilerError(
+          `Invalid pointer arithmetic: cannot ${expr.operator.value} two pointers`,
+          expr.operator.line,
+        );
+      }
+
       // Check if types are compatible for binary operation
-      // For arithmetic, we check if they can be promoted to a common type
-      // i.e. left -> right OR right -> left
       if (
         !this.checkTypeCompatibility(leftType, rightType, 0) &&
         !this.checkTypeCompatibility(rightType, leftType, 0)
@@ -414,6 +594,10 @@ export class SemanticAnalyzer {
         );
       }
     }
+  }
+
+  private isSignedInteger(type: VariableType): boolean {
+    return ["i8", "i16", "i32", "i64"].includes(type.name);
   }
 
   private checkTypeCompatibility(
@@ -651,7 +835,7 @@ export class SemanticAnalyzer {
     }
 
     if (expr.value) {
-      this.analyzeExpression(expr.value, scope);
+      this.analyzeExpression(expr.value, scope, expr.varType);
       const valueType = this.inferType(expr.value, scope);
       if (valueType) {
         this.checkTypeCompatibilityOrThrow(
@@ -660,6 +844,17 @@ export class SemanticAnalyzer {
           expr.startToken?.line || 0,
         );
       }
+      // Mark variable as initialized
+      this.initializedVars.add(expr.name);
+    } else if (expr.scope === "local") {
+      // Local variable declared but not initialized
+      this.warnings.push(
+        new CompilerWarning(
+          `Local variable '${expr.name}' declared without initialization`,
+          expr.startToken?.line || 0,
+          "Initialize variable to prevent undefined behavior",
+        ),
+      );
     }
 
     // Define in scope
@@ -695,7 +890,14 @@ export class SemanticAnalyzer {
     });
 
     const functionScope = new Scope(scope);
-    // Define arguments in function scope
+
+    // Save current state and create new function context
+    const previousInitializedVars = new Set(this.initializedVars);
+    const previousFunction = this.currentFunction;
+    this.initializedVars = new Set();
+    this.currentFunction = expr.name;
+
+    // Define arguments in function scope - they are initialized
     for (const arg of expr.args) {
       functionScope.define(arg.name, {
         type: "local",
@@ -703,6 +905,7 @@ export class SemanticAnalyzer {
         varType: arg.type,
         isParameter: true,
       });
+      this.initializedVars.add(arg.name); // Parameters are initialized
     }
 
     const previousReturnType = this.currentReturnType;
@@ -711,7 +914,10 @@ export class SemanticAnalyzer {
 
     this.checkUnusedVariables(functionScope);
 
+    // Restore previous state
     this.currentReturnType = previousReturnType;
+    this.initializedVars = previousInitializedVars;
+    this.currentFunction = previousFunction;
   }
 
   private analyzeBlockExpr(expr: BlockExpr, scope: Scope): void {
@@ -723,14 +929,34 @@ export class SemanticAnalyzer {
     if (!resolved) {
       // It might be a function call or struct member access handled elsewhere,
       // but if it's a standalone identifier expression, it should be a variable.
-      // However, IdentifierExpr is often used as part of other expressions.
-      // We need to be careful here.
-      // For now, let's assume if it's visited here, it's a variable usage.
-      // But wait, IdentifierExpr is also used in assignments.
-      // Let's skip strict check here for now or check if it's a function.
       if (!scope.resolveFunction(expr.name)) {
-        // throw new CompilerError(`Undefined identifier '${expr.name}'`, expr.startToken?.line);
+        // Check if it's a type (for sizeof or similar constructs)
+        if (!scope.resolveType(expr.name)) {
+          this.warnings.push(
+            new CompilerWarning(
+              `Identifier '${expr.name}' is not defined`,
+              expr.startToken?.line || 0,
+            ),
+          );
+        }
       }
+    } else if (
+      resolved.type === "local" &&
+      !this.initializedVars.has(expr.name) &&
+      !resolved.isParameter
+    ) {
+      // Variable is declared but may not be initialized
+      console.log(
+        `[DEBUG Identifier] '${expr.name}' not in initializedVars:`,
+        Array.from(this.initializedVars),
+      );
+      this.warnings.push(
+        new CompilerWarning(
+          `Variable '${expr.name}' may be used before initialization`,
+          expr.startToken?.line || 0,
+          "Initialize variable before use to prevent undefined behavior",
+        ),
+      );
     }
   }
 
@@ -820,6 +1046,10 @@ export class SemanticAnalyzer {
       }
 
       let returnType: VariableType = { name: "i32", isPointer: 0, isArray: [] };
+
+      if (name === "malloc" || name === "calloc" || name === "realloc") {
+        returnType = { name: "u8", isPointer: 1, isArray: [] };
+      }
 
       scope.defineFunction(name, {
         name: name,

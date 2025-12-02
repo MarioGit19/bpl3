@@ -1,5 +1,4 @@
-import type AsmGenerator from "../../transpiler/AsmGenerator";
-import type LlvmGenerator from "../../transpiler/LlvmGenerator";
+import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import type BlockExpr from "./blockExpr";
@@ -25,46 +24,24 @@ export default class LoopExpr extends Expression {
     console.log(this.toString(depth));
   }
 
-  transpile(gen: AsmGenerator, scope: Scope): void {
-    if (this.startToken) gen.emitSourceLocation(this.startToken.line);
-    const label = gen.generateLabel("loop_");
-    const startLabel = `${label}_start`;
-    const endLabel = `${label}_end`;
+  toIR(gen: IRGenerator, scope: Scope): string {
+    const bodyBlock = gen.createBlock("loop_body");
+    const endBlock = gen.createBlock("loop_end");
 
     scope.setCurrentContext({
       type: "loop",
-      continueLabel: startLabel,
-      breakLabel: endLabel,
+      breakLabel: endBlock.name,
+      continueLabel: bodyBlock.name,
       stackOffset: scope.stackOffset,
     });
 
-    gen.emitLabel(startLabel);
-    this.body.transpile(gen, scope);
-    gen.emit(`jmp ${startLabel}`, "jump to start of loop");
-    gen.emitLabel(endLabel);
+    gen.emitBranch(bodyBlock.name);
+    gen.setBlock(bodyBlock);
 
-    scope.removeCurrentContext("loop");
-  }
+    this.body.toIR(gen, scope);
+    gen.emitBranch(bodyBlock.name);
 
-  generateIR(gen: LlvmGenerator, scope: Scope): string {
-    const startLabel = gen.generateLabel("loop_start");
-    const endLabel = gen.generateLabel("loop_end");
-
-    scope.setCurrentContext({
-      type: "loop",
-      breakLabel: endLabel,
-      continueLabel: startLabel,
-      stackOffset: 0,
-    });
-
-    gen.emit(`br label %${startLabel}`);
-    gen.emitLabel(startLabel);
-
-    this.body.generateIR(gen, scope);
-
-    gen.emit(`br label %${startLabel}`);
-    gen.emitLabel(endLabel);
-
+    gen.setBlock(endBlock);
     scope.removeCurrentContext("loop");
     return "";
   }

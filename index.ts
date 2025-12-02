@@ -1,20 +1,16 @@
-import AsmGenerator from "./transpiler/AsmGenerator";
-import LlvmGenerator from "./transpiler/LlvmGenerator";
 import Scope from "./transpiler/Scope";
 import HelperGenerator from "./transpiler/HelperGenerator";
+import { IRGenerator } from "./transpiler/ir/IRGenerator";
+import { LLVMTargetBuilder } from "./transpiler/target/LLVMTargetBuilder";
+import { SemanticAnalyzer } from "./transpiler/analysis/SemanticAnalyzer";
 import {
   getFileTokens,
   parseTokens,
   parseImportExpressions,
   extractImportStatements,
 } from "./utils/parser";
-import {
-  transpileProgram,
-  parseLibraryFile,
-  parseLibraryFileLlvm,
-} from "./utils/transpiler";
+import { parseLibraryFile } from "./utils/transpiler";
 import { getOutputFileName, saveToFile } from "./utils/file";
-import { compileAsmFile, linkObjectFile } from "./utils/compiler";
 import { execSync, spawnSync } from "child_process";
 import { existsSync, unlinkSync, readFileSync } from "fs";
 import { resolve, isAbsolute } from "path";
@@ -32,7 +28,6 @@ let cleanupAsm = true;
 let cleanupO = true;
 let optimizationLevel = 3;
 let showDeps = false;
-let useLlvm = false;
 const extraLibs: string[] = [];
 
 function debug(...args: any[]) {
@@ -116,9 +111,6 @@ for (const arg of args) {
       case "--graph":
         showDeps = true;
         break;
-      case "--llvm":
-        useLlvm = true;
-        break;
       default:
         console.warn(`Warning: Unknown option (ignored): ${arg}`);
         break;
@@ -159,111 +151,55 @@ try {
   const tokens = getFileTokens(fileName);
   const ast = parseTokens(tokens);
 
-  if (useLlvm) {
-    const gen = new LlvmGenerator();
-    gen.setSourceFile(fileName);
-    const scope = new Scope();
-
-    // Initialize base types in scope
-    HelperGenerator.generateBaseTypes(gen as any, scope);
-
-    // Handle imports for LLVM
-    const imports = parseImportExpressions(extractImportStatements(ast));
-    if (imports.length) {
-      const objectFiles = parseLibraryFileLlvm(fileName, scope);
-      objectFiles.forEach((obj) => objectsToLink.add(obj));
-    }
-
-    ast.generateIR(gen, scope);
-    asmContent = gen.build();
-    asmFilePath = getOutputFileName(fileName, ".ll");
-    saveToFile(asmFilePath, asmContent);
-
-    debug(`Generated LLVM IR: ${asmFilePath}`);
-
-    if (printAsm) {
-      console.log(asmContent);
-    }
-
-    if (compileLib) {
-      const outputObj = getOutputFileName(fileName, ".o");
-      debug(`Compiling LLVM IR to object file: ${outputObj}`);
-      try {
-        execSync(
-          `clang -Wno-override-module -O${optimizationLevel} -c -o ${outputObj} ${asmFilePath}`,
-          { stdio: "inherit" },
-        );
-      } catch (e) {
-        console.error("LLVM compilation failed.");
-        process.exit(1);
-      }
-      process.exit(0);
-    }
-
-    // Compile LLVM IR
-    // clang -o output input.ll
-    const outputExe = getOutputFileName(fileName, "");
-    debug(`Compiling LLVM IR to executable: ${outputExe}`);
-
-    const linkArgs = Array.from(objectsToLink).join(" ");
-    try {
-      execSync(
-        `clang -Wno-override-module -O${optimizationLevel} -o ${outputExe} ${asmFilePath} ${linkArgs} -lm`,
-        { stdio: "inherit" },
-      );
-    } catch (e) {
-      console.error("LLVM compilation failed.");
-      process.exit(1);
-    }
-
-    if (shouldRun) {
-      debug(`--- Running ${outputExe} ---`);
-      try {
-        execSync(`./${outputExe}`, { stdio: "inherit" });
-      } catch (e: any) {
-        debug(`Program exited with code: ${e.status}`);
-      }
-    }
-
-    process.exit(0);
-  }
-
-  const gen = new AsmGenerator(optimizationLevel);
-  gen.setSourceFile(fileName);
   const scope = new Scope();
 
+  // Initialize base types in scope
+  HelperGenerator.generateBaseTypes(scope);
+
+  // Handle imports
   const imports = parseImportExpressions(extractImportStatements(ast));
   if (imports.length) {
-    // We rely on parseLibraryFile to handle recursive compilation and return object files
     const objectFiles = parseLibraryFile(fileName, scope);
     objectFiles.forEach((obj) => objectsToLink.add(obj));
   }
 
-  asmContent = transpileProgram(ast, gen, scope);
-  asmFilePath = getOutputFileName(fileName, ".asm");
+  const analyzer = new SemanticAnalyzer();
+  analyzer.analyze(ast, scope);
+
+  for (const warning of analyzer.warnings) {
+    ErrorReporter.warn(warning);
+  }
+
+  const gen = new IRGenerator();
+  ast.toIR(gen, scope);
+  const builder = new LLVMTargetBuilder();
+  asmContent = builder.build(gen.module);
+  asmFilePath = getOutputFileName(fileName, ".ll");
   saveToFile(asmFilePath, asmContent);
 } catch (e) {
   ErrorReporter.report(e);
+  process.exit(1);
 }
-
-// --- 2. Print Assembly ---
 
 // --- 2. Print Assembly ---
 if (printAsm) {
-  debug(`--- 2. Generated Assembly: ${asmFilePath} ---`);
+  debug(`--- 2. Generated LLVM IR: ${asmFilePath} ---`);
   console.log(asmContent);
   debug("-----------------------------------");
 } else {
-  debug("--- 2. Skipping assembly printout ---");
+  debug("--- 2. Skipping LLVM IR printout ---");
 }
 
-// --- 3. Assemble ---
-debug(`--- 3. Assembling ${asmFilePath} ---`);
-let objFilePath: string;
+// --- 3. Assemble (Compile to Object) ---
+debug(`--- 3. Compiling ${asmFilePath} ---`);
+const objFilePath = getOutputFileName(fileName, ".o");
 try {
-  objFilePath = compileAsmFile(asmFilePath);
+  execSync(
+    `clang -Wno-override-module -O${optimizationLevel} -c -o ${objFilePath} ${asmFilePath}`,
+    { stdio: "inherit" },
+  );
 } catch (e) {
-  console.error("Assembly failed.");
+  console.error("Compilation failed.");
   process.exit(1);
 }
 
@@ -277,13 +213,14 @@ if (compileLib) {
 debug(`--- 4. Linking to create executable (Mode: ${linkMode}) ---`);
 
 const outputExe = getOutputFileName(fileName, "");
-const linkArgs = Array.from(objectsToLink);
-if (linkMode === "static") {
-  linkArgs.push("-static");
-}
+const linkArgs = Array.from(objectsToLink).join(" ");
+const staticFlag = linkMode === "static" ? "-static" : "";
 
 try {
-  linkObjectFile(objFilePath, linkArgs, outputExe);
+  execSync(
+    `clang -Wno-override-module -O${optimizationLevel} ${staticFlag} -o ${outputExe} ${objFilePath} ${linkArgs} -lm`,
+    { stdio: "inherit" },
+  );
 } catch (e) {
   console.error("Linking failed.");
   process.exit(1);

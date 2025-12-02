@@ -19,10 +19,7 @@ frame modifyVector(v: Vector3) {
 # Feature 2: Return by Value
 # This function creates a local struct and returns it by value.
 frame createVector(x: u64, y: u64, z: u64) ret Vector3 {
-    local v: Vector3;
-    v.x = x;
-    v.y = y;
-    v.z = z;
+    local v: Vector3 = {x: x, y: y, z: z};
     call printf("  [Inside createVector] Created: (%d, %d, %d)\n", v.x, v.y, v.z);
     return v;
 }
@@ -32,10 +29,7 @@ frame main() ret u8 {
 
     # 1. Demonstrate Pass by Value
     call printf("1. Testing Pass by Value:\n");
-    local myVec: Vector3;
-    myVec.x = 10;
-    myVec.y = 20;
-    myVec.z = 30;
+    local myVec: Vector3 = {x: 10, y: 20, z: 30};
 
     call printf("  [Main] Original before call: (%d, %d, %d)\n", myVec.x, myVec.y, myVec.z);
     call modifyVector(myVec);

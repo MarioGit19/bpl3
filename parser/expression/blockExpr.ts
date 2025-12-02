@@ -1,5 +1,4 @@
-import type AsmGenerator from "../../transpiler/AsmGenerator";
-import type LlvmGenerator from "../../transpiler/LlvmGenerator";
+import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
@@ -28,15 +27,9 @@ export default class BlockExpr extends Expression {
     return this;
   }
 
-  transpile(gen: AsmGenerator, scope: Scope): void {
+  toIR(gen: IRGenerator, scope: Scope): string {
     for (const expr of this.expressions) {
-      expr.transpile(gen, scope);
-    }
-  }
-
-  generateIR(gen: LlvmGenerator, scope: Scope): string {
-    for (const expr of this.expressions) {
-      expr.generateIR(gen, scope);
+      expr.toIR(gen, scope);
     }
     return "";
   }

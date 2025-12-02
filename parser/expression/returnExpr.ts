@@ -1,5 +1,4 @@
-import type AsmGenerator from "../../transpiler/AsmGenerator";
-import type LlvmGenerator from "../../transpiler/LlvmGenerator";
+import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
@@ -43,58 +42,6 @@ export default class ReturnExpr extends Expression {
     return this;
   }
 
-  transpile(gen: AsmGenerator, scope: Scope): void {
-    if (this.startToken) gen.emitSourceLocation(this.startToken.line);
-    const context = scope.getCurrentContext("function");
-    if (!context) {
-      throw new Error("Return statement not within a function context");
-    }
-
-    if (this.value) {
-      this.value.transpile(gen, scope);
-
-      const funcContext = scope.getCurrentContext("function");
-      if (funcContext && funcContext.type === "function") {
-        const returnSlot = scope.resolve("__return_slot__");
-        if (returnSlot && funcContext.returnType) {
-          let typeInfo;
-          if (
-            funcContext.returnType.genericArgs &&
-            funcContext.returnType.genericArgs.length > 0
-          ) {
-            typeInfo = scope.resolveGenericType(
-              funcContext.returnType.name,
-              funcContext.returnType.genericArgs,
-            );
-          } else {
-            typeInfo = scope.resolveType(funcContext.returnType.name);
-          }
-
-          if (typeInfo) {
-            gen.emit("push rax", "Save source address");
-            gen.emit(
-              `mov rdi, [rbp - ${returnSlot.offset}]`,
-              "Destination address",
-            );
-            gen.emit("pop rsi", "Source address");
-            gen.emit(`mov rcx, ${typeInfo.size}`, "Size to copy");
-            gen.emit("rep movsb", "Copy struct to return slot");
-            gen.emit(
-              `mov rax, [rbp - ${returnSlot.offset}]`,
-              "Return address of result",
-            );
-          }
-        }
-      }
-    } else {
-      gen.emit("xor rax, rax", "set return value to 0 (void)");
-    }
-
-    if (context.type === "function") {
-      gen.emit(`jmp ${context.endLabel}`, "jump to function return");
-    }
-  }
-
   private getIntSize(typeName: string): number {
     switch (typeName) {
       case "i8":
@@ -118,51 +65,26 @@ export default class ReturnExpr extends Expression {
     }
   }
 
-  generateIR(gen: LlvmGenerator, scope: Scope): string {
+  toIR(gen: IRGenerator, scope: Scope): string {
     const context = scope.getCurrentContext("function");
     if (!context || context.type !== "function") {
       throw new Error("Return statement not within a function context");
     }
 
     if (this.value) {
-      const val = this.value.generateIR(gen, scope);
+      const val = this.value.toIR(gen, scope);
+      let type = { type: "i64" } as any;
       if (context.returnType) {
-        const type = gen.mapType(context.returnType);
+        type = gen.getIRType(context.returnType);
+      }
 
-        const returnSize = this.getIntSize(context.returnType.name);
-        if (
-          returnSize < 8 &&
-          !context.returnType.isPointer &&
-          !context.returnType.isArray.length
-        ) {
-          let valIsI64 = false;
-          if (
-            this.value.type === ExpressionType.BinaryExpression ||
-            this.value.type === ExpressionType.NumberLiteralExpr
-          ) {
-            valIsI64 = true;
-          }
-
-          if (valIsI64) {
-            const trunc = gen.generateReg("trunc");
-            gen.emit(`  ${trunc} = trunc i64 ${val} to ${type}`);
-            gen.emit(`  ret ${type} ${trunc}`);
-            return "";
-          }
-        }
-
-        if (type === "ptr" && val === "0") {
-          gen.emit(`  ret ptr null`);
-        } else {
-          gen.emit(`  ret ${type} ${val}`);
-        }
+      if (type.type === "pointer" && val === "0") {
+        gen.emitReturn("null", type);
       } else {
-        // If return type is void but we have a value, it's weird but maybe allowed?
-        // Usually semantic analyzer catches this.
-        gen.emit(`  ret void`);
+        gen.emitReturn(val, type);
       }
     } else {
-      gen.emit("  ret void");
+      gen.emitReturn(null);
     }
     return "";
   }

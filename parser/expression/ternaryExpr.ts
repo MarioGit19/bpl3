@@ -1,5 +1,7 @@
-import type AsmGenerator from "../../transpiler/AsmGenerator";
-import type LlvmGenerator from "../../transpiler/LlvmGenerator";
+import { IROpcode } from "../../transpiler/ir/IROpcode";
+import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
+import type { IRType } from "../../transpiler/ir/IRType";
+import { IRI64 } from "../../transpiler/ir/IRType";
 import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
@@ -32,64 +34,43 @@ export default class TernaryExpr extends Expression {
     console.log(this.toString(depth));
   }
 
-  transpile(gen: AsmGenerator, scope: Scope): void {
-    const label = gen.generateLabel("ternary_");
-    const conditionLabel = `${label}_condition`;
-    const trueLabel = `${label}_true`;
-    const falseLabel = `${label}_false`;
-    const endLabel = `${label}_end`;
+  toIR(gen: IRGenerator, scope: Scope): string {
+    let condition = this.condition.toIR(gen, scope);
+    const condType = resolveExpressionType(this.condition, scope);
 
-    gen.emitLabel(conditionLabel);
-    this.condition.transpile(gen, scope);
-    gen.emit(`cmp rax, 0`, "compare condition result to 0");
-    gen.emit(`je ${falseLabel}`, "jump to false branch if condition is false");
+    if (condType) {
+      const irType = gen.getIRType(condType);
+      if (irType.type !== "i1") {
+        condition = gen.emitBinary(IROpcode.NE, irType, condition, "0");
+      }
+    } else {
+      condition = gen.emitBinary(IROpcode.NE, { type: "i64" }, condition, "0");
+    }
 
-    gen.emitLabel(trueLabel);
-    this.trueExpr.transpile(gen, scope);
-    gen.emit(`jmp ${endLabel}`, "jump to end after true branch");
-
-    gen.emitLabel(falseLabel);
-    this.falseExpr.transpile(gen, scope);
-    gen.emitLabel(endLabel);
-  }
-
-  generateIR(gen: LlvmGenerator, scope: Scope): string {
-    const condition = this.condition.generateIR(gen, scope);
-
-    const trueLabel = gen.generateLabel("ternary_true");
-    const falseLabel = gen.generateLabel("ternary_false");
-    const endLabel = gen.generateLabel("ternary_end");
+    const trueBlock = gen.createBlock("ternary_true");
+    const falseBlock = gen.createBlock("ternary_false");
+    const endBlock = gen.createBlock("ternary_end");
 
     const type =
       resolveExpressionType(this.trueExpr, scope) ||
       resolveExpressionType(this.falseExpr, scope);
-    const llvmType = type ? gen.mapType(type) : "i64";
-    const resultVar = gen.generateLocal("ternary_result");
-    gen.emit(`  %${resultVar} = alloca ${llvmType}`);
+    const irType: IRType = type ? gen.getIRType(type) : IRI64;
 
-    const condType = resolveExpressionType(this.condition, scope);
-    const condLlvmType = condType ? gen.mapType(condType) : "i64";
-    const condBool = gen.generateReg("cond");
-    gen.emit(`${condBool} = icmp ne ${condLlvmType} ${condition}, 0`);
-    gen.emit(`br i1 ${condBool}, label %${trueLabel}, label %${falseLabel}`);
+    const resultPtr = gen.emitAlloca(irType);
 
-    // True Branch
-    gen.emitLabel(trueLabel);
-    const trueVal = this.trueExpr.generateIR(gen, scope);
-    gen.emit(`store ${llvmType} ${trueVal}, ptr %${resultVar}`);
-    gen.emit(`br label %${endLabel}`);
+    gen.emitCondBranch(condition, trueBlock.name, falseBlock.name);
 
-    // False Branch
-    gen.emitLabel(falseLabel);
-    const falseVal = this.falseExpr.generateIR(gen, scope);
-    gen.emit(`store ${llvmType} ${falseVal}, ptr %${resultVar}`);
-    gen.emit(`br label %${endLabel}`);
+    gen.setBlock(trueBlock);
+    const trueVal = this.trueExpr.toIR(gen, scope);
+    gen.emitStore(irType, trueVal, resultPtr);
+    gen.emitBranch(endBlock.name);
 
-    // End
-    gen.emitLabel(endLabel);
-    const resultReg = gen.generateReg("ternary_res");
-    gen.emit(`${resultReg} = load ${llvmType}, ptr %${resultVar}`);
+    gen.setBlock(falseBlock);
+    const falseVal = this.falseExpr.toIR(gen, scope);
+    gen.emitStore(irType, falseVal, resultPtr);
+    gen.emitBranch(endBlock.name);
 
-    return resultReg;
+    gen.setBlock(endBlock);
+    return gen.emitLoad(irType, resultPtr);
   }
 }

@@ -75,22 +75,17 @@ frame main() ret u8 {
     # --- Local Variables (Stack) ---
 
     # Allocate two structs on the stack
-    local book1: Book;
-    local user1: User;
+    local book1: Book = {id: 101, is_checked_out: 0};
+    local user1: User = {user_id: 5001, health: 100, checked_out_books: NULL};
 
-    # Initialize Book
-    book1.id = 101;
+    # Initialize Book strings
     call strcpy(book1.title, "The Low-Level Primer");
     call strcpy(book1.author, "A. Gemini");
-    book1.is_checked_out = 0;
 
-    # Initialize User
-    user1.user_id = 5001;
+    # Initialize User string
     call strcpy(user1.name, "John Smith");
 
-    # user1.name = "Jane Doe";
-    user1.health = 100; #DEFAULT_USER_HEALTH;
-    user1.checked_out_books = NULL; # Use the built-in NULL keyword
+    # user1.name = "Jane Doe"
 
     # Update the global count
     g_total_books = g_total_books + 1;

@@ -1,6 +1,6 @@
 # BPL (Basic Programming Language) Documentation
 
-Welcome to the official documentation for BPL, a statically typed, compiled programming language designed for learning compiler construction and low-level programming concepts. BPL transpiles to x86-64 Assembly (NASM).
+Welcome to the official documentation for BPL, a statically typed, compiled programming language designed for learning compiler construction and low-level programming concepts. BPL compiles to LLVM IR.
 
 ## Table of Contents
 

@@ -127,15 +127,10 @@ frame main() ret u64 {
     call printf("Array: [%f, %f, %f]\n", arr[0], arr[1], arr[2]);
 
     call printf("\n--- Structs ---\n");
-    local p: Point;
-    p.x = 5.0;
-    p.y = 10.0;
+    local p: Point = {x: 5.0, y: 10.0};
     call print_point(p);
 
-    local v: Vector3;
-    v.x = 1.0;
-    v.y = 2.0;
-    v.z = 3.0;
+    local v: Vector3 = {x: 1.0, y: 2.0, z: 3.0};
     call printf("Vector3: (%f, %f, %f)\n", v.x, v.y, v.z);
 
     call printf("\n--- Complex Calculation ---\n");

@@ -13,7 +13,7 @@ function analyze(input: string) {
   const scope = new Scope();
 
   if (!scope.resolveType("u8")) {
-    HelperGenerator.generateBaseTypes(null as any, scope);
+    HelperGenerator.generateBaseTypes(scope);
   }
 
   return analyzer.analyze(program, scope);

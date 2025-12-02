@@ -1,5 +1,5 @@
-import type AsmGenerator from "../../transpiler/AsmGenerator";
-import type LlvmGenerator from "../../transpiler/LlvmGenerator";
+import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
+import type { IRType } from "../../transpiler/ir/IRType";
 import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
@@ -29,28 +29,41 @@ export default class ArrayLiteralExpr extends Expression {
     console.log(this.toString(depth));
   }
 
-  transpile(gen: AsmGenerator, scope: Scope): void {
-    for (let i = this.elements.length - 1; i >= 0; i--) {
-      this.elements[i]!.transpile(gen, scope);
-      gen.emit("push rax", "Pushing array element onto stack");
-      scope.stackOffset += 8;
-    }
-    gen.emit("mov rax, rsp", "Setting rax to point to start of array literal");
-  }
-
-  generateIR(gen: LlvmGenerator, scope: Scope): string {
+  toIR(gen: IRGenerator, scope: Scope): string {
     const size = this.elements.length;
-    const arrayType = `[${size} x i64]`;
-    const ptr = gen.generateReg("array_lit");
-    gen.emit(`${ptr} = alloca ${arrayType}, align 8`);
+    let elemType: IRType = { type: "i64" };
+
+    if (size > 0) {
+      const first = this.elements[0];
+      if (!first) {
+        throw new Error("Array element is undefined");
+      }
+      if (first.type === ExpressionType.NumberLiteralExpr) {
+        const val = (first as any).value;
+        elemType =
+          val.includes(".") || val.includes("e")
+            ? { type: "f64" }
+            : { type: "i64" };
+      } else if (first.type === ExpressionType.StringLiteralExpr) {
+        elemType = { type: "pointer", base: { type: "i8" } };
+      } else if (first.type === ExpressionType.IdentifierExpr) {
+        const name = (first as any).name;
+        const resolved = scope.resolve(name);
+        if (resolved) elemType = gen.getIRType(resolved.varType);
+      }
+    }
+
+    const arrayType: IRType = { type: "array", base: elemType, size };
+    const ptr = gen.emitAlloca(arrayType);
 
     for (let i = 0; i < size; i++) {
-      const val = this.elements[i]!.generateIR(gen, scope);
-      const elemPtr = gen.generateReg("elem_ptr");
-      gen.emit(
-        `${elemPtr} = getelementptr ${arrayType}, ptr ${ptr}, i64 0, i64 ${i}`,
-      );
-      gen.emit(`store i64 ${val}, ptr ${elemPtr}`);
+      const element = this.elements[i];
+      if (!element) {
+        throw new Error(`Array element at index ${i} is undefined`);
+      }
+      const val = element.toIR(gen, scope);
+      const elemPtr = gen.emitGEP(arrayType, ptr, ["0", i.toString()]);
+      gen.emitStore(elemType, val, elemPtr);
     }
 
     return ptr;

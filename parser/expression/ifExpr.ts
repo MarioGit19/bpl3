@@ -1,5 +1,5 @@
-import type AsmGenerator from "../../transpiler/AsmGenerator";
-import type LlvmGenerator from "../../transpiler/LlvmGenerator";
+import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
+import { IROpcode } from "../../transpiler/ir/IRInstruction";
 import Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import type BlockExpr from "./blockExpr";
@@ -38,62 +38,37 @@ export default class IfExpr extends Expression {
     console.log(this.toString(depth));
   }
 
-  transpile(gen: AsmGenerator, scope: Scope): void {
-    if (this.startToken) gen.emitSourceLocation(this.startToken.line);
-    const label = gen.generateLabel("if_");
-    const conditionLabel = `${label}_condition`;
-    const thenLabel = `${label}_then`;
-    const endLabel = `${label}_end`;
-    const elseLabel = this.elseBranch ? `${label}_else` : endLabel;
-
-    gen.emitLabel(conditionLabel);
-    this.condition.transpile(gen, scope);
-    gen.emit(`cmp rax, 0`, "compare condition result to 0");
-    gen.emit(`je ${elseLabel}`, "jump to else branch if condition is false");
-
-    gen.emitLabel(thenLabel);
-    this.thenBranch.transpile(gen, scope);
-    gen.emit(`jmp ${endLabel}`, "jump to end after then branch");
-
-    if (this.elseBranch) {
-      gen.emitLabel(elseLabel);
-      this.elseBranch.transpile(gen, scope);
-    }
-
-    gen.emitLabel(endLabel);
-  }
-
-  generateIR(gen: LlvmGenerator, scope: Scope): string {
-    const cond = this.condition.generateIR(gen, scope);
-    const thenLabel = gen.generateLabel("then");
-    const elseLabel = gen.generateLabel("else");
-    const endLabel = gen.generateLabel("if_end");
-
+  toIR(gen: IRGenerator, scope: Scope): string {
+    const condition = this.condition.toIR(gen, scope);
     const condType = resolveExpressionType(this.condition, scope);
-    const llvmType = condType ? gen.mapType(condType) : "i64";
+    const irType = condType
+      ? gen.getIRType(condType)
+      : ({ type: "i64" } as any);
 
-    const condReg = gen.generateReg("cond");
-    gen.emit(`${condReg} = icmp ne ${llvmType} ${cond}, 0`);
+    // Compare condition to 0 to get boolean
+    const cmp = gen.emitBinary(IROpcode.NE, irType, condition, "0");
 
-    if (this.elseBranch) {
-      gen.emit(`br i1 ${condReg}, label %${thenLabel}, label %${elseLabel}`);
+    const thenBlock = gen.createBlock("then");
+    const elseBlock = this.elseBranch ? gen.createBlock("else") : null;
+    const mergeBlock = gen.createBlock("merge");
 
-      gen.emitLabel(thenLabel);
-      this.thenBranch.generateIR(gen, scope);
-      gen.emit(`br label %${endLabel}`);
+    gen.emitCondBranch(
+      cmp,
+      thenBlock.name,
+      elseBlock ? elseBlock.name : mergeBlock.name,
+    );
 
-      gen.emitLabel(elseLabel);
-      this.elseBranch.generateIR(gen, scope);
-      gen.emit(`br label %${endLabel}`);
-    } else {
-      gen.emit(`br i1 ${condReg}, label %${thenLabel}, label %${endLabel}`);
+    gen.setBlock(thenBlock);
+    this.thenBranch.toIR(gen, scope);
+    gen.emitBranch(mergeBlock.name);
 
-      gen.emitLabel(thenLabel);
-      this.thenBranch.generateIR(gen, scope);
-      gen.emit(`br label %${endLabel}`);
+    if (elseBlock) {
+      gen.setBlock(elseBlock);
+      this.elseBranch!.toIR(gen, scope);
+      gen.emitBranch(mergeBlock.name);
     }
 
-    gen.emitLabel(endLabel);
+    gen.setBlock(mergeBlock);
     return "";
   }
 }

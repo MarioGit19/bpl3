@@ -140,16 +140,69 @@ loop {
 
 Structs allow grouping related data.
 
+### Struct Declaration
+
 ```bpl
 struct Point {
     x: u64,
     y: u64
 }
+```
+
+### Struct Initialization
+
+Structs can be initialized using struct literals with two different syntaxes:
+
+#### Positional Initialization
+
+Fields are assigned in the order they are declared:
+
+```bpl
+local p: Point = {10, 20};  # x=10, y=20
+```
+
+#### Named Initialization
+
+Fields are assigned by name (order doesn't matter):
+
+```bpl
+local p: Point = {y: 20, x: 10};  # x=10, y=20
+```
+
+#### Nested Struct Initialization
+
+```bpl
+struct Color {
+    r: u8,
+    g: u8,
+    b: u8,
+}
+
+struct Pixel {
+    pos: Point,
+    color: Color,
+}
 
 frame main() ret u8 {
-    local p: Point;
-    p.x = 10;
-    p.y = 20;
+    # Nested initialization with named fields
+    local px: Pixel = {
+        pos: {x: 10, y: 20},
+        color: {255, 128, 64}
+    };
+
+    return 0;
+}
+```
+
+**Important**: You cannot mix positional and named initialization in the same struct literal.
+
+### Member Access
+
+```bpl
+frame main() ret u8 {
+    local p: Point = {10, 20};
+    p.x = 100;  # Modify field
+    local y_val: u64 = p.y;  # Read field
     return 0;
 }
 ```

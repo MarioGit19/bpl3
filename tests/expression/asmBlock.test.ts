@@ -2,7 +2,7 @@ import { describe, it, expect } from "bun:test";
 import Lexer from "../../lexer/lexer";
 import { Parser } from "../../parser/parser";
 import ExpressionType from "../../parser/expressionType";
-import { AsmBlockExpr } from "../../parser/expression/asmBlockExpr";
+import AsmBlockExpr from "../../parser/expression/asmBlockExpr";
 import FunctionDeclarationExpr from "../../parser/expression/functionDeclaration";
 import TokenType from "../../lexer/tokenType";
 

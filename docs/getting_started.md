@@ -7,14 +7,14 @@ This guide will help you set up the BPL compiler and write your first program.
 To use BPL, you need the following tools installed on your system:
 
 - **Bun**: A fast all-in-one JavaScript runtime. [Install Bun](https://bun.sh/)
-- **NASM**: The Netwide Assembler, used to assemble the generated code.
-- **GCC**: The GNU Compiler Collection, used for linking.
+- **Clang**: The LLVM compiler front end, used to compile and link the generated code.
+- **GCC**: The GNU Compiler Collection (optional, Clang is preferred).
 
-On Ubuntu/Debian, you can install NASM and GCC with:
+On Ubuntu/Debian, you can install Clang with:
 
 ```bash
 sudo apt update
-sudo apt install nasm gcc
+sudo apt install clang
 ```
 
 ## Installation
@@ -64,8 +64,8 @@ or
 
 This command will:
 
-1.  Transpile `hello.x` to `hello.asm`.
-2.  Assemble `hello.asm` to `hello.o`.
+1.  Transpile `hello.x` to `hello.ll` (LLVM IR).
+2.  Compile `hello.ll` to `hello.o`.
 3.  Link `hello.o` to create the executable `hello`.
 
 To run the executable:
@@ -88,17 +88,40 @@ You can use the `-r` (run) flag to compile and run in one step:
 bun index.ts -r hello.x
 ```
 
+## Next Steps
+
+Try working with structs:
+
+```bpl
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+frame main() ret u8 {
+    # Initialize with struct literal
+    local p: Point = {x: 10, y: 20};
+    call print("Point: (%d, %d)\n", p.x, p.y);
+    return 0;
+}
+```
+
+Save this as `point.x` and compile:
+
+```bash
+bun index.ts -r point.x
+```
+
 ## Compiler Options
 
 Run `bun index.ts --help` to see all available options:
 
 - `-q | --quiet`: Suppress output.
-- `-p | --print-asm`: Print generated assembly.
+- `-p | --print-asm`: Print generated LLVM IR.
 - `-r | --run`: Run after compilation.
 - `-g | --gdb`: Run inside GDB.
 - `-l | --lib`: Compile as a shared library.
 - `-s | --static`: Compile as a static executable.
-- `--llvm`: Use the LLVM backend to generate LLVM IR.
 
 ## VS Code Extension
 

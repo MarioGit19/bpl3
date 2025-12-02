@@ -1,13 +1,11 @@
 import { describe, it, expect } from "bun:test";
-import AsmGenerator from "../../transpiler/AsmGenerator";
 import HelperGenerator from "../../transpiler/HelperGenerator";
 import Scope from "../../transpiler/Scope";
 
 describe("HelperGenerator", () => {
   it("should generate base types", () => {
-    const gen = new AsmGenerator(0);
     const scope = new Scope();
-    HelperGenerator.generateBaseTypes(gen, scope);
+    HelperGenerator.generateBaseTypes(scope);
 
     // Unsigned integers
     expect(scope.resolveType("u8")).not.toBeNull();

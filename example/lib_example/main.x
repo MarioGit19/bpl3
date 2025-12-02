@@ -6,15 +6,11 @@ import logNumber, logGlobal from "./printer.x";
 import printf from "libc";
 
 frame main() ret u8 {
-    local p: Point;
-    p.x = 5;
-    p.y = 4;
+    local p: Point = {x: 5, y: 4};
     local mag: u64 = call magnitudeSquared(p);
     call logNumber(mag);
 
-    local r: Rectangle;
-    r.width = 10;
-    r.height = 20;
+    local r: Rectangle = {width: 10, height: 20};
     local area: u64 = call rectArea(r);
     call logNumber(area);
 

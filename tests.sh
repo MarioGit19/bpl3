@@ -1,12 +1,6 @@
 #!/bin/bash
 
 SPECIFIC_TEST=""
-GENERATOR=""
-
-if [ "$1" == "--llvm" ]; then
-    GENERATOR="llvm"
-    shift
-fi
 
 if [ "$1" != "" ]; then
     SPECIFIC_TEST="/$1/"
@@ -30,13 +24,8 @@ for TEST_SCRIPT in $TEST_SCRIPTS; do
     echo "---------------------------------------------------"
     echo "Running test for $TEST_NAME..."
 
-    GEN_ARG=""
-    if [ "$GENERATOR" == "llvm" ]; then
-        GEN_ARG="--llvm"
-    fi
-
     pushd "$DIR_NAME" > /dev/null
-    OUT=$(./test.sh "$GEN_ARG")
+    OUT=$(./test.sh)
     TEST_RES=$?
     popd > /dev/null
 

@@ -29,6 +29,9 @@ import ContinueExpr from "./expression/continueExpr";
 import ImportExpr from "./expression/importExpr";
 import ExportExpr from "./expression/exportExpr";
 import ArrayLiteralExpr from "./expression/arrayLiteralExpr";
+import StructLiteralExpr, {
+  type StructLiteralField,
+} from "./expression/structLiteralExpr";
 import ExternDeclarationExpr from "./expression/externDeclarationExpr";
 import SwitchExpr, { type SwitchCase } from "./expression/switchExpr";
 import { CompilerError } from "../errors";
@@ -456,6 +459,8 @@ export class Parser {
           return new StringLiteralExpr(stringToken.value, stringToken);
         case TokenType.OPEN_BRACKET:
           return this.parseArrayLiteral();
+        case TokenType.OPEN_BRACE:
+          return this.parseStructLiteral();
         case TokenType.EOF:
           this.consume(TokenType.EOF);
           return new EOFExpr();
@@ -1183,5 +1188,50 @@ export class Parser {
       expr instanceof BlockExpr ||
       expr instanceof FunctionDeclarationExpr
     );
+  }
+
+  parseStructLiteral(): Expression {
+    return this.withRange(() => {
+      this.consume(TokenType.OPEN_BRACE, "Expected '{'");
+      const fields: { fieldName?: string; value: Expression }[] = [];
+
+      if (!this.check(TokenType.CLOSE_BRACE)) {
+        do {
+          // Check if it's a named field: identifier : expression
+          if (
+            this.check(TokenType.IDENTIFIER) &&
+            this.peek(1)?.type === TokenType.COLON
+          ) {
+            const name = this.consume(
+              TokenType.IDENTIFIER,
+              "Expected field name",
+            ).value;
+            this.consume(TokenType.COLON, "Expected ':'");
+            const value = this.parseTernary();
+            fields.push({ fieldName: name, value });
+          } else {
+            // Positional argument
+            const value = this.parseTernary();
+            fields.push({ value });
+          }
+        } while (this.match(TokenType.COMMA));
+      }
+
+      this.consume(TokenType.CLOSE_BRACE, "Expected '}'");
+      return new StructLiteralExpr(fields);
+    });
+  }
+
+  check(type: TokenType): boolean {
+    if (this.current >= this.tokens.length) return false;
+    return this.peek()?.type === type;
+  }
+
+  match(type: TokenType): boolean {
+    if (this.check(type)) {
+      this.consume(type);
+      return true;
+    }
+    return false;
   }
 }

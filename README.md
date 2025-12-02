@@ -6,7 +6,7 @@ BPL is a simple programming language that compiles to x86-64 assembly. It is des
 
 ## Installation
 
-To install BPL, you need to have `bun`, `nasm` and `gcc` installed on your system.
+To install BPL, you need to have `bun`, `clang` and `gcc` installed on your system.
 
 - Clone the repository
 - Install the dependencies
@@ -16,8 +16,8 @@ To install BPL, you need to have `bun`, `nasm` and `gcc` installed on your syste
 git clone https://github.com/pr0h0/bpl3.git
 cd bpl3
 bun install
-bun index.ts example/hello-world.x
-./example/hello-world
+bun index.ts example/hello-world/hello-world.x
+./example/hello-world/hello-world
 ```
 
 You should see "Hello, World!" printed to the console.
@@ -42,6 +42,7 @@ To install it:
 - **Inline Assembly**: Allows embedding raw assembly code within BPL code for low-level operations with interpolation of BPL variables.
 - **Structures and Arrays**: Supports user-defined structures and arrays for complex data management.
 - **Array Literals**: Supports initializing arrays with literals `[1, 2, 3]`.
+- **Struct Literals**: Supports initializing structs with literals using both named and positional syntax.
 - **Standard Library**: Provides built-in functions for `print`, `exit`, `exec`, `str_len`.
 - **Optimization**: Built-in peephole optimizer to generate efficient assembly code.
 - **Simple Syntax**: Designed to be easy to read and write, with a syntax similar to C, Go, and Python.
@@ -72,13 +73,12 @@ This will generate an executable file in the same directory as the source file.
 ### CLI Options
 
 - `-q | --quiet`: Suppress all output except for errors.
-- `-p | --print-asm`: Print the generated assembly code to the console and preserve the `.asm` file.
+- `-p | --print-asm`: Print the generated LLVM IR to the console and preserve the `.ll` file.
 - `-r | --run`: Automatically run the compiled program after successful compilation.
 - `-g | --gdb`: Run the compiled program inside GDB for debugging.
 - `-l | --lib`: Compile as a shared library instead of an executable, preserve `.o` file.
 - `-d | --dynamic`: Compile as a dynamically linked executable (default).
 - `-s | --static`: Compile as a static executable (no dynamic linking).
-- `--llvm`: Use the LLVM backend to generate LLVM IR instead of assembly.
 
 ### Import/Export
 
@@ -306,7 +306,9 @@ loop {
 ### Inline Assembly
 
 BPL allows embedding raw assembly code within BPL code using the `asm` block. This is useful for low-level operations that are not directly supported by BPL. You can also interpolate BPL variables into the assembly code using `(varName)`.
-Each variable is interpolated as `[ rbp - offset ]` for local variables and `[ rel varName ]` for global variables so keep that in mind when using inline assembly.
+The assembly code is passed to LLVM's inline assembly mechanism. By default, this uses AT&T syntax.
+Variables interpolated with `(varName)` are replaced with operands (e.g., `$0`, `$1`) and passed as input/output constraints.
+
 Here is an example of using inline assembly to add two numbers:
 
 ```bpl
@@ -315,9 +317,9 @@ frame main() ret u8 {
     local b: u8 = 10;
     local result: u8;
     asm {
-        mov rax, (a)
-        add rax, (b)
-        mov (result), rax
+        mov (a), %rax
+        add (b), %rax
+        mov %rax, (result)
     }
     call printf("Result: %d\n", result);
     return 0;
@@ -327,14 +329,50 @@ frame main() ret u8 {
 ### Structures and Arrays
 
 BPL supports user-defined structures and arrays for complex data management. Structures can be defined using the `struct` keyword, and arrays can be declared using square brackets `[]`.
-Here is an example of defining a structure and using an array:
+
+#### Struct Declaration and Initialization
+
+Structs can be initialized using struct literals with either positional or named field syntax:
 
 ```bpl
 struct Point {
-    x: u8;
-    y: u8;
+    x: u8,
+    y: u8,
 }
 
+frame main() ret u8 {
+    # Positional initialization (fields in order)
+    local p1: Point = {10, 20};
+
+    # Named initialization (any order)
+    local p2: Point = {y: 30, x: 40};
+
+    # Nested struct initialization
+    struct Color {
+        r: u8,
+        g: u8,
+        b: u8,
+    }
+
+    struct Pixel {
+        pos: Point,
+        color: Color,
+    }
+
+    local pixel: Pixel = {
+        pos: {0, 0},
+        color: {r: 255, g: 128, b: 64}
+    };
+
+    return 0;
+}
+```
+
+**Important**: You cannot mix named and positional initialization in the same struct literal. Use either all named fields or all positional fields.
+
+#### Arrays of Structs
+
+```bpl
 global points: Point[10];
 
 frame main() ret u8 {
@@ -420,16 +458,16 @@ local max: u8 = a > b ? a : b;
 
 ### Optimization
 
-BPL includes a built-in peephole optimizer that automatically improves the generated assembly code. The optimizer runs during the compilation process and applies various rules to reduce code size and improve performance.
+BPL leverages the powerful optimization capabilities of LLVM. By default, the compiler uses `-O3` optimization level, which applies aggressive optimizations to generate highly efficient machine code.
 
 **Optimizations include:**
 
-- **Redundant Push/Pop Removal**: Eliminates unnecessary stack operations.
-- **Move Optimization**: Simplifies `mov` instructions (e.g., `mov rax, rax` is removed).
-- **Zeroing Idioms**: Replaces `mov reg, 0` with `xor reg, reg`.
-- **Arithmetic Simplification**: Optimizes operations like adding/subtracting zero or multiplying by one/zero.
-- **Jump Optimization**: Removes jumps to the immediately following label.
-- **Instruction Strength Reduction**: Replaces expensive operations with cheaper ones (e.g., `add reg, 1` -> `inc reg`).
+- **Dead Code Elimination**: Removes code that does not affect the program output.
+- **Constant Folding**: Evaluates constant expressions at compile time.
+- **Loop Unrolling**: Unrolls loops to reduce overhead.
+- **Function Inlining**: Inlines small functions to reduce call overhead.
+- **Vectorization**: Uses SIMD instructions for parallel processing.
+- **Instruction Combination**: Combines multiple instructions into fewer, more efficient ones.
 
 ### Standard Library
 
@@ -449,6 +487,7 @@ The `example` directory contains several programs demonstrating various features
 - `fib.x`: Generates Fibonacci sequence, demonstrating loops and variables.
 - `malloc.x`: Demonstrates manual memory management using `malloc` and `free`.
 - `structs_arrays.x`: Shows how to use arrays of structures.
+- `struct_literal_demo/`: Demonstrates struct literal initialization (positional, named, and nested).
 - `linked_list.x`: Implements a linked list using structs and dynamic memory allocation.
 - `asm_demo.x`: Demonstrates inline assembly and variable interpolation.
 - `operators.x`: Comprehensive test of arithmetic, bitwise, and logical operators.

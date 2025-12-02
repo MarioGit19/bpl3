@@ -1,5 +1,4 @@
-import type AsmGenerator from "../../transpiler/AsmGenerator";
-import type LlvmGenerator from "../../transpiler/LlvmGenerator";
+import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
@@ -19,11 +18,7 @@ export default class EOFExpr extends Expression {
     console.log(this.toString(depth));
   }
 
-  transpile(gen: AsmGenerator, scope: Scope): void {
-    gen.emit("", "EOFExpr\n");
-  }
-
-  generateIR(gen: LlvmGenerator, scope: Scope): string {
+  toIR(gen: IRGenerator, scope: Scope): string {
     return "";
   }
 }

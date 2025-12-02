@@ -1,5 +1,4 @@
-import type AsmGenerator from "../../transpiler/AsmGenerator";
-import type LlvmGenerator from "../../transpiler/LlvmGenerator";
+import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import BinaryExpr from "./binaryExpr";
@@ -7,6 +6,7 @@ import Expression from "./expr";
 import IdentifierExpr from "./identifierExpr";
 import UnaryExpr from "./unaryExpr";
 import type { VariableType } from "./variableDeclarationExpr";
+import { IROpcode } from "../../transpiler/ir/IRInstruction";
 
 export default class MemberAccessExpr extends Expression {
   constructor(
@@ -138,7 +138,7 @@ export default class MemberAccessExpr extends Expression {
     }
   }
 
-  transpile(gen: AsmGenerator, scope: Scope): void {
+  toIR(gen: IRGenerator, scope: Scope): string {
     const isLHS = scope.getCurrentContext("LHS");
     if (isLHS) scope.removeCurrentContext("LHS");
 
@@ -148,400 +148,155 @@ export default class MemberAccessExpr extends Expression {
       this.object.name === "args" &&
       this.isIndexAccess
     ) {
-      const variadicStart = scope.resolve("__variadic_start_offset__");
-      const variadicCount = scope.resolve("__variadic_reg_count__");
-
-      if (variadicStart && variadicCount) {
-        // This is a variadic args access
-        // Calculate index
-        this.property.transpile(gen, scope);
-        // RAX has index 'i'
-
-        // We need to check if i < variadicCount (registers) or i >= variadicCount (stack)
-        // But wait, variadicCount is stored as a string offset in scope (hack).
-        // Let's parse it.
-        const numRegs = parseInt(variadicCount.offset);
-        const startOffset = parseInt(variadicStart.offset);
-
-        const labelStack = gen.generateLabel("variadic_stack");
-        const labelDone = gen.generateLabel("variadic_done");
-
-        gen.emit(
-          `cmp rax, ${numRegs}`,
-          "Check if variadic arg is in register spill area",
-        );
-        gen.emit(`jge ${labelStack}`, "If index >= numRegs, go to stack");
-
-        // Register access
-        // Addr = RBP - startOffset - (i * 8)
-        gen.emit("mov rbx, rax", "Copy index");
-        gen.emit("imul rbx, 8", "Scale index");
-        gen.emit("mov rax, rbp", "Base RBP");
-        gen.emit(`sub rax, ${startOffset}`, "Subtract start offset");
-        gen.emit("sub rax, rbx", "Subtract scaled index");
-        gen.emit(`jmp ${labelDone}`, "Done");
-
-        gen.emitLabel(labelStack);
-        // Stack access
-        // Addr = RBP + 16 + (i - numRegs) * 8
-        gen.emit(`sub rax, ${numRegs}`, "Adjust index for stack");
-        gen.emit("imul rax, 8", "Scale index");
-        gen.emit("add rax, 16", "Add return address + saved rbp offset");
-        gen.emit("add rax, rbp", "Add RBP");
-
-        gen.emitLabel(labelDone);
-
-        // Now RAX has the address of the argument.
-        // If !isLHS, dereference it.
-        if (!isLHS) {
-          // Assuming u64 for now as per implementation in FunctionDeclaration
-          gen.emit("mov rax, [rax]", "Dereference variadic arg");
-        } else {
-          scope.setCurrentContext({ type: "LHS" });
-        }
-        return;
-      }
-    }
-
-    const objectType = this.resolveExpressionType(this.object, scope);
-    if (!objectType) {
-      if (this.object instanceof IdentifierExpr) {
-        console.error(
-          `Could not resolve type of object '${this.object.name}' in member access`,
-        );
-        console.error("Is it defined?");
-      }
-      throw new Error(`Could not resolve type of object in member access`);
-    }
-
-    // If object is NOT a pointer (struct instance or array), we need its address (LHS context)
-    // If object IS a pointer, we need its value (address it points to) (RHS context)
-    if (objectType.isPointer === 0) {
-      scope.setCurrentContext({ type: "LHS" });
-    }
-
-    this.object.transpile(gen, scope);
-
-    if (objectType.isPointer === 0) {
-      scope.removeCurrentContext("LHS");
-    }
-
-    gen.emit("push rax", "MEMBER ACCESS EXPR - save base address");
-    scope.stackOffset += 8;
-
-    if (this.isIndexAccess) {
-      this.property.transpile(gen, scope);
-      gen.emit("pop rbx", "MEMBER ACCESS EXPR - restore base address");
-      scope.stackOffset -= 8;
-
-      // Calculate element size
-      let elementSize = 8;
-      let baseType;
-      if (objectType.genericArgs && objectType.genericArgs.length > 0) {
-        baseType = scope.resolveGenericType(
-          objectType.name,
-          objectType.genericArgs,
-        );
-      } else {
-        baseType = scope.resolveType(objectType.name);
-      }
-
-      if (objectType.isArray.length > 0) {
-        if (baseType) {
-          const tempType = {
-            ...baseType,
-            isArray: objectType.isArray.slice(1),
-            isPointer: objectType.isPointer,
-          };
-          elementSize = scope.calculateSizeOfType(tempType);
-        }
-      } else if (objectType.isPointer > 0) {
-        if (objectType.isPointer > 1) {
-          elementSize = 8;
-        } else {
-          elementSize = baseType ? baseType.size : 8;
-        }
-      }
-
-      gen.emit(`imul rax, ${elementSize}`, "MEMBER ACCESS EXPR - scale index");
-      gen.emit("add rax, rbx", "MEMBER ACCESS EXPR - calculate address");
-    } else {
-      gen.emit("pop rax", "MEMBER ACCESS EXPR - restore base address");
-      scope.stackOffset -= 8;
-
-      const propertyName = (this.property as IdentifierExpr).name;
-      let typeInfo;
-      if (objectType.genericArgs && objectType.genericArgs.length > 0) {
-        typeInfo = scope.resolveGenericType(
-          objectType.name,
-          objectType.genericArgs,
-        );
-      } else {
-        typeInfo = scope.resolveType(objectType.name);
-      }
-
-      if (!typeInfo) {
-        throw new Error(`Undefined type '${objectType.name}'`);
-      }
-
-      const memberInfo = typeInfo.members.get(propertyName);
-      if (!memberInfo) {
-        throw new Error(
-          `Type '${typeInfo.name}' has no member named '${propertyName}'.`,
-        );
-      }
-
-      const propertyOffset = memberInfo.offset || 0;
-
-      gen.emit(
-        `add rax, ${propertyOffset}`,
-        `MEMBER ACCESS EXPR - add property offset for ${propertyName}`,
-      );
-    }
-
-    if (!isLHS) {
-      const resultType = this.resolveExpressionType(this, scope);
-      // If result is struct (not pointer) or array, keep address (L-value)
-      if (resultType) {
-        const isArray = resultType.isArray.length > 0;
-        let typeInfoForStructCheck;
-        if (resultType.genericArgs && resultType.genericArgs.length > 0) {
-          typeInfoForStructCheck = scope.resolveGenericType(
-            resultType.name,
-            resultType.genericArgs,
-          );
-        } else {
-          typeInfoForStructCheck = scope.resolveType(resultType.name);
-        }
-
-        const isStruct =
-          !resultType.isPointer &&
-          !isArray &&
-          typeInfoForStructCheck?.isPrimitive === false;
-
-        if (isArray || isStruct) {
-          // Do NOT dereference
-        } else {
-          let typeInfo;
-          if (resultType.genericArgs && resultType.genericArgs.length > 0) {
-            typeInfo = scope.resolveGenericType(
-              resultType.name,
-              resultType.genericArgs,
-            );
-          } else {
-            typeInfo = scope.resolveType(resultType.name);
-          }
-
-          if (typeInfo) {
-            if (resultType.isPointer > 0) {
-              gen.emit("mov rax, [rax]", "Dereference pointer (64-bit)");
-            } else if (typeInfo.size === 1) {
-              gen.emit("movzx rax, byte [rax]", "Dereference 8-bit");
-            } else if (typeInfo.size === 2) {
-              gen.emit("movzx rax, word [rax]", "Dereference 16-bit");
-            } else if (typeInfo.size === 4) {
-              if (typeInfo.info.signed) {
-                gen.emit(
-                  "movsxd rax, dword [rax]",
-                  "Dereference 32-bit (signed)",
-                );
-              } else {
-                gen.emit(
-                  "mov eax, dword [rax]",
-                  "Dereference 32-bit (unsigned)",
-                );
-              }
-            } else {
-              gen.emit("mov rax, [rax]", "Dereference 64-bit");
-            }
-          } else {
-            gen.emit(
-              "mov rax, [rax]",
-              "MEMBER ACCESS EXPR - dereference if RHS",
-            );
-          }
-        }
-      } else {
-        gen.emit("mov rax, [rax]", "MEMBER ACCESS EXPR - dereference if RHS");
-      }
-    } else {
-      scope.setCurrentContext({ type: "LHS" });
-    }
-  }
-
-  generateIR(gen: LlvmGenerator, scope: Scope): string {
-    const isLHS = scope.getCurrentContext("LHS");
-    if (isLHS) scope.removeCurrentContext("LHS");
-
-    // Handle variadic args access: args[i]
-    if (
-      this.object instanceof IdentifierExpr &&
-      this.object.name === "args" &&
-      this.isIndexAccess
-    ) {
+      const variadicStart = scope.resolve("__va_gp_offset__");
       const regSaveArea = scope.resolve("__va_reg_save_area__");
       const overflowArgArea = scope.resolve("__va_overflow_arg_area__");
-      const gpOffset = scope.resolve("__va_gp_offset__");
 
-      if (regSaveArea && overflowArgArea && gpOffset) {
-        const index = this.property.generateIR(gen, scope);
+      if (variadicStart && regSaveArea && overflowArgArea) {
+        const index = this.property.toIR(gen, scope);
+        const startOffset = parseInt(variadicStart.irName!); // Assuming constant for now
 
-        // Ensure index is i64
-        let idxVal = index;
-        const indexType = this.resolveExpressionType(this.property, scope);
-        if (indexType && this.getIntSize(indexType.name) < 8) {
-          const castReg = gen.generateReg("idx_ext");
-          const isSigned = ["i32", "i16", "i8"].includes(indexType.name);
-          const op = isSigned ? "sext" : "zext";
-          const llvmType = gen.mapType(indexType);
-          gen.emit(`${castReg} = ${op} ${llvmType} ${index} to i64`);
-          idxVal = castReg;
-        }
-
-        const gpCount = gpOffset.llvmName!; // This is the constant string count
-
-        const totalIdx = gen.generateReg("total_idx");
-        gen.emit(`${totalIdx} = add i64 ${idxVal}, ${gpCount}`);
-
-        const cond = gen.generateReg("cond");
-        gen.emit(`${cond} = icmp ult i64 ${totalIdx}, 6`);
-
-        // Reg Save Area Address
-        const regOffset = gen.generateReg("reg_offset");
-        gen.emit(`${regOffset} = mul i64 ${totalIdx}, 8`);
-        const regPtr = gen.generateReg("reg_ptr");
-        gen.emit(
-          `${regPtr} = getelementptr i8, ptr ${regSaveArea.llvmName}, i64 ${regOffset}`,
+        // Calculate current offset: startOffset * 8 + index * 8
+        const indexScaled = gen.emitBinary(IROpcode.MUL, "i64", index, "8");
+        const startOffsetBytes = startOffset * 8;
+        const currentOffset = gen.emitBinary(
+          IROpcode.ADD,
+          "i64",
+          indexScaled,
+          startOffsetBytes.toString(),
         );
 
-        // Overflow Arg Area Address
-        const stackIdx = gen.generateReg("stack_idx");
-        gen.emit(`${stackIdx} = sub i64 ${totalIdx}, 6`);
-        const stackOffset = gen.generateReg("stack_offset");
-        gen.emit(`${stackOffset} = mul i64 ${stackIdx}, 8`);
-        const stackPtr = gen.generateReg("stack_ptr");
-        gen.emit(
-          `${stackPtr} = getelementptr i8, ptr ${overflowArgArea.llvmName}, i64 ${stackOffset}`,
+        // Check if in registers (offset < 48)
+        const inRegs = gen.emitBinary(IROpcode.LT, "i64", currentOffset, "48");
+        // inRegs is i1 (from icmp)
+
+        const labelRegs = gen.createBlock("va_regs");
+        const labelStack = gen.createBlock("va_stack");
+        const labelMerge = gen.createBlock("va_merge");
+
+        const resultPtr = gen.emitAlloca(
+          { type: "pointer", base: { type: "i8" } },
+          "va_arg_ptr",
         );
 
-        const ptr = gen.generateReg("arg_ptr");
-        gen.emit(`${ptr} = select i1 ${cond}, ptr ${regPtr}, ptr ${stackPtr}`);
+        gen.emitCondBranch(inRegs, labelRegs.name, labelStack.name);
 
-        if (isLHS) {
+        // Registers
+        gen.setBlock(labelRegs);
+        const regAddr = gen.emitGEP({ type: "i8" }, regSaveArea.irName!, [
+          currentOffset,
+        ]);
+        gen.emitStore(
+          { type: "pointer", base: { type: "i8" } },
+          regAddr,
+          resultPtr,
+        );
+        gen.emitBranch(labelMerge.name);
+
+        // Stack
+        gen.setBlock(labelStack);
+        const stackOffset = gen.emitBinary(
+          IROpcode.SUB,
+          "i64",
+          currentOffset,
+          "48",
+        );
+        const stackAddr = gen.emitGEP({ type: "i8" }, overflowArgArea.irName!, [
+          stackOffset,
+        ]);
+        gen.emitStore(
+          { type: "pointer", base: { type: "i8" } },
+          stackAddr,
+          resultPtr,
+        );
+        gen.emitBranch(labelMerge.name);
+
+        gen.setBlock(labelMerge);
+        const finalPtr = gen.emitLoad(
+          { type: "pointer", base: { type: "i8" } },
+          resultPtr,
+        );
+
+        // If !isLHS, load the value (u64)
+        if (!isLHS) {
+          return gen.emitLoad({ type: "i64" }, finalPtr);
+        } else {
           scope.setCurrentContext({ type: "LHS" });
-          return ptr;
+          return finalPtr;
         }
-
-        const val = gen.generateReg("arg_val");
-        gen.emit(`${val} = load i64, ptr ${ptr}`);
-        return val;
       }
-
-      throw new Error(
-        "Variadic arguments 'args' not implemented for LLVM backend yet.",
-      );
     }
 
+    const ptr = this.getAddress(gen, scope);
+
+    if (isLHS) {
+      scope.setCurrentContext({ type: "LHS" });
+      return ptr;
+    }
+
+    const resultType = this.resolveExpressionType(this, scope);
+    if (!resultType) throw new Error("Cannot resolve result type");
+
+    if (resultType.isArray.length > 0) {
+      const arrayType = gen.getIRType(resultType);
+      return gen.emitGEP(arrayType, ptr, ["0", "0"]);
+    }
+
+    const type = gen.getIRType(resultType);
+    return gen.emitLoad(type, ptr);
+  }
+
+  getAddress(gen: IRGenerator, scope: Scope): string {
     const objectType = this.resolveExpressionType(this.object, scope);
     if (!objectType) throw new Error("Cannot resolve object type");
 
     let basePtr: string;
-    // If object is a struct/array variable, we need its address (LHS).
-    // If object is a pointer, we need its value (RHS).
-    if (objectType.isPointer === 0 && objectType.isArray.length === 0) {
-      scope.setCurrentContext({ type: "LHS" });
-      basePtr = this.object.generateIR(gen, scope);
-      scope.removeCurrentContext("LHS");
+
+    if (objectType.isPointer > 0) {
+      basePtr = this.object.toIR(gen, scope);
     } else if (objectType.isArray.length > 0) {
-      scope.setCurrentContext({ type: "LHS" });
-      basePtr = this.object.generateIR(gen, scope);
-      scope.removeCurrentContext("LHS");
+      basePtr = this.object.toIR(gen, scope);
     } else {
-      basePtr = this.object.generateIR(gen, scope);
+      basePtr = this.object.getAddress(gen, scope);
     }
 
-    let resultPtr: string;
-
     if (this.isIndexAccess) {
-      let index = this.property.generateIR(gen, scope);
-
-      // Cast index to i64 if needed
+      let index = this.property.toIR(gen, scope);
       const indexType = this.resolveExpressionType(this.property, scope);
-      if (indexType) {
-        const typeName = indexType.name;
-        if (["i32", "u32", "i16", "u16", "i8", "u8"].includes(typeName)) {
-          const castReg = gen.generateReg("idx_ext");
-          const isSigned = typeName.startsWith("i");
-          const op = isSigned ? "sext" : "zext";
-          const llvmType = gen.mapType(indexType);
-          gen.emit(`${castReg} = ${op} ${llvmType} ${index} to i64`);
-          index = castReg;
-        }
+
+      if (indexType && this.getIntSize(indexType.name) < 8) {
+        const isSigned = ["i8", "i16", "i32"].includes(indexType.name);
+        const opcode = isSigned ? IROpcode.SEXT : IROpcode.ZEXT;
+        index = gen.emitCast(
+          opcode,
+          index,
+          { type: "i64" },
+          gen.getIRType(indexType),
+        );
       }
 
-      const resultReg = gen.generateReg("elem");
-
-      if (objectType.isArray.length > 0) {
-        const arrayType = gen.mapType(objectType);
-        gen.emit(
-          `${resultReg} = getelementptr ${arrayType}, ptr ${basePtr}, i64 0, i64 ${index}`,
-        );
+      let elemType: VariableType;
+      if (objectType.isPointer > 0) {
+        elemType = { ...objectType, isPointer: objectType.isPointer - 1 };
+      } else if (objectType.isArray.length > 0) {
+        elemType = { ...objectType, isArray: objectType.isArray.slice(1) };
       } else {
-        // Pointer
-        const pointedType = {
-          ...objectType,
-          isPointer: objectType.isPointer - 1,
-        };
-        const llvmPointedType = gen.mapType(pointedType);
-        gen.emit(
-          `${resultReg} = getelementptr ${llvmPointedType}, ptr ${basePtr}, i64 ${index}`,
-        );
+        throw new Error("Cannot index non-pointer/non-array");
       }
-      resultPtr = resultReg;
+
+      const irElemType = gen.getIRType(elemType);
+      return gen.emitGEP(irElemType, basePtr, [index]);
     } else {
       const propertyName = (this.property as IdentifierExpr).name;
-      let typeInfo;
+      let typeInfo = scope.resolveType(objectType.name);
       if (objectType.genericArgs && objectType.genericArgs.length > 0) {
         typeInfo = scope.resolveGenericType(
           objectType.name,
           objectType.genericArgs,
         );
-      } else {
-        typeInfo = scope.resolveType(objectType.name);
       }
 
-      if (!typeInfo) {
-        // Try to resolve generic type if applicable
-        if (objectType.genericArgs && objectType.genericArgs.length > 0) {
-          // ...
-        }
-        // If still not found, check if it's a primitive type that hasn't been defined in scope yet?
-        // Primitives should be pre-defined.
-        // Maybe it's u64?
-        if (
-          [
-            "u64",
-            "i64",
-            "f64",
-            "u32",
-            "i32",
-            "f32",
-            "u16",
-            "i16",
-            "u8",
-            "i8",
-            "bool",
-            "char",
-            "void",
-          ].includes(objectType.name)
-        ) {
-          // It is a primitive, but maybe scope doesn't have TypeInfo for it?
-          // We should construct a temporary TypeInfo for primitives if missing.
-          // But normally HelperGenerator or Scope should have them.
-        }
-
-        throw new Error(`Undefined type '${objectType.name}'`);
-      }
+      if (!typeInfo) throw new Error(`Undefined type ${objectType.name}`);
 
       let memberIndex = 0;
       let found = false;
@@ -552,53 +307,17 @@ export default class MemberAccessExpr extends Expression {
         }
         memberIndex++;
       }
-      if (!found)
-        throw new Error(
-          `Member ${propertyName} not found in ${objectType.name}`,
-        );
+      if (!found) throw new Error(`Member ${propertyName} not found`);
 
-      const resultReg = gen.generateReg("member");
-      // We need the underlying struct type for GEP, not the pointer type
-      const structType = gen.mapType({ ...objectType, isPointer: 0 });
-      gen.emit(
-        `${resultReg} = getelementptr ${structType}, ptr ${basePtr}, i32 0, i32 ${memberIndex}`,
-      );
-      resultPtr = resultReg;
-    }
-
-    if (isLHS) {
-      scope.setCurrentContext({ type: "LHS" });
-      return resultPtr;
-    } else {
-      const resultType = this.resolveExpressionType(this, scope);
-      if (!resultType) throw new Error("Cannot resolve result type");
-
-      // If result is struct or array, return pointer (address)
-      // If result is primitive/pointer, load value
-      const isArray = resultType.isArray.length > 0;
-      let typeInfoForStructCheck;
-      if (resultType.genericArgs && resultType.genericArgs.length > 0) {
-        typeInfoForStructCheck = scope.resolveGenericType(
-          resultType.name,
-          resultType.genericArgs,
-        );
-      } else {
-        typeInfoForStructCheck = scope.resolveType(resultType.name);
-      }
-
-      const isStruct =
-        !resultType.isPointer &&
-        !isArray &&
-        typeInfoForStructCheck?.isPrimitive === false;
-
-      if (isArray) {
-        return resultPtr;
-      } else {
-        const llvmType = gen.mapType(resultType);
-        const valReg = gen.generateReg("val");
-        gen.emit(`${valReg} = load ${llvmType}, ptr ${resultPtr}`);
-        return valReg;
-      }
+      const structType = gen.getIRType({
+        ...objectType,
+        isPointer: 0,
+        isArray: [],
+      });
+      return gen.emitGEP(structType, basePtr, [
+        { value: "0", type: "i32" },
+        { value: memberIndex.toString(), type: "i32" },
+      ]);
     }
   }
 }

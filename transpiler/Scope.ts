@@ -10,6 +10,7 @@ export interface VarInfo {
   sourceFile?: string;
   usageCount?: number; // Track number of times variable is used
   llvmName?: string;
+  irName?: string;
 }
 
 export type ContextType =
@@ -64,6 +65,7 @@ export type FunctionInfo = {
   declaration?: Token;
   sourceFile?: string;
   llvmName?: string;
+  irName?: string;
 };
 
 export default class Scope {

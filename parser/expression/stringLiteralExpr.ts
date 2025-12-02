@@ -1,7 +1,6 @@
 import type Token from "../../lexer/token";
-import type AsmGenerator from "../../transpiler/AsmGenerator";
 import type Scope from "../../transpiler/Scope";
-import type LlvmGenerator from "../../transpiler/LlvmGenerator";
+import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
 
@@ -37,16 +36,7 @@ export default class StringLiteralExpr extends Expression {
       .replaceAll("\\t", '", 0x09, "');
   }
 
-  transpile(gen: AsmGenerator, scope: Scope): void {
-    const label = gen.generateLabel("str_");
-    gen.emitRoData(label, "db", `"${this.formatString()}", 0`);
-    gen.emit(
-      `lea rax, [rel ${label}]`,
-      `Load address of string literal "${this.value}"`,
-    );
-  }
-
-  generateIR(gen: LlvmGenerator, scope: Scope): string {
+  toIR(gen: IRGenerator, scope: Scope): string {
     const unescaped = this.value
       .replace(/\\n/g, "\n")
       .replace(/\\t/g, "\t")

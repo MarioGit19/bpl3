@@ -1,9 +1,8 @@
-import type AsmGenerator from "./AsmGenerator";
 import type Scope from "./Scope";
 
 export default class HelperGenerator {
   // #region Base Types
-  static generateBaseTypes(gen: AsmGenerator, scope: Scope): void {
+  static generateBaseTypes(scope: Scope): void {
     scope.defineType("u8", {
       size: 1,
       alignment: 1,

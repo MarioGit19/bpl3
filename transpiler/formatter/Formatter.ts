@@ -22,6 +22,7 @@ import AsmBlockExpr from "../../parser/expression/asmBlockExpr";
 import UnaryExpr from "../../parser/expression/unaryExpr";
 import TernaryExpr from "../../parser/expression/ternaryExpr";
 import SwitchExpr from "../../parser/expression/switchExpr";
+import StructLiteralExpr from "../../parser/expression/structLiteralExpr";
 import Token from "../../lexer/token";
 import TokenType from "../../lexer/tokenType";
 
@@ -101,6 +102,8 @@ export class Formatter {
         return this.visitMemberAccess(expr as MemberAccessExpr);
       case ExpressionType.ArrayLiteralExpr:
         return this.visitArrayLiteral(expr as ArrayLiteralExpr);
+      case ExpressionType.StructLiteralExpr:
+        return this.visitStructLiteral(expr as StructLiteralExpr);
       case ExpressionType.AsmBlockExpression:
         return this.visitAsmBlock(expr as AsmBlockExpr);
       case ExpressionType.UnaryExpression:
@@ -495,6 +498,19 @@ export class Formatter {
 
   private visitArrayLiteral(expr: ArrayLiteralExpr): string {
     return `[${expr.elements.map((e) => this.visit(e)).join(", ")}]`;
+  }
+
+  private visitStructLiteral(expr: StructLiteralExpr): string {
+    if (expr.fields.length === 0) {
+      return "{}";
+    }
+    const fields = expr.fields.map((field) => {
+      if (field.fieldName) {
+        return `${field.fieldName}: ${this.visit(field.value)}`;
+      }
+      return this.visit(field.value);
+    });
+    return `{${fields.join(", ")}}`;
   }
 
   private visitAsmBlock(expr: AsmBlockExpr): string {

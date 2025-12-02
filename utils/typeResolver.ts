@@ -93,6 +93,14 @@ export function resolveExpressionType(
       return { name: "u8", isPointer: 0, isArray: [] };
     }
 
+    const leftSize = leftType ? getIntSize(leftType.name) : 8;
+    const rightSize = rightType ? getIntSize(rightType.name) : 8;
+    const maxSize = Math.max(leftSize, rightSize);
+
+    if (maxSize <= 4) {
+      return { name: "i32", isPointer: 0, isArray: [] };
+    }
+
     return { name: "i64", isPointer: 0, isArray: [] };
   }
   if (expr.type === ExpressionType.MemberAccessExpression) {
@@ -159,6 +167,8 @@ export function resolveExpressionType(
           isArray: opType.isArray,
         };
       }
+    } else if (unaryExpr.operator.type === TokenType.NOT) {
+      return { name: "u8", isPointer: 0, isArray: [] };
     }
     // Handle other unary ops if needed (e.g. MINUS preserves type)
     return resolveExpressionType(unaryExpr.right, scope);

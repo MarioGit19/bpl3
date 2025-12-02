@@ -1,5 +1,4 @@
-import type AsmGenerator from "../../transpiler/AsmGenerator";
-import type LlvmGenerator from "../../transpiler/LlvmGenerator";
+import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
@@ -61,406 +60,184 @@ export default class FunctionDeclarationExpr extends Expression {
     return this;
   }
 
-  transpile(gen: AsmGenerator, scope: Scope): void {
-    const label = gen.generateLabel(`func_${this.name}_`);
-    const endLabel = label + "_end";
-
-    if (this.name === "main") {
-      gen.emitGlobalDefinition(`_user_main equ ${label}`);
-    }
-    gen.emitLabel(label);
-
-    const funcScope = this.setupFunctionScope(scope, label, endLabel);
-
-    // Function prologue
-    if (this.startToken) gen.emitSourceLocation(this.startToken.line);
-    gen.emit("push rbp", "save base pointer");
-    gen.emit("mov rbp, rsp", "set new base pointer");
-
-    const { intArgIndex, floatArgIndex } = this.handleArguments(
-      gen,
-      scope,
-      funcScope,
-    );
-
-    this.handleVariadicArguments(gen, funcScope, intArgIndex, floatArgIndex);
-
-    // Reserve space for locals
-    const localsStackIndex = gen.getCurrentLineIndex();
-    gen.emit("sub rsp, 0", "reserve space for locals (placeholder)");
-    const startStackOffset = funcScope.stackOffset;
-
-    // body
-    this.body.transpile(gen, funcScope);
-
-    // Calculate locals size and patch
-    const localsSize = funcScope.stackOffset - startStackOffset;
-    const totalStackSize = funcScope.stackOffset;
-    const padding = (16 - (totalStackSize % 16)) % 16;
-    const totalLocalsAllocation = localsSize + padding;
-
-    if (totalLocalsAllocation > 0) {
-      gen.patchLine(
-        localsStackIndex,
-        `sub rsp, ${totalLocalsAllocation}`,
-        `allocate space for locals (size: ${localsSize}, align: ${padding})`,
-      );
-    } else {
-      // If no locals, we can remove the instruction or make it a comment
-      gen.patchLine(localsStackIndex, `nop`, `no locals to allocate`);
-    }
-
-    funcScope.removeCurrentContext("function");
-
-    // Function epilogue
-    gen.emitLabel(endLabel);
-    gen.emit("mov rsp, rbp", "reset stack pointer");
-    gen.emit("pop rbp", "restore base pointer");
-    gen.emit("ret", "return from function");
-    // funcScope.allocLocal(-8); // RBP
-  }
-
-  private setupFunctionScope(
-    scope: Scope,
-    label: string,
-    endLabel: string,
-  ): Scope {
-    const existingFunc = scope.resolveFunction(this.name);
-    if (existingFunc) {
-      // Update existing function definition (e.g. from SemanticAnalyzer or forward declaration)
-      existingFunc.label = label;
-      existingFunc.startLabel = label;
-      existingFunc.endLabel = endLabel;
-      // We could also verify that args and return type match here
-    } else {
-      scope.defineFunction(this.name, {
-        args: this.args,
-        returnType: this.returnType,
-        endLabel: endLabel,
-        label: label,
-        name: this.name,
-        startLabel: label,
-        declaration: this.startToken,
-        isVariadic: this.isVariadic,
-      });
-    }
-
-    // Ensure generic types are instantiated for args and return type
-    this.args.forEach((arg) => {
-      if (arg.type.genericArgs && arg.type.genericArgs.length > 0) {
-        scope.resolveGenericType(arg.type.name, arg.type.genericArgs);
-      }
-    });
-
-    if (
-      this.returnType &&
-      this.returnType.genericArgs &&
-      this.returnType.genericArgs.length > 0
-    ) {
-      scope.resolveGenericType(
-        this.returnType.name,
-        this.returnType.genericArgs,
-      );
-    }
-
-    const funcScope = new Scope(scope);
-    funcScope.setCurrentContext({
-      type: "function",
-      label: label,
-      endLabel: endLabel,
-      returnType: this.returnType,
-    });
-    return funcScope;
-  }
-
-  private handleArguments(
-    gen: AsmGenerator,
-    scope: Scope,
-    funcScope: Scope,
-  ): { intArgIndex: number; floatArgIndex: number } {
-    let isStructReturn = false;
-    if (
-      this.returnType &&
-      !this.returnType.isPointer &&
-      !this.returnType.isArray.length
-    ) {
-      const typeInfo = scope.resolveType(this.returnType.name);
-      if (typeInfo && !typeInfo.isPrimitive) {
-        isStructReturn = true;
-      }
-    }
-
-    // Set up function arguments in the new scope
-    if (this.args.length > 0 || isStructReturn) {
-      const stackSpace = (this.args.length + (isStructReturn ? 1 : 0)) * 8;
-      gen.emit(`sub rsp, ${stackSpace}`, "allocate space for arguments");
-    }
-
-    if (isStructReturn) {
-      const offset = funcScope.allocLocal(8);
-      gen.emit(`mov [rbp - ${offset}], rdi`, `store hidden return pointer`);
-      funcScope.define("__return_slot__", {
-        offset: offset.toString(),
-        type: "local",
-        varType: { name: "u64", isPointer: 1, isArray: [] }, // Treat as pointer
-      });
-    }
-
-    let intArgIndex = isStructReturn ? 1 : 0;
-    let floatArgIndex = 0;
-
-    this.args.forEach((arg, index) => {
-      const offset = funcScope.allocLocal(8);
-      let reg = "";
-      const isFloat = arg.type.name === "f32" || arg.type.name === "f64";
-
-      if (isFloat) {
-        if (floatArgIndex < 8) {
-          reg = `xmm${floatArgIndex++}`;
-        }
-      } else {
-        if (intArgIndex < this.argOrders.length) {
-          reg = this.argOrders[intArgIndex++]!;
-        }
-      }
-
-      if (reg) {
-        if (isFloat) {
-          gen.emit(`movq rax, ${reg}`, `Move float arg ${arg.name} to rax`);
-          gen.emit(
-            `mov [rbp - ${offset}], rax`,
-            `store argument ${arg.name} (float)`,
-          );
-        } else {
-          gen.emit(
-            `mov [rbp - ${offset}], ${reg}`,
-            `store argument ${arg.name}`,
-          );
-        }
-      } else {
-        // Handle arguments passed on stack (if > 6 args)
-        // For now, assume < 6 args + return pointer
-        // Stack args are at [rbp + 16 + (index - 6) * 8]
-        // But we need to account for return pointer shifting registers
-        // This is getting complicated for > 6 args.
-        // Let's assume < 6 args for now.
-        throw new Error(
-          "Too many arguments (stack passing not fully implemented with struct return)",
-        );
-      }
-
-      funcScope.define(arg.name, {
-        offset: offset.toString(),
-        type: "local",
-        varType: arg.type,
-        isParameter: true,
-      });
-    });
-
-    return { intArgIndex, floatArgIndex };
-  }
-
-  private handleVariadicArguments(
-    gen: AsmGenerator,
-    funcScope: Scope,
-    intArgIndex: number,
-    floatArgIndex: number,
-  ): void {
-    if (this.isVariadic && this.variadicType) {
-      // Spill remaining registers to stack for variadic access
-      // We only support u64 variadic args for now (GP registers)
-      // If variadicType is float, we should spill XMM registers.
-      // Assuming u64 for now as per user request.
-
-      const isFloatVariadic =
-        this.variadicType.name === "f32" || this.variadicType.name === "f64";
-
-      if (isFloatVariadic) {
-        // Spill XMM registers
-        const startReg = floatArgIndex;
-        const numRegs = 8 - startReg;
-        if (numRegs > 0) {
-          const spillSize = numRegs * 8;
-          gen.emit(
-            `sub rsp, ${spillSize}`,
-            `allocate space for variadic float registers`,
-          );
-          const baseOffset = funcScope.stackOffset + spillSize; // Offset from RBP to start of spill area (bottom)
-          // Actually, let's just allocate and store.
-          // We want them contiguous.
-          // [xmm0, xmm1, ...]
-          // If we push, we get reverse order?
-          // Let's use mov.
-          for (let i = 0; i < numRegs; i++) {
-            const regIndex = startReg + i;
-            const offset = funcScope.allocLocal(8);
-            gen.emit(`movq rax, xmm${regIndex}`, `Move variadic arg to rax`);
-            gen.emit(
-              `mov [rbp - ${offset}], rax`,
-              `store variadic arg (xmm${regIndex})`,
-            );
-          }
-          // Define a special variable to know where the register save area starts
-          // The first variadic register is at [rbp - (baseOffset - (numRegs-1)*8)]?
-          // No, we allocated sequentially.
-          // First (startReg) is at [rbp - (stackOffset_before + 8)]
-          // Last is at [rbp - stackOffset_after]
-          // So they are contiguous in memory:
-          // High Addr: [Arg0]
-          // Low Addr: [ArgN]
-          // This is reverse order of array indexing if we want args[0] to be Arg0.
-          // args[0] should be at High Addr.
-          // args[1] should be at Lower Addr.
-          // So args[i] address = Base - i*8.
-          // Base = Address of Arg0.
-          // Address of Arg0 = rbp - (stackOffset_start + 8).
-
-          funcScope.define("__variadic_start_offset__", {
-            offset: (funcScope.stackOffset - numRegs * 8 + 8).toString(), // Offset of the *first* variadic arg (Arg0)
-            type: "local",
-            varType: this.variadicType,
-            isParameter: true, // Mark as parameter-like
-          });
-          funcScope.define("__variadic_reg_count__", {
-            offset: numRegs.toString(), // Store count as offset string (hack)
-            type: "local",
-            varType: { name: "u64", isPointer: 0, isArray: [] },
-            isParameter: true,
-          });
-        }
-      } else {
-        // Spill GP registers
-        const startReg = intArgIndex;
-        const numRegs = 6 - startReg;
-        if (numRegs > 0) {
-          const spillSize = numRegs * 8;
-          gen.emit(
-            `sub rsp, ${spillSize}`,
-            `allocate space for variadic GP registers`,
-          );
-
-          // We want args[0] (startReg) to be at High Address.
-          // args[1] at Lower Address.
-          // So we store startReg at [rbp - (current + 8)]
-          // startReg+1 at [rbp - (current + 16)]
-
-          const startOffset = funcScope.stackOffset + 8;
-
-          for (let i = 0; i < numRegs; i++) {
-            const regIndex = startReg + i;
-            const offset = funcScope.allocLocal(8);
-            gen.emit(
-              `mov [rbp - ${offset}], ${this.argOrders[regIndex]}`,
-              `store variadic arg (${this.argOrders[regIndex]})`,
-            );
-          }
-
-          funcScope.define("__variadic_start_offset__", {
-            offset: startOffset.toString(),
-            type: "local",
-            varType: this.variadicType,
-            isParameter: true,
-          });
-          funcScope.define("__variadic_reg_count__", {
-            offset: numRegs.toString(),
-            type: "local",
-            varType: { name: "u64", isPointer: 0, isArray: [] },
-            isParameter: true,
-          });
-        } else {
-          // No registers used for variadic, all on stack
-          funcScope.define("__variadic_reg_count__", {
-            offset: "0",
-            type: "local",
-            varType: { name: "u64", isPointer: 0, isArray: [] },
-            isParameter: true,
-          });
-        }
-      }
-    }
-  }
-
-  generateIR(gen: LlvmGenerator, scope: Scope): string {
-    // Ensure generic types are instantiated for args and return type
-    this.args.forEach((arg) => {
-      if (arg.type.genericArgs && arg.type.genericArgs.length > 0) {
-        scope.resolveGenericType(arg.type.name, arg.type.genericArgs);
-      }
-    });
-
-    if (
-      this.returnType &&
-      this.returnType.genericArgs &&
-      this.returnType.genericArgs.length > 0
-    ) {
-      scope.resolveGenericType(
-        this.returnType.name,
-        this.returnType.genericArgs,
-      );
-    }
-
-    const returnType = this.returnType ? gen.mapType(this.returnType) : "void";
+  toIR(gen: IRGenerator, scope: Scope): string {
     const name = this.name === "main" ? "user_main" : this.name;
 
+    const resolvedArgs = this.args.map((arg) => {
+      let argType = arg.type;
+      if (arg.type.genericArgs && arg.type.genericArgs.length > 0) {
+        const typeInfo = scope.resolveGenericType(
+          arg.type.name,
+          arg.type.genericArgs,
+        );
+        if (typeInfo) {
+          argType = { ...arg.type, name: typeInfo.name, genericArgs: [] };
+          gen.registerStruct(typeInfo, scope);
+        }
+      } else {
+        const typeInfo = scope.resolveType(arg.type.name);
+        if (typeInfo && !typeInfo.isPrimitive) {
+          gen.registerStruct(typeInfo, scope);
+        }
+      }
+      return { ...arg, type: argType };
+    });
+
+    let resolvedReturnType = this.returnType;
+    if (
+      this.returnType &&
+      this.returnType.genericArgs &&
+      this.returnType.genericArgs.length > 0
+    ) {
+      const typeInfo = scope.resolveGenericType(
+        this.returnType.name,
+        this.returnType.genericArgs,
+      );
+      if (typeInfo) {
+        resolvedReturnType = {
+          ...this.returnType,
+          name: typeInfo.name,
+          genericArgs: [],
+        };
+        gen.registerStruct(typeInfo, scope);
+      }
+    } else if (this.returnType) {
+      const typeInfo = scope.resolveType(this.returnType.name);
+      if (typeInfo && !typeInfo.isPrimitive) {
+        gen.registerStruct(typeInfo, scope);
+      }
+    }
+
+    const irArgs = resolvedArgs.map((arg) => ({
+      name: arg.name,
+      type: gen.getIRType(arg.type),
+    }));
+
+    const irReturnType = resolvedReturnType
+      ? gen.getIRType(resolvedReturnType)
+      : ({ type: "void" } as any);
+
+    const irName = name;
+    gen.createFunction(irName, irArgs, irReturnType, this.isVariadic);
+
     const existingFunc = scope.resolveFunction(this.name);
-    if (!existingFunc) {
+    if (existingFunc) {
+      existingFunc.irName = name;
+      existingFunc.args = resolvedArgs;
+      existingFunc.returnType = resolvedReturnType;
+    } else {
       scope.defineFunction(this.name, {
-        args: this.args,
-        returnType: this.returnType,
+        args: resolvedArgs,
+        returnType: resolvedReturnType,
         endLabel: name + "_end",
         label: name,
         name: this.name,
         startLabel: name,
         declaration: this.startToken,
         isVariadic: this.isVariadic,
+        irName: name,
       });
     }
-
-    const argsList = this.args
-      .map((arg) => {
-        const type = gen.mapType(arg.type);
-        return `${type} %${arg.name}_arg`;
-      })
-      .join(", ");
-
-    const signatureArgs = this.isVariadic
-      ? argsList
-        ? argsList + ", ..."
-        : "..."
-      : argsList;
-
-    gen.emit(`define ${returnType} @${name}(${signatureArgs}) {`);
-    gen.emit("entry:");
 
     const funcScope = new Scope(scope);
     funcScope.setCurrentContext({
       type: "function",
       label: name,
       endLabel: name + "_end",
-      returnType: this.returnType,
+      returnType: resolvedReturnType,
+    });
+
+    const entryBlock = gen.createBlock("entry");
+    gen.setBlock(entryBlock);
+
+    resolvedArgs.forEach((arg, index) => {
+      const irType = irArgs[index]!.type;
+      const argVal = `%${arg.name}`;
+      const ptr = gen.emitAlloca(irType, arg.name);
+      gen.emitStore(irType, argVal, ptr);
+
+      funcScope.define(arg.name, {
+        type: "local",
+        offset: "0",
+        varType: arg.type,
+        irName: ptr,
+      });
     });
 
     if (this.isVariadic) {
-      gen.emitGlobal("declare void @llvm.va_start(ptr)");
+      // Define 'args' to enable detection in MemberAccessExpr
+      funcScope.define("args", {
+        offset: "0",
+        type: "local",
+        varType: { name: "u64", isPointer: 1, isArray: [] }, // Treat as pointer-like for resolution
+        irName: "args_marker",
+      });
 
-      const vaList = gen.generateLocal("va_list");
-      gen.emit(`  %${vaList} = alloca %struct.__va_list_tag`);
-      gen.emit(`  call void @llvm.va_start(ptr %${vaList})`);
+      // Emit va_start logic
+      gen.ensureIntrinsic(
+        "llvm.va_start",
+        [{ name: "list", type: { type: "pointer", base: { type: "i8" } } }],
+        { type: "void" },
+      );
+
+      // Define struct.__va_list_tag if not exists
+      if (!gen.module.structs.some((s) => s.name === "struct.__va_list_tag")) {
+        gen.module.addStruct("struct.__va_list_tag", [
+          { type: "i32" },
+          { type: "i32" },
+          { type: "pointer", base: { type: "i8" } },
+          { type: "pointer", base: { type: "i8" } },
+        ]);
+      }
+
+      const vaList = gen.emitAlloca(
+        { type: "struct", name: "struct.__va_list_tag", fields: [] },
+        "va_list",
+      );
+      gen.emitCall(
+        "llvm.va_start",
+        [{ value: vaList, type: { type: "pointer", base: { type: "i8" } } }],
+        { type: "void" },
+      );
 
       // Extract reg_save_area (index 3) and overflow_arg_area (index 2)
-      const regSaveAreaPtr = gen.generateReg("reg_save_area_ptr");
-      gen.emit(
-        `  ${regSaveAreaPtr} = getelementptr inbounds %struct.__va_list_tag, ptr %${vaList}, i32 0, i32 3`,
-      );
-      const regSaveArea = gen.generateReg("reg_save_area");
-      gen.emit(`  ${regSaveArea} = load ptr, ptr ${regSaveAreaPtr}`);
+      // We need to know the structure of va_list. It is target dependent.
+      // On x86_64 linux it is:
+      // struct __va_list_tag {
+      //   i32 gp_offset;
+      //   i32 fp_offset;
+      //   ptr overflow_arg_area;
+      //   ptr reg_save_area;
+      // }
+      // We can use getelementptr to access fields.
 
-      const overflowArgAreaPtr = gen.generateReg("overflow_arg_area_ptr");
-      gen.emit(
-        `  ${overflowArgAreaPtr} = getelementptr inbounds %struct.__va_list_tag, ptr %${vaList}, i32 0, i32 2`,
+      // reg_save_area is at index 3
+      const regSaveAreaPtr = gen.emitGEP(
+        { type: "struct", name: "struct.__va_list_tag", fields: [] },
+        vaList,
+        [
+          { value: "0", type: "i32" },
+          { value: "3", type: "i32" },
+        ],
       );
-      const overflowArgArea = gen.generateReg("overflow_arg_area");
-      gen.emit(`  ${overflowArgArea} = load ptr, ptr ${overflowArgAreaPtr}`);
+      const regSaveArea = gen.emitLoad(
+        { type: "pointer", base: { type: "i8" } },
+        regSaveAreaPtr,
+      );
+
+      // overflow_arg_area is at index 2
+      const overflowArgAreaPtr = gen.emitGEP(
+        { type: "struct", name: "struct.__va_list_tag", fields: [] },
+        vaList,
+        [
+          { value: "0", type: "i32" },
+          { value: "2", type: "i32" },
+        ],
+      );
+      const overflowArgArea = gen.emitLoad(
+        { type: "pointer", base: { type: "i8" } },
+        overflowArgAreaPtr,
+      );
 
       // Count fixed GP arguments
       let gpCount = 0;
@@ -473,55 +250,30 @@ export default class FunctionDeclarationExpr extends Expression {
         offset: "0",
         type: "local",
         varType: { name: "u64", isPointer: 1, isArray: [] },
-        llvmName: regSaveArea,
+        irName: regSaveArea,
       });
 
       funcScope.define("__va_overflow_arg_area__", {
         offset: "0",
         type: "local",
         varType: { name: "u64", isPointer: 1, isArray: [] },
-        llvmName: overflowArgArea,
+        irName: overflowArgArea,
       });
 
       funcScope.define("__va_gp_offset__", {
         offset: gpCount.toString(),
         type: "local",
         varType: { name: "u64", isPointer: 0, isArray: [] },
-        llvmName: gpCount.toString(), // Store as constant string if possible, or we can use it directly
-      });
-
-      // Define 'args' to enable detection in MemberAccessExpr
-      funcScope.define("args", {
-        offset: "0",
-        type: "local",
-        varType: { name: "u64", isPointer: 1, isArray: [] }, // Treat as pointer-like for resolution
-        llvmName: "args_marker",
+        irName: gpCount.toString(),
       });
     }
 
-    this.args.forEach((arg) => {
-      const type = gen.mapType(arg.type);
-      const ptr = gen.generateLocal(arg.name);
-      gen.emit(`  %${ptr} = alloca ${type}`);
-      gen.emit(`  store ${type} %${arg.name}_arg, ptr %${ptr}`);
+    this.body.toIR(gen, funcScope);
 
-      funcScope.define(arg.name, {
-        offset: "0",
-        type: "local",
-        varType: arg.type,
-        llvmName: `%${ptr}`,
-      });
-    });
-
-    this.body.generateIR(gen, funcScope);
-
-    if (returnType === "void") {
-      gen.emit("  ret void");
-    } else {
-      gen.emit("  unreachable");
+    if (irReturnType.type === "void") {
+      gen.emitReturn(null);
     }
 
-    gen.emit("}");
     return "";
   }
 }

@@ -15,10 +15,12 @@ asm {
 
 ### Variable Interpolation
 
-You can access BPL variables inside the `asm` block by wrapping them in parentheses `(varName)`. The compiler replaces these with the appropriate memory address or register reference.
+You can access BPL variables inside the `asm` block by wrapping them in parentheses `(varName)`. The compiler replaces these with a register containing the memory address of the variable.
 
-- **Local Variables**: Replaced with `[rbp - offset]`.
-- **Global Variables**: Replaced with `[rel varName]`.
+- **Local Variables**: Replaced with a register holding the stack address.
+- **Global Variables**: Replaced with a register holding the global address.
+
+To access the value, you must dereference the register using `[(varName)]`.
 
 ```bpl
 frame main() ret u8 {
@@ -27,9 +29,9 @@ frame main() ret u8 {
     local result: u64;
 
     asm {
-        mov rax, (a)      ; Load 'a' into RAX
-        add rax, (b)      ; Add 'b' to RAX
-        mov (result), rax ; Store result
+        mov rax, [(a)]      ; Load value of 'a' into RAX
+        add rax, [(b)]      ; Add value of 'b' to RAX
+        mov [(result)], rax ; Store result
     }
 
     return 0;

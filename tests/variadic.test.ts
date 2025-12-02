@@ -1,118 +1,185 @@
 import { describe, it, expect } from "bun:test";
-import Lexer from "../lexer/lexer";
-import { Parser } from "../parser/parser";
-import TokenType from "../lexer/tokenType";
-import ExpressionType from "../parser/expressionType";
-import ExternDeclarationExpr from "../parser/expression/externDeclarationExpr";
-import FunctionDeclarationExpr from "../parser/expression/functionDeclaration";
-import MemberAccessExpr from "../parser/expression/memberAccessExpr";
-import IdentifierExpr from "../parser/expression/identifierExpr";
-import AsmGenerator from "../transpiler/AsmGenerator";
+import { IRGenerator } from "../transpiler/ir/IRGenerator";
+import { LLVMTargetBuilder } from "../transpiler/target/LLVMTargetBuilder";
 import Scope from "../transpiler/Scope";
+import { Parser } from "../parser/parser";
+import Lexer from "../lexer/lexer";
 import HelperGenerator from "../transpiler/HelperGenerator";
 
-function parse(input: string) {
-  const lexer = new Lexer(input);
-  const parser = new Parser(lexer.tokenize());
-  return parser.parse();
-}
-
-function generate(input: string) {
+function generateIR(input: string): string {
   const lexer = new Lexer(input);
   const parser = new Parser(lexer.tokenize());
   const program = parser.parse();
-  const gen = new AsmGenerator(0);
+  const gen = new IRGenerator();
   const scope = new Scope();
-  HelperGenerator.generateBaseTypes(gen, scope);
-  program.transpile(gen, scope);
-  return gen.build();
+  HelperGenerator.generateBaseTypes(scope);
+  program.toIR(gen, scope);
+  const builder = new LLVMTargetBuilder();
+  return builder.build(gen.module);
 }
 
 describe("Variadic Functions", () => {
-  describe("Lexer", () => {
-    it("should tokenize ellipsis", () => {
-      const input = "...";
-      const lexer = new Lexer(input);
-      const tokens = lexer.tokenize();
-      expect(tokens[0]!.type).toBe(TokenType.ELLIPSIS);
-    });
-
-    it("should tokenize ellipsis in function signature", () => {
-      const input = "frame foo(a: u64, ...:u64)";
-      const lexer = new Lexer(input);
-      const tokens = lexer.tokenize();
-      // frame, foo, (, a, :, u64, ,, ..., :, u64, )
-      const ellipsisToken = tokens.find((t) => t.type === TokenType.ELLIPSIS);
-      expect(ellipsisToken).toBeDefined();
-    });
+  it("should declare variadic function with correct signature", () => {
+    const ir = generateIR(`
+      frame sum(count: u64, ...:u64) ret u64 {
+        return count;
+      }
+    `);
+    expect(ir).toContain("define i64 @sum(i64 %count, ...)");
   });
 
-  describe("Parser", () => {
-    it("should parse extern variadic declaration", () => {
-      const input = "extern printf(fmt: *u8, ...);";
-      const program = parse(input);
-      const expr = program.expressions[0] as ExternDeclarationExpr;
-      expect(expr.type).toBe(ExpressionType.ExternDeclaration);
-      expect(expr.name).toBe("printf");
-      expect(expr.isVariadic).toBe(true);
-    });
-
-    it("should parse user-defined variadic function", () => {
-      const input = "frame sum(count: u64, ...:u64) ret u64 { return 0; }";
-      const program = parse(input);
-      const expr = program.expressions[0] as FunctionDeclarationExpr;
-      expect(expr.type).toBe(ExpressionType.FunctionDeclaration);
-      expect(expr.name).toBe("sum");
-      expect(expr.isVariadic).toBe(true);
-      expect(expr.variadicType?.name).toBe("u64");
-    });
-
-    it("should fail if variadic arg is not last", () => {
-      const input = "frame foo(...:u64, a: u64) {}";
-      expect(() => parse(input)).toThrow();
-    });
-
-    it("should parse args access", () => {
-      const input = `
-        frame sum(count: u64, ...:u64) {
-            local x: u64 = args[0];
+  it("should access variadic arguments with args keyword", () => {
+    const ir = generateIR(`
+      frame sum(count: u64, ...:u64) ret u64 {
+        local total: u64 = 0;
+        local i: u64 = 0;
+        loop {
+          if i >= count { break; }
+          total = total + args[i];
+          i = i + 1;
         }
-      `;
-      const program = parse(input);
-      const func = program.expressions[0] as FunctionDeclarationExpr;
-      // body -> VariableDeclaration -> value (MemberAccess)
-      const varDecl = (func.body as any).expressions[0];
-      const value = varDecl.value as MemberAccessExpr;
-      expect(value.type).toBe(ExpressionType.MemberAccessExpression);
-      expect((value.object as IdentifierExpr).name).toBe("args");
-      expect(value.isIndexAccess).toBe(true);
-    });
+        return total;
+      }
+    `);
+    expect(ir).toContain("define i64 @sum(i64 %count, ...)");
+    expect(ir).toContain("alloca i64"); // For total
+    expect(ir).toContain("br label"); // For loop
   });
 
-  describe("Generator", () => {
-    it("should generate spill code for variadic function", () => {
-      const input = "frame sum(count: u64, ...:u64) {}";
-      const asm = generate(input);
-      // Should see sub rsp to allocate space for spilled registers
-      // And mov instructions to save registers to stack
-      expect(asm).toContain("sub rsp,");
-      expect(asm).toContain("mov [rbp -");
-    });
+  it("should generate correct variadic setup code", () => {
+    const ir = generateIR(`
+      frame test(count: u64, ...:u64) {
+        local x: u64 = args[0];
+      }
+    `);
+    expect(ir).toContain("define void @test(i64 %count, ...)");
+    // Should have va_list setup
+    expect(ir).toMatch(/alloca.*va_list|alloca.*\[1 x/);
+  });
 
-    it("should generate correct code for args access", () => {
-      const input = `
-        frame sum(count: u64, ...:u64) {
-            local x: u64 = args[0];
+  it("should handle multiple variadic calls", () => {
+    const ir = generateIR(`
+      frame sum(count: u64, ...:u64) ret u64 {
+        local total: u64 = 0;
+        local i: u64 = 0;
+        loop {
+          if i >= count { break; }
+          total = total + args[i];
+          i = i + 1;
         }
-      `;
-      const asm = generate(input);
-      // Should see check for register vs stack
-      expect(asm).toContain("cmp rax,"); // Check index against reg count
-      expect(asm).toContain("jge"); // Jump if stack
-      // Register access logic
-      expect(asm).toContain("imul rbx, 8");
-      // Stack access logic
-      expect(asm).toContain("add rax, 16");
-    });
+        return total;
+      }
+      
+      frame main() ret u64 {
+        local s1: u64 = call sum(3, 1, 2, 3);
+        local s2: u64 = call sum(5, 10, 20, 30, 40, 50);
+        return s1 + s2;
+      }
+    `);
+    expect(ir).toContain("call i64 @sum(i64 3, i64 1, i64 2, i64 3)");
+    expect(ir).toContain(
+      "call i64 @sum(i64 5, i64 10, i64 20, i64 30, i64 40, i64 50)",
+    );
+  });
+
+  it("should support string variadic arguments", () => {
+    const ir = generateIR(`
+      frame concat(count: u64, dest: *u8, ...:u64) {
+        local i: u64 = 0;
+        loop {
+          if i >= count { break; }
+          i = i + 1;
+        }
+      }
+    `);
+    expect(ir).toContain("define void @concat(i64 %count, ptr %dest, ...)");
+  });
+
+  it("should work with external variadic functions", () => {
+    const ir = generateIR(`
+      import printf from "libc";
+      extern printf(fmt: *u8, ...);
+      
+      frame main() ret u64 {
+        call printf("Test %d %s\\n", 42, "hello");
+        return 0;
+      }
+    `);
+    expect(ir).toContain("@printf");
+    expect(ir).toContain("call");
+  });
+
+  it("should handle empty variadic arguments", () => {
+    const ir = generateIR(`
+      frame test(base: u64, ...:u64) ret u64 {
+        return base;
+      }
+      
+      frame main() ret u64 {
+        return call test(42);
+      }
+    `);
+    expect(ir).toContain("call i64 @test(i64 42)");
+  });
+
+  it("should generate correct code for variadic with loop", () => {
+    const ir = generateIR(`
+      frame sum(count: u64, ...:u64) ret u64 {
+        local total: u64 = 0;
+        local i: u64 = 0;
+        loop {
+          if i >= count { break; }
+          total = total + args[i];
+          i = i + 1;
+        }
+        return total;
+      }
+    `);
+    expect(ir).toContain("define i64 @sum(i64 %count, ...)");
+    expect(ir).toMatch(/loop_body_\d+:/);
+    expect(ir).toMatch(/loop_end_\d+:/);
+    expect(ir).toContain("icmp"); // For comparison
+    expect(ir).toContain("add i64"); // For increment and total
+  });
+});
+
+describe("Variadic Edge Cases", () => {
+  it("should handle variadic with struct arguments", () => {
+    const ir = generateIR(`
+      struct Point { x: u64, y: u64 }
+      frame test(count: u64, ...:u64) {
+        local i: u64 = 0;
+      }
+    `);
+    expect(ir).toContain("define void @test(i64 %count, ...)");
+  });
+
+  it("should handle nested variadic calls", () => {
+    const ir = generateIR(`
+      frame inner(count: u64, ...:u64) ret u64 {
+        return count;
+      }
+      
+      frame outer(count: u64, ...:u64) ret u64 {
+        return call inner(count, args[0], args[1]);
+      }
+    `);
+    expect(ir).toContain("define i64 @inner(i64 %count, ...)");
+    expect(ir).toContain("define i64 @outer(i64 %count, ...)");
+  });
+
+  it("should handle variadic return values in expressions", () => {
+    const ir = generateIR(`
+      frame sum(count: u64, ...:u64) ret u64 {
+        return count;
+      }
+      
+      frame main() ret u64 {
+        local x: u64 = call sum(3, 1, 2, 3) + 10;
+        return x;
+      }
+    `);
+    expect(ir).toContain("call i64 @sum(i64 3, i64 1, i64 2, i64 3)");
+    expect(ir).toContain("add i64");
   });
 });

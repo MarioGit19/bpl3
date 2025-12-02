@@ -1,5 +1,4 @@
-import type AsmGenerator from "../../transpiler/AsmGenerator";
-import type LlvmGenerator from "../../transpiler/LlvmGenerator";
+import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import type { VariableType } from "./variableDeclarationExpr";
@@ -26,12 +25,15 @@ export default class Expression {
     throw new Error("Method not implemented.");
   }
 
-  transpile(gen: AsmGenerator, scope: Scope): void {
+  toIR(gen: IRGenerator, scope: Scope): string {
+    console.log("Method not implemented for:", this.constructor.name);
     throw new Error("Method not implemented.");
   }
 
-  generateIR(gen: LlvmGenerator, scope: Scope): string {
-    throw new Error("Method not implemented.");
+  getAddress(gen: IRGenerator, scope: Scope): string {
+    throw new Error(
+      "Method not implemented. This expression is not an l-value.",
+    );
   }
 
   optimize(): Expression {

@@ -32,11 +32,26 @@ struct Point {
 }
 
 global points: Point[5];
+
+frame main() ret u8 {
+    # Initialize with struct literal (positional)
+    local p1: Point = {10, 20};
+
+    # Initialize with named fields
+    local p2: Point = {y: 30, x: 40};
+
+    # Array initialization
+    points[0] = p1;
+    points[1] = {50, 60};  # Direct literal assignment
+
+    return 0;
+}
 ```
 
 **Key Concepts:**
 
 - **Structs**: Grouping data (`x`, `y`).
+- **Struct Literals**: Initializing structs with `{...}` syntax (positional or named).
 - **Arrays**: Fixed-size collections.
 - **Access**: `points[i].x` syntax.
 
@@ -97,7 +112,51 @@ asm {
 - **Interpolation**: Accessing BPL variables `(rnd)` inside assembly.
 - **System Calls**: Direct kernel interaction.
 
-## 6. Division Semantics (`example/division_demo/division_demo.x`)
+## 6. Struct Literal Initialization (`example/struct_literal_demo/`)
+
+Demonstrates the various ways to initialize structs using literal syntax.
+
+```bpl
+struct Color {
+    r: i32,
+    g: i32,
+    b: i32,
+}
+
+frame main() ret i32 {
+    # Positional initialization
+    local c1: Color = {255, 128, 64};
+
+    # Named initialization (any order)
+    local c2: Color = {b: 100, g: 200, r: 50};
+
+    # Nested structs
+    struct Point3D {
+        x: i32,
+        y: i32,
+        z: i32,
+        color: Color,
+    }
+
+    local p: Point3D = {
+        x: 10,
+        y: 20,
+        z: 30,
+        color: {r: 255, g: 255, b: 255}
+    };
+
+    return 0;
+}
+```
+
+**Key Concepts:**
+
+- **Positional Syntax**: `{value1, value2, ...}` - fields assigned in declaration order.
+- **Named Syntax**: `{field: value, ...}` - fields can be in any order.
+- **Nested Structs**: Struct literals can be nested for complex initialization.
+- **Restriction**: Cannot mix positional and named initialization in the same literal.
+
+## 7. Division Semantics (`example/division_demo/division_demo.x`)
 
 Demonstrates the difference between float division (`/`) and integer/floor division (`//`).
 

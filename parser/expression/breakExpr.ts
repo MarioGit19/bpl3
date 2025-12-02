@@ -1,5 +1,4 @@
-import type AsmGenerator from "../../transpiler/AsmGenerator";
-import type LlvmGenerator from "../../transpiler/LlvmGenerator";
+import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
@@ -20,24 +19,12 @@ export default class BreakExpr extends Expression {
     console.log(this.toString(depth));
   }
 
-  transpile(gen: AsmGenerator, scope: Scope): void {
+  toIR(gen: IRGenerator, scope: Scope): string {
     const context = scope.getCurrentContext("loop");
-    if (!context) {
+    if (!context || context.type !== "loop") {
       throw new Error("Break statement used outside of a loop");
     }
-    if (context.type === "loop") {
-      gen.emit(`jmp ${context.breakLabel}`, "BREAK EXPR");
-    }
-  }
-
-  generateIR(gen: LlvmGenerator, scope: Scope): string {
-    const context = scope.getCurrentContext("loop");
-    if (!context) {
-      throw new Error("Break statement used outside of a loop");
-    }
-    if (context.type === "loop") {
-      gen.emit(`br label %${context.breakLabel}`);
-    }
+    gen.emitBranch(context.breakLabel);
     return "";
   }
 }

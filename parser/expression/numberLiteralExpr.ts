@@ -1,9 +1,8 @@
 import type Token from "../../lexer/token";
 import Expression from "./expr";
 import ExpressionType from "../expressionType";
-import type AsmGenerator from "../../transpiler/AsmGenerator";
 import type Scope from "../../transpiler/Scope";
-import type LlvmGenerator from "../../transpiler/LlvmGenerator";
+import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 
 export default class NumberLiteralExpr extends Expression {
   constructor(
@@ -30,24 +29,7 @@ export default class NumberLiteralExpr extends Expression {
     console.log(this.toString(depth));
   }
 
-  transpile(gen: AsmGenerator, scope: Scope): void {
-    if (this.value.includes(".")) {
-      const label = gen.generateLabel("float_");
-      gen.emitRoData(label, "dq", this.value);
-      gen.emit(
-        `movsd xmm0, [rel ${label}]`,
-        `Load float literal ${this.value}`,
-      );
-      gen.emit(`movq rax, xmm0`, `Move float to RAX for transport`);
-    } else {
-      gen.emit(`mov rax, ${this.value}`, `Number Literal ${this.value}`);
-    }
-  }
-
-  generateIR(gen: LlvmGenerator, scope: Scope): string {
-    // For LLVM, we can return the literal value directly.
-    // If it's a float, we might need to ensure it has a decimal point or is in scientific notation if required?
-    // LLVM accepts standard float formats.
+  toIR(gen: IRGenerator, scope: Scope): string {
     const isHexBinOct =
       this.value.startsWith("0x") ||
       this.value.startsWith("0b") ||
@@ -62,7 +44,7 @@ export default class NumberLiteralExpr extends Expression {
       }
       return this.value;
     }
-    // Convert hex/bin/oct to decimal for LLVM IR
+    // Convert hex/bin/oct to decimal
     try {
       return BigInt(this.value).toString();
     } catch (e) {

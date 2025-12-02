@@ -34,39 +34,19 @@ The parser (`parser.ts`) uses a recursive descent approach to build the AST.
 
 ## 3. Transpiler (`transpiler/`)
 
-The transpiler is responsible for generating assembly code or LLVM IR from the AST.
+The transpiler is responsible for generating LLVM IR from the AST.
 
-- **`AsmGenerator.ts`**: A helper class that manages the output buffers (`.text`, `.data`, `.bss`) and provides methods to emit assembly instructions.
-- **`LlvmGenerator.ts`**: A helper class for generating LLVM IR.
+- **`IRGenerator.ts`**: A helper class for generating LLVM IR.
 - **`Scope.ts`**: Manages variable scopes (global vs. local), symbol tables, and type information.
-- **`transpile()` method**: Each AST node implements a `transpile(gen: AsmGenerator, scope: Scope)` method that emits the corresponding assembly code.
-- **`generateIR()` method**: Each AST node implements a `generateIR(gen: LlvmGenerator, scope: Scope)` method that emits the corresponding LLVM IR.
+- **`toIR()` method**: Each AST node implements a `toIR(gen: IRGenerator, scope: Scope)` method that emits the corresponding LLVM IR.
 
 ### Stack Management
 
-BPL uses the stack for local variables.
+BPL uses the stack for local variables, managed by LLVM's `alloca` instruction.
 
-- **RBP (Base Pointer)**: Points to the base of the current stack frame.
-- **RSP (Stack Pointer)**: Points to the top of the stack.
-- Local variables are accessed via offsets from RBP (e.g., `[rbp - 8]`).
+## 4. Optimizer
 
-## 4. Optimizer (`transpiler/optimizer/`)
-
-The optimizer (`Optimizer.ts`) runs on the generated assembly code (peephole optimization). It applies a series of rules to simplify instructions and improve performance.
-
-### Optimization Levels
-
-- **Level 1**: Basic simplifications (e.g., `add rax, 0` -> removed).
-- **Level 2**: Control flow and stack optimizations (e.g., removing redundant push/pop).
-- **Level 3**: Advanced instruction combining.
-
-### Implemented Rules:
-
-- **`MovRegToSameRegRule`**: Removes `mov rax, rax`.
-- **`MovZeroRule`**: Replaces `mov rax, 0` with `xor rax, rax`.
-- **`IncDecRule`**: Replaces `add rax, 1` with `inc rax`.
-- **`RedundantPushPopRule`**: Removes `push rax` followed immediately by `pop rax`.
-- **`JmpNextLabelRule`**: Removes jumps to the very next line.
+The compiler relies on LLVM's powerful optimization pipeline (e.g., `opt` and `clang -O3`).
 
 ## 5. Type System
 
@@ -83,5 +63,5 @@ To add a new feature (e.g., a new loop type):
 
 1.  **Lexer**: Add new keywords/tokens if necessary.
 2.  **Parser**: Create a new AST node class (e.g., `ForLoopExpr`) and update the parser to recognize the syntax.
-3.  **Transpiler**: Implement the `transpile` method for the new AST node to generate the correct assembly.
+3.  **Transpiler**: Implement the `toIR` method for the new AST node to generate the correct LLVM IR.
 4.  **Tests**: Add unit tests and integration tests.

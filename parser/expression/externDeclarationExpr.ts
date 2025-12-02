@@ -1,5 +1,6 @@
-import type AsmGenerator from "../../transpiler/AsmGenerator";
-import type LlvmGenerator from "../../transpiler/LlvmGenerator";
+import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
+import { IRFunction } from "../../transpiler/ir/IRFunction";
+import { IRVoid } from "../../transpiler/ir/IRType";
 import Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
@@ -44,39 +45,38 @@ export default class ExternDeclarationExpr extends Expression {
     return output;
   }
 
-  transpile(gen: AsmGenerator, scope: Scope): void {
+  toIR(gen: IRGenerator, scope: Scope): string {
     const existingFunc = scope.resolveFunction(this.name);
-    if (!existingFunc || !existingFunc.isExternal) {
-      throw new Error(
-        `Function ${this.name} is not defined, or it's already defined and is not external.`,
-      );
+    if (existingFunc) {
+      existingFunc.irName = this.name;
+      existingFunc.args = this.args;
+      existingFunc.returnType = this.returnType;
+      existingFunc.isVariadic = this.isVariadic;
+    } else {
+      scope.defineFunction(this.name, {
+        args: this.args,
+        returnType: this.returnType,
+        endLabel: this.name + "_end",
+        label: this.name,
+        name: this.name,
+        startLabel: this.name,
+        isExternal: true,
+        isVariadic: this.isVariadic,
+        irName: this.name,
+      });
     }
 
-    scope.defineFunction(this.name, {
-      args: this.args,
-      returnType: this.returnType,
-      endLabel: this.name + "_end",
-      label: this.name,
-      name: this.name,
-      startLabel: this.name,
-      isExternal: true,
-      isVariadic: this.isVariadic,
-    });
+    const retType = this.returnType ? gen.getIRType(this.returnType) : IRVoid;
+    const args = this.args.map((a) => ({
+      name: a.name,
+      type: gen.getIRType(a.type),
+    }));
 
-    gen.emitImportStatement(`extern ${this.name}`);
-  }
-
-  generateIR(gen: LlvmGenerator, scope: Scope): string {
-    scope.defineFunction(this.name, {
-      args: this.args,
-      returnType: this.returnType,
-      endLabel: this.name + "_end",
-      label: this.name,
-      name: this.name,
-      startLabel: this.name,
-      isExternal: true,
-      isVariadic: this.isVariadic,
-    });
+    // Check if already declared as extern
+    if (!gen.module.functions.some((f) => f.name === this.name)) {
+      const func = new IRFunction(this.name, args, retType, this.isVariadic);
+      gen.module.addFunction(func);
+    }
 
     return "";
   }

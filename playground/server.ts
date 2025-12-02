@@ -27,7 +27,7 @@ serve({
         // We also capture stdout/stderr
         const proc = spawnSync(
           "bun",
-          ["index.ts", "--llvm", "-q", "-r", "playground_temp.x"],
+          ["index.ts", "-q", "-r", "playground_temp.x"],
           {
             cwd: ROOT_DIR,
             encoding: "utf-8",
@@ -51,7 +51,7 @@ serve({
       }
     }
 
-    // API: Compile Code (Get IR and ASM)
+    // API: Compile Code (Get IR)
     if (url.pathname === "/api/compile" && req.method === "POST") {
       try {
         const { code } = (await req.json()) as { code: string };
@@ -61,16 +61,6 @@ serve({
 
         // 1. Get LLVM IR
         const procLlvm = spawnSync(
-          "bun",
-          ["index.ts", "--llvm", "-q", "-p", "playground_temp.x"],
-          {
-            cwd: ROOT_DIR,
-            encoding: "utf-8",
-          },
-        );
-
-        // 2. Get Assembly (x86)
-        const procAsm = spawnSync(
           "bun",
           ["index.ts", "-q", "-p", "playground_temp.x"],
           {
@@ -83,14 +73,11 @@ serve({
         if (existsSync(tempFile)) unlinkSync(tempFile);
         const tempLlvm = join(ROOT_DIR, "playground_temp.ll");
         if (existsSync(tempLlvm)) unlinkSync(tempLlvm);
-        const tempAsm = join(ROOT_DIR, "playground_temp.asm");
-        if (existsSync(tempAsm)) unlinkSync(tempAsm);
 
         return Response.json({
           llvm: procLlvm.stdout,
-          asm: procAsm.stdout,
-          stderr: procLlvm.stderr + "\n" + procAsm.stderr,
-          exitCode: procLlvm.status || procAsm.status,
+          stderr: procLlvm.stderr,
+          exitCode: procLlvm.status,
         });
       } catch (e) {
         return Response.json({ error: String(e) }, { status: 500 });
