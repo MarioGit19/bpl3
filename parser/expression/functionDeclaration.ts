@@ -15,6 +15,7 @@ export default class FunctionDeclarationExpr extends Expression {
     public isVariadic: boolean = false,
     public variadicType: VariableType | null = null,
     public genericParams: string[] = [],
+    public scope?: Scope,
   ) {
     super(ExpressionType.FunctionDeclaration);
     this.requiresSemicolon = false;
@@ -73,6 +74,10 @@ export default class FunctionDeclarationExpr extends Expression {
       return "";
     }
 
+    // For instantiated generic functions/methods, use the stored scope which has access
+    // to the symbols from the original definition context (like imports)
+    const effectiveScope = this.scope || scope;
+
     // Check if this is a method
     const isMethod = (this as any).isMethod;
     const receiverStruct = (this as any).receiverStruct;
@@ -108,18 +113,18 @@ export default class FunctionDeclarationExpr extends Expression {
     const resolvedArgs = allArgs.map((arg) => {
       let argType = arg.type;
       if (arg.type.genericArgs && arg.type.genericArgs.length > 0) {
-        const typeInfo = scope.resolveGenericType(
+        const typeInfo = effectiveScope.resolveGenericType(
           arg.type.name,
           arg.type.genericArgs,
         );
         if (typeInfo) {
           argType = { ...arg.type, name: typeInfo.name, genericArgs: [] };
-          gen.registerStruct(typeInfo, scope);
+          gen.registerStruct(typeInfo, effectiveScope);
         }
       } else {
-        const typeInfo = scope.resolveType(arg.type.name);
+        const typeInfo = effectiveScope.resolveType(arg.type.name);
         if (typeInfo && !typeInfo.isPrimitive) {
-          gen.registerStruct(typeInfo, scope);
+          gen.registerStruct(typeInfo, effectiveScope);
         }
       }
       return { ...arg, type: argType };
@@ -131,7 +136,7 @@ export default class FunctionDeclarationExpr extends Expression {
       this.returnType.genericArgs &&
       this.returnType.genericArgs.length > 0
     ) {
-      const typeInfo = scope.resolveGenericType(
+      const typeInfo = effectiveScope.resolveGenericType(
         this.returnType.name,
         this.returnType.genericArgs,
       );
@@ -141,12 +146,12 @@ export default class FunctionDeclarationExpr extends Expression {
           name: typeInfo.name,
           genericArgs: [],
         };
-        gen.registerStruct(typeInfo, scope);
+        gen.registerStruct(typeInfo, effectiveScope);
       }
     } else if (this.returnType) {
-      const typeInfo = scope.resolveType(this.returnType.name);
+      const typeInfo = effectiveScope.resolveType(this.returnType.name);
       if (typeInfo && !typeInfo.isPrimitive) {
-        gen.registerStruct(typeInfo, scope);
+        gen.registerStruct(typeInfo, effectiveScope);
       }
     }
 
@@ -162,13 +167,13 @@ export default class FunctionDeclarationExpr extends Expression {
     const irName = name;
     gen.createFunction(irName, irArgs, irReturnType, this.isVariadic);
 
-    const existingFunc = scope.resolveFunction(this.name);
+    const existingFunc = effectiveScope.resolveFunction(this.name);
     if (existingFunc) {
       existingFunc.irName = name;
       existingFunc.args = resolvedArgs;
       existingFunc.returnType = resolvedReturnType;
     } else {
-      scope.defineFunction(this.name, {
+      effectiveScope.defineFunction(this.name, {
         args: resolvedArgs,
         returnType: resolvedReturnType,
         endLabel: name + "_end",
@@ -181,7 +186,7 @@ export default class FunctionDeclarationExpr extends Expression {
       });
     }
 
-    const funcScope = new Scope(scope);
+    const funcScope = new Scope(effectiveScope);
     funcScope.setCurrentContext({
       type: "function",
       label: name,

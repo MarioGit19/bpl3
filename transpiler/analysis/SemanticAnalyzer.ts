@@ -39,9 +39,10 @@ export class SemanticAnalyzer {
   private currentProgram: ProgramExpr | null = null;
   public warnings: CompilerWarning[] = [];
 
-  public analyze(program: ProgramExpr, parentScope?: Scope): Scope {
+  public analyze(program: ProgramExpr, parentScope?: Scope, useScopeAsRoot: boolean = false): Scope {
     // Use a child scope to avoid polluting the parent scope (used for transpilation)
-    const scope = parentScope ? new Scope(parentScope) : new Scope();
+    // Unless useScopeAsRoot is true
+    const scope = (parentScope && useScopeAsRoot) ? parentScope : (parentScope ? new Scope(parentScope) : new Scope());
     this.rootScope = scope;
     this.currentProgram = program;
     this.analyzeBlock(program.expressions, scope);
@@ -347,7 +348,14 @@ export class SemanticAnalyzer {
         const memberExpr = expr as any;
         const objectType = this.inferType(memberExpr.object, scope);
 
-        if (!objectType) return null;
+        if (!objectType) {
+          // Log for debugging
+          if (memberExpr.object.type === ExpressionType.IdentifierExpr) {
+            const name = (memberExpr.object as any).name;
+            console.log(`Failed to infer type of '${name}' in member access`);
+          }
+          return null;
+        }
 
         if (memberExpr.isIndexAccess) {
           if (objectType.isArray.length > 0) {
@@ -380,7 +388,10 @@ export class SemanticAnalyzer {
             typeInfo = scope.resolveType(objectType.name);
           }
 
-          if (!typeInfo) return null;
+          if (!typeInfo) {
+            console.log(`Failed to resolve type '${objectType.name}' for member access. genericArgs: ${objectType.genericArgs?.length || 0}`);
+            return null;
+          }
 
           const propertyName = (memberExpr.property as any).name;
           const member = typeInfo.members.get(propertyName);
@@ -848,6 +859,10 @@ export class SemanticAnalyzer {
     }
 
     const clonedDecl = this.cloneFunctionDeclaration(func.astDeclaration);
+    // Preserve the original scope for resolving symbols during analysis
+    if (func.astDeclaration.scope && !clonedDecl.scope) {
+      clonedDecl.scope = func.astDeclaration.scope;
+    }
 
     // Create type substitution map
     const typeMap = new Map<string, VariableType>();
@@ -907,8 +922,10 @@ export class SemanticAnalyzer {
       this.currentProgram.addExpression(clonedDecl);
     }
 
-    // NOTE: We don't analyze the function body here - it will be analyzed when
-    // the semantic analyzer encounters it in the program expression list
+    // Analyze the monomorphized function now, using the original scope as context
+    // This ensures that symbols from the original definition scope (like imported functions) are accessible
+    const analyzeScope = clonedDecl.scope || scope;
+    this.analyzeFunctionDeclaration(clonedDecl, analyzeScope);
 
     const instantiated = scope.resolveFunction(mangledName);
     if (!instantiated) {
@@ -959,11 +976,44 @@ export class SemanticAnalyzer {
   }
 
   /**
+   * Deep clone an expression tree, preserving object types
+   */
+  private deepCloneExpression(expr: any): any {
+    if (!expr || typeof expr !== 'object') {
+      return expr;
+    }
+    
+    if (Array.isArray(expr)) {
+      return expr.map(item => this.deepCloneExpression(item));
+    }
+    
+    // Create a new object with the same prototype
+    const cloned = Object.create(Object.getPrototypeOf(expr));
+    
+    // Copy all properties
+    for (const key in expr) {
+      if (expr.hasOwnProperty(key)) {
+        // Don't deep clone the contextScope reference - we'll restore it later
+        if (key === 'contextScope') {
+          cloned[key] = expr[key];
+        } else {
+          cloned[key] = this.deepCloneExpression(expr[key]);
+        }
+      }
+    }
+    
+    return cloned;
+  }
+
+  /**
    * Deep clone a function declaration
    */
   private cloneFunctionDeclaration(
     decl: FunctionDeclarationExpr,
   ): FunctionDeclarationExpr {
+    // Deep clone the body to avoid mutating the original template
+    const clonedBody = decl.body ? this.deepCloneExpression(decl.body) : decl.body;
+    
     // Deep clone is handled by creating a new instance with cloned properties
     return new FunctionDeclarationExpr(
       decl.name,
@@ -980,7 +1030,7 @@ export class SemanticAnalyzer {
             genericArgs: decl.returnType.genericArgs?.map((g) => ({ ...g })),
           }
         : decl.returnType,
-      decl.body, // Keep the same body reference for now
+      clonedBody,
       decl.nameToken,
       decl.isVariadic,
       decl.variadicType
@@ -990,6 +1040,7 @@ export class SemanticAnalyzer {
           }
         : undefined,
       decl.genericParams ? [...decl.genericParams] : undefined,
+      decl.scope
     );
   }
 
@@ -1111,6 +1162,13 @@ export class SemanticAnalyzer {
         }
         break;
 
+      case ExpressionType.SizeOfExpression:
+        const sizeofExpr = expr as any; // SizeofExpr
+        if (sizeofExpr.typeArg) {
+          this.substituteType(sizeofExpr.typeArg, typeMap);
+        }
+        break;
+
       // Add more cases as needed for other expression types
       default:
         // For other expression types, do nothing for now
@@ -1127,11 +1185,14 @@ export class SemanticAnalyzer {
   ): void {
     const concrete = typeMap.get(type.name);
     if (concrete) {
-      // Replace the type with the concrete type
+      // Replace the type NAME only - preserve pointer/array modifiers from the original type
+      // For example: *T with T→u64 should become *u64, not u64
       type.name = concrete.name;
-      type.isPointer = concrete.isPointer;
-      type.isArray = concrete.isArray ? [...concrete.isArray] : [];
-      type.genericArgs = concrete.genericArgs?.map((g) => ({ ...g }));
+      // If the concrete type has generic args, copy them
+      if (concrete.genericArgs && concrete.genericArgs.length > 0) {
+        type.genericArgs = concrete.genericArgs.map((g) => ({ ...g }));
+      }
+      // Don't replace isPointer or isArray - those are part of the original type expression
     }
 
     // Recursively substitute in generic args
@@ -1380,20 +1441,24 @@ export class SemanticAnalyzer {
 
     // Check if this function is already defined
     const existing = scope.resolveFunction(expr.name);
-    if (!isMethod && existing) {
-      // If it's a monomorphized function that was already registered, skip re-analysis
-      // (Monomorphized functions have no generic params and mangled names like foo__u64)
-      if (expr.genericParams.length === 0 && expr.name.includes("__")) {
-        return; // Already analyzed during monomorphization
+    if (existing) {
+      // Check if this AST node was already analyzed
+      if ((expr as any)._analyzed) {
+        return; // This exact AST node was already analyzed
       }
-      throw new CompilerError(
-        `Function '${expr.name}' is already defined.`,
-        expr.startToken?.line || 0,
-      );
+      // If the existing function points to the same AST declaration, allow analysis
+      // This happens when monomorphization registers the function before analyzing it
+      if (existing.astDeclaration !== expr && !isMethod) {
+        throw new CompilerError(
+          `Function '${expr.name}' is already defined.`,
+          expr.startToken?.line || 0,
+        );
+      }
     }
 
     // Only define function if not a method (methods are already defined in analyzeStructDeclaration)
-    if (!isMethod) {
+    // Also skip if the function was already defined (e.g., by monomorphization)
+    if (!isMethod && !existing) {
       scope.defineFunction(expr.name, {
         name: expr.name,
         label: expr.name,
@@ -1409,6 +1474,10 @@ export class SemanticAnalyzer {
       });
     }
 
+    if (!expr.scope) {
+      expr.scope = scope;
+    }
+
     const functionScope = new Scope(scope);
 
     // Save current state and create new function context
@@ -1419,14 +1488,17 @@ export class SemanticAnalyzer {
 
     // If method, define 'this' parameter first
     if (isMethod && receiverStruct) {
+      // Use the thisType stored on the declaration if available (for instantiated methods)
+      const thisType = (expr as any).thisType || {
+        name: receiverStruct,
+        isPointer: 1,
+        isArray: [],
+      };
+      
       functionScope.define("this", {
         type: "local",
         offset: "0",
-        varType: {
-          name: receiverStruct,
-          isPointer: 1,
-          isArray: [],
-        },
+        varType: thisType,
         isParameter: true,
       });
       this.initializedVars.add("this");
@@ -1448,6 +1520,9 @@ export class SemanticAnalyzer {
     this.analyzeExpression(expr.body, functionScope);
 
     this.checkUnusedVariables(functionScope);
+
+    // Mark as analyzed to avoid re-analysis
+    (expr as any)._analyzed = true;
 
     // Restore previous state
     this.currentReturnType = previousReturnType;
@@ -1641,9 +1716,6 @@ export class SemanticAnalyzer {
 
       let returnType: VariableType = { name: "i32", isPointer: 0, isArray: [] };
 
-      if (name === "malloc" || name === "calloc" || name === "realloc") {
-        returnType = { name: "u8", isPointer: 1, isArray: [] };
-      }
 
       scope.defineFunction(name, {
         name: name,
@@ -1693,7 +1765,7 @@ export class SemanticAnalyzer {
           name: expr.name,
           startLabel: expr.name,
           isExternal: true,
-          isVariadic: expr.isVariadic, // Explicit extern declaration implies fixed signature unless we add support for '...'
+          isVariadic: expr.isVariadic, // Explicit extern declaration implies fixed signature
         });
         return;
       }
@@ -1804,6 +1876,14 @@ export class SemanticAnalyzer {
         genericMethods: expr.methods, // Store methods for later instantiation
         declaration: expr.startToken,
       };
+      
+      // Set the scope on each method so they can resolve symbols from the definition scope
+      for (const method of expr.methods) {
+        if (!method.scope) {
+          method.scope = scope;
+        }
+      }
+      
       scope.defineType(expr.name, structTypeInfo);
       return;
     }
@@ -1824,6 +1904,7 @@ export class SemanticAnalyzer {
     const toAddLater: string[] = [];
     let currentOffset = 0;
     let maxAlignment = 1;
+    let fieldIndex = 0;
 
     expr.fields.forEach((field) => {
       const fieldTypeInfo = scope.resolveType(field.type.name);
@@ -1873,7 +1954,9 @@ export class SemanticAnalyzer {
         alignment: fieldAlignment,
         isPrimitive: fieldTypeInfo.isPrimitive,
         members: fieldTypeInfo.members,
+        index: fieldIndex,
       });
+      fieldIndex++;
 
       currentOffset += fieldSize;
       maxAlignment = Math.max(maxAlignment, fieldAlignment);
@@ -1898,7 +1981,9 @@ export class SemanticAnalyzer {
         alignment: fieldAlignment,
         isPrimitive: false,
         members: structTypeInfo.members,
+        index: fieldIndex,
       });
+      fieldIndex++;
 
       currentOffset += fieldSize;
       maxAlignment = Math.max(maxAlignment, fieldAlignment);
@@ -1975,6 +2060,103 @@ export class SemanticAnalyzer {
     }
   }
 
+  private instantiateStructMethod(
+    structName: string,
+    methodAst: FunctionDeclarationExpr,
+    typeArgs: VariableType[],
+    scope: Scope,
+    genericParams: string[],
+  ): void {
+    const mangledName = mangleMethod(structName, methodAst.name);
+
+    // Check if already exists
+    if (scope.resolveFunction(mangledName)) return;
+
+    // Clone AST
+    const clonedDecl = this.cloneFunctionDeclaration(methodAst);
+    // Preserve the original scope for resolving symbols during analysis
+    if (methodAst.scope && !clonedDecl.scope) {
+      clonedDecl.scope = methodAst.scope;
+    }
+
+    // Substitute types
+    const typeMap = new Map<string, VariableType>();
+    for (let i = 0; i < genericParams.length; i++) {
+      if (typeArgs[i]) {
+        typeMap.set(genericParams[i], typeArgs[i]);
+      }
+    }
+
+    this.substituteTypesInFunction(clonedDecl, typeMap);
+
+    // Update name
+    clonedDecl.name = mangledName;
+    (clonedDecl as any).isMethod = true;
+    (clonedDecl as any).receiverStruct = structName;
+
+    // Add 'this' param with proper generic args
+    let thisType: VariableType;
+    const match = structName.match(/^([^<]+)<(.+)>$/);
+    if (match) {
+      const baseName = match[1]!;
+      const argsStr = match[2]!;
+      const genericArgNames = this.parseGenericArgs(argsStr);
+      thisType = {
+        name: baseName,
+        isPointer: 1,
+        isArray: [],
+        genericArgs: genericArgNames.map((arg) => this.parseTypeString(arg)),
+      };
+    } else {
+      thisType = {
+        name: structName,
+        isPointer: 1,
+        isArray: [],
+      };
+    }
+
+    // Store the this type on the declaration for later use
+    (clonedDecl as any).thisType = thisType;
+
+    const thisParam = {
+      name: "this",
+      type: thisType,
+    };
+
+    const finalArgs = [thisParam, ...clonedDecl.args];
+
+    // Define in scope
+    scope.defineFunction(mangledName, {
+      name: mangledName,
+      label: mangledName,
+      startLabel: `${mangledName}_start`,
+      endLabel: `${mangledName}_end`,
+      args: finalArgs.map((a) => ({ name: a.name, type: a.type })),
+      returnType: clonedDecl.returnType,
+      isExternal: false,
+      isVariadic: clonedDecl.isVariadic,
+      variadicType: clonedDecl.variadicType,
+      genericParams: [],
+      astDeclaration: clonedDecl,
+      isMethod: true,
+      receiverStruct: structName,
+      originalName: methodAst.name,
+    });
+    
+    // Verify the function was stored correctly
+    const stored = scope.resolveFunction(mangledName);
+    const storedThisArg = stored?.args.find(arg => arg.name === "this");
+
+    // Add to program
+    if (this.currentProgram) {
+      this.currentProgram.addExpression(clonedDecl);
+    }
+
+    // Analyze the instantiated method now, using the original scope as context
+    const analyzeScope = clonedDecl.scope || scope;
+    this.analyzeFunctionDeclaration(clonedDecl, analyzeScope);
+  }
+
   private analyzeMethodCall(expr: MethodCallExpr, scope: Scope): void {
     // Analyze receiver
     this.analyzeExpression(expr.receiver, scope);
@@ -2011,8 +2193,39 @@ export class SemanticAnalyzer {
     let func = scope.resolveFunction(mangledName);
 
     if (!func) {
+      const typeInfo = scope.resolveType(structName);
+      if (typeInfo && typeInfo.genericMethods) {
+        const methodAst = typeInfo.genericMethods.find(
+          (m) => m.name === expr.methodName,
+        );
+        if (methodAst) {
+          const match = structName.match(/^([^<]+)<(.+)>$/);
+          if (match) {
+            const argsStr = match[2];
+            const typeArgs = this.parseGenericArgs(argsStr).map((s) =>
+              this.parseTypeString(s),
+            );
+
+            this.instantiateStructMethod(
+              structName,
+              methodAst,
+              typeArgs,
+              scope,
+              typeInfo.genericParams || [],
+            );
+            func = scope.resolveFunction(mangledName);
+          }
+        }
+      }
+    }
+
+    if (!func) {
+      const typeInfo = scope.resolveType(structName);
+      const hasGenericMethods = typeInfo && typeInfo.genericMethods ? "yes" : "no";
+      const genericMethodsCount = typeInfo && typeInfo.genericMethods ? typeInfo.genericMethods.length : 0;
+      
       throw new CompilerError(
-        `Method '${expr.methodName}' not found on type '${structName}'`,
+        `Method '${expr.methodName}' not found on type '${structName}'. Info: hasGenericMethods=${hasGenericMethods}, count=${genericMethodsCount}`,
         expr.startToken?.line || 0,
       );
     }
@@ -2131,8 +2344,10 @@ export class SemanticAnalyzer {
     // Infer source type
     const sourceType = this.inferType(expr.value, scope);
     if (!sourceType) {
+      // Add helpful debug info
+      const valueStr = expr.value.type || "unknown";
       throw new CompilerError(
-        `Cannot infer type of cast source expression`,
+        `Cannot infer type of cast source expression (${valueStr})`,
         expr.startToken?.line || 0,
       );
     }

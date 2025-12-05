@@ -73,9 +73,12 @@ export type FunctionInfo = {
   originalName?: string;
   genericParams?: string[];
   astDeclaration?: FunctionDeclarationExpr; // Store AST for monomorphization
+  definitionScope?: Scope;
 };
 
 export default class Scope {
+  private static nextId = 0;
+  public id = Scope.nextId++;
   public types = new Map<string, TypeInfo>();
   public vars = new Map<string, VarInfo>();
   public stackOffset = 0; // Tracks stack usage for this function
@@ -142,21 +145,22 @@ export default class Scope {
     } else if (this.functions.has(name)) {
       if (this.functions.get(name)!.isExternal && info.isExternal) {
         if (this.functions.get(name)!.args.length < info.args.length) {
-          this.functions.set(name, info);
+          this.functions.set(name, { ...info, definitionScope: this });
         }
         return; // Allow re-definition of external functions
       }
       throw new Error(`Function ${name} is already defined.`);
     } else {
-      this.functions.set(name, info);
+      this.functions.set(name, { ...info, definitionScope: this });
     }
   }
 
   resolveFunction(name: string): FunctionInfo | null {
+    if (this.functions.has(name)) {
+      return this.functions.get(name)!;
+    }
     if (this.parent) {
       return this.parent.resolveFunction(name);
-    } else if (this.functions.has(name)) {
-      return this.functions.get(name)!;
     }
     return null;
   }
@@ -245,6 +249,8 @@ export default class Scope {
       info: { description: `Instantiated ${name}` },
       declaration: baseType.declaration,
       sourceFile: baseType.sourceFile,
+      genericMethods: baseType.genericMethods,
+      genericParams: baseType.genericParams, // Keep generic params for reference
     };
 
     const paramMap = new Map<string, VariableType>();
@@ -254,6 +260,7 @@ export default class Scope {
 
     let currentOffset = 0;
     let maxAlignment = 1;
+    let fieldIndex = 0;
 
     if (!baseType.genericFields) {
       throw new Error("Generic type missing field definitions.");
@@ -273,6 +280,11 @@ export default class Scope {
       }
 
       if (!fieldTypeInfo) {
+        console.error(`Failed to resolve type '${concreteType.name}' in scope ${this.id}.`);
+        console.error(`Available types: ${Array.from(this.types.keys()).join(", ")}`);
+        if (this.parent) {
+             console.error(`Parent scope ${this.parent.id} available types: ${Array.from(this.parent.types.keys()).join(", ")}`);
+        }
         throw new Error(
           `Could not resolve type '${concreteType.name}' during instantiation of '${instantiationName}'.`,
         );
@@ -296,7 +308,7 @@ export default class Scope {
 
       newType.members.set(field.name, {
         info: { description: `Field ${field.name}` },
-        name: fieldTypeInfo.name,
+        name: fieldTypeInfo.name, // This is the instantiated name like "Inner<u64>" if generic
         isArray: concreteType.isArray,
         isPointer: concreteType.isPointer,
         size: fieldSize,
@@ -304,7 +316,9 @@ export default class Scope {
         alignment: fieldAlignment,
         isPrimitive: fieldTypeInfo.isPrimitive,
         members: fieldTypeInfo.members,
+        index: fieldIndex,
       });
+      fieldIndex++;
 
       currentOffset += fieldSize;
       maxAlignment = Math.max(maxAlignment, fieldAlignment);
@@ -318,54 +332,9 @@ export default class Scope {
     this.getGlobalScope().defineType(instantiationName, newType);
 
     // Register methods for the instantiated generic type
-    if (baseType.genericMethods && baseType.genericMethods.length > 0) {
-      const { mangleMethod } = require("../utils/methodMangler");
-
-      for (const method of baseType.genericMethods) {
-        const mangledName = mangleMethod(instantiationName, method.name);
-
-        // Substitute generic type parameters in method signature
-        const thisParam = {
-          name: "this",
-          type: {
-            name: instantiationName,
-            isPointer: 1,
-            isArray: [],
-          },
-        };
-
-        // Substitute generic parameters in method arguments
-        const substitutedArgs = method.args.map((arg: any) => ({
-          name: arg.name,
-          type: this.substituteType(arg.type, paramMap),
-        }));
-
-        const methodArgs = [thisParam, ...substitutedArgs];
-
-        // Substitute generic parameters in return type
-        const returnType = method.returnType
-          ? this.substituteType(method.returnType, paramMap)
-          : null;
-
-        // Register the method as a function
-        this.getGlobalScope().functions.set(mangledName, {
-          name: mangledName,
-          label: mangledName,
-          startLabel: `${mangledName}_start`,
-          endLabel: `${mangledName}_end`,
-          args: methodArgs,
-          returnType: returnType,
-          isExternal: false,
-          declaration: method.startToken,
-          irName: `@${mangledName}`,
-          isMethod: true,
-          receiverStruct: instantiationName,
-          originalName: method.name,
-          genericParams: method.genericParams || [],
-          astDeclaration: method,
-        });
-      }
-    }
+    // REMOVED: We now handle method instantiation in SemanticAnalyzer on demand
+    // to ensure proper code generation and type substitution in the body.
+    
     return newType;
   }
 

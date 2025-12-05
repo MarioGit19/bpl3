@@ -379,8 +379,20 @@ export class IRGenerator {
       case "f64":
         return { type: "f64" };
       default:
-        return { type: "struct", name: type.name, fields: [] };
+        let name = type.name;
+        if (type.genericArgs && type.genericArgs.length > 0) {
+          name = this.getCanonicalTypeName(type);
+        }
+        return { type: "struct", name: name, fields: [] };
     }
+  }
+
+  private getCanonicalTypeName(type: VariableType): string {
+    let name = type.name;
+    if (type.genericArgs && type.genericArgs.length > 0) {
+      name += `<${type.genericArgs.map((a) => this.getCanonicalTypeName(a)).join(",")}>`;
+    }
+    return name;
   }
 
   addStringConstant(str: string): string {
@@ -416,7 +428,6 @@ export class IRGenerator {
 
       if (
         member.isPointer === 0 &&
-        member.isArray.length === 0 &&
         !member.isPrimitive
       ) {
         const memberTypeInfo = scope.resolveType(member.name);

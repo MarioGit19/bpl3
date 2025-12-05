@@ -41,6 +41,25 @@ export default class ImportExpr extends Expression {
   toIR(gen: IRGenerator, scope: Scope): string {
     for (const importItem of this.importName) {
       if (importItem.type === "type") {
+        const typeName = importItem.name;
+        for (const [funcName, funcInfo] of scope.functions) {
+          if (
+            funcInfo.isMethod &&
+            funcInfo.receiverStruct === typeName &&
+            funcInfo.isExternal
+          ) {
+            const retType = funcInfo.returnType
+              ? gen.getIRType(funcInfo.returnType)
+              : IRVoid;
+            const args = funcInfo.args.map((a) => ({
+              name: a.name,
+              type: gen.getIRType(a.type),
+            }));
+
+            const func = new IRFunction(funcName, args, retType);
+            gen.module.addFunction(func);
+          }
+        }
         continue;
       }
       const name = importItem.name;

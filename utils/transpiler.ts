@@ -26,10 +26,10 @@ export function transpileProgram(program: ProgramExpr, scope?: Scope): string {
   }
 
   const analyzer = new SemanticAnalyzer();
-  analyzer.analyze(program, scope);
+  analyzer.analyze(program, scope, true);
 
   for (const warning of analyzer.warnings) {
-    ErrorReporter.warn(warning);
+    // ErrorReporter.warn(warning);
   }
 
   // Run memory safety analysis
@@ -41,7 +41,7 @@ export function transpileProgram(program: ProgramExpr, scope?: Scope): string {
   }
 
   for (const warning of memorySafety.warnings) {
-    ErrorReporter.warn(warning);
+    // ErrorReporter.warn(warning);
   }
 
   // Halt compilation if memory safety errors were found
@@ -81,7 +81,7 @@ export function parseLibraryFile(
 
     if (moduleName === "std") {
       absolutePath = resolve(__dirname, "../lib/std.x");
-    } else if (moduleName.startsWith(".") || moduleName.startsWith("/")) {
+    } else if (moduleName.startsWith(".") || moduleName.startsWith("/") || moduleName.includes("/")) {
       const libDir = dirname(resolve(libFilePath));
       absolutePath = resolve(libDir, moduleName);
     } else {
@@ -122,6 +122,20 @@ export function parseLibraryFile(
           const typeInfo = importedScope.resolveType(imp.name);
           if (typeInfo) {
             scope.defineType(imp.name, typeInfo);
+
+            // Auto-import methods for the struct
+            for (const [funcName, funcInfo] of importedScope.functions) {
+              if (funcInfo.isMethod && funcInfo.receiverStruct === imp.name) {
+                scope.defineFunction(funcName, {
+                  ...funcInfo,
+                  label: funcInfo.name,
+                  startLabel: funcInfo.name,
+                  endLabel: funcInfo.name,
+                  isExternal: true,
+                  llvmName: `@${funcInfo.name}`,
+                });
+              }
+            }
           } else {
             throw new Error(
               `Imported type ${imp.name} not found in ${absolutePath}`,

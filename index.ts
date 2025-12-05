@@ -164,14 +164,19 @@ try {
   }
 
   const analyzer = new SemanticAnalyzer();
-  analyzer.analyze(ast, scope);
+  console.log(`DEBUG: Before analyze, scope ${scope.id} has String type: ${!!scope.resolveType("String")}`);
+  console.log(`DEBUG: Before analyze, scope ${scope.id} types: ${Array.from(scope.types.keys()).join(", ")}`);
+  console.log(`DEBUG: Before analyze, scope has ${scope.functions.size} functions`);
+  const analyzedScope = analyzer.analyze(ast, scope, true);
+  console.log(`DEBUG: After analyze, analyzedScope has String type: ${!!analyzedScope.resolveType("String")}`);
+  console.log(`DEBUG: After analyze, analyzedScope has ${analyzedScope.functions.size} functions`);
 
   for (const warning of analyzer.warnings) {
     ErrorReporter.warn(warning);
   }
 
   const gen = new IRGenerator();
-  ast.toIR(gen, scope);
+  ast.toIR(gen, analyzedScope);
   const builder = new LLVMTargetBuilder();
   asmContent = builder.build(gen.module);
   asmFilePath = getOutputFileName(fileName, ".ll");

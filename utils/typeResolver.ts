@@ -30,6 +30,30 @@ export function resolveExpressionType(
     const func = scope.resolveFunction(call.functionName);
     return func ? func.returnType : null;
   }
+  if (expr.type === ExpressionType.MethodCallExpr) {
+    const methodCall = expr as any;
+    const receiverType = resolveExpressionType(methodCall.receiver, scope);
+    if (!receiverType) return null;
+
+    let structName = receiverType.name;
+    if (receiverType.genericArgs && receiverType.genericArgs.length > 0) {
+      const typeInfo = scope.resolveGenericType(
+        receiverType.name,
+        receiverType.genericArgs,
+      );
+      if (typeInfo) structName = typeInfo.name;
+    }
+
+    const { mangleMethod } = require("./methodMangler");
+    let mangledName = mangleMethod(structName, methodCall.methodName);
+
+    if (methodCall.monomorphizedName) {
+      mangledName = methodCall.monomorphizedName;
+    }
+
+    const func = scope.resolveFunction(mangledName);
+    return func ? func.returnType : null;
+  }
   if (expr.type === ExpressionType.BinaryExpression) {
     const binExpr = expr as any;
 
@@ -144,6 +168,18 @@ export function resolveExpressionType(
       const member = typeInfo.members.get(propertyName);
       if (!member) return null;
 
+      // If the member has genericArgs, it's a generic type that needs instantiation
+      if (member.genericArgs && member.genericArgs.length > 0) {
+        return {
+          name: member.name,
+          isPointer: member.isPointer,
+          isArray: member.isArray,
+          genericArgs: member.genericArgs,
+        };
+      }
+      
+      // Otherwise, the name might already be an instantiated type like "Inner<u64>"
+      // Just return the type as-is
       return {
         name: member.name,
         isPointer: member.isPointer,

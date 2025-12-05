@@ -35,6 +35,7 @@ enum ExpressionType {
   ImportExpression = "ImportExpression",
   ExportExpression = "ExportExpression",
   ExternDeclaration = "ExternDeclaration",
+  SizeOfExpression = "SizeOfExpression",
 
   Program = "Program",
   EOF = "EOF",

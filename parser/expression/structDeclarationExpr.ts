@@ -56,6 +56,31 @@ export default class StructDeclarationExpr extends Expression {
   toIR(gen: IRGenerator, scope: Scope): string {
     // Define type in scope (same logic as generateIR)
     if (this.genericParams.length > 0) {
+      if (!scope.types.has(this.name)) {
+        const structTypeInfo: TypeInfo = {
+          name: this.name,
+          isArray: [],
+          isPointer: 0,
+          members: new Map(),
+          size: 0,
+          alignment: 1,
+          isPrimitive: false,
+          info: {
+            description: `Generic Structure ${this.name}`,
+          },
+          genericParams: this.genericParams,
+          genericFields: this.fields.map((f) => ({
+            name: f.name,
+            type: f.type,
+          })),
+          declaration: this.startToken,
+        };
+        scope.defineType(this.name, structTypeInfo);
+      }
+      return "";
+    }
+
+    if (!scope.types.has(this.name)) {
       const structTypeInfo: TypeInfo = {
         name: this.name,
         isArray: [],
@@ -65,102 +90,83 @@ export default class StructDeclarationExpr extends Expression {
         alignment: 1,
         isPrimitive: false,
         info: {
-          description: `Generic Structure ${this.name}`,
+          description: `Structure ${this.name}`,
         },
-        genericParams: this.genericParams,
-        genericFields: this.fields.map((f) => ({
-          name: f.name,
-          type: f.type,
-        })),
-        declaration: this.startToken,
       };
-      scope.defineType(this.name, structTypeInfo);
-      return "";
-    }
 
-    const structTypeInfo: TypeInfo = {
-      name: this.name,
-      isArray: [],
-      isPointer: 0,
-      members: new Map(),
-      size: 0,
-      alignment: 1,
-      isPrimitive: false,
-      info: {
-        description: `Structure ${this.name}`,
-      },
-    };
+      let currentOffset = 0;
+      let maxAlignment = 1;
+      let memberIndex = 0;
 
-    let currentOffset = 0;
-    let maxAlignment = 1;
-    let memberIndex = 0;
+      this.fields.forEach((field) => {
+        let fieldTypeInfo = scope.resolveType(field.type.name);
 
-    this.fields.forEach((field) => {
-      let fieldTypeInfo = scope.resolveType(field.type.name);
+        if (!fieldTypeInfo && field.type.name === this.name) {
+          fieldTypeInfo = {
+            name: this.name,
+            size: 0,
+            alignment: 1,
+            isPrimitive: false,
+            members: structTypeInfo.members,
+            isArray: [],
+            isPointer: 0,
+            info: { description: `Recursive reference to ${this.name}` },
+          };
+        }
 
-      if (!fieldTypeInfo && field.type.name === this.name) {
-        fieldTypeInfo = {
-          name: this.name,
-          size: 0,
-          alignment: 1,
-          isPrimitive: false,
-          members: structTypeInfo.members,
-          isArray: [],
-          isPointer: 0,
-          info: { description: `Recursive reference to ${this.name}` },
-        };
-      }
+        if (!fieldTypeInfo) {
+          throw new Error(
+            `Unknown type '${field.type.name}' for field '${field.name}' in struct '${this.name}'`,
+          );
+        }
 
-      if (!fieldTypeInfo) {
-        throw new Error(
-          `Unknown type '${field.type.name}' for field '${field.name}' in struct '${this.name}'`,
-        );
-      }
+        let fieldSize = fieldTypeInfo.size;
+        let fieldAlignment = fieldTypeInfo.alignment || 1;
 
-      let fieldSize = fieldTypeInfo.size;
-      let fieldAlignment = fieldTypeInfo.alignment || 1;
+        if (field.type.isPointer > 0) {
+          fieldSize = 8;
+          fieldAlignment = 8;
+        } else if (field.type.isArray.length > 0) {
+          fieldSize =
+            fieldTypeInfo.size * field.type.isArray.reduce((a, b) => a * b, 1);
+          fieldAlignment = fieldTypeInfo.alignment || 1;
+        }
 
-      if (field.type.isPointer > 0) {
-        fieldSize = 8;
-        fieldAlignment = 8;
-      } else if (field.type.isArray.length > 0) {
-        fieldSize =
-          fieldTypeInfo.size * field.type.isArray.reduce((a, b) => a * b, 1);
-        fieldAlignment = fieldTypeInfo.alignment || 1;
-      }
+        const padding =
+          (fieldAlignment - (currentOffset % fieldAlignment)) % fieldAlignment;
+        currentOffset += padding;
 
-      const padding =
-        (fieldAlignment - (currentOffset % fieldAlignment)) % fieldAlignment;
-      currentOffset += padding;
+        structTypeInfo.members.set(field.name, {
+          info: { description: `Field ${field.name} of type ${field.type.name}` },
+          name: field.type.name,
+          isArray: field.type.isArray,
+          isPointer: field.type.isPointer,
+          size: fieldSize,
+          offset: currentOffset,
+          alignment: fieldAlignment,
+          isPrimitive: fieldTypeInfo.isPrimitive,
+          members: fieldTypeInfo.members,
+          index: memberIndex++,
+        });
 
-      structTypeInfo.members.set(field.name, {
-        info: { description: `Field ${field.name} of type ${field.type.name}` },
-        name: field.type.name,
-        isArray: field.type.isArray,
-        isPointer: field.type.isPointer,
-        size: fieldSize,
-        offset: currentOffset,
-        alignment: fieldAlignment,
-        isPrimitive: fieldTypeInfo.isPrimitive,
-        members: fieldTypeInfo.members,
-        index: memberIndex++,
+        currentOffset += fieldSize;
+        maxAlignment = Math.max(maxAlignment, fieldAlignment);
       });
 
-      currentOffset += fieldSize;
-      maxAlignment = Math.max(maxAlignment, fieldAlignment);
-    });
+      const structPadding =
+        (maxAlignment - (currentOffset % maxAlignment)) % maxAlignment;
+      structTypeInfo.size = currentOffset + structPadding;
+      structTypeInfo.alignment = maxAlignment;
+      structTypeInfo.declaration = this.startToken;
 
-    const structPadding =
-      (maxAlignment - (currentOffset % maxAlignment)) % maxAlignment;
-    structTypeInfo.size = currentOffset + structPadding;
-    structTypeInfo.alignment = maxAlignment;
-    structTypeInfo.declaration = this.startToken;
+      scope.defineType(this.name, structTypeInfo);
+    }
 
-    scope.defineType(this.name, structTypeInfo);
-
-    // Add to IRModule
-    const fields = this.fields.map((f) => gen.getIRType(f.type));
-    gen.module.addStruct(this.name, fields);
+    // Add to IRModule if not already present
+    if (!gen.module.structs.some((s) => s.name === this.name)) {
+      const fields = this.fields.map((f) => gen.getIRType(f.type));
+      gen.module.addStruct(this.name, fields);
+    }
 
     // Generate IR for methods
     for (const method of this.methods) {

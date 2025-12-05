@@ -104,7 +104,11 @@ class Lexer {
     }
 
     if (Lexer.IDENTIFIER_REGEX.test(char)) {
-      return this.parseIdentifier(char, start);
+      const token = this.parseIdentifier(char, start);
+      if (token.value === "sizeof") {
+        token.type = TokenType.SIZEOF;
+      }
+      return token;
     }
 
     throw new CompilerError(

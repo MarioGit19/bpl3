@@ -36,6 +36,7 @@ import StructLiteralExpr, {
 import ExternDeclarationExpr from "./expression/externDeclarationExpr";
 import SwitchExpr, { type SwitchCase } from "./expression/switchExpr";
 import CastExpr from "./expression/castExpr";
+import { SizeofExpr } from "./expression/sizeofExpr";
 import { CompilerError } from "../errors";
 
 export class Parser {
@@ -463,6 +464,8 @@ export class Parser {
           return this.parseArrayLiteral();
         case TokenType.OPEN_BRACE:
           return this.parseStructLiteral();
+        case TokenType.SIZEOF:
+          return this.parseSizeofExpression();
         case TokenType.EOF:
           this.consume(TokenType.EOF);
           return new EOFExpr();
@@ -1427,6 +1430,16 @@ export class Parser {
       this.consume(TokenType.CLOSE_PAREN, "Expected ')' after cast expression");
 
       return new CastExpr(targetType, value);
+    });
+  }
+
+  parseSizeofExpression(): Expression {
+    return this.withRange(() => {
+      const token = this.consume(TokenType.SIZEOF);
+      this.consume(TokenType.OPEN_PAREN, "Expected '(' after 'sizeof'");
+      const type = this.parseType();
+      this.consume(TokenType.CLOSE_PAREN, "Expected ')' after type");
+      return new SizeofExpr(type, token);
     });
   }
 

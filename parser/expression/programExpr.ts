@@ -203,6 +203,13 @@ export default class ProgramExpr extends Expression {
     for (const method of structDecl.methods) {
       const mangledName = mangleMethod(instantiatedTypeName, method.name);
 
+      // Check if this method was already instantiated during semantic analysis
+      // If so, it was already added to the program and will be/was IR-generated
+      const funcInfo = scope.resolveFunction(mangledName);
+      if (funcInfo && funcInfo.astDeclaration && (funcInfo.astDeclaration as any)._analyzed) {
+        continue; // Skip - already handled during semantic analysis
+      }
+
       // Clone and substitute generic types in the method
       const substitutedMethod = this.substituteGenericTypesInMethod(
         method,
