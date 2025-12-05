@@ -1,6 +1,5 @@
 #!/bin/bash
 source ../test_utils.sh
-
 # Configuration
 SOURCE_FILE="fib.x"
 INPUT="93 10"

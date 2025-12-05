@@ -1,6 +1,5 @@
 #!/bin/bash
 source ../test_utils.sh
-
 # Configuration
 SOURCE_FILE="dynamic_array.x"
 INPUT=""

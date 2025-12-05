@@ -1,18 +1,16 @@
 #!/bin/bash
 source ../test_utils.sh
 
-
-
-# Test Bitwise
+# Test 1: Bitwise operations
 echo "Testing bitwise.x..."
-compile "bitwise.x"
-
+SOURCE_FILE="bitwise.x"
+compile "$SOURCE_FILE"
 if [ $? -ne 0 ]; then
-    exit 1;
+    exit 1
 fi
 
-EXE="bitwise"
-EXPECTED_BITWISE=(
+EXE="${SOURCE_FILE%.x}"
+EXPECTED=(
     "--- Bitwise u64 ---"
     "AND: deadbeefcafebabe & ffffffff = cafebabe"
     "OR: deadbeefcafebabe | ffffffff = deadbeefffffffff"
@@ -27,24 +25,22 @@ EXPECTED_BITWISE=(
     "AND: aa & f = a"
     "OR: aa | f = af"
 )
-assert_output "$EXE" "" "" "" "${EXPECTED_BITWISE[@]}"
-
+assert_output "$EXE" "" "" "" "${EXPECTED[@]}"
 if [ $? -ne 0 ]; then
-    exit 1;
+    exit 1
+fi
+rm -f "$EXE" *.o *.asm *.ll
+
+# Test 2: Casting
+echo "Testing casting.x..."
+SOURCE_FILE="casting.x"
+compile "$SOURCE_FILE"
+if [ $? -ne 0 ]; then
+    exit 1
 fi
 
-# Cleanup
-rm -f "$EXE"
-rm -f *.o
-rm -f *.asm
-rm -f *.ll
-
-# Test Casting
-echo "Testing casting.x..."
-compile "casting.x"
-if [ $? -ne 0 ]; then exit 1; fi
-EXE="casting"
-EXPECTED_CASTING=(
+EXE="${SOURCE_FILE%.x}"
+EXPECTED=(
     "--- Casting Tests ---"
     "f64 to u64: 123.456000 -> 123"
     "u64 to f64: 987 -> 987.000000"
@@ -52,23 +48,22 @@ EXPECTED_CASTING=(
     "f64 to f32: 6.280000 -> 6.280000"
     "u64 to u8 (trunc): 1234567890abcdef -> ef"
 )
-assert_output "$EXE" "" "" "" "${EXPECTED_CASTING[@]}"
+assert_output "$EXE" "" "" "" "${EXPECTED[@]}"
 if [ $? -ne 0 ]; then
-    exit 1;
+    exit 1
+fi
+rm -f "$EXE" *.o *.asm *.ll
+
+# Test 3: Control Flow
+echo "Testing control_flow.x..."
+SOURCE_FILE="control_flow.x"
+compile "$SOURCE_FILE"
+if [ $? -ne 0 ]; then
+    exit 1
 fi
 
-# Cleanup
-rm -f "$EXE"
-rm -f *.o
-rm -f *.asm
-rm -f *.ll
-
-# Test Control Flow
-echo "Testing control_flow.x..."
-compile "control_flow.x"
-if [ $? -ne 0 ]; then exit 1; fi
-EXE="control_flow"
-EXPECTED_CONTROL=(
+EXE="${SOURCE_FILE%.x}"
+EXPECTED=(
     "--- Control Flow ---"
     "Outer loop i=0"
     "  Inner loop j=0"
@@ -80,13 +75,8 @@ EXPECTED_CONTROL=(
     "  Inner loop j=0"
     "  Inner loop j=2"
 )
-assert_output "$EXE" "" "" "" "${EXPECTED_CONTROL[@]}"
+assert_output "$EXE" "" "" "" "${EXPECTED[@]}"
 if [ $? -ne 0 ]; then
-    exit 1;
+    exit 1
 fi
-
-# Cleanup
-rm -f "$EXE"
-rm -f *.o
-rm -f *.asm
-rm -f *.ll
+rm -f "$EXE" *.o *.asm *.ll

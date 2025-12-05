@@ -1,8 +1,5 @@
 #!/bin/bash
 source ../test_utils.sh
-
-
-
 # Configuration
 SOURCE_FILE="float_demo.x"
 INPUT=""

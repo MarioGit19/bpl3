@@ -1,14 +1,11 @@
 #!/bin/bash
 source ../test_utils.sh
-
-
-
 # Configuration
 SOURCE_FILE="linked_list.x"
 INPUT=""
 ARGS=""
 ENV_VARS=""
-EXPECTED=("10 -> 20 -> 30 -> 40 -> 50 -> NULL" "1 -> 4 -> 5 -> NULL")
+EXPECTED=("1 -> 4 -> 5 -> NULL" "1 -> 2 -> 3 -> 4 -> 5 -> NULL" "10 -> 40 -> 50 -> NULL" "10 -> 20 -> 30 -> 40 -> 50 -> NULL")
 
 # Compile
 compile "$SOURCE_FILE"

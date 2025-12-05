@@ -1,9 +1,12 @@
 #!/bin/bash
 source ../test_utils.sh
+
 # Configuration
-SOURCE_FILE="variadic_user_demo.x"
+SOURCE_FILE="no_malloc_import.x"
 INPUT=""
-EXPECTED=("Sum result: 150" "Final string: Hello, variadic world!")
+ARGS=""
+ENV_VARS=""
+EXPECTED=("Total elements: 5" "numbers[0] = 1" "numbers[4] = 5")
 
 # Compile
 compile "$SOURCE_FILE"
@@ -13,13 +16,12 @@ fi
 
 # Run Test
 EXE="${SOURCE_FILE%.x}"
-assert_output "$EXE" "$INPUT" "" "" "$EXPECTED"
+assert_output "$EXE" "$INPUT" "$ARGS" "$ENV_VARS" "${EXPECTED[@]}"
 if [ $? -ne 0 ]; then
     exit 1
 fi
 
 # Cleanup
 rm -f "$EXE"
-rm -f *.o
-rm -f *.asm
-rm -f *.ll
+rm -f *.o *.asm *.ll
+

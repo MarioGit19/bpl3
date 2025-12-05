@@ -45,6 +45,7 @@ export type TypeInfo = {
   genericParams?: string[];
   genericFields?: { name: string; type: VariableType }[];
   genericMethods?: any[]; // Store method AST nodes for generic structs
+  definingScope?: Scope; // The scope where this type was originally defined (for generic instantiation)
   index?: number;
 };
 
@@ -208,10 +209,7 @@ export default class Scope {
 
     let totalSize = 0;
     for (let member of type.members.values()) {
-      if (!this.resolveType(member.name)) {
-        throw new Error(`Type ${member.name} not defined.`);
-      }
-      totalSize += this.resolveType(member.name)!.size;
+      totalSize += member.size;
     }
     return totalSize;
   }
@@ -251,6 +249,7 @@ export default class Scope {
       sourceFile: baseType.sourceFile,
       genericMethods: baseType.genericMethods,
       genericParams: baseType.genericParams, // Keep generic params for reference
+      definingScope: baseType.definingScope, // Preserve the defining scope for method instantiation
     };
 
     const paramMap = new Map<string, VariableType>();
@@ -282,8 +281,18 @@ export default class Scope {
       if (!fieldTypeInfo) {
         console.error(`Failed to resolve type '${concreteType.name}' in scope ${this.id}.`);
         console.error(`Available types: ${Array.from(this.types.keys()).join(", ")}`);
-        if (this.parent) {
-             console.error(`Parent scope ${this.parent.id} available types: ${Array.from(this.parent.types.keys()).join(", ")}`);
+        console.error(`This scope parent: ${this.parent ? this.parent.id : 'null'}`);
+        let currentScope: Scope | null = this.parent;
+        let depth = 1;
+        while (currentScope) {
+          console.error(`Parent scope ${currentScope.id} (depth ${depth}) available types: ${Array.from(currentScope.types.keys()).join(", ")}`);
+          console.error(`  Parent of scope ${currentScope.id}: ${currentScope.parent ? currentScope.parent.id : 'null'}`);
+          currentScope = currentScope.parent;
+          depth++;
+          if (depth > 10) {
+            console.error('Stopping scope chain traversal after 10 levels to prevent infinite loop');
+            break;
+          }
         }
         throw new Error(
           `Could not resolve type '${concreteType.name}' during instantiation of '${instantiationName}'.`,

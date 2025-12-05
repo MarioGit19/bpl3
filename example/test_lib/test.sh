@@ -1,6 +1,5 @@
 #!/bin/bash
 source ../test_utils.sh
-
 # Configuration
 SOURCE_FILE="test_lib.x"
 INPUT=""

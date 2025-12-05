@@ -1,8 +1,5 @@
 #!/bin/bash
 source ../test_utils.sh
-
-
-
 # Configuration
 SOURCE_FILE="struct_features_demo.x"
 INPUT=""

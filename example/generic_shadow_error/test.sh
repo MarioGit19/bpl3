@@ -1,6 +1,5 @@
 #!/bin/bash
 source ../test_utils.sh
-
 # Configuration
 SOURCE_FILE="generic_shadow_error.x"
 

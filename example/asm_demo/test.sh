@@ -1,8 +1,5 @@
 #!/bin/bash
 source ../test_utils.sh
-
-
-
 # Configuration
 SOURCE_FILE="asm_demo.x"
 INPUT=""

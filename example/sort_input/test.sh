@@ -1,6 +1,5 @@
 #!/bin/bash
 source ../test_utils.sh
-
 # Configuration
 SOURCE_FILE="sort_input.x"
 INPUT="5 3 8 1 2 7"

@@ -1,23 +1,18 @@
 #!/bin/bash
 source ../test_utils.sh
-
 FAILED_TEST_COUNT=0
-
 bash ./test_edge_cases.sh
 if [ $? -ne 0 ]; then
     FAILED_TEST_COUNT=$((FAILED_TEST_COUNT + 1))
 fi
-
 bash ./test_generics.sh
 if [ $? -ne 0 ]; then
     FAILED_TEST_COUNT=$((FAILED_TEST_COUNT + 1))
 fi
-
 bash ./test_nested.sh
 if [ $? -ne 0 ]; then
     FAILED_TEST_COUNT=$((FAILED_TEST_COUNT + 1))
 fi
-
 # Configuration
 SOURCE_FILE="user.x"
 INPUT=""

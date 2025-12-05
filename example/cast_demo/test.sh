@@ -1,6 +1,5 @@
 #!/bin/bash
 source ../test_utils.sh
-
 # Configuration
 SOURCE_FILE="cast_demo.x"
 EXPECTED=("u64 1000 cast to u8: 232" "f64 3.14" "Pointer")

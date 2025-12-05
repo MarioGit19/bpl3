@@ -121,7 +121,13 @@ export function parseLibraryFile(
         if (imp.type === "type") {
           const typeInfo = importedScope.resolveType(imp.name);
           if (typeInfo) {
-            scope.defineType(imp.name, typeInfo);
+            // Store the defining scope for generic types so their methods
+            // can be instantiated in the correct context with access to imports
+            const typeInfoWithScope = {
+              ...typeInfo,
+              definingScope: importedScope,
+            };
+            scope.defineType(imp.name, typeInfoWithScope);
 
             // Auto-import methods for the struct
             for (const [funcName, funcInfo] of importedScope.functions) {
@@ -133,6 +139,7 @@ export function parseLibraryFile(
                   endLabel: funcInfo.name,
                   isExternal: true,
                   llvmName: `@${funcInfo.name}`,
+                  definitionScope: importedScope,
                 });
               }
             }

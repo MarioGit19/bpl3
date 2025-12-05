@@ -6,6 +6,8 @@ frame main() {
     # Test Array<String>
     local stringArr: Array<String>;
     stringArr.length = 0;
+    stringArr.capacity = 0;
+    stringArr.data = cast<*String>(0);
 
     local s1: String;
     s1.length = 5;
@@ -41,6 +43,8 @@ frame main() {
     # Test Array methods
     local intArr: Array<u64>;
     intArr.length = 0;
+    intArr.capacity = 0;
+    intArr.data = cast<*u64>(0);
     call intArr.push(100);
     call intArr.push(200);
     call intArr.set(0, 999);

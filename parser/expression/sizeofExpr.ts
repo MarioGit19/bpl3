@@ -1,15 +1,17 @@
-import { Expression } from "../parser";
 import { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import Scope from "../../transpiler/Scope";
-import { TypeInfo } from "../../transpiler/Scope";
+import type { TypeInfo } from "../../transpiler/Scope";
 import Token from "../../lexer/token";
-import { VariableType } from "./variableDeclarationExpr";
+import type { VariableType } from "./variableDeclarationExpr";
 import ExpressionType from "../expressionType";
+import Expression from "./expr";
 
-export class SizeofExpr implements Expression {
-  public type = ExpressionType.SizeOfExpression;
-  
-  constructor(public typeArg: VariableType, public token: Token) {}
+export class SizeofExpr extends Expression {
+    
+    constructor(public typeArg: VariableType, public token: Token) {
+      super(ExpressionType.SizeOfExpression);
+
+  }
 
   toIR(gen: IRGenerator, scope: Scope): string {
     let typeInfo: TypeInfo | null = null;

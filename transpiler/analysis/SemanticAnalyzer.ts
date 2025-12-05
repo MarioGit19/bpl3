@@ -922,8 +922,32 @@ export class SemanticAnalyzer {
       this.currentProgram.addExpression(clonedDecl);
     }
 
-    // Analyze the monomorphized function now, using the original scope as context
-    // This ensures that symbols from the original definition scope (like imported functions) are accessible
+    // Ensure the original scope (from the library) has access to types from the current scope
+    // This is necessary for monomorphization to work when the generic type arguments
+    // (like String) are defined in the current file but not in the library where the generic was defined
+    if (clonedDecl.scope && clonedDecl.scope !== scope) {
+      // Copy missing types from current scope (including parent chain) to the library scope
+      const typesToCopy: Map<string, TypeInfo> = new Map();
+      
+      // Collect all types from current scope chain
+      let currentScope: Scope | null = scope;
+      while (currentScope) {
+        for (const [typeName, typeInfo] of currentScope.types) {
+          if (!typesToCopy.has(typeName)) {
+            typesToCopy.set(typeName, typeInfo);
+          }
+        }
+        currentScope = currentScope.parent;
+      }
+      
+      // Copy to library scope
+      for (const [typeName, typeInfo] of typesToCopy) {
+        if (!clonedDecl.scope.resolveType(typeName)) {
+          clonedDecl.scope.defineType(typeName, typeInfo);
+        }
+      }
+    }
+    
     const analyzeScope = clonedDecl.scope || scope;
     this.analyzeFunctionDeclaration(clonedDecl, analyzeScope);
 
@@ -1705,18 +1729,43 @@ export class SemanticAnalyzer {
 
   private analyzeImportExpression(expr: ImportExpr, scope: Scope): void {
     for (const importItem of expr.importName) {
+      const name = importItem.name;
       if (importItem.type === "type") {
+        // Check if type is already resolvable (either in this scope or parent chain)
+        // If it is, we don't need to do anything as parseLibraryFile already handled it
+        if (scope.resolveType(name)) {
+          continue; // Type already accessible, skip
+        }
+        
+        // If we reach here, the type is not accessible, which shouldn't happen
+        // if parseLibraryFile ran correctly. But let's try to recover by searching
+        // in parent scopes and defining it in the global scope.
+        console.warn(`Type '${name}' not found during import analysis. Attempting recovery...`);
+        
+        let parent = scope.parent;
+        let typeInfo:TypeInfo|null = null;
+        while (parent && !typeInfo) {
+          let temp = parent.types.get(name); // Check directly in parent's types
+          if (temp){
+            typeInfo = temp;
+          }
+          parent = parent.parent;
+        }
+        
+        if (typeInfo) {
+          const globalScope = scope.getGlobalScope();
+          if (!globalScope.types.has(name)) {
+            globalScope.defineType(name, typeInfo);
+          }
+        } else {
+          throw new Error(`Cannot import type '${name}': type not found in any parent scope`);
+        }
         continue;
       }
-      const name = importItem.name;
-
       if (scope.resolveFunction(name)) {
         continue;
       }
-
       let returnType: VariableType = { name: "i32", isPointer: 0, isArray: [] };
-
-
       scope.defineFunction(name, {
         name: name,
         label: name,
@@ -2072,11 +2121,20 @@ export class SemanticAnalyzer {
     // Check if already exists
     if (scope.resolveFunction(mangledName)) return;
 
+    // Get the type info to find the defining scope
+    const typeInfo = scope.resolveType(structName);
+    const definingScope = typeInfo?.definingScope;
+    
     // Clone AST
     const clonedDecl = this.cloneFunctionDeclaration(methodAst);
     // Preserve the original scope for resolving symbols during analysis
     if (methodAst.scope && !clonedDecl.scope) {
       clonedDecl.scope = methodAst.scope;
+    }
+    
+    // If no scope is set on the method but we have a defining scope, use that
+    if (!clonedDecl.scope && definingScope) {
+      clonedDecl.scope = definingScope;
     }
 
     // Substitute types
@@ -2125,8 +2183,8 @@ export class SemanticAnalyzer {
 
     const finalArgs = [thisParam, ...clonedDecl.args];
 
-    // Define in scope
-    scope.defineFunction(mangledName, {
+    // Define in scope - register in BOTH the defining scope (if different) and current scope
+    const funcInfo: FunctionInfo = {
       name: mangledName,
       label: mangledName,
       startLabel: `${mangledName}_start`,
@@ -2141,7 +2199,16 @@ export class SemanticAnalyzer {
       isMethod: true,
       receiverStruct: structName,
       originalName: methodAst.name,
-    });
+      definitionScope: definingScope,
+    };
+    
+    // Register in current scope
+    scope.defineFunction(mangledName, funcInfo);
+    
+    // Also register in defining scope if it's different
+    if (definingScope && definingScope !== scope) {
+      definingScope.defineFunction(mangledName, funcInfo);
+    }
     
     // Verify the function was stored correctly
     const stored = scope.resolveFunction(mangledName);
@@ -2152,8 +2219,34 @@ export class SemanticAnalyzer {
       this.currentProgram.addExpression(clonedDecl);
     }
 
-    // Analyze the instantiated method now, using the original scope as context
-    const analyzeScope = clonedDecl.scope || scope;
+    // Ensure the scope used for analysis has access to types from the current scope
+    // This is necessary for monomorphization to work when the generic type arguments
+    // (like String) are defined in the current file but not in the library where the generic was defined
+    const analyzeScope = clonedDecl.scope || definingScope || scope;
+    
+    if (analyzeScope && analyzeScope !== scope) {
+      // Copy missing types from current scope (including parent chain) to the analysis scope
+      const typesToCopy: Map<string, TypeInfo> = new Map();
+      
+      // Collect all types from current scope chain
+      let currentScope: Scope | null = scope;
+      while (currentScope) {
+        for (const [typeName, typeInfo] of currentScope.types) {
+          if (!typesToCopy.has(typeName)) {
+            typesToCopy.set(typeName, typeInfo);
+          }
+        }
+        currentScope = currentScope.parent;
+      }
+      
+      // Copy to analysis scope (but don't overwrite existing types)
+      for (const [typeName, typeInfo] of typesToCopy) {
+        if (!analyzeScope.resolveType(typeName)) {
+          analyzeScope.defineType(typeName, typeInfo);
+        }
+      }
+    }
+    
     this.analyzeFunctionDeclaration(clonedDecl, analyzeScope);
   }
 

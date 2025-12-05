@@ -8,7 +8,6 @@ if [ $? -ne 0 ]; then
 fi
 
 source ../test_utils.sh
-
 # Configuration
 SOURCE_FILE="struct_literal.x"
 INPUT=""

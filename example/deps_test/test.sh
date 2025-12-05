@@ -1,14 +1,11 @@
 #!/bin/bash
 source ../test_utils.sh
-
-
-
 # Configuration
 SOURCE_FILE="main.x"
-INPUT="" # Input for the program if needed
-ARGS="" # Command line arguments
-ENV_VARS="" # Environment variables (e.g. "VAR=val")
-EXPECTED="" # Can be multiple arguments
+INPUT=""
+ARGS=""
+ENV_VARS=""
+EXPECTED="Utility function called"
 
 # Compile
 compile "$SOURCE_FILE"
