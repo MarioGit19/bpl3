@@ -1,5 +1,6 @@
 import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
-import { IRVoid } from "../../transpiler/ir/IRType";
+import { IRVoid, irTypeToString } from "../../transpiler/ir/IRType";
+import { CompilerError } from "../../errors";
 import { mangleMethod } from "../../utils/methodMangler";
 import { resolveExpressionType } from "../../utils/typeResolver";
 import ExpressionType from "../expressionType";
@@ -41,8 +42,9 @@ export default class MethodCallExpr extends Expression {
     // Resolve receiver type
     const receiverType = resolveExpressionType(this.receiver, scope);
     if (!receiverType) {
-      throw new Error(
+      throw new CompilerError(
         `Cannot resolve receiver type for method call '${this.methodName}'`,
+        this.startToken?.line || 0,
       );
     }
 
@@ -102,8 +104,9 @@ export default class MethodCallExpr extends Expression {
     }
 
     if (!func) {
-      throw new Error(
+      throw new CompilerError(
         `Method '${this.methodName}' not found on type '${structName}'`,
+        this.startToken?.line || 0,
       );
     }
 
@@ -173,7 +176,19 @@ export default class MethodCallExpr extends Expression {
       : IRVoid;
 
     const funcName = func.irName || `@${mangledName}`;
-    const result = gen.emitCall(funcName, argValues, returnType);
+
+    let signature: string | undefined;
+    if (func.isVariadic) {
+      const argTypes = (func.args || []).map((a) => {
+        const t = gen.getIRType(a.type);
+        return irTypeToString(t);
+      });
+      signature = argTypes.join(", ");
+      if (signature) signature += ", ...";
+      else signature = "...";
+    }
+
+    const result = gen.emitCall(funcName, argValues, returnType, signature);
     return result || "";
   }
 

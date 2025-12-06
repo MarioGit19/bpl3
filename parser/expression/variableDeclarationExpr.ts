@@ -1,4 +1,5 @@
 import Token from "../../lexer/token";
+import { CompilerError } from "../../errors";
 import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import { IROpcode } from "../../transpiler/ir/IROpcode";
 import Scope from "../../transpiler/Scope";
@@ -92,6 +93,16 @@ export default class VariableDeclarationExpr extends Expression {
       let initVal: string | undefined = undefined;
       if (this.value instanceof NumberLiteralExpr) {
         initVal = this.value.value;
+      } else if (this.value instanceof StringLiteralExpr) {
+        const unescaped = this.value.value
+          .replace(/\\n/g, "\n")
+          .replace(/\\t/g, "\t")
+          .replace(/\\r/g, "\r")
+          .replace(/\\"/g, '"')
+          .replace(/\\\\/g, "\\");
+        const globalStrName = gen.addStringConstant(unescaped);
+        const len = unescaped.length + 1;
+        initVal = `getelementptr inbounds ([${len} x i8], ptr ${globalStrName}, i64 0, i64 0)`;
       }
 
       gen.module.addGlobal(name, irType, initVal);
@@ -164,8 +175,9 @@ export default class VariableDeclarationExpr extends Expression {
         } else if (this.value instanceof StructLiteralExpr) {
           const structType = scope.resolveType(this.varType.name);
           if (!structType || structType.isPrimitive) {
-            throw new Error(
+            throw new CompilerError(
               `Cannot initialize non-struct type '${this.varType.name}' with struct literal`,
+              this.nameToken?.line || 0,
             );
           }
           this.initializeStruct(gen, scope, ptr, structType, this.value);
@@ -173,8 +185,9 @@ export default class VariableDeclarationExpr extends Expression {
       } else if (this.value instanceof StructLiteralExpr) {
         const structType = scope.resolveType(this.varType.name);
         if (!structType || structType.isPrimitive) {
-          throw new Error(
+          throw new CompilerError(
             `Cannot initialize non-struct type '${this.varType.name}' with struct literal`,
+            this.nameToken?.line || 0,
           );
         }
         this.initializeStruct(gen, scope, ptr, structType, this.value);
@@ -265,8 +278,9 @@ export default class VariableDeclarationExpr extends Expression {
     const hasPositional = literal.fields.some((f) => f.fieldName === undefined);
 
     if (hasNamed && hasPositional) {
-      throw new Error(
+      throw new CompilerError(
         `Cannot mix named and positional field initialization in struct literal for '${structType.name}'`,
+        this.nameToken?.line || 0,
       );
     }
 
@@ -277,8 +291,9 @@ export default class VariableDeclarationExpr extends Expression {
       if (field.fieldName) {
         const member = structType.members.get(field.fieldName);
         if (!member) {
-          throw new Error(
+          throw new CompilerError(
             `Field '${field.fieldName}' not found in struct '${structType.name}'`,
+            this.nameToken?.line || 0,
           );
         }
         fieldIndex = member.index!;
@@ -297,8 +312,9 @@ export default class VariableDeclarationExpr extends Expression {
         }
 
         if (!foundMember) {
-          throw new Error(
+          throw new CompilerError(
             `Too many fields in struct literal for '${structType.name}' or index mismatch`,
+            this.nameToken?.line || 0,
           );
         }
         fieldIndex =
@@ -323,7 +339,10 @@ export default class VariableDeclarationExpr extends Expression {
       if (field.value instanceof StructLiteralExpr) {
         const fieldTypeInfo = scope.resolveType(fieldType.name);
         if (!fieldTypeInfo) {
-          throw new Error(`Unknown type ${fieldType.name}`);
+          throw new CompilerError(
+            `Unknown type ${fieldType.name}`,
+            this.nameToken?.line || 0,
+          );
         }
         this.initializeStruct(gen, scope, elemPtr, fieldTypeInfo, field.value);
       } else {

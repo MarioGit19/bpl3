@@ -1,10 +1,26 @@
-const editor = document.getElementById("codeEditor");
+import { CodeJar } from "https://medv.io/codejar/codejar.js";
+
+const editorElement = document.getElementById("codeEditor");
 const outputPre = document.getElementById("consoleOutput");
 const irPre = document.getElementById("irOutput");
+const astPre = document.getElementById("astOutput");
 const tutorialList = document.getElementById("tutorialList");
 const tutTitle = document.getElementById("tutTitle");
 const tutDesc = document.getElementById("tutDesc");
 const warnPre = document.getElementById("warnOutput");
+
+const highlight = (editor) => {
+  // Highlight with Prism
+  if (window.Prism) {
+    editor.innerHTML = Prism.highlight(
+      editor.textContent,
+      Prism.languages.c,
+      "c",
+    );
+  }
+};
+
+const jar = CodeJar(editorElement, highlight);
 
 // Load tutorials
 fetch("/tutorials.json")
@@ -26,7 +42,7 @@ function loadTutorial(tut, li) {
   li.classList.add("active");
   tutTitle.textContent = tut.title;
   tutDesc.textContent = tut.description;
-  editor.value = tut.code;
+  jar.updateCode(tut.code);
 }
 
 // Run Code
@@ -36,7 +52,7 @@ document.getElementById("runBtn").addEventListener("click", async () => {
     const res = await fetch("/api/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: editor.value }),
+      body: JSON.stringify({ code: jar.toString() }),
     });
     const data = await res.json();
 
@@ -69,7 +85,7 @@ document.getElementById("compileBtn").addEventListener("click", async () => {
     const res = await fetch("/api/compile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: editor.value }),
+      body: JSON.stringify({ code: jar.toString() }),
     });
     const data = await res.json();
 
@@ -88,6 +104,29 @@ document.getElementById("compileBtn").addEventListener("click", async () => {
     document.querySelector('.tab[data-target="ir"]').click();
   } catch (e) {
     irPre.textContent = "Network Error: " + e.message;
+  }
+});
+
+// Show AST
+document.getElementById("astBtn").addEventListener("click", async () => {
+  astPre.textContent = "Generating AST...";
+  try {
+    const res = await fetch("/api/ast", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: jar.toString() }),
+    });
+    const data = await res.json();
+
+    if (data.error) {
+      astPre.textContent = "Server Error:\n" + data.error;
+    } else {
+      astPre.textContent = data.ast || "No AST output";
+    }
+    // Switch to AST tab
+    document.querySelector('.tab[data-target="ast"]').click();
+  } catch (e) {
+    astPre.textContent = "Network Error: " + e.message;
   }
 });
 

@@ -1,6 +1,6 @@
 import { dirname, resolve } from "path";
 
-import { ErrorReporter } from "../errors";
+import { ErrorReporter, CompilerError } from "../errors";
 import { MemorySafetyAnalyzer } from "../transpiler/analysis/MemorySafetyAnalyzer";
 import { SemanticAnalyzer } from "../transpiler/analysis/SemanticAnalyzer";
 import HelperGenerator from "../transpiler/HelperGenerator";
@@ -101,31 +101,51 @@ export function parseLibraryFile(
 
     if (absolutePath.endsWith(".x")) {
       const importedScope = new Scope();
-      const nestedLibs = parseLibraryFile(absolutePath, importedScope, visited);
-      objectFiles.push(...nestedLibs);
-
-      const importedProgram = parseFile(absolutePath);
-
-      const asmContent = transpileProgram(importedProgram, importedScope);
-
-      const asmFile = absolutePath.replace(/\.x$/, ".ll");
-      saveToFile(asmFile, asmContent);
-      const objFile = compileLlvmIrToObject(asmFile);
-      objectFiles.push(objFile);
-
-      const importedExports = extractExportStatements(
-        importedProgram,
-      ) as ExportExpr[];
-
-      for (const imp of importExpr.importName) {
-        const match = importedExports.find(
-          (e) => e.exportName === imp.name && e.exportType === imp.type,
+      try {
+        const nestedLibs = parseLibraryFile(
+          absolutePath,
+          importedScope,
+          visited,
         );
-        if (!match) {
-          throw new Error(
-            `Import ${imp.name} (${imp.type}) not found in ${absolutePath}`,
+        objectFiles.push(...nestedLibs);
+
+        const importedProgram = parseFile(absolutePath);
+
+        const asmContent = transpileProgram(importedProgram, importedScope);
+
+        const asmFile = absolutePath.replace(/\.x$/, ".ll");
+        saveToFile(asmFile, asmContent);
+        const objFile = compileLlvmIrToObject(asmFile);
+        objectFiles.push(objFile);
+
+        const importedExports = extractExportStatements(
+          importedProgram,
+        ) as ExportExpr[];
+
+        for (const imp of importExpr.importName) {
+          const match = importedExports.find(
+            (e) => e.exportName === imp.name && e.exportType === imp.type,
+          );
+          if (!match) {
+            throw new CompilerError(
+              `Import ${imp.name} (${imp.type}) not found in ${absolutePath}`,
+              imp.token?.line || importExpr.startToken?.line || 0,
+            );
+          }
+        }
+      } catch (e: any) {
+        if (e instanceof CompilerError) throw e;
+        if (
+          e.message &&
+          (e.message.startsWith("File not found") ||
+            e.message.startsWith("Directory does not exist"))
+        ) {
+          throw new CompilerError(
+            `Could not resolve module '${moduleName}'`,
+            importExpr.startToken?.line || 0,
           );
         }
+        throw e;
       }
 
       for (const imp of importExpr.importName) {
@@ -155,8 +175,9 @@ export function parseLibraryFile(
               }
             }
           } else {
-            throw new Error(
+            throw new CompilerError(
               `Imported type ${imp.name} not found in ${absolutePath}`,
+              imp.token?.line || importExpr.startToken?.line || 0,
             );
           }
         }
@@ -175,8 +196,9 @@ export function parseLibraryFile(
               llvmName: `@${funcInfo.name}`,
             });
           } else {
-            throw new Error(
+            throw new CompilerError(
               `Imported function ${imp.name} not found in ${absolutePath}`,
+              imp.token?.line || importExpr.startToken?.line || 0,
             );
           }
         }

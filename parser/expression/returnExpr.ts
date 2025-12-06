@@ -4,6 +4,7 @@ import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
 import FunctionCallExpr from "./functionCallExpr";
+import { CompilerError } from "../../errors";
 
 export default class ReturnExpr extends Expression {
   constructor(public value: Expression | null) {
@@ -65,7 +66,10 @@ export default class ReturnExpr extends Expression {
   toIR(gen: IRGenerator, scope: Scope): string {
     const context = scope.getCurrentContext("function");
     if (!context || context.type !== "function") {
-      throw new Error("Return statement not within a function context");
+      throw new CompilerError(
+        "Return statement not within a function context",
+        this.startToken?.line || 0,
+      );
     }
 
     if (this.value) {

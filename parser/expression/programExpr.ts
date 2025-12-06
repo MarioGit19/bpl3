@@ -2,6 +2,7 @@ import HelperGenerator from "../../transpiler/HelperGenerator";
 import { IROpcode } from "../../transpiler/ir/IRInstruction";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
+import { CompilerError } from "../../errors";
 
 import type Scope from "../../transpiler/Scope";
 import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
@@ -50,8 +51,9 @@ export default class ProgramExpr extends Expression {
 
     for (const expr of this.expressions) {
       if (!allowedTopLevelTypes.has(expr.type)) {
-        throw new Error(
+        throw new CompilerError(
           `Invalid expression type at top level: ${ExpressionType[expr.type]}`,
+          expr.startToken?.line || 0,
         );
       }
     }

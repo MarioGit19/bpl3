@@ -4,6 +4,7 @@ import type { TypeInfo } from "../../transpiler/Scope";
 import type Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
+import { CompilerError } from "../../errors";
 
 import type { VariableType } from "./variableDeclarationExpr";
 import type FunctionDeclarationExpr from "./functionDeclaration";
@@ -113,8 +114,9 @@ export default class StructDeclarationExpr extends Expression {
         }
 
         if (!fieldTypeInfo) {
-          throw new Error(
+          throw new CompilerError(
             `Unknown type '${field.type.name}' for field '${field.name}' in struct '${this.name}'`,
+            field.token?.line || this.startToken?.line || 0,
           );
         }
 

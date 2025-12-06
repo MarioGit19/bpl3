@@ -23,6 +23,7 @@ import { IRModule } from "./IRModule";
 import type { IRType } from "./IRType";
 import type { TypeInfo } from "../Scope";
 import type { VariableType } from "../../parser/expression/variableDeclarationExpr";
+import { getIntSize, isSignedInt } from "../../utils/typeResolver";
 
 export class IRGenerator {
   public module: IRModule;
@@ -230,13 +231,18 @@ export class IRGenerator {
     funcName: string,
     args: { value: string; type: IRType }[],
     returnType: IRType,
+    functionSignature?: string,
   ): string | null {
     if (returnType.type === "void") {
-      this.emit(new CallInst(funcName, args, returnType, null));
+      this.emit(
+        new CallInst(funcName, args, returnType, null, functionSignature),
+      );
       return null;
     } else {
       const dest = this.getTemp("call");
-      this.emit(new CallInst(funcName, args, returnType, dest));
+      this.emit(
+        new CallInst(funcName, args, returnType, dest, functionSignature),
+      );
       return dest;
     }
   }
@@ -455,5 +461,88 @@ export class IRGenerator {
     }
 
     this.module.addStruct(typeInfo.name, fields);
+  }
+
+  emitTypeCast(
+    sourceValue: string,
+    sourceType: VariableType,
+    targetType: VariableType,
+    sourceIRType: IRType,
+    targetIRType: IRType,
+  ): string {
+    const srcIsFloat = sourceType.name === "f32" || sourceType.name === "f64";
+    const tgtIsFloat = targetType.name === "f32" || targetType.name === "f64";
+    const srcIsPtr = sourceType.isPointer > 0;
+    const tgtIsPtr = targetType.isPointer > 0;
+
+    // Pointer to pointer
+    if (srcIsPtr && tgtIsPtr) {
+      return this.emitBitcast(sourceValue, sourceIRType, targetIRType);
+    }
+
+    // Pointer to integer
+    if (srcIsPtr && !tgtIsPtr) {
+      return this.emitPtrToInt(sourceValue, sourceIRType, targetIRType);
+    }
+
+    // Integer to pointer
+    if (!srcIsPtr && tgtIsPtr) {
+      return this.emitIntToPtr(sourceValue, sourceIRType, targetIRType);
+    }
+
+    // Float to float
+    if (srcIsFloat && tgtIsFloat) {
+      const srcSize = this.getFloatSize(sourceType.name);
+      const tgtSize = this.getFloatSize(targetType.name);
+      if (srcSize > tgtSize) {
+        return this.emitFPTrunc(sourceValue, sourceIRType, targetIRType);
+      } else if (srcSize < tgtSize) {
+        return this.emitFPExt(sourceValue, sourceIRType, targetIRType);
+      }
+      return sourceValue;
+    }
+
+    // Float to integer
+    if (srcIsFloat && !tgtIsFloat) {
+      const isSigned = isSignedInt(targetType.name);
+      if (isSigned) {
+        return this.emitFPToSI(sourceValue, sourceIRType, targetIRType);
+      } else {
+        return this.emitFPToUI(sourceValue, sourceIRType, targetIRType);
+      }
+    }
+
+    // Integer to float
+    if (!srcIsFloat && tgtIsFloat) {
+      const isSigned = isSignedInt(sourceType.name);
+      if (isSigned) {
+        return this.emitSIToFP(sourceValue, sourceIRType, targetIRType);
+      } else {
+        return this.emitUIToFP(sourceValue, sourceIRType, targetIRType);
+      }
+    }
+
+    // Integer to integer
+    const srcSize = getIntSize(sourceType.name);
+    const tgtSize = getIntSize(targetType.name);
+
+    if (srcSize > tgtSize) {
+      return this.emitTrunc(sourceValue, sourceIRType, targetIRType);
+    } else if (srcSize < tgtSize) {
+      const isSigned = isSignedInt(sourceType.name);
+      if (isSigned) {
+        return this.emitSExt(sourceValue, sourceIRType, targetIRType);
+      } else {
+        return this.emitZExt(sourceValue, sourceIRType, targetIRType);
+      }
+    }
+
+    return sourceValue;
+  }
+
+  private getFloatSize(name: string): number {
+    if (name === "f32") return 4;
+    if (name === "f64") return 8;
+    return 0;
   }
 }

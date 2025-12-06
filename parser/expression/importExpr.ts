@@ -71,7 +71,12 @@ export default class ImportExpr extends Expression {
         }));
 
         if (!gen.module.functions.some((f) => f.name === name)) {
-          const func = new IRFunction(name, args, retType);
+          const func = new IRFunction(
+            name,
+            args,
+            retType,
+            existingFunc.isVariadic || false,
+          );
           gen.module.addFunction(func);
         }
         continue;

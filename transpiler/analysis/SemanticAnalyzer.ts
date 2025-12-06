@@ -1187,8 +1187,9 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
             globalScope.defineType(name, typeInfo);
           }
         } else {
-          throw new Error(
+          throw new CompilerError(
             `Cannot import type '${name}': type not found in any parent scope`,
+            expr.startToken?.line || 0,
           );
         }
         continue;
@@ -1197,23 +1198,34 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
         continue;
       }
       let returnType: VariableType = { name: "i32", isPointer: 0, isArray: [] };
+      let args: { type: VariableType; name: string }[] = [];
+      let isVariadic = true;
 
       // Standard library overrides for common functions
       if (["malloc", "calloc", "realloc", "memcpy", "memset"].includes(name)) {
         returnType = { name: "u8", isPointer: 1, isArray: [] }; // *void -> *u8
       } else if (["free", "exit"].includes(name)) {
         returnType = { name: "void", isPointer: 0, isArray: [] };
+      } else if (["strtod", "atof"].includes(name)) {
+        returnType = { name: "f64", isPointer: 0, isArray: [] };
+        if (name === "strtod") {
+          args = [
+            { name: "nptr", type: { name: "u8", isPointer: 1, isArray: [] } },
+            { name: "endptr", type: { name: "u8", isPointer: 2, isArray: [] } },
+          ];
+          isVariadic = false;
+        }
       }
 
       scope.defineFunction(name, {
         name: name,
         label: name,
-        args: [],
+        args: args,
         returnType: returnType,
         startLabel: name,
         endLabel: name,
         isExternal: true,
-        isVariadic: true, // Imported functions are assumed variadic/unknown signature unless declared
+        isVariadic: isVariadic, // Imported functions are assumed variadic/unknown signature unless declared
       });
     }
   }

@@ -1,5 +1,7 @@
 import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import Scope from "../../transpiler/Scope";
+import { CompilerError } from "../../errors";
+import { SemanticAnalyzer } from "../../transpiler/analysis/SemanticAnalyzer";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
 import IdentifierExpr from "./identifierExpr";
@@ -43,7 +45,11 @@ export default class CastExpr extends Expression {
       const ptr = gen.emitAlloca(irType);
 
       const typeInfo = scope.resolveType(this.targetType.name);
-      if (!typeInfo) throw new Error("Unknown type " + this.targetType.name);
+      if (!typeInfo)
+        throw new CompilerError(
+          "Unknown type " + this.targetType.name,
+          this.startToken?.line || 0,
+        );
 
       structLiteral.fields.forEach((field, index) => {
         let fieldName = field.fieldName;
@@ -80,8 +86,9 @@ export default class CastExpr extends Expression {
         }
 
         if (!fieldType)
-          throw new Error(
+          throw new CompilerError(
             `Cannot resolve field ${fieldName || index} in ${this.targetType.name}`,
+            this.startToken?.line || 0,
           );
 
         const fieldPtr = gen.emitGEP(gen.getIRType(this.targetType), ptr, [
@@ -98,14 +105,14 @@ export default class CastExpr extends Expression {
     const sourceValue = this.value.toIR(gen, scope);
 
     // We need a way to infer the type - import SemanticAnalyzer temporarily
-    const {
-      SemanticAnalyzer,
-    } = require("../../transpiler/analysis/SemanticAnalyzer");
     const analyzer = new SemanticAnalyzer();
     const sourceType = analyzer.inferType(this.value, scope);
 
     if (!sourceType) {
-      throw new Error(`Cannot infer type of cast source expression`);
+      throw new CompilerError(
+        `Cannot infer type of cast source expression`,
+        this.startToken?.line || 0,
+      );
     }
 
     const targetIRType = gen.getIRType(this.targetType);
@@ -167,90 +174,12 @@ export default class CastExpr extends Expression {
     sourceIRType: any,
     targetIRType: any,
   ): string {
-    const srcIsFloat = sourceType.name === "f32" || sourceType.name === "f64";
-    const tgtIsFloat = targetType.name === "f32" || targetType.name === "f64";
-    const srcIsPtr = sourceType.isPointer > 0;
-    const tgtIsPtr = targetType.isPointer > 0;
-
-    // Pointer to pointer
-    if (srcIsPtr && tgtIsPtr) {
-      return gen.emitBitcast(sourceValue, sourceIRType, targetIRType);
-    }
-
-    // Pointer to integer
-    if (srcIsPtr && !tgtIsPtr) {
-      return gen.emitPtrToInt(sourceValue, sourceIRType, targetIRType);
-    }
-
-    // Integer to pointer
-    if (!srcIsPtr && tgtIsPtr) {
-      return gen.emitIntToPtr(sourceValue, sourceIRType, targetIRType);
-    }
-
-    // Float to float
-    if (srcIsFloat && tgtIsFloat) {
-      const srcSize = this.getFloatSize(sourceType.name);
-      const tgtSize = this.getFloatSize(targetType.name);
-      if (srcSize > tgtSize) {
-        return gen.emitFPTrunc(sourceValue, sourceIRType, targetIRType);
-      } else if (srcSize < tgtSize) {
-        return gen.emitFPExt(sourceValue, sourceIRType, targetIRType);
-      }
-      return sourceValue;
-    }
-
-    // Float to integer
-    if (srcIsFloat && !tgtIsFloat) {
-      const isSigned = this.isSignedInt(targetType.name);
-      if (isSigned) {
-        return gen.emitFPToSI(sourceValue, sourceIRType, targetIRType);
-      } else {
-        return gen.emitFPToUI(sourceValue, sourceIRType, targetIRType);
-      }
-    }
-
-    // Integer to float
-    if (!srcIsFloat && tgtIsFloat) {
-      const isSigned = this.isSignedInt(sourceType.name);
-      if (isSigned) {
-        return gen.emitSIToFP(sourceValue, sourceIRType, targetIRType);
-      } else {
-        return gen.emitUIToFP(sourceValue, sourceIRType, targetIRType);
-      }
-    }
-
-    // Integer to integer
-    const srcSize = this.getIntSize(sourceType.name);
-    const tgtSize = this.getIntSize(targetType.name);
-
-    if (srcSize > tgtSize) {
-      return gen.emitTrunc(sourceValue, sourceIRType, targetIRType);
-    } else if (srcSize < tgtSize) {
-      const isSigned = this.isSignedInt(sourceType.name);
-      if (isSigned) {
-        return gen.emitSExt(sourceValue, sourceIRType, targetIRType);
-      } else {
-        return gen.emitZExt(sourceValue, sourceIRType, targetIRType);
-      }
-    }
-
-    return sourceValue;
-  }
-  private getFloatSize(name: string): number {
-    if (name === "f32") return 4;
-    if (name === "f64") return 8;
-    return 0;
-  }
-
-  private getIntSize(name: string): number {
-    if (name === "u8" || name === "i8") return 1;
-    if (name === "u16" || name === "i16") return 2;
-    if (name === "u32" || name === "i32") return 4;
-    if (name === "u64" || name === "i64") return 8;
-    return 0;
-  }
-
-  private isSignedInt(name: string): boolean {
-    return name === "i8" || name === "i16" || name === "i32" || name === "i64";
+    return gen.emitTypeCast(
+      sourceValue,
+      sourceType,
+      targetType,
+      sourceIRType,
+      targetIRType,
+    );
   }
 }

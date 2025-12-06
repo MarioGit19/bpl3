@@ -668,7 +668,10 @@ export class ExpressionParser {
       this.parser.consume(TokenType.OPEN_BRACE, "Expected '{' after 'asm'.");
 
       const asmCodeTokens: Token[] = [];
-      while (this.parser.peek()?.type !== TokenType.CLOSE_BRACE) {
+      while (
+        this.parser.peek() &&
+        this.parser.peek()!.type !== TokenType.CLOSE_BRACE
+      ) {
         asmCodeTokens.push(this.parser.consume(this.parser.peek()!.type));
       }
 
@@ -749,7 +752,7 @@ export class ExpressionParser {
 
   parseArrayLiteral(): Expression {
     return this.parser.withRange(() => {
-      this.parser.consume(TokenType.OPEN_BRACKET);
+      const token = this.parser.consume(TokenType.OPEN_BRACKET);
       const elements: Expression[] = [];
 
       while (
@@ -782,7 +785,7 @@ export class ExpressionParser {
         "Expected ']' after array literal.",
       );
 
-      return new ArrayLiteralExpr(elements);
+      return new ArrayLiteralExpr(elements, token);
     });
   }
 

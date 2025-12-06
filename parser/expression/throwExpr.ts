@@ -4,6 +4,7 @@ import ExpressionType from "../expressionType";
 import Expression from "./expr";
 import { resolveExpressionType } from "../../utils/typeResolver";
 import { IROpcode } from "../../transpiler/ir/IRInstruction";
+import { CompilerError } from "../../errors";
 
 function djb2(str: string): number {
   let hash = 5381;
@@ -35,7 +36,10 @@ export default class ThrowExpr extends Expression {
     const type = resolveExpressionType(this.expression, scope);
 
     if (!type) {
-      throw new Error("Cannot resolve type of thrown expression");
+      throw new CompilerError(
+        "Cannot resolve type of thrown expression",
+        this.startToken?.line || 0,
+      );
     }
 
     const irType = gen.getIRType(type);
@@ -43,7 +47,11 @@ export default class ThrowExpr extends Expression {
 
     // Allocate memory for the exception object
     const typeInfo = scope.resolveType(type.name);
-    if (!typeInfo) throw new Error("Unknown type " + type.name);
+    if (!typeInfo)
+      throw new CompilerError(
+        "Unknown type " + type.name,
+        this.startToken?.line || 0,
+      );
 
     let size = typeInfo.size;
     if (type.isPointer > 0) size = 8;
@@ -54,7 +62,8 @@ export default class ThrowExpr extends Expression {
       { type: "pointer", base: { type: "i8" } },
     );
 
-    if (!mallocPtr) throw new Error("malloc failed");
+    if (!mallocPtr)
+      throw new CompilerError("malloc failed", this.startToken?.line || 0);
 
     // Cast mallocPtr to pointer to type
     const typedPtr = gen.emitCast(

@@ -271,3 +271,7 @@ export function getIntSize(typeName: string): number {
       return 8;
   }
 }
+
+export function isSignedInt(name: string): boolean {
+  return name.startsWith("i") || name === "int";
+}

@@ -1,5 +1,6 @@
 import Token from "../../lexer/token";
 import TokenType from "../../lexer/tokenType";
+import { CompilerError } from "../../errors";
 import ArrayLiteralExpr from "../../parser/expression/arrayLiteralExpr";
 import AsmBlockExpr from "../../parser/expression/asmBlockExpr";
 import BinaryExpr from "../../parser/expression/binaryExpr";
@@ -136,7 +137,10 @@ export class Formatter {
       case ExpressionType.EOF:
         return "\n";
       default:
-        throw new Error(`Unknown expression type: ${expr.type}`);
+        throw new CompilerError(
+          `Unknown expression type: ${expr.type}`,
+          expr.startToken?.line || 0,
+        );
     }
   }
 

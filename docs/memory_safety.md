@@ -11,6 +11,36 @@ The BPL compiler now includes two strict analysis passes that run before code ge
 
 Both analyzers are **strict by default** and will halt compilation when critical errors are detected.
 
+## Memory Safety Features
+
+### Null Pointer Checks
+
+The compiler performs static analysis to detect potential null pointer dereferences.
+
+```bpl
+local p: *u64 = null;
+local x: u64 = *p; # Warning: Potential null pointer dereference
+```
+
+### Use-After-Free Detection
+
+The compiler tracks `malloc` and `free` calls to detect use-after-free errors.
+
+```bpl
+local p: *u64 = call malloc(8);
+call free(p);
+*p = 10; # Error: Use after free
+```
+
+### Buffer Overflow Detection
+
+Static analysis attempts to detect out-of-bounds array access when indices are constant or can be inferred.
+
+```bpl
+local arr: u64[10];
+arr[10] = 5; # Error: Array index out of bounds
+```
+
 ## Undefined Behavior Detection
 
 ### Shift Operations

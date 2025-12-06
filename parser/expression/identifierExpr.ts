@@ -1,4 +1,5 @@
 import type Scope from "../../transpiler/Scope";
+import { CompilerError } from "../../errors";
 import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
@@ -27,11 +28,18 @@ export default class IdentifierExpr extends Expression {
       if (func) {
         return `@${func.name}`;
       }
-      throw new Error(`Undefined identifier: ${this.name}`);
+      throw new CompilerError(
+        `Undefined identifier: ${this.name}`,
+        this.startToken?.line || 0,
+        "Check if the variable is declared or imported.",
+      );
     }
 
     if (!symbol.irName) {
-      throw new Error(`Variable ${this.name} has no IR representation`);
+      throw new CompilerError(
+        `Variable ${this.name} has no IR representation`,
+        this.startToken?.line || 0,
+      );
     }
 
     // Array decay
@@ -50,9 +58,16 @@ export default class IdentifierExpr extends Expression {
 
   getAddress(gen: IRGenerator, scope: Scope): string {
     const symbol = scope.resolve(this.name);
-    if (!symbol) throw new Error(`Undefined identifier: ${this.name}`);
+    if (!symbol)
+      throw new CompilerError(
+        `Undefined identifier: ${this.name}`,
+        this.startToken?.line || 0,
+      );
     if (!symbol.irName)
-      throw new Error(`Variable ${this.name} has no IR representation`);
+      throw new CompilerError(
+        `Variable ${this.name} has no IR representation`,
+        this.startToken?.line || 0,
+      );
     return symbol.irName;
   }
 }

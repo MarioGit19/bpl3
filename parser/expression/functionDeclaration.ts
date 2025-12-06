@@ -4,6 +4,7 @@ import { IRVoid } from "../../transpiler/ir/IRType";
 import Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
+import { mangleMethod } from "../../utils/methodMangler";
 
 import type { VariableType } from "./variableDeclarationExpr";
 export default class FunctionDeclarationExpr extends Expression {
@@ -86,7 +87,6 @@ export default class FunctionDeclarationExpr extends Expression {
     // Use mangled name for methods, regular name for functions
     let name: string;
     if (isMethod && receiverStruct) {
-      const { mangleMethod } = require("../../utils/methodMangler");
       // If the name already contains the mangled pattern (from monomorphization), use it as-is
       if (this.name.startsWith("__bplm__") || this.name.includes("__")) {
         name = this.name;

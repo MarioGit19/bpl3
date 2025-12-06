@@ -3,6 +3,7 @@ import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import Token from "../../lexer/token";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
+import { CompilerError } from "../../errors";
 
 export default class ExportExpr extends Expression {
   constructor(
@@ -30,14 +31,20 @@ export default class ExportExpr extends Expression {
     if (this.exportType === "type") {
       const type = scope.resolveType(this.exportName);
       if (!type) {
-        throw new Error(`Exporting undefined type: ${this.exportName}`);
+        throw new CompilerError(
+          `Exporting undefined type: ${this.exportName}`,
+          this.nameToken?.line || 0,
+        );
       }
       return "";
     }
 
     const func = scope.resolveFunction(this.exportName);
     if (!func) {
-      throw new Error(`Exporting undefined function: ${this.exportName}`);
+      throw new CompilerError(
+        `Exporting undefined function: ${this.exportName}`,
+        this.nameToken?.line || 0,
+      );
     }
     return "";
   }

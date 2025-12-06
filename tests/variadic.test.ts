@@ -77,9 +77,11 @@ describe("Variadic Functions", () => {
         return s1 + s2;
       }
     `);
-    expect(ir).toContain("call i64 @sum(i64 3, i64 1, i64 2, i64 3)");
     expect(ir).toContain(
-      "call i64 @sum(i64 5, i64 10, i64 20, i64 30, i64 40, i64 50)",
+      "call i64 (i64, ...) @sum(i64 3, i64 1, i64 2, i64 3)",
+    );
+    expect(ir).toContain(
+      "call i64 (i64, ...) @sum(i64 5, i64 10, i64 20, i64 30, i64 40, i64 50)",
     );
   });
 
@@ -120,7 +122,7 @@ describe("Variadic Functions", () => {
         return call test(42);
       }
     `);
-    expect(ir).toContain("call i64 @test(i64 42)");
+    expect(ir).toContain("call i64 (i64, ...) @test(i64 42)");
   });
 
   it("should generate correct code for variadic with loop", () => {
@@ -180,7 +182,9 @@ describe("Variadic Edge Cases", () => {
         return x;
       }
     `);
-    expect(ir).toContain("call i64 @sum(i64 3, i64 1, i64 2, i64 3)");
+    expect(ir).toContain(
+      "call i64 (i64, ...) @sum(i64 3, i64 1, i64 2, i64 3)",
+    );
     expect(ir).toContain("add i64");
   });
 });

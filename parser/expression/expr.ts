@@ -3,6 +3,7 @@ import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import type Scope from "../../transpiler/Scope";
 import Token from "../../lexer/token";
 import ExpressionType from "../expressionType";
+import { CompilerError } from "../../errors";
 
 import type { VariableType } from "./variableDeclarationExpr";
 export default class Expression {
@@ -19,7 +20,10 @@ export default class Expression {
   public monomorphizedName?: string;
 
   toString(depth: number = 0): string {
-    throw new Error("Method not implemented.");
+    throw new CompilerError(
+      "Method toString not implemented.",
+      this.startToken?.line || 0,
+    );
   }
 
   log(depth: number = 0): void {
@@ -28,12 +32,16 @@ export default class Expression {
 
   toIR(gen: IRGenerator, scope: Scope): string {
     Logger.log("Method not implemented for:", this.constructor.name);
-    throw new Error("Method not implemented.");
+    throw new CompilerError(
+      `Method toIR not implemented for ${this.constructor.name}`,
+      this.startToken?.line || 0,
+    );
   }
 
   getAddress(gen: IRGenerator, scope: Scope): string {
-    throw new Error(
-      "Method not implemented. This expression is not an l-value.",
+    throw new CompilerError(
+      "Expression is not an l-value (cannot take address or assign to it).",
+      this.startToken?.line || 0,
     );
   }
 

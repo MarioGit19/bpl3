@@ -1,5 +1,6 @@
 import type Token from "../../lexer/token";
 import TokenType from "../../lexer/tokenType";
+import { CompilerError } from "../../errors";
 import { IROpcode } from "../../transpiler/ir/IRInstruction";
 import { getIntSize, resolveExpressionType } from "../../utils/typeResolver";
 import ExpressionType from "../expressionType";
@@ -346,7 +347,10 @@ export default class BinaryExpr extends Expression {
         opcode = IROpcode.OR;
         break;
       default:
-        throw new Error(`Unknown int operator: ${this.operator.value}`);
+        throw new CompilerError(
+          `Unknown int operator: ${this.operator.value}`,
+          this.startToken?.line || 0,
+        );
     }
 
     const result = gen.emitBinary(opcode, commonType, lVal, rVal);
@@ -484,7 +488,10 @@ export default class BinaryExpr extends Expression {
         isComparison = true;
         break;
       default:
-        throw new Error(`Unsupported float operator: ${this.operator.value}`);
+        throw new CompilerError(
+          `Unsupported float operator: ${this.operator.value}`,
+          this.startToken?.line || 0,
+        );
     }
 
     const result = gen.emitBinary(opcode, commonType, lVal, rVal);
@@ -545,8 +552,9 @@ export default class BinaryExpr extends Expression {
           opcode = IROpcode.XOR;
           break;
         default:
-          throw new Error(
+          throw new CompilerError(
             `Unknown assignment operator: ${this.operator.value}`,
+            this.startToken?.line || 0,
           );
       }
       val = gen.emitBinary(opcode, type, leftVal, val);

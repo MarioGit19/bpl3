@@ -23,6 +23,28 @@ bun index.ts example/hello-world/hello-world.x
 You should see "Hello, World!" printed to the console.
 More examples can be found in the `example` directory.
 
+## CLI Usage
+
+The BPL compiler (`index.ts`) supports several command-line arguments:
+
+- `-e`, `--eval <code>`: Compile and run the provided code string directly.
+- `-r`, `--run`: Run the compiled executable immediately after compilation.
+- `-s`, `--static`: Link statically (default is dynamic).
+- `-d`, `--dynamic`: Link dynamically.
+- `-q`, `--quiet`: Suppress output messages.
+- `-p`, `--print-asm`: Print the generated LLVM IR to the console.
+- `--print-ast`: Print the generated AST (JSON) to the console.
+- `-g`, `--gdb`: Run the executable with GDB for debugging.
+- `-l`, `--lib`: Compile as a library (object file only, no linking).
+- `-O0`, `-O1`, `-O2`, `-O3`: Set optimization level (default is -O3).
+- `--deps`, `--graph`: Generate and print a dependency graph (DOT format).
+
+Example:
+
+```bash
+bun index.ts -r -e 'import printf from "libc"; frame main() { call printf("Hello from CLI!\n"); }'
+```
+
 ## VS Code Extension
 
 BPL includes a full-featured VS Code extension providing syntax highlighting, code completion, go-to-definition, and hover information.
@@ -243,6 +265,45 @@ frame main(argc: i32, argv: **u8, envp: **u8) ret u8 {
     }
     return 0;
 }
+```
+
+### Exception Handling (Try-Catch-Throw)
+
+BPL supports structured exception handling using `try`, `catch`, and `throw`. This mechanism is implemented using `setjmp` and `longjmp` under the hood.
+
+```bpl
+frame main() {
+    try {
+        call risky_function();
+    } catch (e: u64) {
+        call printf("Caught exception: %d\n", e);
+    }
+}
+
+frame risky_function() {
+    if some_condition {
+        throw 404; # Throws an exception with value 404
+    }
+}
+```
+
+### Sizeof Operator
+
+The `sizeof` operator returns the size of a type in bytes. It is evaluated at compile time.
+
+```bpl
+local size_u64: u64 = sizeof(u64); # 8
+local size_point: u64 = sizeof(Point); # Size of struct Point
+```
+
+### Explicit Casting
+
+BPL supports explicit type casting using the `cast<TargetType>(value)` syntax.
+
+```bpl
+local f: f64 = 3.14;
+local i: i32 = cast<i32>(f); # 3
+local ptr: *u8 = cast<*u8>(i); # Cast integer to pointer
 ```
 
 ### Variables

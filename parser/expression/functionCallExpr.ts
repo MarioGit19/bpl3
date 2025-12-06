@@ -1,7 +1,8 @@
 import type Scope from "../../transpiler/Scope";
+import { CompilerError } from "../../errors";
 import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import { IROpcode } from "../../transpiler/ir/IRInstruction";
-import { IRVoid } from "../../transpiler/ir/IRType";
+import { IRVoid, irTypeToString } from "../../transpiler/ir/IRType";
 import { resolveExpressionType } from "../../utils/typeResolver";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
@@ -47,7 +48,10 @@ export default class FunctionCallExpr extends Expression {
 
     const func = scope.resolveFunction(funcName);
     if (!func) {
-      throw new Error(`Function ${funcName} not found`);
+      throw new CompilerError(
+        `Function ${funcName} not found`,
+        this.startToken?.line || 0,
+      );
     }
 
     // If this is an external function, ensure it's declared in the IR module
@@ -162,7 +166,18 @@ export default class FunctionCallExpr extends Expression {
 
     const irFuncName = func.irName || `@${funcName}`;
 
-    const result = gen.emitCall(irFuncName, argValues, returnType);
+    let signature: string | undefined;
+    if (func.isVariadic) {
+      const argTypes = (func.args || []).map((a) => {
+        const t = gen.getIRType(a.type);
+        return irTypeToString(t);
+      });
+      signature = argTypes.join(", ");
+      if (signature) signature += ", ...";
+      else signature = "...";
+    }
+
+    const result = gen.emitCall(irFuncName, argValues, returnType, signature);
     return result || "";
   }
 

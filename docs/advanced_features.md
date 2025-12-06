@@ -193,6 +193,90 @@ frame main() ret u64 {
 
 BPL handles the complexity of the x86-64 calling convention for you. The first few variadic arguments might be passed in registers, while the rest are on the stack. The `args[i]` accessor automatically handles this distinction.
 
+## Generics
+
+BPL supports generic functions and structs, allowing you to write code that works with multiple types.
+
+### Generic Functions
+
+Define a generic function using angle brackets `<T>`.
+
+```bpl
+frame identity<T>(val: T) ret T {
+    return val;
+}
+
+frame main() {
+    local a: u64 = call identity<u64>(10);
+    local b: u8 = call identity<u8>(5);
+}
+```
+
+### Generic Structs
+
+Structs can also be generic.
+
+```bpl
+struct Box<T> {
+    value: T
+}
+
+frame main() {
+    local b: Box<u64>;
+    b.value = 123;
+}
+```
+
+## Exception Handling
+
+BPL provides a `try-catch` mechanism for handling runtime errors, implemented using `setjmp` and `longjmp`.
+
+### Syntax
+
+```bpl
+try {
+    # Code that might throw
+    if some_error_condition {
+        throw 1; # Throw an integer error code
+    }
+} catch (err: u64) {
+    # Handle error
+    # 'err' contains the thrown value
+    call printf("Caught error: %d\n", err);
+}
+```
+
+### How it works
+
+- `try`: Saves the current execution context (stack pointer, instruction pointer, etc.).
+- `throw`: Restores the saved context and jumps to the `catch` block, passing the error code.
+- `catch`: Receives the error code.
+
+**Note**: This mechanism is lightweight but should be used for exceptional conditions, as it involves non-local jumps.
+
+## Type Casting
+
+You can explicitly convert between types using the `cast` operator.
+
+```bpl
+local a: u64 = 100;
+local b: u8 = cast<u8>(a); # Downcast u64 to u8
+
+local ptr: *u64 = &a;
+local void_ptr: *void = cast<*void>(ptr); # Pointer cast
+```
+
+## Sizeof Operator
+
+The `sizeof` operator returns the size in bytes of a type or variable. This is resolved at compile time.
+
+```bpl
+local s: u64 = sizeof(u64); # 8
+local arr_size: u64 = sizeof(u64) * 10;
+local ptr: *u8 = call malloc(sizeof(MyStruct));
+```
+
+
 ```
 
 ```

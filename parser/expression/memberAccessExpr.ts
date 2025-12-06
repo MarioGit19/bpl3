@@ -1,5 +1,6 @@
 import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import type Scope from "../../transpiler/Scope";
+import { CompilerError } from "../../errors";
 import { IROpcode } from "../../transpiler/ir/IRInstruction";
 import ExpressionType from "../expressionType";
 import BinaryExpr from "./binaryExpr";
@@ -231,7 +232,11 @@ export default class MemberAccessExpr extends Expression {
     }
 
     const resultType = this.resolveExpressionType(this, scope);
-    if (!resultType) throw new Error("Cannot resolve result type");
+    if (!resultType)
+      throw new CompilerError(
+        "Cannot resolve result type",
+        this.startToken?.line || 0,
+      );
 
     if (resultType.isArray.length > 0) {
       const arrayType = gen.getIRType(resultType);
@@ -245,7 +250,10 @@ export default class MemberAccessExpr extends Expression {
   getAddress(gen: IRGenerator, scope: Scope): string {
     const objectType = this.resolveExpressionType(this.object, scope);
     if (!objectType) {
-      throw new Error("Cannot resolve object type");
+      throw new CompilerError(
+        "Cannot resolve object type",
+        this.startToken?.line || 0,
+      );
     }
 
     let basePtr: string;
@@ -279,7 +287,10 @@ export default class MemberAccessExpr extends Expression {
       } else if (objectType.isArray.length > 0) {
         elemType = { ...objectType, isArray: objectType.isArray.slice(1) };
       } else {
-        throw new Error("Cannot index non-pointer/non-array");
+        throw new CompilerError(
+          "Cannot index non-pointer/non-array",
+          this.startToken?.line || 0,
+        );
       }
 
       const irElemType = gen.getIRType(elemType);
@@ -294,7 +305,11 @@ export default class MemberAccessExpr extends Expression {
         );
       }
 
-      if (!typeInfo) throw new Error(`Undefined type ${objectType.name}`);
+      if (!typeInfo)
+        throw new CompilerError(
+          `Undefined type ${objectType.name}`,
+          this.startToken?.line || 0,
+        );
 
       let memberIndex = 0;
       let found = false;
@@ -305,7 +320,11 @@ export default class MemberAccessExpr extends Expression {
         }
         memberIndex++;
       }
-      if (!found) throw new Error(`Member ${propertyName} not found`);
+      if (!found)
+        throw new CompilerError(
+          `Member ${propertyName} not found`,
+          this.startToken?.line || 0,
+        );
 
       const structType = gen.getIRType({
         ...objectType,

@@ -5,10 +5,16 @@ import ExpressionType from "../expressionType";
 import Expression from "./expr";
 import IdentifierExpr from "./identifierExpr";
 import NumberLiteralExpr from "./numberLiteralExpr";
+import { CompilerError } from "../../errors";
+import Token from "../../lexer/token";
 
 export default class ArrayLiteralExpr extends Expression {
-  constructor(public elements: Expression[]) {
+  constructor(
+    public elements: Expression[],
+    token: Token,
+  ) {
     super(ExpressionType.ArrayLiteralExpr);
+    this.startToken = token;
   }
 
   toString(depth: number = 0): string {
@@ -34,7 +40,10 @@ export default class ArrayLiteralExpr extends Expression {
     if (size > 0) {
       const first = this.elements[0];
       if (!first) {
-        throw new Error("Array element is undefined");
+        throw new CompilerError(
+          "Array element is undefined",
+          this.startToken?.line || 0,
+        );
       }
       if (first.type === ExpressionType.NumberLiteralExpr) {
         const val = (first as NumberLiteralExpr).value;
@@ -57,7 +66,10 @@ export default class ArrayLiteralExpr extends Expression {
     for (let i = 0; i < size; i++) {
       const element = this.elements[i];
       if (!element) {
-        throw new Error(`Array element at index ${i} is undefined`);
+        throw new CompilerError(
+          `Array element at index ${i} is undefined`,
+          this.startToken?.line || 0,
+        );
       }
       const val = element.toIR(gen, scope);
       const elemPtr = gen.emitGEP(arrayType, ptr, ["0", i.toString()]);

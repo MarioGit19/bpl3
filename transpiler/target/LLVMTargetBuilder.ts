@@ -18,7 +18,7 @@ import {
 } from "../ir/IRInstruction";
 import { IRModule } from "../ir/IRModule";
 
-import type { IRType } from "../ir/IRType";
+import { type IRType, irTypeToString } from "../ir/IRType";
 import { Logger } from "../../utils/Logger";
 
 export class LLVMTargetBuilder implements TargetBuilder {
@@ -141,6 +141,10 @@ export class LLVMTargetBuilder implements TargetBuilder {
           .map((a) => `${this.typeToString(a.type)} ${a.value}`)
           .join(", ");
         const name = i.funcName.startsWith("@") ? i.funcName : `@${i.funcName}`;
+        const sig = i.functionSignature ? `(${i.functionSignature})` : "";
+        if (sig) {
+          return `${dest}call ${this.typeToString(i.returnType)} ${sig} ${name}(${args})`;
+        }
         return `${dest}call ${this.typeToString(i.returnType)} ${name}(${args})`;
       }
       case IROpcode.RET: {
@@ -225,19 +229,7 @@ export class LLVMTargetBuilder implements TargetBuilder {
   }
 
   private typeToString(type: IRType): string {
-    if (type.type === "void") return "void";
-    if (type.type === "i8") return "i8";
-    if (type.type === "i1") return "i1";
-    if (type.type === "i16") return "i16";
-    if (type.type === "i32") return "i32";
-    if (type.type === "i64") return "i64";
-    if (type.type === "f32") return "float";
-    if (type.type === "f64") return "double";
-    if (type.type === "pointer") return "ptr";
-    if (type.type === "array")
-      return `[${type.size} x ${this.typeToString(type.base!)}]`;
-    if (type.type === "struct") return `%${this.formatName(type.name)}`;
-    return "void";
+    return irTypeToString(type);
   }
 
   private formatName(name: string): string {

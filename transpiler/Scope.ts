@@ -1,18 +1,9 @@
 import type { VariableType } from "../parser/expression/variableDeclarationExpr";
 import type FunctionDeclarationExpr from "../parser/expression/functionDeclaration";
 import Token from "../lexer/token";
-
-export interface VarInfo {
-  type: "local" | "global";
-  offset: string;
-  varType: VariableType;
-  isParameter?: boolean;
-  declaration?: Token;
-  sourceFile?: string;
-  usageCount?: number; // Track number of times variable is used
-  llvmName?: string;
-  irName?: string;
-}
+import { CompilerError } from "../errors";
+import { TypeRegistry, type TypeInfo, type InfoType } from "./TypeRegistry";
+import { SymbolTable, type VarInfo, type FunctionInfo } from "./SymbolTable";
 
 export type ContextType =
   | {
@@ -30,69 +21,37 @@ export type ContextType =
   | { type: "LHS" }
   | null;
 
-export type TypeInfo = {
-  name: string;
-  isPointer: number;
-  isArray: number[];
-  size: number;
-  offset?: number;
-  alignment?: number;
-  isPrimitive: boolean;
-  members: Map<string, TypeInfo>;
-  info: InfoType;
-  declaration?: Token;
-  sourceFile?: string;
-  genericParams?: string[];
-  genericFields?: { name: string; type: VariableType }[];
-  genericMethods?: any[]; // Store method AST nodes for generic structs
-  definingScope?: Scope; // The scope where this type was originally defined (for generic instantiation)
-  index?: number;
-  parentType?: string;
-};
-
-export type InfoType = {
-  description: string;
-  signed?: boolean;
-  [key: string]: any;
-};
-
-export type FunctionInfo = {
-  name: string;
-  label: string;
-  startLabel: string;
-  endLabel: string;
-  args: { type: VariableType; name: string }[];
-  returnType: VariableType | null;
-  isExternal?: boolean;
-  isVariadic?: boolean;
-  variadicType?: VariableType | null;
-  declaration?: Token;
-  sourceFile?: string;
-  llvmName?: string;
-  irName?: string;
-  isMethod?: boolean;
-  receiverStruct?: string;
-  originalName?: string;
-  genericParams?: string[];
-  astDeclaration?: FunctionDeclarationExpr; // Store AST for monomorphization
-  definitionScope?: Scope;
-};
+// Re-export types for compatibility
+export type { TypeInfo, InfoType, VarInfo, FunctionInfo };
 
 export default class Scope {
   private static nextId = 0;
   static idCounter = 0;
   public id: number;
-  public types = new Map<string, TypeInfo>();
-  public vars = new Map<string, VarInfo>();
+
+  public typeRegistry: TypeRegistry;
+  public symbolTable: SymbolTable;
+
   public stackOffset = 0; // Tracks stack usage for this function
   public localsOffset = 0; // Tracks size of locals allocated (used for alignment calculation)
-  public functions = new Map<string, FunctionInfo>();
   public currentContext: ContextType[] = [];
 
   constructor(public parent: Scope | null = null) {
     this.id = Scope.idCounter++;
     this.parent = parent;
-    this.vars = new Map();
+    this.typeRegistry = new TypeRegistry(parent?.typeRegistry);
+    this.symbolTable = new SymbolTable(parent?.symbolTable);
+  }
+
+  // Getters for backward compatibility
+  get types() {
+    return this.typeRegistry.getTypes();
+  }
+  get vars() {
+    return this.symbolTable.getVariables();
+  }
+  get functions() {
+    return this.symbolTable.getFunctions();
   }
 
   // #region Context Management
@@ -123,17 +82,17 @@ export default class Scope {
 
   // #region Variables
   resolve(name: string): VarInfo | null {
-    const variable = this.vars.get(name);
+    const variable = this.symbolTable.getVariable(name);
     if (variable) {
       variable.usageCount = (variable.usageCount || 0) + 1;
       return variable;
     }
-    return this.parent?.resolve(name) || null;
+    return null;
   }
 
   // Define a new variable
   define(name: string, info: VarInfo) {
-    this.vars.set(name, { ...info, usageCount: 0 });
+    this.symbolTable.addVariable(name, { ...info, usageCount: 0 });
   }
 
   // Allocate space on stack (e.g., 8 bytes for 64-bit int)
@@ -149,27 +108,31 @@ export default class Scope {
   defineFunction(name: string, info: FunctionInfo) {
     if (this.parent) {
       this.parent.defineFunction(name, info);
-    } else if (this.functions.has(name)) {
-      if (this.functions.get(name)!.isExternal && info.isExternal) {
-        if (this.functions.get(name)!.args.length < info.args.length) {
-          this.functions.set(name, { ...info, definitionScope: this });
+      return;
+    }
+
+    const existing = this.symbolTable.getFunction(name);
+    if (existing) {
+      if (existing.isExternal && info.isExternal) {
+        if (existing.args.length < info.args.length) {
+          this.symbolTable.addFunction(name, {
+            ...info,
+            definitionScope: this,
+          });
         }
         return; // Allow re-definition of external functions
       }
-      throw new Error(`Function ${name} is already defined.`);
+      throw new CompilerError(
+        `Function ${name} is already defined.`,
+        info.declaration?.line || 0,
+      );
     } else {
-      this.functions.set(name, { ...info, definitionScope: this });
+      this.symbolTable.addFunction(name, { ...info, definitionScope: this });
     }
   }
 
   resolveFunction(name: string): FunctionInfo | null {
-    if (this.functions.has(name)) {
-      return this.functions.get(name)!;
-    }
-    if (this.parent) {
-      return this.parent.resolveFunction(name);
-    }
-    return null;
+    return this.symbolTable.getFunction(name) || null;
   }
 
   resolveMethod(structName: string, methodName: string): FunctionInfo | null {
@@ -181,18 +144,24 @@ export default class Scope {
 
   // #region Types
   defineType(name: string, info: TypeInfo) {
-    if (this.types.has(name)) {
-      throw new Error(`Type ${name} is already defined.`);
+    if (this.typeRegistry.getTypes().has(name)) {
+      throw new CompilerError(
+        `Type ${name} is already defined.`,
+        info.declaration?.line || 0,
+      );
     }
+
     if (info.size === 0) {
       const size = this.calculateSizeOfType(info);
       info.size = size;
     }
-    this.types.set(name, info);
+    this.typeRegistry.addType(name, info);
   }
+
   resolveType(name: string): TypeInfo | null {
-    return this.types.get(name) || this.parent?.resolveType(name) || null;
+    return this.typeRegistry.getType(name) || null;
   }
+
   calculateSizeOfType(type: TypeInfo): number {
     if (type.isPrimitive) {
       return type.size;
@@ -224,6 +193,7 @@ export default class Scope {
     name: string,
     args: VariableType[],
     contextScope?: Scope,
+    token?: Token,
   ): TypeInfo | null {
     const instantiationName = `${name}<${args.map((a) => this.getCanonicalTypeName(a)).join(",")}>`;
 
@@ -239,14 +209,18 @@ export default class Scope {
 
     if (!baseType.genericParams || baseType.genericParams.length === 0) {
       if (args.length > 0) {
-        throw new Error(`Type '${name}' is not generic.`);
+        throw new CompilerError(
+          `Type '${name}' is not generic.`,
+          token?.line || 0,
+        );
       }
       return baseType;
     }
 
     if (args.length !== baseType.genericParams.length) {
-      throw new Error(
+      throw new CompilerError(
         `Type '${name}' expects ${baseType.genericParams.length} generic arguments, but got ${args.length}.`,
+        token?.line || 0,
       );
     }
 
@@ -295,7 +269,10 @@ export default class Scope {
     }
 
     if (!baseType.genericFields) {
-      throw new Error("Generic type missing field definitions.");
+      throw new CompilerError(
+        "Generic type missing field definitions.",
+        token?.line || 0,
+      );
     }
 
     baseType.genericFields.forEach((field) => {
@@ -337,8 +314,9 @@ export default class Scope {
       }
 
       if (!fieldTypeInfo) {
-        throw new Error(
+        throw new CompilerError(
           `Could not resolve type '${concreteType.name}' during instantiation of '${instantiationName}'.`,
+          token?.line || 0,
         );
       }
 

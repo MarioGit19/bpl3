@@ -30,18 +30,20 @@ describe("Try/Catch/Throw", () => {
         }
       }
     `);
-    
+
     // Check for ExceptionNode allocation
     expect(ir).toMatch(/%ExceptionNode = type/);
     expect(ir).toMatch(/alloca %ExceptionNode/);
-    
+
     // Check for setjmp call
     expect(ir).toMatch(/call i32 @setjmp/);
-    
+
     // Check for branching based on setjmp result
     expect(ir).toMatch(/icmp eq i32 %.*, 0/);
-    expect(ir).toMatch(/br i1 %.*, label %try_block_\d+, label %catch_dispatch_\d+/);
-    
+    expect(ir).toMatch(
+      /br i1 %.*, label %try_block_\d+, label %catch_dispatch_\d+/,
+    );
+
     // Check for stack manipulation (push/pop)
     expect(ir).toMatch(/@__exception_stack_top/);
   });
@@ -55,7 +57,7 @@ describe("Try/Catch/Throw", () => {
 
     // Check for __current_exception store
     expect(ir).toMatch(/store .* @__current_exception/);
-    
+
     // Check for longjmp call
     expect(ir).toMatch(/call void @longjmp/);
   });
@@ -72,11 +74,11 @@ describe("Try/Catch/Throw", () => {
 
     // Check for type ID loading
     expect(ir).toMatch(/load i32, ptr @__current_exception_type_id/);
-    
+
     // Check for multiple catch blocks
     expect(ir).toMatch(/catch_match_0/);
     expect(ir).toMatch(/catch_match_1/);
-    
+
     // Check for rethrow block (if no match found)
     expect(ir).toMatch(/rethrow/);
   });

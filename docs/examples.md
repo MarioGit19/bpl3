@@ -308,3 +308,66 @@ local floor_res: f64 = x // y; # 3.0
 
 - **`/` Operator**: Performs floating-point division, promoting integers to floats if necessary.
 - **`//` Operator**: Performs integer division for integers (truncating) and floor division for floats.
+
+## 10. Generic Stack
+
+Demonstrates how to create a reusable data structure using generics.
+
+```bpl
+struct Stack<T> {
+    data: *T,
+    capacity: u64,
+    top: u64
+}
+
+frame push<T>(s: *Stack<T>, value: T) {
+    if s.top >= s.capacity {
+        # Handle overflow (e.g., resize)
+        return;
+    }
+    s.data[s.top] = value;
+    s.top = s.top + 1;
+}
+
+frame pop<T>(s: *Stack<T>) ret T {
+    s.top = s.top - 1;
+    return s.data[s.top];
+}
+```
+
+**Key Concepts:**
+
+- **Generic Structs**: `Stack<T>` can hold any type.
+- **Generic Functions**: `push<T>` and `pop<T>` operate on the generic stack.
+
+## 11. Error Handling
+
+Demonstrates robust error handling using `try-catch`.
+
+```bpl
+frame safe_divide(a: u64, b: u64) ret u64 {
+    if b == 0 {
+        throw 101; # Error code for division by zero
+    }
+    return a // b;
+}
+
+frame main() {
+    try {
+        local res: u64 = call safe_divide(10, 0);
+        call printf("Result: %d\n", res);
+    } catch (err: u64) {
+        if err == 101 {
+            call printf("Error: Division by zero!\n");
+        } else {
+            call printf("Unknown error: %d\n", err);
+        }
+    }
+}
+```
+
+**Key Concepts:**
+
+- **Throwing**: Using `throw` to signal an error condition.
+- **Catching**: Using `try-catch` blocks to handle errors gracefully without crashing.
+

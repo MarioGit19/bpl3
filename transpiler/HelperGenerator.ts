@@ -3,41 +3,87 @@ import type { IRGenerator } from "./ir/IRGenerator";
 import type { IRType } from "./ir/IRType";
 
 export default class HelperGenerator {
-    static generateExceptionHelpers(gen: IRGenerator): void {
+  static generateExceptionHelpers(gen: IRGenerator): void {
     // Declare setjmp/longjmp
-    gen.ensureIntrinsic("setjmp", [{ name: "env", type: { type: "pointer", base: { type: "i8" } } }], { type: "i32" });
-    gen.ensureIntrinsic("longjmp", [{ name: "env", type: { type: "pointer", base: { type: "i8" } } }, { name: "val", type: { type: "i32" } }], { type: "void" });
-    gen.ensureIntrinsic("malloc", [{ name: "size", type: { type: "i64" } }], { type: "pointer", base: { type: "i8" } });
-    gen.ensureIntrinsic("free", [{ name: "ptr", type: { type: "pointer", base: { type: "i8" } } }], { type: "void" });
-    gen.ensureIntrinsic("exit", [{ name: "status", type: { type: "i32" } }], { type: "void" });
-    gen.ensureIntrinsic("printf", [{ name: "format", type: { type: "pointer", base: { type: "i8" } } }], { type: "i32" }, true);
+    gen.ensureIntrinsic(
+      "setjmp",
+      [{ name: "env", type: { type: "pointer", base: { type: "i8" } } }],
+      { type: "i32" },
+    );
+    gen.ensureIntrinsic(
+      "longjmp",
+      [
+        { name: "env", type: { type: "pointer", base: { type: "i8" } } },
+        { name: "val", type: { type: "i32" } },
+      ],
+      { type: "void" },
+    );
+    gen.ensureIntrinsic("malloc", [{ name: "size", type: { type: "i64" } }], {
+      type: "pointer",
+      base: { type: "i8" },
+    });
+    gen.ensureIntrinsic(
+      "free",
+      [{ name: "ptr", type: { type: "pointer", base: { type: "i8" } } }],
+      { type: "void" },
+    );
+    gen.ensureIntrinsic("exit", [{ name: "status", type: { type: "i32" } }], {
+      type: "void",
+    });
+    gen.ensureIntrinsic(
+      "printf",
+      [{ name: "format", type: { type: "pointer", base: { type: "i8" } } }],
+      { type: "i32" },
+      true,
+    );
 
     // struct ExceptionNode { jmp_buf env; struct ExceptionNode* next; }
     // jmp_buf is [200 x i8]
-    const jmpBufType: IRType = { type: "array", size: 200, base: { type: "i8" } };
-    const exceptionNodePtrType: IRType = { type: "pointer", base: { type: "struct", name: "ExceptionNode" } };
+    const jmpBufType: IRType = {
+      type: "array",
+      size: 200,
+      base: { type: "i8" },
+    };
+    const exceptionNodePtrType: IRType = {
+      type: "pointer",
+      base: { type: "struct", name: "ExceptionNode" },
+    };
 
     // Check if struct already exists to avoid duplicates
-    if (!gen.module.structs.some(s => s.name === "ExceptionNode")) {
-        gen.module.addStruct("ExceptionNode", [
-            jmpBufType,
-            exceptionNodePtrType
-        ]);
+    if (!gen.module.structs.some((s) => s.name === "ExceptionNode")) {
+      gen.module.addStruct("ExceptionNode", [jmpBufType, exceptionNodePtrType]);
     }
 
     // Global __exception_stack_top
-    if (!gen.module.globals.some(g => g.name === "@__exception_stack_top")) {
-        gen.module.addGlobal("@__exception_stack_top", exceptionNodePtrType, "null", "linkonce_odr");
+    if (!gen.module.globals.some((g) => g.name === "@__exception_stack_top")) {
+      gen.module.addGlobal(
+        "@__exception_stack_top",
+        exceptionNodePtrType,
+        "null",
+        "linkonce_odr",
+      );
     }
 
     // Global __current_exception
-    if (!gen.module.globals.some(g => g.name === "@__current_exception")) {
-        gen.module.addGlobal("@__current_exception", { type: "pointer", base: { type: "i8" } }, "null", "linkonce_odr");
+    if (!gen.module.globals.some((g) => g.name === "@__current_exception")) {
+      gen.module.addGlobal(
+        "@__current_exception",
+        { type: "pointer", base: { type: "i8" } },
+        "null",
+        "linkonce_odr",
+      );
     }
 
     // Global __current_exception_type_id
-    if (!gen.module.globals.some(g => g.name === "@__current_exception_type_id")) {
-        gen.module.addGlobal("@__current_exception_type_id", { type: "i32" }, "0", "linkonce_odr");
+    if (
+      !gen.module.globals.some((g) => g.name === "@__current_exception_type_id")
+    ) {
+      gen.module.addGlobal(
+        "@__current_exception_type_id",
+        { type: "i32" },
+        "0",
+        "linkonce_odr",
+      );
     }
   }
 

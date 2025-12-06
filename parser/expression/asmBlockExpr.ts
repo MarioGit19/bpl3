@@ -1,5 +1,6 @@
 import Token from "../../lexer/token";
 import TokenType from "../../lexer/tokenType";
+import { CompilerError } from "../../errors";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
 
@@ -54,18 +55,25 @@ export default class AsmBlockExpr extends Expression {
       if (token.value === "(") {
         const varToken = this.code[++i]!;
         if (this.code[i + 1]?.value !== ")") {
-          throw new Error("Expected )");
+          throw new CompilerError("Expected )", token.line);
         }
         i++; // skip )
 
         const variable = scope.resolve(varToken.value);
-        if (!variable) throw new Error(`Undefined var ${varToken.value}`);
+        if (!variable)
+          throw new CompilerError(
+            `Undefined var ${varToken.value}`,
+            varToken.line,
+          );
 
         if (variable.irName) {
           args.push(variable.irName);
           asmString += `$${argIndex++}`;
         } else {
-          throw new Error(`Variable ${varToken.value} has no irName`);
+          throw new CompilerError(
+            `Variable ${varToken.value} has no irName`,
+            varToken.line,
+          );
         }
       } else {
         if (token.type === TokenType.STRING_LITERAL) {

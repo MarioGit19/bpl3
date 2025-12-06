@@ -96,6 +96,57 @@ frame sum(count: u64, ...:u64) ret u64 {
 }
 ```
 
+## Exception Handling
+
+BPL provides a `try-catch-throw` mechanism for handling runtime errors.
+
+### Throwing Exceptions
+
+Use the `throw` keyword to raise an exception. The exception value must be an integer (currently).
+
+```bpl
+frame check_value(x: u64) {
+    if x == 0 {
+        throw 1; # Error code 1
+    }
+}
+```
+
+### Catching Exceptions
+
+Use `try` and `catch` blocks to handle exceptions.
+
+```bpl
+try {
+    call check_value(0);
+} catch (err: u64) {
+    call printf("Error occurred: %d\n", err);
+}
+```
+
+## Type Casting
+
+### Explicit Casts
+
+You can explicitly cast between compatible types using `cast<Type>(value)`.
+
+```bpl
+local x: f64 = 10.5;
+local y: u64 = cast<u64>(x); # 10
+```
+
+### Implicit Casts
+
+BPL performs some implicit casts, such as widening integers or promoting integers to floats in mixed arithmetic, but warns about potential precision loss.
+
+## Sizeof Operator
+
+The `sizeof` operator returns the size of a type in bytes.
+
+```bpl
+local s: u64 = sizeof(u64);
+```
+
 ## Extern Keyword
 
 The `extern` keyword is used to declare the signature of functions that are imported from external sources (like C libraries or object files) where the source code is not available to the BPL compiler.

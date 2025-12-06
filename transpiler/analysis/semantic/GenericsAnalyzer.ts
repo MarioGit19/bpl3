@@ -1,4 +1,5 @@
 import type { ISemanticAnalyzer } from "./ISemanticAnalyzer";
+import { CompilerError } from "../../../errors";
 import ArrayLiteralExpr from "../../../parser/expression/arrayLiteralExpr";
 import BinaryExpr from "../../../parser/expression/binaryExpr";
 import BlockExpr from "../../../parser/expression/blockExpr";
@@ -40,8 +41,9 @@ export class GenericsAnalyzer {
 
     // Clone the function declaration
     if (!func.astDeclaration) {
-      throw new Error(
+      throw new CompilerError(
         `Cannot monomorphize function '${func.name}' without AST declaration.`,
+        line,
       );
     }
 
@@ -142,8 +144,9 @@ export class GenericsAnalyzer {
 
     const instantiated = scope.resolveFunction(mangledName);
     if (!instantiated) {
-      throw new Error(
+      throw new CompilerError(
         `Failed to instantiate generic function '${func.name}' -> '${mangledName}'`,
+        line,
       );
     }
 

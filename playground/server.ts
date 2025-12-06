@@ -84,6 +84,35 @@ serve({
       }
     }
 
+    // API: Get AST
+    if (url.pathname === "/api/ast" && req.method === "POST") {
+      try {
+        const { code } = (await req.json()) as { code: string };
+        const tempFile = join(ROOT_DIR, "playground_temp_ast.x");
+
+        writeFileSync(tempFile, code);
+
+        const procAst = spawnSync(
+          "bun",
+          ["index.ts", "-q", "--print-ast", "playground_temp_ast.x"],
+          {
+            cwd: ROOT_DIR,
+            encoding: "utf-8",
+          },
+        );
+
+        if (existsSync(tempFile)) unlinkSync(tempFile);
+
+        return Response.json({
+          ast: procAst.stdout,
+          stderr: procAst.stderr,
+          exitCode: procAst.status,
+        });
+      } catch (e) {
+        return Response.json({ error: String(e) }, { status: 500 });
+      }
+    }
+
     // Static Files
     let filePath = join(
       PUBLIC_DIR,

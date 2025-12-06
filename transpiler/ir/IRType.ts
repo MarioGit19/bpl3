@@ -30,3 +30,25 @@ export function isInteger(t: IRType): boolean {
 export function isFloat(t: IRType): boolean {
   return ["f32", "f64"].includes(t.type);
 }
+
+export function irTypeToString(type: IRType): string {
+  if (type.type === "void") return "void";
+  if (type.type === "i8") return "i8";
+  if (type.type === "i1") return "i1";
+  if (type.type === "i16") return "i16";
+  if (type.type === "i32") return "i32";
+  if (type.type === "i64") return "i64";
+  if (type.type === "f32") return "float";
+  if (type.type === "f64") return "double";
+  if (type.type === "pointer") return "ptr";
+  if (type.type === "array")
+    return `[${type.size} x ${irTypeToString(type.base!)}]`;
+  if (type.type === "struct") {
+    let name = type.name;
+    if (name.includes("<") || name.includes(">") || name.includes(" ")) {
+      name = `"${name}"`;
+    }
+    return `%${name}`;
+  }
+  return "void";
+}

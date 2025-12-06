@@ -3,6 +3,7 @@ import { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import Scope from "../../transpiler/Scope";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
+import { CompilerError } from "../../errors";
 
 import type { TypeInfo } from "../../transpiler/Scope";
 import type { VariableType } from "./variableDeclarationExpr";
@@ -27,7 +28,10 @@ export class SizeofExpr extends Expression {
     }
 
     if (!typeInfo) {
-      throw new Error(`Type ${this.typeArg.name} not found.`);
+      throw new CompilerError(
+        `Type ${this.typeArg.name} not found.`,
+        this.token.line,
+      );
     }
 
     // Handle pointers and arrays which modify the base type size

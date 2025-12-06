@@ -88,7 +88,7 @@
       "id": "generics",
       "title": "15. Generic Structs",
       "description": "BPL supports generic structs with type parameters. Methods on generic structs can use the type parameters.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nstruct Box<T> {\n    val: T,\n\n    frame get() ret T {\n        return this.val;\n    }\n\n    frame set(value: T) {\n        this.val = value;\n    }\n}\n\nstruct Pair<A, B> {\n    first: A,\n    second: B,\n\n    frame getFirst() ret A {\n        return this.first;\n    }\n\n    frame getSecond() ret B {\n        return this.second;\n    }\n}\n\nframe main() {\n    local intBox: Box<u64>;\n    call intBox.set(123);\n    call printf(\"Box<u64>: %d\\n\", call intBox.get());\n\n    local strBox: Box<*u8>;\n    call strBox.set(\"Generic\");\n    call printf(\"Box<*u8>: %s\\n\", call strBox.get());\n\n    local p: Pair<u64, *u8>;\n    p.first = 42;\n    p.second = \"hello\";\n    call printf(\"Pair: %d, %s\\n\", call p.getFirst(), call p.getSecond());\n}\n"
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nstruct Box<T> {\n    val: T,\n\n    frame get() ret T {\n        return this.val;\n    }\n\n    frame set(value: T) {\n        this.val = value;\n    }\n}\n\nstruct Pair<A, B> {\n    first: A,\n    second: B,\n\n    frame getFirst() ret A {\n        return this.first;\n    }\n\n    frame getSecond() ret B {\n        return this.second;\n    }\n}\n\nframe main() {\n    local intBox: Box<u64>;\n    call intBox.set(123);\n    call printf(\"Box<u64>: %d\\n\", call intBox.get());\n\n    local p: Pair<u64, u64>;\n    p.first = 42;\n    p.second = 100;\n    call printf(\"Pair: %d, %d\\n\", call p.getFirst(), call p.getSecond());\n}\n"
     },
     {
       "id": "errors",
@@ -148,7 +148,7 @@
       "id": "writing-files",
       "title": "25. Writing Files",
       "description": "Writing files using C standard library functions.",
-      "code": "import printf, fopen, fwrite, fclose from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern fopen(filename: *u8, mode: *u8) ret *u8;\nextern fwrite(ptr: *u8, size: u64, nmemb: u64, stream: *u8) ret u64;\nextern fclose(stream: *u8) ret i32;\n\nframe main() {\n    local f: *u8 = call fopen(\"/tmp/output.txt\", \"w\");\n    if f == NULL {\n        call printf(\"Failed to open file\\n\");\n        return 1;\n    }\n\n    local s: *u8 = \"hello\\n\";\n    call fwrite(s, 1, 6, f);\n    call printf(\"Wrote to /tmp/output.txt\\n\");\n\n    call fclose(f);\n}\n"
+      "code": "import printf, fopen, fwrite, fclose from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern fopen(filename: *u8, mode: *u8) ret *u8;\nextern fwrite(ptr: *u8, size: u64, nmemb: u64, stream: *u8) ret u64;\nextern fclose(stream: *u8) ret i32;\n\nframe main() ret u8 {\n    local f: *u8 = call fopen(\"/tmp/output.txt\", \"w\");\n    if f == NULL {\n        call printf(\"Failed to open file\\n\");\n        return 1;\n    }\n\n    local s: *u8 = \"hello\\n\";\n    call fwrite(s, 1, 6, f);\n    call printf(\"Wrote to /tmp/output.txt\\n\");\n\n    call fclose(f);\n    return 0;\n}\n"
     },
     {
       "id": "reading-files",
@@ -179,6 +179,18 @@
       "title": "30. Exit",
       "description": "Exiting the program with a status code.",
       "code": "import printf, exit from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern exit(code: i32);\n\nframe main() {\n    call printf(\"Exiting with code 3\\n\");\n    call exit(3);\n}\n"
+    },
+    {
+      "id": "inline-assembly",
+      "title": "31. Inline Assembly",
+      "description": "Embed raw assembly code using the `asm` block. You can interpolate BPL variables using `(varName)`. Note: BPL uses Intel syntax for inline assembly, and variables are passed as pointers (addresses).",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    local a: u64 = 10;\n    local b: u64 = 20;\n    local result: u64;\n\n    # Inline assembly to add a and b\n    # Variables are passed as pointers, so we dereference them with []\n    asm {\n        mov rax, [(a)]\n        add rax, [(b)]\n        mov [(result)], rax\n    }\n\n    call printf(\"Result from asm: %d\\n\", result);\n}\n"
+    },
+    {
+      "id": "division",
+      "title": "32. Division Types",
+      "description": "BPL distinguishes between float division `/` and integer division `//`.",
+      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    local a: u64 = 7;\n    local b: u64 = 2;\n\n    # Integer division (truncates)\n    call printf(\"7 // 2 = %d\\n\", a // b);\n\n    # Float division (returns float)\n    call printf(\"7 / 2 = %f\\n\", a / b);\n    \n    # Float literals\n    call printf(\"7.0 / 2.0 = %f\\n\", 7.0 / 2.0);\n}\n"
     }
   ]
 }

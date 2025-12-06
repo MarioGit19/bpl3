@@ -1,5 +1,6 @@
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
+import { CompilerError } from "../../errors";
 
 import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import type Scope from "../../transpiler/Scope";
@@ -34,8 +35,9 @@ export default class StructLiteralExpr extends Expression {
   }
 
   toIR(gen: IRGenerator, scope: Scope): string {
-    throw new Error(
+    throw new CompilerError(
       "StructLiteralExpr.toIR should not be called directly. It should be handled by VariableDeclarationExpr.",
+      this.startToken?.line || 0,
     );
   }
 }

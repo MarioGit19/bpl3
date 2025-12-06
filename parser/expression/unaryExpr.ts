@@ -1,5 +1,6 @@
 import type Token from "../../lexer/token";
 import TokenType from "../../lexer/tokenType";
+import { CompilerError } from "../../errors";
 import { IROpcode } from "../../transpiler/ir/IRInstruction";
 import ExpressionType from "../expressionType";
 import BinaryExpr from "./binaryExpr";
@@ -186,7 +187,10 @@ export default class UnaryExpr extends Expression {
 
       const resultType = this.resolveExpressionType(this, scope);
       if (!resultType)
-        throw new Error("Cannot resolve result type for dereference");
+        throw new CompilerError(
+          "Cannot resolve result type for dereference",
+          this.operator.line,
+        );
 
       const type = gen.getIRType(resultType);
       return gen.emitLoad(type, ptr);
@@ -215,7 +219,10 @@ export default class UnaryExpr extends Expression {
         return gen.emitBinary("xor", irType, val, "-1");
       }
       default:
-        throw new Error(`Unsupported unary operator: ${this.operator.value}`);
+        throw new CompilerError(
+          `Unsupported unary operator: ${this.operator.value}`,
+          this.operator.line,
+        );
     }
   }
 
@@ -223,6 +230,9 @@ export default class UnaryExpr extends Expression {
     if (this.operator.type === TokenType.STAR) {
       return this.right.toIR(gen, scope);
     }
-    throw new Error("Cannot take address of this unary expression");
+    throw new CompilerError(
+      "Cannot take address of this unary expression",
+      this.operator.line,
+    );
   }
 }
