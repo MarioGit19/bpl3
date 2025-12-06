@@ -2,8 +2,8 @@ import * as path from "path";
 import { type ExtensionContext, workspace } from "vscode";
 import {
   LanguageClient,
-  LanguageClientOptions,
-  ServerOptions,
+  type LanguageClientOptions,
+  type ServerOptions,
   TransportKind,
 } from "vscode-languageclient/node";
 

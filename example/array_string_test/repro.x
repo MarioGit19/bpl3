@@ -1,5 +1,5 @@
-import [Array] from "../../lib/array.x";
-import [String] from "../../lib/string.x";
+import [Array] from "std/array.x";
+import [String] from "std/string.x";
 
 frame main() {
     local a: Array<Array<String>>;

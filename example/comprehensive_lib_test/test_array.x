@@ -1,4 +1,4 @@
-import [Array] from "../../lib/array.x";
+import [Array] from "std/array.x";
 import printf from "libc";
 import assert from "./utils.x";
 

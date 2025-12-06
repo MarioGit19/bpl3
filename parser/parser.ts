@@ -49,6 +49,10 @@ export class Parser extends ParserBase implements IParser {
     return this.expressionParser.parseExpression();
   }
 
+  parseAssignment(): Expression {
+    return this.expressionParser.parseAssignment();
+  }
+
   parseTernary(): Expression {
     return this.expressionParser.parseTernary();
   }
@@ -99,6 +103,14 @@ export class Parser extends ParserBase implements IParser {
 
   parseSwitchExpression(): Expression {
     return this.controlFlowParser.parseSwitchExpression();
+  }
+
+  parseTryExpression(): Expression {
+    return this.controlFlowParser.parseTryExpression();
+  }
+
+  parseThrowExpression(): Expression {
+    return this.controlFlowParser.parseThrowExpression();
   }
 
   parseVariableDeclaration(): VariableDeclarationExpr {

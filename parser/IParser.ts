@@ -13,6 +13,7 @@ import type LoopExpr from "./expression/loopExpr";
 
 export interface IParser extends ParserBase {
   parseExpression(): Expression;
+  parseAssignment(): Expression;
   parseTernary(): Expression;
   parseType(): VariableType;
   parseCodeBlock(): BlockExpr;
@@ -33,4 +34,6 @@ export interface IParser extends ParserBase {
   parseBreakExpr(): Expression;
   parseContinueExpr(): Expression;
   parseFunctionReturn(): Expression;
+  parseTryExpression(): Expression;
+  parseThrowExpression(): Expression;
 }

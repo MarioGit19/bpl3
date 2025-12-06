@@ -37,6 +37,9 @@ enum ExpressionType {
   ExternDeclaration = "ExternDeclaration",
   SizeOfExpression = "SizeOfExpression",
 
+  TryExpression = "TryExpression",
+  ThrowExpression = "ThrowExpression",
+
   Program = "Program",
   EOF = "EOF",
 }

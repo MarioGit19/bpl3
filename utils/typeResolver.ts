@@ -12,6 +12,7 @@ import BinaryExpr from "../parser/expression/binaryExpr";
 import MemberAccessExpr from "../parser/expression/memberAccessExpr";
 import UnaryExpr from "../parser/expression/unaryExpr";
 import TernaryExpr from "../parser/expression/ternaryExpr";
+import CastExpr from "../parser/expression/castExpr";
 
 export function resolveExpressionType(
   expr: Expression,
@@ -25,6 +26,9 @@ export function resolveExpressionType(
       (val.includes(".") || val.toLowerCase().includes("e"))
       ? { name: "f64", isPointer: 0, isArray: [] }
       : { name: "u64", isPointer: 0, isArray: [] };
+  }
+  if (expr.type === ExpressionType.CastExpression) {
+    return (expr as CastExpr).targetType;
   }
   if (expr.type === ExpressionType.IdentifierExpr) {
     const sym = scope.resolve((expr as IdentifierExpr).name);

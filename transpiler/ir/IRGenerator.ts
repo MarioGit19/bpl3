@@ -16,6 +16,7 @@ import {
   ReturnInst,
   StoreInst,
   SwitchInst,
+  UnreachableInst,
 } from "./IRInstruction";
 import { IRModule } from "./IRModule";
 
@@ -43,6 +44,18 @@ export class IRGenerator {
     returnType: IRType,
     isVariadic: boolean = false, // Add this
   ): IRFunction {
+    // Check if function already exists
+    const existingIndex = this.module.functions.findIndex(
+      (f) => f.name === name,
+    );
+    if (existingIndex !== -1) {
+      const existing = this.module.functions[existingIndex]!;
+      // If existing is a declaration (no blocks), we can replace it
+      if (existing.blocks.length === 0) {
+        this.module.functions.splice(existingIndex, 1);
+      }
+    }
+
     const func = new IRFunction(name, args, returnType, isVariadic);
     this.module.addFunction(func);
     this.currentFunction = func;
@@ -53,9 +66,10 @@ export class IRGenerator {
     name: string,
     args: { name: string; type: IRType }[],
     returnType: IRType,
+    isVariadic: boolean = false,
   ) {
     if (this.module.functions.some((f) => f.name === name)) return;
-    const func = new IRFunction(name, args, returnType);
+    const func = new IRFunction(name, args, returnType, isVariadic);
     this.module.addFunction(func);
   }
 
@@ -230,6 +244,10 @@ export class IRGenerator {
   // Helper to emit branch
   emitBranch(label: string) {
     this.emit(new BranchInst(label));
+  }
+
+  emitUnreachable() {
+    this.emit(new UnreachableInst());
   }
 
   // Helper to emit cond branch

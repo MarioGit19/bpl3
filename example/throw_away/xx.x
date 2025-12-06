@@ -1,6 +1,6 @@
 import printf, malloc from "libc";
-import [String] from "../../lib/string.x";
-import [Array] from "../../lib/array.x";
+import [String] from "std/string.x";
+import [Array] from "std/array.x";
 
 extern malloc(size: u64) ret *u8;
 

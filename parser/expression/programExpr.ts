@@ -59,6 +59,7 @@ export default class ProgramExpr extends Expression {
 
   toIR(gen: IRGenerator, scope: Scope): string {
     this.validate();
+    HelperGenerator.generateExceptionHelpers(gen);
 
     const weHaveExportStmt = this.expressions.find(
       (expr) => expr.type === ExpressionType.ExportExpression,

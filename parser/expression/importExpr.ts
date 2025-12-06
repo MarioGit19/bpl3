@@ -70,8 +70,10 @@ export default class ImportExpr extends Expression {
           type: gen.getIRType(a.type),
         }));
 
-        const func = new IRFunction(name, args, retType);
-        gen.module.addFunction(func);
+        if (!gen.module.functions.some((f) => f.name === name)) {
+          const func = new IRFunction(name, args, retType);
+          gen.module.addFunction(func);
+        }
         continue;
       }
 
@@ -93,8 +95,10 @@ export default class ImportExpr extends Expression {
         irName: name,
       });
 
-      const func = new IRFunction(name, [], gen.getIRType(returnType));
-      gen.module.addFunction(func);
+      if (!gen.module.functions.some((f) => f.name === name)) {
+        const func = new IRFunction(name, [], gen.getIRType(returnType));
+        gen.module.addFunction(func);
+      }
     }
     return "";
   }

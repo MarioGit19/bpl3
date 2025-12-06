@@ -21,6 +21,8 @@ import ProgramExpr from "../../parser/expression/programExpr";
 import ReturnExpr from "../../parser/expression/returnExpr";
 import StructDeclarationExpr from "../../parser/expression/structDeclarationExpr";
 import SwitchExpr from "../../parser/expression/switchExpr";
+import TryExpr from "../../parser/expression/tryExpr";
+import ThrowExpr from "../../parser/expression/throwExpr";
 import TernaryExpr from "../../parser/expression/ternaryExpr";
 import UnaryExpr from "../../parser/expression/unaryExpr";
 import VariableDeclarationExpr, {
@@ -177,6 +179,12 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
         break;
       case ExpressionType.CastExpression:
         this.analyzeCastExpr(expr as CastExpr, scope);
+        break;
+      case ExpressionType.TryExpression:
+        this.analyzeTryExpr(expr as TryExpr, scope);
+        break;
+      case ExpressionType.ThrowExpression:
+        this.analyzeThrowExpr(expr as ThrowExpr, scope);
         break;
       case ExpressionType.BreakExpression:
       case ExpressionType.ContinueExpression:
@@ -1790,6 +1798,11 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
     // Analyze the value being cast
     this.analyzeExpression(expr.value, scope);
 
+    // Special handling for StructLiteralExpr
+    if (expr.value.type === ExpressionType.StructLiteralExpr) {
+      return;
+    }
+
     // Infer source type
     const sourceType = this.inferType(expr.value, scope);
     if (!sourceType) {
@@ -1819,5 +1832,28 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
         expr.startToken?.line || 0,
       );
     }
+  }
+
+  private analyzeTryExpr(expr: TryExpr, scope: Scope): void {
+    const tryScope = new Scope(scope);
+    this.analyzeBlockExpr(expr.tryBlock, tryScope);
+
+    for (const catchBlock of expr.catchBlocks) {
+      const catchScope = new Scope(scope);
+      // Declare the catch variable
+      catchScope.define(catchBlock.variableName, {
+        type: "local",
+        offset: "0",
+        varType: catchBlock.variableType,
+        isParameter: true,
+        declaration: expr.startToken,
+      });
+
+      this.analyzeBlockExpr(catchBlock.block, catchScope);
+    }
+  }
+
+  private analyzeThrowExpr(expr: ThrowExpr, scope: Scope): void {
+    this.analyzeExpression(expr.expression, scope);
   }
 }

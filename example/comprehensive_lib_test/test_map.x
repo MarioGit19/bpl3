@@ -1,4 +1,4 @@
-import [Map] from "../../lib/map.x";
+import [Map] from "std/map.x";
 import printf from "libc";
 import assert from "./utils.x";
 

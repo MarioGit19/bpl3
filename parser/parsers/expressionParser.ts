@@ -414,6 +414,10 @@ export class ExpressionParser {
           return this.parseStructLiteral();
         case TokenType.SIZEOF:
           return this.parseSizeofExpression();
+        case TokenType.TRY:
+          return this.parser.parseTryExpression();
+        case TokenType.THROW:
+          return this.parser.parseThrowExpression();
         case TokenType.EOF:
           this.parser.consume(TokenType.EOF);
           return new EOFExpr();

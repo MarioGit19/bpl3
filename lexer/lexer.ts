@@ -107,6 +107,12 @@ class Lexer {
       const token = this.parseIdentifier(char, start);
       if (token.value === "sizeof") {
         token.type = TokenType.SIZEOF;
+      } else if (token.value === "try") {
+        token.type = TokenType.TRY;
+      } else if (token.value === "catch") {
+        token.type = TokenType.CATCH;
+      } else if (token.value === "throw") {
+        token.type = TokenType.THROW;
       }
       return token;
     }

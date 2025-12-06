@@ -1,7 +1,7 @@
 import printf from "libc";
-import [Array] from "../../lib/array.x";
-import [Set] from "../../lib/set.x";
-import [Map] from "../../lib/map.x";
+import [Array] from "std/array.x";
+import [Set] from "std/set.x";
+import [Map] from "std/map.x";
 
 frame main() {
     # Test Set with duplicate checking

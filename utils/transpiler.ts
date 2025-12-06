@@ -82,6 +82,12 @@ export function parseLibraryFile(
 
     if (moduleName === "std") {
       absolutePath = resolve(__dirname, "../lib/std.x");
+    } else if (moduleName.startsWith("std/")) {
+      let relativePath = moduleName.substring(4);
+      if (!relativePath.endsWith(".x")) {
+        relativePath += ".x";
+      }
+      absolutePath = resolve(__dirname, "../lib", relativePath);
     } else if (
       moduleName.startsWith(".") ||
       moduleName.startsWith("/") ||

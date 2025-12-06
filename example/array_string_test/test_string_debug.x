@@ -1,5 +1,5 @@
 import printf from "libc";
-import [String] from "../../lib/string.x";
+import [String] from "std/string.x";
 
 frame main() {
     # String demo

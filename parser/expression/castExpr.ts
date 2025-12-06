@@ -4,6 +4,7 @@ import ExpressionType from "../expressionType";
 import Expression from "./expr";
 import IdentifierExpr from "./identifierExpr";
 import NumberLiteralExpr from "./numberLiteralExpr";
+import StructLiteralExpr from "./structLiteralExpr";
 
 import type { VariableType } from "./variableDeclarationExpr";
 
@@ -36,6 +37,64 @@ export default class CastExpr extends Expression {
   }
 
   toIR(gen: IRGenerator, scope: Scope): string {
+    if (this.value.type === ExpressionType.StructLiteralExpr) {
+      const structLiteral = this.value as StructLiteralExpr;
+      const irType = gen.getIRType(this.targetType);
+      const ptr = gen.emitAlloca(irType);
+
+      const typeInfo = scope.resolveType(this.targetType.name);
+      if (!typeInfo) throw new Error("Unknown type " + this.targetType.name);
+
+      structLiteral.fields.forEach((field, index) => {
+        let fieldName = field.fieldName;
+        let fieldIndex = index;
+        let fieldType: VariableType | undefined;
+
+        if (fieldName) {
+          let i = 0;
+          for (const [name, member] of typeInfo.members) {
+            if (name === fieldName) {
+              fieldIndex = i;
+              fieldType = {
+                name: member.name,
+                isPointer: member.isPointer,
+                isArray: member.isArray,
+              };
+              break;
+            }
+            i++;
+          }
+        } else {
+          let i = 0;
+          for (const [name, member] of typeInfo.members) {
+            if (i === index) {
+              fieldType = {
+                name: member.name,
+                isPointer: member.isPointer,
+                isArray: member.isArray,
+              };
+              break;
+            }
+            i++;
+          }
+        }
+
+        if (!fieldType)
+          throw new Error(
+            `Cannot resolve field ${fieldName || index} in ${this.targetType.name}`,
+          );
+
+        const fieldPtr = gen.emitGEP(gen.getIRType(this.targetType), ptr, [
+          "0",
+          fieldIndex.toString(),
+        ]);
+        const val = field.value.toIR(gen, scope);
+        gen.emitStore(gen.getIRType(fieldType), val, fieldPtr);
+      });
+
+      return gen.emitLoad(irType, ptr);
+    }
+
     const sourceValue = this.value.toIR(gen, scope);
 
     // We need a way to infer the type - import SemanticAnalyzer temporarily

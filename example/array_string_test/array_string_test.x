@@ -1,7 +1,7 @@
 # Demo test for Array and String features
 import printf from "libc";
-import [Array] from "../../lib/array.x";
-import [String] from "../../lib/string.x";
+import [Array] from "std/array.x";
+import [String] from "std/string.x";
 
 frame main() {
     # Array demo

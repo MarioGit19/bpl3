@@ -292,3 +292,12 @@ export class CastInst extends IRInstruction {
     return `${this.dest} = ${opStr} ${JSON.stringify(this.srcType)} ${this.value} to ${JSON.stringify(this.destType)}`;
   }
 }
+
+export class UnreachableInst extends IRInstruction {
+  constructor() {
+    super(IROpcode.UNREACHABLE);
+  }
+  toString(): string {
+    return "unreachable";
+  }
+}

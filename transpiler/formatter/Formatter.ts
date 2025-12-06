@@ -25,6 +25,8 @@ import StructDeclarationExpr from "../../parser/expression/structDeclarationExpr
 import StructLiteralExpr from "../../parser/expression/structLiteralExpr";
 import SwitchExpr from "../../parser/expression/switchExpr";
 import TernaryExpr from "../../parser/expression/ternaryExpr";
+import ThrowExpr from "../../parser/expression/throwExpr";
+import TryExpr from "../../parser/expression/tryExpr";
 import UnaryExpr from "../../parser/expression/unaryExpr";
 import VariableDeclarationExpr from "../../parser/expression/variableDeclarationExpr";
 import ExpressionType from "../../parser/expressionType";
@@ -99,6 +101,10 @@ export class Formatter {
         return this.visitExportExpr(expr as ExportExpr);
       case ExpressionType.ExternDeclaration:
         return this.visitExternDeclaration(expr as ExternDeclarationExpr);
+      case ExpressionType.TryExpression:
+        return this.visitTryExpr(expr as TryExpr);
+      case ExpressionType.ThrowExpression:
+        return this.visitThrowExpr(expr as ThrowExpr);
       case ExpressionType.StructureDeclaration:
         return this.visitStructDeclaration(expr as StructDeclarationExpr);
       case ExpressionType.IdentifierExpr:
@@ -673,6 +679,26 @@ export class Formatter {
     this.indentLevel--;
     output += this.indent() + "}";
     return output;
+  }
+
+  private visitTryExpr(expr: TryExpr): string {
+    let result = "try ";
+    result += this.visitBlockExpr(expr.tryBlock);
+
+    for (const catchBlock of expr.catchBlocks) {
+      result += " catch (";
+      result += catchBlock.variableName;
+      result += ": ";
+      result += this.formatType(catchBlock.variableType);
+      result += ") ";
+      result += this.visitBlockExpr(catchBlock.block);
+    }
+
+    return result;
+  }
+
+  private visitThrowExpr(expr: ThrowExpr): string {
+    return `throw ${this.visit(expr.expression)};`;
   }
 
   private formatType(type: any): string {

@@ -4,7 +4,12 @@ import type { IRType } from "./IRType";
 
 export class IRModule {
   public functions: IRFunction[] = [];
-  public globals: { name: string; type: IRType; value?: any }[] = [];
+  public globals: {
+    name: string;
+    type: IRType;
+    value?: any;
+    linkage?: string;
+  }[] = [];
   public externs: { name: string; args: IRType[]; returnType: IRType }[] = [];
   public structs: { name: string; fields: IRType[] }[] = [];
 
@@ -12,8 +17,8 @@ export class IRModule {
     this.functions.push(func);
   }
 
-  addGlobal(name: string, type: IRType, value?: any) {
-    this.globals.push({ name, type, value });
+  addGlobal(name: string, type: IRType, value?: any, linkage?: string) {
+    this.globals.push({ name, type, value, linkage });
   }
 
   addExtern(name: string, args: IRType[], returnType: IRType) {

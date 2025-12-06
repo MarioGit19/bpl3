@@ -1,6 +1,6 @@
 # Test that Array.x's malloc import works without re-importing in main
 import printf from "libc";
-import [Array] from "../../lib/array.x";
+import [Array] from "std/array.x";
 
 extern printf(format: *u8, ...);
 

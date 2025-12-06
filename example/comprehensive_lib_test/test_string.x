@@ -1,5 +1,5 @@
 import printf from "libc";
-import [String], streq, atoi, to_upper, to_lower from "../../lib/string.x";
+import [String], streq, atoi, to_upper, to_lower from "std/string.x";
 import assert from "./utils.x";
 
 frame main() {

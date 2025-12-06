@@ -40,10 +40,12 @@ export class LLVMTargetBuilder implements TargetBuilder {
         ) {
           output += `${global.name} = private unnamed_addr constant ${this.typeToString(global.type)} c"${this.escapeString(global.value)}\\00", align 1\n`;
         } else {
-          output += `${global.name} = global ${this.typeToString(global.type)} ${global.value}, align 8\n`;
+          const linkage = global.linkage ? `${global.linkage} ` : "";
+          output += `${global.name} = ${linkage}global ${this.typeToString(global.type)} ${global.value}, align 8\n`;
         }
       } else {
-        output += `${global.name} = global ${this.typeToString(global.type)} zeroinitializer, align 8\n`;
+        const linkage = global.linkage ? `${global.linkage} ` : "";
+        output += `${global.name} = ${linkage}global ${this.typeToString(global.type)} zeroinitializer, align 8\n`;
       }
     }
 
@@ -193,6 +195,8 @@ export class LLVMTargetBuilder implements TargetBuilder {
         if (i.opcode === IROpcode.INT_TO_PTR) op = "inttoptr";
         return `${i.dest} = ${op} ${this.typeToString(i.srcType)} ${i.value} to ${this.typeToString(i.destType)}`;
       }
+      case IROpcode.UNREACHABLE:
+        return "unreachable";
       default:
         return `; Unknown instruction ${inst.opcode}`;
     }

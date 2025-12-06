@@ -27,6 +27,7 @@ export enum IROpcode {
   CALL,
   SWITCH,
   INLINE_ASM,
+  UNREACHABLE,
 
   PHI, // Optional for now
 

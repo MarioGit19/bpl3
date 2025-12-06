@@ -28,6 +28,9 @@ export function generateDependencyGraph(entryFile: string): string {
 
         if (moduleName === "std") {
           absolutePath = resolve(__dirname, "../lib/std.x");
+        } else if (moduleName.startsWith("std/")) {
+          const relativePath = moduleName.substring(4);
+          absolutePath = resolve(__dirname, "../lib", relativePath);
         } else if (moduleName === "libc" || moduleName === "c") {
           absolutePath = "libc";
           isVirtual = true;

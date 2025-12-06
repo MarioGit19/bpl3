@@ -1,6 +1,6 @@
 import printf from "libc";
-import [Set] from "../../lib/set.x";
-import [Array] from "../../lib/array.x";
+import [Set] from "std/set.x";
+import [Array] from "std/array.x";
 import assert from "./utils.x";
 
 frame main() {

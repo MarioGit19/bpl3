@@ -48,6 +48,10 @@ enum TokenType {
   GREATER_EQUAL = "GREATER_EQUAL",
 
   CARET = "CARET", // ^ bitwise XOR
+
+  TRY = "TRY",
+  CATCH = "CATCH",
+  THROW = "THROW",
   CARET_ASSIGN = "CARET_ASSIGN",
 
   AMPERSAND = "AMPERSAND",

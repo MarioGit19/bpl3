@@ -10,6 +10,8 @@ import LoopExpr from "../expression/loopExpr";
 import NumberLiteralExpr from "../expression/numberLiteralExpr";
 import ReturnExpr from "../expression/returnExpr";
 import SwitchExpr, { type SwitchCase } from "../expression/switchExpr";
+import TryExpr, { type CatchBlock } from "../expression/tryExpr";
+import ThrowExpr from "../expression/throwExpr";
 
 export class ControlFlowParser {
   constructor(private parser: IParser) {}
@@ -140,6 +142,41 @@ export class ControlFlowParser {
       }
 
       return new ReturnExpr(returnExpr);
+    });
+  }
+
+  parseTryExpression(): Expression {
+    return this.parser.withRange(() => {
+      this.parser.consume(TokenType.TRY);
+      const tryBlock = this.parser.parseCodeBlock();
+      const catchBlocks: CatchBlock[] = [];
+
+      while (this.parser.match(TokenType.CATCH)) {
+        this.parser.consume(TokenType.OPEN_PAREN);
+        const variableName = this.parser.consume(TokenType.IDENTIFIER).value;
+        this.parser.consume(TokenType.COLON);
+        const variableType = this.parser.parseType();
+        this.parser.consume(TokenType.CLOSE_PAREN);
+        const block = this.parser.parseCodeBlock();
+        catchBlocks.push({ variableName, variableType, block });
+      }
+
+      if (catchBlocks.length === 0) {
+        throw new CompilerError(
+          "Expected at least one catch block after try.",
+          this.parser.peek()?.line || 0,
+        );
+      }
+
+      return new TryExpr(tryBlock, catchBlocks);
+    });
+  }
+
+  parseThrowExpression(): Expression {
+    return this.parser.withRange(() => {
+      this.parser.consume(TokenType.THROW);
+      const expr = this.parser.parseAssignment();
+      return new ThrowExpr(expr);
     });
   }
 }

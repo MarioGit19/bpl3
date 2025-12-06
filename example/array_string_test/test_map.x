@@ -1,6 +1,6 @@
 import printf from "libc";
-import [Array] from "../../lib/array.x";
-import [Map] from "../../lib/map.x";
+import [Array] from "std/array.x";
+import [Map] from "std/map.x";
 
 frame main() {
     # Test Map with key updates  
