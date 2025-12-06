@@ -25,7 +25,6 @@ frame main() ret i32 {
     call printf("Normalized v3: (%f, %f, %f)\n", v3.x, v3.y, v3.z);
     call free(v1);
     call free(v2);
-    # call free(v3);
 
     # 2. Strings
     call printf("\n--- Strings ---\n");

@@ -1,121 +1,166 @@
-import fopen, fclose, fread, fwrite, fseek, ftell, rewind, remove, feof from "libc";
+import sys_open, sys_close, sys_read, sys_write, sys_lseek, sys_unlink from "std/syscalls.x";
+import strcmp from "std/string.x";
+import print_int, println, print_str from "std/io.x";
 
-# External C function declarations
-extern fopen(filename: *u8, mode: *u8) ret *u8;
-extern fclose(stream: *u8) ret i32;
-extern fread(ptr: *u8, size: u64, nmemb: u64, stream: *u8) ret u64;
-extern fwrite(ptr: *u8, size: u64, nmemb: u64, stream: *u8) ret u64;
-extern fseek(stream: *u8, offset: i64, whence: i32) ret i32;
-extern ftell(stream: *u8) ret i64;
-extern rewind(stream: *u8);
-extern remove(filename: *u8) ret i32;
-extern feof(stream: *u8) ret i32;
+# File flags
+frame O_RDONLY() ret u64 {
+    return 0;
+}
+frame O_WRONLY() ret u64 {
+    return 1;
+}
+frame O_RDWR() ret u64 {
+    return 2;
+}
+frame O_CREAT() ret u64 {
+    return 64;
+}
+frame O_TRUNC() ret u64 {
+    return 512;
+}
+frame O_APPEND() ret u64 {
+    return 1024;
+}
 
-# Constants for fseek (as functions)
-frame SEEK_SET() ret i32 { return 0; }
-frame SEEK_CUR() ret i32 { return 1; }
-frame SEEK_END() ret i32 { return 2; }
+# Seek constants
+frame SEEK_SET() ret u64 {
+    return 0;
+}
+frame SEEK_CUR() ret u64 {
+    return 1;
+}
+frame SEEK_END() ret u64 {
+    return 2;
+}
 
 struct File {
-    handle: *u8,
-    mode: *u8,
+    fd: u64,
     path: *u8,
+    mode: *u8,
+    is_open: u8,
 
-    # Open a file with the given path and mode
-    # Modes: "r", "w", "a", "r+", "w+", "a+"
     frame open(path: *u8, mode: *u8) ret u8 {
+        # Open a file with the given path and mode
+        # Modes: "r", "w", "a", "r+", "w+", "a+"
+
         this.path = path;
         this.mode = mode;
-        this.handle = call fopen(path, mode);
-        
-        if this.handle == NULL {
-            return 0; # Failure
-        }
-        return 1; # Success
-    }
 
-    # Close the file
-    frame close() ret i32 {
-        if this.handle == NULL {
+        local flags: u64 = 0;
+        local mode_val: u64 = 438; # 0666 in octal (rw-rw-rw-)
+
+        if call strcmp(mode, "r") == 0 {
+            flags = call O_RDONLY();
+        } else if call strcmp(mode, "w") == 0 {
+            flags = call O_WRONLY() | call O_CREAT() | call O_TRUNC();
+        } else if call strcmp(mode, "a") == 0 {
+            flags = call O_WRONLY() | call O_CREAT() | call O_APPEND();
+        } else if call strcmp(mode, "r+") == 0 {
+            flags = call O_RDWR();
+        } else if call strcmp(mode, "w+") == 0 {
+            flags = call O_RDWR() | call O_CREAT() | call O_TRUNC();
+        } else if call strcmp(mode, "a+") == 0 {
+            flags = call O_RDWR() | call O_CREAT() | call O_APPEND();
+        } else {
+            return 0; # Invalid mode
+        }
+
+        local res: u64 = call sys_open(path, flags, mode_val);
+
+        # Check for error (negative return value, but u64 so check if > very large number)
+        # Linux returns -errno on error. Max errno is 4095.
+        # So if res > -4096 (unsigned comparison), it's an error.
+        # -4096 in u64 is 0xFFFFFFFFFFFFF000
+
+        if res > 0xFFFFFFFFFFFFF000 {
+            call print_int(cast<i64>(res));
+            call println();
+            this.is_open = 0;
             return 0;
         }
-        local res: i32 = call fclose(this.handle);
-        this.handle = NULL;
+
+        this.fd = res;
+        this.is_open = 1;
+        return 1;
+    }
+
+    frame close() ret u64 {
+        # Close the file
+
+        if this.is_open == 0 {
+            return 0;
+        }
+        local res: u64 = call sys_close(this.fd);
+        this.is_open = 0;
         return res;
     }
 
-    # Read data into a buffer
-    # Returns the number of bytes read
     frame read(buffer: *u8, size: u64) ret u64 {
-        if this.handle == NULL {
+        # Read data into a buffer
+        # Returns the number of bytes read
+
+        if this.is_open == 0 {
             return 0;
         }
-        return call fread(buffer, 1, size, this.handle);
+        return call sys_read(this.fd, buffer, size);
     }
 
-    # Write data from a buffer
-    # Returns the number of bytes written
     frame write(buffer: *u8, size: u64) ret u64 {
-        if this.handle == NULL {
+        # Write data from a buffer
+        # Returns the number of bytes written
+
+        if this.is_open == 0 {
             return 0;
         }
-        return call fwrite(buffer, 1, size, this.handle);
+        return call sys_write(this.fd, buffer, size);
     }
 
-    # Write a null-terminated string
     frame writeString(str: *u8) ret u64 {
-        if this.handle == NULL {
+        # Write a null-terminated string
+
+        if this.is_open == 0 {
             return 0;
         }
-        # Calculate length manually since we can't easily import strlen here without circular deps or duplication
-        # But we can assume user passes valid string. 
-        # Actually, let's just iterate.
         local len: u64 = 0;
         loop {
-            if str[len] == 0 { break; }
+            if str[len] == 0 {
+                break;
+            }
             len = len + 1;
         }
-        return call fwrite(str, 1, len, this.handle);
+        return call sys_write(this.fd, str, len);
     }
 
-    # Seek to a position
-    frame seek(offset: i64, whence: i32) ret i32 {
-        if this.handle == NULL {
-            return cast<i32>(-1);
+    frame seek(offset: u64, whence: u64) ret u64 {
+        # Seek to a position
+
+        if this.is_open == 0 {
+            return 0;
         }
-        return call fseek(this.handle, offset, whence);
+        return call sys_lseek(this.fd, offset, whence);
     }
 
-    # Get current position
-    frame tell() ret i64 {
-        if this.handle == NULL {
-            return -1;
+    frame tell() ret u64 {
+        # Get current position
+
+        if this.is_open == 0 {
+            return 0;
         }
-        return call ftell(this.handle);
+        return call sys_lseek(this.fd, 0, call SEEK_CUR());
     }
 
-    # Rewind to the beginning
     frame rewind() {
-        if this.handle != NULL {
-            call rewind(this.handle);
-        }
-    }
+        # Rewind to the beginning
 
-    # Check if end of file
-    frame isEOF() ret u8 {
-        if this.handle == NULL {
-            return 1;
+        if this.is_open != 0 {
+            call sys_lseek(this.fd, 0, call SEEK_SET());
         }
-        if call feof(this.handle) != 0 {
-            return 1;
-        }
-        return 0;
     }
 }
 
 # Static helper to delete a file
-frame removeFile(path: *u8) ret i32 {
-    return call remove(path);
+frame removeFile(path: *u8) ret u64 {
+    return call sys_unlink(path);
 }
 
 export [File];

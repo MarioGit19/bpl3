@@ -97,13 +97,62 @@ Mathematical functions.
 
 ### `array.x`
 
-Array utilities.
+Generic dynamic array implementation.
 
-- `array_fill_u64(arr: *u64, len: u64, val: u64)`: Fills an array with a specific value.
-- `array_copy_u64(dest: *u64, src: *u64, len: u64)`: Copies elements from source to destination array.
-- `array_reverse_u64(arr: *u64, len: u64)`: Reverses an array in-place.
-- `array_find_u64(arr: *u64, len: u64, val: u64) ret i64`: Finds the index of a value in an array (returns -1 if not found).
-- `array_sum_u64(arr: *u64, len: u64) ret u64`: Calculates the sum of all elements in an array.
+```bpl
+import [Array] from "lib/array.x";
+
+local arr: Array<u64>;
+call arr.push(10);
+call arr.push(20);
+local val: u64 = call arr.get(0);
+```
+
+**Methods:**
+
+- `push(value: T)`: Adds an element to the end.
+- `pop() ret T`: Removes and returns the last element.
+- `len() ret u64`: Returns the number of elements.
+- `get(index: u64) ret T`: Returns the element at the given index.
+- `set(index: u64, value: T)`: Sets the element at the given index.
+- `clear()`: Clears the array (sets length to 0).
+- `free()`: Frees the underlying memory.
+
+### `map.x`
+
+Generic hash map implementation (linear probing).
+
+```bpl
+import [Map] from "lib/map.x";
+
+local m: Map<u64, u64>;
+call m.put(1, 100);
+local val: u64 = call m.get(1);
+```
+
+**Methods:**
+
+- `put(key: K, value: V)`: Inserts or updates a key-value pair.
+- `get(key: K) ret V`: Retrieves the value for a key.
+- `has(key: K) ret u8`: Checks if a key exists.
+
+### `set.x`
+
+Generic set implementation.
+
+```bpl
+import [Set] from "lib/set.x";
+
+local s: Set<u64>;
+call s.add(10);
+if call s.has(10) { ... }
+```
+
+**Methods:**
+
+- `add(value: T)`: Adds a value to the set.
+- `has(value: T) ret u8`: Checks if a value exists.
+- `delete(value: T) ret u8`: Removes a value.
 
 ## Interfacing with C
 

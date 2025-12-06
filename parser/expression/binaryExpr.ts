@@ -217,11 +217,39 @@ export default class BinaryExpr extends Expression {
       (rightType?.isPointer || rightVal === "null" || rightVal === "0")
     ) {
       if (
-        this.operator.type === TokenType.EQUAL ||
-        this.operator.type === TokenType.NOT_EQUAL
+        [
+          TokenType.EQUAL,
+          TokenType.NOT_EQUAL,
+          TokenType.LESS_THAN,
+          TokenType.GREATER_THAN,
+          TokenType.LESS_EQUAL,
+          TokenType.GREATER_EQUAL,
+        ].includes(this.operator.type)
       ) {
-        const opcode =
-          this.operator.type === TokenType.EQUAL ? IROpcode.EQ : IROpcode.NE;
+        let opcode: IROpcode;
+        switch (this.operator.type) {
+          case TokenType.EQUAL:
+            opcode = IROpcode.EQ;
+            break;
+          case TokenType.NOT_EQUAL:
+            opcode = IROpcode.NE;
+            break;
+          case TokenType.LESS_THAN:
+            opcode = IROpcode.ULT;
+            break;
+          case TokenType.GREATER_THAN:
+            opcode = IROpcode.UGT;
+            break;
+          case TokenType.LESS_EQUAL:
+            opcode = IROpcode.ULE;
+            break;
+          case TokenType.GREATER_EQUAL:
+            opcode = IROpcode.UGE;
+            break;
+          default:
+            throw new Error("Unreachable");
+        }
+
         let type: IRType = { type: "pointer", base: { type: "i8" } };
         if (leftVal !== "null" && leftVal !== "0" && leftType)
           type = gen.getIRType(leftType);
@@ -285,6 +313,10 @@ export default class BinaryExpr extends Expression {
     let opcode: IROpcode;
     let isComparison = false;
 
+    const isUnsigned =
+      (leftType?.name.startsWith("u") || false) &&
+      (rightType?.name.startsWith("u") || false);
+
     switch (this.operator.type) {
       case TokenType.PLUS:
         opcode = IROpcode.ADD;
@@ -325,19 +357,19 @@ export default class BinaryExpr extends Expression {
         isComparison = true;
         break;
       case TokenType.LESS_THAN:
-        opcode = IROpcode.LT;
+        opcode = isUnsigned ? IROpcode.ULT : IROpcode.LT;
         isComparison = true;
         break;
       case TokenType.GREATER_THAN:
-        opcode = IROpcode.GT;
+        opcode = isUnsigned ? IROpcode.UGT : IROpcode.GT;
         isComparison = true;
         break;
       case TokenType.LESS_EQUAL:
-        opcode = IROpcode.LE;
+        opcode = isUnsigned ? IROpcode.ULE : IROpcode.LE;
         isComparison = true;
         break;
       case TokenType.GREATER_EQUAL:
-        opcode = IROpcode.GE;
+        opcode = isUnsigned ? IROpcode.UGE : IROpcode.GE;
         isComparison = true;
         break;
       case TokenType.AND:

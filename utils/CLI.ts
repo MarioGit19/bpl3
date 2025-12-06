@@ -1,6 +1,12 @@
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
+import { spawnSync } from "child_process";
+import { Command } from "commander";
 import { Logger } from "./Logger";
+import { formatFiles } from "./formatter";
+import { generateDependencyGraph } from "./DependencyGraph";
+
+const packageJson = require("../package.json");
 
 export interface CompilerConfig {
   linkMode: "dynamic" | "static";
@@ -73,94 +79,120 @@ export function parseCLI(): CompilerConfig {
     }
   }
 
-  // --- Parse Command Line Arguments ---
-  const args = process.argv.slice(2);
+  const program = new Command();
 
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i]!;
-    if (arg.startsWith("-")) {
-      switch (arg) {
-        case "-e":
-        case "--eval":
-          if (i + 1 < args.length) {
-            config.isEval = true;
-            config.sourceCode = args[++i]!;
-            config.sourceFile = `eval_${Date.now()}_${Math.floor(Math.random() * 10000)}.x`;
-            writeFileSync(config.sourceFile, config.sourceCode);
-          } else {
-            Logger.error("Error: No code provided for -e");
-            process.exit(1);
-          }
-          break;
-        case "-s":
-        case "--static":
-          config.linkMode = "static";
-          break;
-        case "-d":
-        case "--dynamic":
-          config.linkMode = "dynamic";
-          break;
-        case "-q":
-        case "--quiet":
-          config.quiet = true;
-          Logger.setQuiet(true);
-          break;
-        case "-p":
-        case "--print-asm":
-          config.printAsm = true;
-          config.cleanupAsm = false;
-          break;
-        case "--print-ast":
-          config.printAst = true;
-          break;
-        case "-r":
-        case "--run":
-          config.shouldRun = true;
-          break;
-        case "-g":
-        case "--gdb":
-          config.shouldGdb = true;
-          break;
-        case "-l":
-        case "--lib":
-          config.compileLib = true;
-          config.cleanupO = false;
-          break;
-        case "-O0":
-          config.optimizationLevel = 0;
-          break;
-        case "-O1":
-          config.optimizationLevel = 1;
-          break;
-        case "-O2":
-          config.optimizationLevel = 2;
-          break;
-        case "-O3":
-          config.optimizationLevel = 3;
-          break;
-        case "--deps":
-        case "--graph":
-          config.showDeps = true;
-          break;
-        default:
-          Logger.warn(`Warning: Unknown option (ignored): ${arg}`);
-          break;
+  program
+    .name(Object.keys(packageJson.bin)?.[0] || packageJson.name)
+    .description(packageJson.description)
+    .version(packageJson.version);
+
+  // Format command
+  program
+    .command("format")
+    .description("Format BPL source files")
+    .option("--write", "Write changes to file")
+    .option("-u", "Ignore unknown files")
+    .argument("<files...>", "Files to format")
+    .action((files, options) => {
+      formatFiles(files, options.write || false, options.u || false);
+      process.exit(0);
+    });
+
+  // Dependency Graph command
+  program
+    .command("deps-graph")
+    .description("Generate dependency graph image")
+    .argument("<file>", "Entry file")
+    .argument("[output]", "Output image file", "deps.png")
+    .action((file, output) => {
+      const dot = generateDependencyGraph(file);
+      try {
+        const result = spawnSync("dot", ["-Tpng", "-o", output], {
+          input: dot,
+          stdio: ["pipe", "inherit", "inherit"],
+        });
+        if (result.error) {
+          throw result.error;
+        }
+        Logger.info(`Dependency graph saved to ${output}`);
+      } catch (e) {
+        Logger.error(
+          "Failed to generate dependency graph. Is 'dot' (Graphviz) installed?",
+        );
+        process.exit(1);
       }
-    } else {
-      if (!config.sourceFile && !config.isEval) {
-        config.sourceFile = arg!;
-      } else {
-        config.extraLibs.push(arg!);
+      process.exit(0);
+    });
+
+  // Main compilation options
+  program
+    .option("-r, --run", "Run the executable")
+    .option("-q, --quiet", "Suppress output")
+    .option("-p, --print-asm", "Print assembly")
+    .option("--print-ast", "Print AST")
+    .option("-s, --static", "Static linking")
+    .option("-d, --dynamic", "Dynamic linking")
+    .option("-g, --gdb", "Run with GDB")
+    .option("-l, --lib", "Compile as library (don't link)")
+    .option("--no-cleanup", "Don't cleanup temporary files")
+    .option("-O, --optimization <level>", "Optimization level", parseInt)
+    .option("--deps", "Show dependency graph")
+    .option("--graph", "Show dependency graph (alias)")
+    .option("-e, --eval <code>", "Evaluate code")
+    .argument("[file]", "Source file")
+    .argument("[libs...]", "Extra object files to link")
+    .action(() => {});
+
+  program.parse(process.argv);
+
+  const options = program.opts();
+  const args = program.args;
+
+  if (options.run) config.shouldRun = true;
+  if (options.quiet) {
+    config.quiet = true;
+    Logger.setQuiet(true);
+  }
+  if (options.printAsm) {
+    config.printAsm = true;
+    config.cleanupAsm = false;
+  }
+  if (options.printAst) config.printAst = true;
+  if (options.static) config.linkMode = "static";
+  if (options.dynamic) config.linkMode = "dynamic";
+  if (options.gdb) config.shouldGdb = true;
+  if (options.lib) {
+    config.compileLib = true;
+    config.cleanupO = false;
+  }
+  if (options.cleanup === false) {
+    config.cleanupAsm = false;
+    config.cleanupO = false;
+  }
+  if (options.optimization !== undefined && !isNaN(options.optimization)) {
+    config.optimizationLevel = options.optimization;
+  }
+  if (options.deps || options.graph) config.showDeps = true;
+
+  if (options.eval) {
+    config.isEval = true;
+    config.sourceCode = options.eval;
+    config.sourceFile = `eval_${Date.now()}_${Math.floor(Math.random() * 10000)}.x`;
+    writeFileSync(config.sourceFile, config.sourceCode ?? "");
+    if (args.length > 0) {
+      config.extraLibs.push(...args);
+    }
+  } else {
+    if (args.length > 0) {
+      config.sourceFile = args[0] ?? null;
+      if (args.length > 1) {
+        config.extraLibs.push(...args.slice(1));
       }
     }
   }
 
   if (!config.sourceFile) {
-    Logger.error("Error: No source file provided.");
-    Logger.error(
-      "Usage: bun index.ts [-s|-d] [-q] [-p] [-r] [-g] [-l] <source.x> [lib1.o ...]",
-    );
-    process.exit(1);
+    program.help();
   }
 
   return config;

@@ -28,8 +28,7 @@ export class TypeChecker {
     if (isExpectedFloat && isActualFloat) {
       // Allow f32 -> f64
       if (expected.name === "f64" && actual.name === "f32") return true;
-      // Allow f64 -> f32 (lossy but often allowed, or maybe strict?)
-      // User asked for strict. Let's allow f32 -> f64 but warn/error on f64 -> f32?
+      // Allow f64 -> f32 (lossy but often allowed)
       // For now, let's allow both as they are "compatible" floats.
       return true;
     }
@@ -45,17 +44,8 @@ export class TypeChecker {
     }
 
     if (isExpectedInt && isActualInt) {
-      // Allow int -> int (size check?)
-      // BPL treats most ints as compatible for now.
-      // Allow smaller int to larger int (promotion)
-      const expectedSize = this.getIntSize(expected.name);
-      const actualSize = this.getIntSize(actual.name);
       // Allow all integer conversions (promotion and truncation)
       return true;
-
-      // Allow literal int to smaller int (if it fits, but we can't check value here easily)
-      // Assuming user knows what they are doing with literals
-      if (actual.isLiteral) return true;
     }
 
     // Pointers

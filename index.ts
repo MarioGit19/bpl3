@@ -19,7 +19,6 @@ import {
 } from "./utils/parser";
 import { parseLibraryFile } from "./utils/transpiler";
 import { Logger } from "./utils/Logger";
-import { execPath } from "process";
 
 // --- Parse Command Line Arguments ---
 const config = parseCLI();
@@ -130,7 +129,6 @@ if (printAsm) {
   Logger.info(`--- 2. Generated LLVM IR: ${asmFilePath} ---`);
   console.log(asmContent);
   Logger.info("-----------------------------------");
-  process.exit(0);
 } else {
   Logger.info("--- 2. Skipping LLVM IR printout ---");
 }

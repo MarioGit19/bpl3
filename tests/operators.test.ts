@@ -92,22 +92,22 @@ describe("Comparison Operators", () => {
 
   it("should generate less than comparison", () => {
     const ir = generateIR("frame test() { local x: u8 = 5 < 10; }");
-    expect(ir).toContain("icmp slt i64 5, 10");
+    expect(ir).toContain("icmp ult i64 5, 10");
   });
 
   it("should generate greater than comparison", () => {
     const ir = generateIR("frame test() { local x: u8 = 10 > 5; }");
-    expect(ir).toContain("icmp sgt i64 10, 5");
+    expect(ir).toContain("icmp ugt i64 10, 5");
   });
 
   it("should generate less than or equal comparison", () => {
     const ir = generateIR("frame test() { local x: u8 = 5 <= 10; }");
-    expect(ir).toContain("icmp sle i64 5, 10");
+    expect(ir).toContain("icmp ule i64 5, 10");
   });
 
   it("should generate greater than or equal comparison", () => {
     const ir = generateIR("frame test() { local x: u8 = 10 >= 5; }");
-    expect(ir).toContain("icmp sge i64 10, 5");
+    expect(ir).toContain("icmp uge i64 10, 5");
   });
 });
 

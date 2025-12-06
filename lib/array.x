@@ -1,8 +1,4 @@
-import printf, malloc, realloc, free from "libc";
-
-extern malloc(size: u64) ret *u8;
-extern realloc(ptr: *u8, size: u64) ret *u8;
-extern free(ptr: *u8);
+import malloc, realloc, free from "std/memory.x";
 
 # Generic Array struct with methods
 struct Array<T> {

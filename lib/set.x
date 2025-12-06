@@ -1,5 +1,5 @@
-import malloc, realloc from "libc";
-import [Array] from "./array.x";
+import malloc, realloc from "std/memory.x";
+import [Array] from "std/array.x";
 
 struct Set<T> {
     items: Array<T>,

@@ -94,9 +94,9 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
 
     // Only check for unused variables in local scopes (functions/blocks)
     // Global variables might be used by other modules
-    // if (scope !== this.rootScope) {
-    //   this.checkUnusedVariables(scope);
-    // }
+    if (scope !== this.rootScope) {
+      this.checkUnusedVariables(scope);
+    }
   }
 
   private checkUnusedVariables(scope: Scope): void {
@@ -502,12 +502,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
           name: firstType.name,
           isPointer: firstType.isPointer,
           isArray: [arrExpr.elements.length, ...firstType.isArray],
-          isLiteral: true, // Treat array literal as literal if elements are?
-          // Actually, if elements are literals, the array is a literal value.
-          // Even if elements are variables, it's an rvalue.
-          // But for narrowing, we care if it's a literal number.
-          // Here we care if it's a literal array of literal numbers.
-          // Let's say yes.
+          isLiteral: true,
         };
       }
       case ExpressionType.CastExpression: {
@@ -758,10 +753,6 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
     );
   }
 
-  /**
-   * Generate a mangled name for a generic function instantiation
-   */
-
   private checkTypeCompatibilityOrThrow(
     expected: VariableType,
     actual: VariableType,
@@ -786,8 +777,6 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
       );
     }
   }
-
-  // Determine if an implicit cast is occurring and return a warning message if so
 
   private analyzeVariableDeclaration(
     expr: VariableDeclarationExpr,
@@ -1235,28 +1224,11 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
     scope: Scope,
   ): void {
     const existingFunc = scope.resolveFunction(expr.name);
-    // If it's not defined, we can define it now (assuming it's an extern that didn't need an import, or import was implicit)
-    // But based on ExternDeclarationExpr logic, it expects it to be defined.
-    // However, for Semantic Analysis, we might want to be more lenient or strict.
-    // If we follow the transpiler logic:
+    // If it's not defined, we can define it now.
+    // This allows 'extern' to declare functions without 'import' if they are linked otherwise.
     if (!existingFunc || !existingFunc.isExternal) {
-      // If it's not defined, let's define it as external.
-      // This allows 'extern' to declare functions without 'import' if they are linked otherwise.
-      // But the original logic threw an error. Let's stick to the original logic but maybe relax it if it's not found?
-      // Actually, if I import from libc, it's defined.
-      // If I just say 'extern foo', it should probably be defined.
-
-      // Let's define it if it doesn't exist, assuming the user knows what they are doing (linking against something).
-      // But wait, the original code threw an error.
-      // "Function ${this.name} is not defined, or it's already defined and is not external."
-
-      // If I change this behavior, I might break something.
-      // But if I don't define it in ImportExpr, then it won't be defined here.
-      // I added analyzeImportExpression, so it should be defined if imported.
-
       if (!existingFunc) {
-        // Maybe allow defining it?
-        // For now, let's define it.
+        // Define it if it doesn't exist
         scope.defineFunction(expr.name, {
           args: expr.args,
           returnType: expr.returnType,
@@ -1288,17 +1260,6 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
   }
 
   private analyzeReturnExpr(expr: ReturnExpr, scope: Scope): void {
-    if (this.currentReturnType === null) {
-      // Return outside function? Or void function?
-      // If we are in a function, currentReturnType should be set (even if null/void)
-      // But wait, if function returns void, expr.returnType is null?
-      // Let's assume currentReturnType is null means "not in function" or "void return".
-      // But I initialized it to null.
-      // If I am in global scope, it is null.
-      // If I am in a function with no return type, it is null?
-      // Let's check FunctionDeclarationExpr.returnType. It is VariableType | null.
-    }
-
     if (expr.value) {
       this.analyzeExpression(expr.value, scope);
       const valueType = this.inferType(expr.value, scope);
@@ -1693,7 +1654,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
           : 0;
 
       throw new CompilerError(
-        `Method '${expr.methodName}' not found on type '${structName}'. Info: hasGenericMethods=${hasGenericMethods}, count=${genericMethodsCount}`,
+        `Method '${expr.methodName}' not found on type '${structName}'. (Generic methods: ${hasGenericMethods}, Count: ${genericMethodsCount})`,
         expr.startToken?.line || 0,
       );
     }

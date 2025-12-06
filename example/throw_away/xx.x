@@ -20,7 +20,6 @@ frame main() {
 
     local new_string: String = {data: "-sam-te"};
 
-    # call my_string.concat(&new_string);
     call printf("Concatenated String: %s\n", my_string.data);
     call printf("Concatenated String length: %d\n", my_string.length);
 

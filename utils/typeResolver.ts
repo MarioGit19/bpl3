@@ -22,10 +22,22 @@ export function resolveExpressionType(
     const val = (expr as NumberLiteralExpr).value;
     const isHexBinOct =
       val.startsWith("0x") || val.startsWith("0b") || val.startsWith("0o");
-    return !isHexBinOct &&
+
+    if (
+      !isHexBinOct &&
       (val.includes(".") || val.toLowerCase().includes("e"))
-      ? { name: "f64", isPointer: 0, isArray: [] }
-      : { name: "u64", isPointer: 0, isArray: [] };
+    ) {
+      return { name: "f64", isPointer: 0, isArray: [] };
+    }
+
+    // Check if it fits in i64
+    try {
+      const bigVal = BigInt(val);
+    } catch (e) {
+      // Ignore error
+    }
+
+    return { name: "u64", isPointer: 0, isArray: [] };
   }
   if (expr.type === ExpressionType.CastExpression) {
     return (expr as CastExpr).targetType;

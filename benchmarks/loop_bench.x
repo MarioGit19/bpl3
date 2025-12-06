@@ -12,7 +12,6 @@ frame main() ret u64 {
         # Simple arithmetic operations
         sum = sum + i;
         # Add some bitwise ops to make it slightly more complex
-        # sum = sum ^ (i & 0xFF); 
         i = i + 1;
     }
 

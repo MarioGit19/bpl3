@@ -28,8 +28,52 @@ import {
   TextDocumentSyncKind,
   TextEdit,
   type WorkspaceEdit,
+  SemanticTokensBuilder,
+  type SemanticTokensLegend,
 } from "vscode-languageserver/node";
 import Lexer from "../../../lexer/lexer";
+
+const tokenTypes = [
+  "namespace",
+  "type",
+  "class",
+  "enum",
+  "interface",
+  "struct",
+  "typeParameter",
+  "parameter",
+  "variable",
+  "property",
+  "enumMember",
+  "event",
+  "function",
+  "method",
+  "macro",
+  "keyword",
+  "modifier",
+  "comment",
+  "string",
+  "number",
+  "regexp",
+  "operator",
+];
+const tokenModifiers = [
+  "declaration",
+  "definition",
+  "readonly",
+  "static",
+  "deprecated",
+  "abstract",
+  "async",
+  "modification",
+  "documentation",
+  "defaultLibrary",
+];
+const semanticTokensLegend: SemanticTokensLegend = {
+  tokenTypes,
+  tokenModifiers,
+};
+
 import Token from "../../../lexer/token";
 import TokenType from "../../../lexer/tokenType";
 import ArrayLiteralExpr from "../../../parser/expression/arrayLiteralExpr";
@@ -59,6 +103,7 @@ import Scope from "../../../transpiler/Scope";
 
 import type { TypeInfo } from "../../../transpiler/Scope";
 import type { VariableType } from "../../../parser/expression/variableDeclarationExpr";
+import { resolveExpressionType } from "../../../utils/typeResolver";
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
 const connection = createConnection(ProposedFeatures.all);
@@ -106,6 +151,10 @@ connection.onInitialize((params: InitializeParams) => {
       referencesProvider: true,
       // Tell the client that this server supports rename.
       renameProvider: true,
+      semanticTokensProvider: {
+        legend: semanticTokensLegend,
+        full: true,
+      },
     },
   };
   if (hasWorkspaceFolderCapability) {
@@ -510,6 +559,7 @@ connection.onCodeAction((params: CodeActionParams): CodeAction[] => {
 
 connection.onDefinition((params: DefinitionParams): Location | null => {
   const ast = documentASTs.get(params.textDocument.uri);
+  const scope = documentScopes.get(params.textDocument.uri);
   if (!ast) return null;
 
   const line = params.position.line + 1;
@@ -519,9 +569,11 @@ connection.onDefinition((params: DefinitionParams): Location | null => {
 
   if (!node) return null;
 
+  const resolutionScope = node.contextScope || scope;
+
   if (node instanceof IdentifierExpr) {
-    if (node.contextScope) {
-      const symbol = node.contextScope.resolve(node.name);
+    if (resolutionScope) {
+      const symbol = resolutionScope.resolve(node.name);
       if (symbol && symbol.declaration) {
         const uri = symbol.sourceFile
           ? pathToFileURL(symbol.sourceFile).toString()
@@ -543,8 +595,8 @@ connection.onDefinition((params: DefinitionParams): Location | null => {
       }
     }
   } else if (node instanceof FunctionCallExpr) {
-    if (node.contextScope) {
-      const func = node.contextScope.resolveFunction(node.functionName);
+    if (resolutionScope) {
+      const func = resolutionScope.resolveFunction(node.functionName);
       if (func && func.declaration) {
         const uri = func.sourceFile
           ? pathToFileURL(func.sourceFile).toString()
@@ -642,6 +694,74 @@ connection.onDefinition((params: DefinitionParams): Location | null => {
         );
       }
     }
+  } else if (node instanceof MemberAccessExpr) {
+    if (!node.isIndexAccess && node.property instanceof IdentifierExpr) {
+      try {
+        if (resolutionScope) {
+          const objectType = resolveExpressionType(
+            node.object,
+            resolutionScope,
+          );
+          if (objectType) {
+            const structName = objectType.name;
+            const structSymbol = resolutionScope.resolveType(structName);
+
+            if (structSymbol && structSymbol.members) {
+              const fieldName = (node.property as IdentifierExpr).name;
+              const field = structSymbol.members.get(fieldName);
+              if (field && field.declaration) {
+                const uri = field.sourceFile
+                  ? pathToFileURL(field.sourceFile).toString()
+                  : params.textDocument.uri;
+                return {
+                  uri: uri,
+                  range: {
+                    start: {
+                      line: field.declaration.line - 1,
+                      character: field.declaration.column - 1,
+                    },
+                    end: {
+                      line: field.declaration.line - 1,
+                      character:
+                        field.declaration.column -
+                        1 +
+                        field.declaration.value.length,
+                    },
+                  },
+                };
+              }
+            }
+          }
+        }
+      } catch (e) {}
+    }
+  } else if (node instanceof VariableDeclarationExpr) {
+    // If clicking on the type, go to type definition
+    const typeNode = findTypeNodeAt(node.varType, line, column);
+    if (typeNode && resolutionScope) {
+      const typeInfo = resolveTypeFromNode(resolutionScope, typeNode);
+      if (typeInfo && typeInfo.declaration) {
+        const uri = typeInfo.sourceFile
+          ? pathToFileURL(typeInfo.sourceFile).toString()
+          : params.textDocument.uri;
+        return {
+          uri: uri,
+          range: {
+            start: {
+              line: typeInfo.declaration.line - 1,
+              character: typeInfo.declaration.column - 1,
+            },
+            end: {
+              line: typeInfo.declaration.line - 1,
+              character:
+                typeInfo.declaration.column -
+                1 +
+                typeInfo.declaration.value.length,
+            },
+          },
+        };
+      }
+    }
   }
 
   return null;
@@ -658,30 +778,51 @@ connection.onReferences((params: ReferenceParams): Location[] => {
   const node = findNodeAt(ast, line, column);
   if (!node) return [];
 
-  let targetName = "";
-  let isFunction = false;
+  let targetSymbol: any = null;
 
   if (node instanceof IdentifierExpr) {
-    targetName = node.name;
+    if (node.contextScope) {
+      targetSymbol = node.contextScope.resolve(node.name);
+    }
   } else if (node instanceof FunctionCallExpr) {
-    targetName = node.functionName;
-    isFunction = true;
+    if (node.contextScope) {
+      targetSymbol = node.contextScope.resolveFunction(node.functionName);
+    }
   } else if (node instanceof VariableDeclarationExpr) {
-    targetName = node.name;
+    if (node.contextScope) {
+      targetSymbol = node.contextScope.resolve(node.name);
+    }
   } else if (node instanceof FunctionDeclarationExpr) {
-    targetName = node.name;
-    isFunction = true;
-  } else {
-    return [];
+    if (node.contextScope) {
+      targetSymbol = node.contextScope.resolveFunction(node.name);
+    }
+  } else if (node instanceof MemberAccessExpr) {
+    if (!node.isIndexAccess && node.property instanceof IdentifierExpr) {
+      if (node.contextScope) {
+        const objectType = resolveExpressionType(
+          node.object,
+          node.contextScope,
+        );
+        if (objectType) {
+          const structSymbol = node.contextScope.resolveType(objectType.name);
+          if (structSymbol && structSymbol.members) {
+            targetSymbol = structSymbol.members.get(node.property.name);
+          }
+        }
+      }
+    }
   }
+
+  if (!targetSymbol) return [];
 
   const locations: Location[] = [];
 
   // Helper to traverse AST and find usages
   function findUsages(expr: Expression) {
     if (expr instanceof IdentifierExpr) {
-      if (expr.name === targetName && !isFunction) {
-        if (expr.startToken) {
+      if (expr.contextScope) {
+        const symbol = expr.contextScope.resolve(expr.name);
+        if (symbol === targetSymbol && expr.startToken) {
           locations.push({
             uri: params.textDocument.uri,
             range: {
@@ -699,12 +840,9 @@ connection.onReferences((params: ReferenceParams): Location[] => {
         }
       }
     } else if (expr instanceof FunctionCallExpr) {
-      if (expr.functionName === targetName && isFunction) {
-        if (expr.startToken) {
-          // FunctionCallExpr startToken is usually the name
-          // But let's be safe and check if we have a name token or if startToken is the name
-          // The parser sets startToken to the first token.
-          // For `foo()`, startToken is `foo`.
+      if (expr.contextScope) {
+        const symbol = expr.contextScope.resolveFunction(expr.functionName);
+        if (symbol === targetSymbol && expr.startToken) {
           locations.push({
             uri: params.textDocument.uri,
             range: {
@@ -723,8 +861,9 @@ connection.onReferences((params: ReferenceParams): Location[] => {
       }
       for (const arg of expr.args) findUsages(arg);
     } else if (expr instanceof VariableDeclarationExpr) {
-      if (expr.name === targetName && !isFunction) {
-        if (expr.nameToken) {
+      if (expr.contextScope) {
+        const symbol = expr.contextScope.resolve(expr.name);
+        if (symbol === targetSymbol && expr.nameToken) {
           locations.push({
             uri: params.textDocument.uri,
             range: {
@@ -743,8 +882,9 @@ connection.onReferences((params: ReferenceParams): Location[] => {
       }
       if (expr.value) findUsages(expr.value);
     } else if (expr instanceof FunctionDeclarationExpr) {
-      if (expr.name === targetName && isFunction) {
-        if (expr.nameToken) {
+      if (expr.contextScope) {
+        const symbol = expr.contextScope.resolveFunction(expr.name);
+        if (symbol === targetSymbol && expr.nameToken) {
           locations.push({
             uri: params.textDocument.uri,
             range: {
@@ -779,7 +919,40 @@ connection.onReferences((params: ReferenceParams): Location[] => {
       if (expr.value) findUsages(expr.value);
     } else if (expr instanceof MemberAccessExpr) {
       findUsages(expr.object);
-      if (expr.isIndexAccess) findUsages(expr.property);
+      if (expr.isIndexAccess) {
+        findUsages(expr.property);
+      } else if (expr.property instanceof IdentifierExpr) {
+        if (expr.contextScope) {
+          const objectType = resolveExpressionType(
+            expr.object,
+            expr.contextScope,
+          );
+          if (objectType) {
+            const structSymbol = expr.contextScope.resolveType(objectType.name);
+            if (structSymbol && structSymbol.members) {
+              const fieldSymbol = structSymbol.members.get(expr.property.name);
+              if (fieldSymbol === targetSymbol && expr.property.startToken) {
+                locations.push({
+                  uri: params.textDocument.uri,
+                  range: {
+                    start: {
+                      line: expr.property.startToken.line - 1,
+                      character: expr.property.startToken.column - 1,
+                    },
+                    end: {
+                      line: expr.property.startToken.line - 1,
+                      character:
+                        expr.property.startToken.column -
+                        1 +
+                        expr.property.startToken.value.length,
+                    },
+                  },
+                });
+              }
+            }
+          }
+        }
+      }
     } else if (expr instanceof ProgramExpr) {
       for (const e of expr.expressions) findUsages(e);
     }
@@ -800,22 +973,42 @@ connection.onRenameRequest((params: RenameParams): WorkspaceEdit | null => {
   const node = findNodeAt(ast, line, column);
   if (!node) return null;
 
-  let targetName = "";
-  let isFunction = false;
+  let targetSymbol: any = null;
 
   if (node instanceof IdentifierExpr) {
-    targetName = node.name;
+    if (node.contextScope) {
+      targetSymbol = node.contextScope.resolve(node.name);
+    }
   } else if (node instanceof FunctionCallExpr) {
-    targetName = node.functionName;
-    isFunction = true;
+    if (node.contextScope) {
+      targetSymbol = node.contextScope.resolveFunction(node.functionName);
+    }
   } else if (node instanceof VariableDeclarationExpr) {
-    targetName = node.name;
+    if (node.contextScope) {
+      targetSymbol = node.contextScope.resolve(node.name);
+    }
   } else if (node instanceof FunctionDeclarationExpr) {
-    targetName = node.name;
-    isFunction = true;
-  } else {
-    return null;
+    if (node.contextScope) {
+      targetSymbol = node.contextScope.resolveFunction(node.name);
+    }
+  } else if (node instanceof MemberAccessExpr) {
+    if (!node.isIndexAccess && node.property instanceof IdentifierExpr) {
+      if (node.contextScope) {
+        const objectType = resolveExpressionType(
+          node.object,
+          node.contextScope,
+        );
+        if (objectType) {
+          const structSymbol = node.contextScope.resolveType(objectType.name);
+          if (structSymbol && structSymbol.members) {
+            targetSymbol = structSymbol.members.get(node.property.name);
+          }
+        }
+      }
+    }
   }
+
+  if (!targetSymbol) return null;
 
   const changes: { [uri: string]: TextEdit[] } = {};
   changes[params.textDocument.uri] = [];
@@ -823,8 +1016,9 @@ connection.onRenameRequest((params: RenameParams): WorkspaceEdit | null => {
   // Reuse findUsages logic but return TextEdits
   function findUsagesAndRename(expr: Expression) {
     if (expr instanceof IdentifierExpr) {
-      if (expr.name === targetName && !isFunction) {
-        if (expr.startToken) {
+      if (expr.contextScope) {
+        const symbol = expr.contextScope.resolve(expr.name);
+        if (symbol === targetSymbol && expr.startToken) {
           const edits = changes[params.textDocument.uri];
           if (edits) {
             edits.push(
@@ -847,8 +1041,9 @@ connection.onRenameRequest((params: RenameParams): WorkspaceEdit | null => {
         }
       }
     } else if (expr instanceof FunctionCallExpr) {
-      if (expr.functionName === targetName && isFunction) {
-        if (expr.startToken) {
+      if (expr.contextScope) {
+        const symbol = expr.contextScope.resolveFunction(expr.functionName);
+        if (symbol === targetSymbol && expr.startToken) {
           const edits = changes[params.textDocument.uri];
           if (edits) {
             edits.push(
@@ -872,8 +1067,9 @@ connection.onRenameRequest((params: RenameParams): WorkspaceEdit | null => {
       }
       for (const arg of expr.args) findUsagesAndRename(arg);
     } else if (expr instanceof VariableDeclarationExpr) {
-      if (expr.name === targetName && !isFunction) {
-        if (expr.nameToken) {
+      if (expr.contextScope) {
+        const symbol = expr.contextScope.resolve(expr.name);
+        if (symbol === targetSymbol && expr.nameToken) {
           const edits = changes[params.textDocument.uri];
           if (edits) {
             edits.push(
@@ -897,8 +1093,9 @@ connection.onRenameRequest((params: RenameParams): WorkspaceEdit | null => {
       }
       if (expr.value) findUsagesAndRename(expr.value);
     } else if (expr instanceof FunctionDeclarationExpr) {
-      if (expr.name === targetName && isFunction) {
-        if (expr.nameToken) {
+      if (expr.contextScope) {
+        const symbol = expr.contextScope.resolveFunction(expr.name);
+        if (symbol === targetSymbol && expr.nameToken) {
           const edits = changes[params.textDocument.uri];
           if (edits) {
             edits.push(
@@ -938,7 +1135,45 @@ connection.onRenameRequest((params: RenameParams): WorkspaceEdit | null => {
       if (expr.value) findUsagesAndRename(expr.value);
     } else if (expr instanceof MemberAccessExpr) {
       findUsagesAndRename(expr.object);
-      if (expr.isIndexAccess) findUsagesAndRename(expr.property);
+      if (expr.isIndexAccess) {
+        findUsagesAndRename(expr.property);
+      } else if (expr.property instanceof IdentifierExpr) {
+        if (expr.contextScope) {
+          const objectType = resolveExpressionType(
+            expr.object,
+            expr.contextScope,
+          );
+          if (objectType) {
+            const structSymbol = expr.contextScope.resolveType(objectType.name);
+            if (structSymbol && structSymbol.members) {
+              const fieldSymbol = structSymbol.members.get(expr.property.name);
+              if (fieldSymbol === targetSymbol && expr.property.startToken) {
+                const edits = changes[params.textDocument.uri];
+                if (edits) {
+                  edits.push(
+                    TextEdit.replace(
+                      {
+                        start: {
+                          line: expr.property.startToken.line - 1,
+                          character: expr.property.startToken.column - 1,
+                        },
+                        end: {
+                          line: expr.property.startToken.line - 1,
+                          character:
+                            expr.property.startToken.column -
+                            1 +
+                            expr.property.startToken.value.length,
+                        },
+                      },
+                      params.newName,
+                    ),
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
     } else if (expr instanceof ProgramExpr) {
       for (const e of expr.expressions) findUsagesAndRename(e);
     }
@@ -1058,7 +1293,10 @@ function findNodeAt(
     if (found) return found;
     if (node.property instanceof Expression) {
       found = findNodeAt(node.property, line, column);
-      if (found) return found;
+      if (found) {
+        if (!node.isIndexAccess) return node;
+        return found;
+      }
     }
   } else if (node instanceof ReturnExpr) {
     if (node.value) {
@@ -1126,6 +1364,19 @@ function formatType(type: VariableType): string {
   }
   for (const dim of type.isArray) {
     s += `[${dim}]`;
+  }
+  return s;
+}
+
+function formatTypeFromInfo(info: TypeInfo): string {
+  let s = info.name;
+  for (let i = 0; i < info.isPointer; i++) {
+    s = "*" + s;
+  }
+  if (info.isArray) {
+    for (const dim of info.isArray) {
+      s += `[${dim}]`;
+    }
   }
   return s;
 }
@@ -1419,9 +1670,107 @@ connection.onHover((params: HoverParams): Hover | null => {
         }
       }
     }
+  } else if (node instanceof MemberAccessExpr) {
+    if (!node.isIndexAccess && node.property instanceof IdentifierExpr) {
+      try {
+        const resolutionScope = node.contextScope || scope;
+        const objectType = resolveExpressionType(node.object, resolutionScope);
+        if (!objectType) return null;
+        const structName = objectType.name;
+        const structSymbol = resolutionScope.resolveType(structName);
+
+        if (structSymbol && structSymbol.members) {
+          const fieldName = (node.property as IdentifierExpr).name;
+          const field = structSymbol.members.get(fieldName);
+          if (field) {
+            return {
+              contents: {
+                kind: MarkupKind.Markdown,
+                value: `\`\`\`bpl\n(property) ${fieldName}: ${formatTypeFromInfo(field)}\n\`\`\`\n\nOffset: ${field.offset}`,
+              },
+            };
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
   }
 
   return null;
+});
+
+connection.languages.semanticTokens.on((params) => {
+  const ast = documentASTs.get(params.textDocument.uri);
+  if (!ast) {
+    return { data: [] };
+  }
+
+  const builder = new SemanticTokensBuilder();
+
+  function addToken(
+    token: Token | undefined,
+    type: string,
+    modifiers: string[] = [],
+  ) {
+    if (!token) return;
+    builder.push(
+      token.line - 1,
+      token.column - 1,
+      token.value.length,
+      tokenTypes.indexOf(type),
+      modifiers
+        .map((m) => tokenModifiers.indexOf(m))
+        .reduce((a, b) => a | (1 << b), 0),
+    );
+  }
+
+  function traverse(node: Expression) {
+    if (node instanceof FunctionDeclarationExpr) {
+      addToken(node.nameToken, "function", ["declaration"]);
+      traverse(node.body);
+    } else if (node instanceof VariableDeclarationExpr) {
+      addToken(node.nameToken, "variable", ["declaration"]);
+      if (node.value) traverse(node.value);
+    } else if (node instanceof FunctionCallExpr) {
+      addToken(node.startToken, "function");
+      for (const arg of node.args) traverse(arg);
+    } else if (node instanceof IdentifierExpr) {
+      addToken(node.startToken, "variable");
+    } else if (node instanceof StructDeclarationExpr) {
+      // Name token not available
+    } else if (node instanceof MemberAccessExpr) {
+      traverse(node.object);
+      if (!node.isIndexAccess && node.property instanceof IdentifierExpr) {
+        addToken(node.property.startToken, "property");
+      } else {
+        traverse(node.property);
+      }
+    } else if (node instanceof BinaryExpr) {
+      traverse(node.left);
+      traverse(node.right);
+    } else if (node instanceof UnaryExpr) {
+      traverse(node.right);
+    } else if (node instanceof BlockExpr) {
+      for (const expr of node.expressions) traverse(expr);
+    } else if (node instanceof IfExpr) {
+      traverse(node.condition);
+      traverse(node.thenBranch);
+      if (node.elseBranch) traverse(node.elseBranch);
+    } else if (node instanceof LoopExpr) {
+      traverse(node.body);
+    } else if (node instanceof ReturnExpr) {
+      if (node.value) traverse(node.value);
+    } else if (node instanceof ProgramExpr) {
+      for (const expr of node.expressions) traverse(expr);
+    }
+  }
+
+  for (const expr of ast.expressions) {
+    traverse(expr);
+  }
+
+  return builder.build();
 });
 
 // Make the text document manager listen on the connection

@@ -30,7 +30,8 @@ export default class AsmBlockExpr extends Expression {
 
   toIR(gen: IRGenerator, scope: Scope): string {
     let asmString = "";
-    const args: string[] = [];
+    const args: { value: string; type: any }[] = [];
+    const argConstraints: string[] = [];
     let argIndex = 0;
     let lastLine = -1;
 
@@ -52,7 +53,49 @@ export default class AsmBlockExpr extends Expression {
         continue;
       }
 
-      if (token.value === "(") {
+      // Handle [(var)] -> Load value
+      if (token.value === "[" && this.code[i + 1]?.value === "(") {
+        i++; // skip [
+        const varToken = this.code[++i]!; // skip ( and get var
+        if (this.code[i + 1]?.value !== ")") {
+          throw new CompilerError("Expected )", token.line);
+        }
+        i++; // skip )
+        if (this.code[i + 1]?.value !== "]") {
+          throw new CompilerError("Expected ]", token.line);
+        }
+        i++; // skip ]
+
+        const variable = scope.resolve(varToken.value);
+        if (!variable)
+          throw new CompilerError(
+            `Undefined var ${varToken.value}`,
+            varToken.line,
+          );
+
+        if (variable.irName) {
+          // We use "m" constraint (memory operand) for [(var)].
+          // This passes the address (pointer) to the ASM block.
+          // LLVM replaces $N with the memory reference (e.g. [rbp-8]).
+          // This allows both reading (mov reg, [mem]) and writing (mov [mem], reg).
+          // Passing "r" (value) would prevent writing back to the variable.
+          const irType = gen.getIRType(variable.varType);
+          // We pass the pointer to the variable
+          args.push({
+            value: variable.irName,
+            type: { type: "pointer", base: irType },
+          });
+          argConstraints.push("*m");
+          asmString += `$${argIndex++}`;
+        } else {
+          throw new CompilerError(
+            `Variable ${varToken.value} has no irName`,
+            varToken.line,
+          );
+        }
+      }
+      // Handle (var) -> Pass address (pointer)
+      else if (token.value === "(") {
         const varToken = this.code[++i]!;
         if (this.code[i + 1]?.value !== ")") {
           throw new CompilerError("Expected )", token.line);
@@ -67,7 +110,11 @@ export default class AsmBlockExpr extends Expression {
           );
 
         if (variable.irName) {
-          args.push(variable.irName);
+          args.push({
+            value: variable.irName,
+            type: { type: "pointer", base: gen.getIRType(variable.varType) },
+          });
+          argConstraints.push("r");
           asmString += `$${argIndex++}`;
         } else {
           throw new CompilerError(
@@ -87,14 +134,16 @@ export default class AsmBlockExpr extends Expression {
       }
     }
 
-    const constraints = args.map(() => "r").join(",");
+    const constraints = argConstraints.join(",");
     const clobbers =
-      "~{dirflag},~{fpsr},~{flags},~{memory},~{rax},~{rbx},~{rcx},~{rdx},~{rsi},~{rdi},~{r8},~{r9}";
+      "~{dirflag},~{fpsr},~{flags},~{memory},~{rax},~{rbx},~{rcx},~{rdx},~{rsi},~{rdi},~{r8},~{r9},~{r10},~{r11}";
     const constraintsStr = constraints
       ? `${constraints},${clobbers}`
       : clobbers;
 
-    gen.emitInlineAsm(asmString, constraintsStr, args);
+    // Prepend nop to avoid LLVM/Clang dropping the first instruction
+    // when using inteldialect with AT&T output.
+    gen.emitInlineAsm("nop\n\t" + asmString, constraintsStr, args);
     return "";
   }
 }

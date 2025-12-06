@@ -370,4 +370,3 @@ frame main() {
 
 - **Throwing**: Using `throw` to signal an error condition.
 - **Catching**: Using `try-catch` blocks to handle errors gracefully without crashing.
-

@@ -198,7 +198,11 @@ export class IRGenerator {
   }
 
   // Helper to emit inline asm
-  emitInlineAsm(asm: string, constraints: string, args: string[]) {
+  emitInlineAsm(
+    asm: string,
+    constraints: string,
+    args: { value: string; type: IRType }[],
+  ) {
     this.emit(new InlineAsmInst(asm, constraints, args));
   }
 
@@ -472,12 +476,16 @@ export class IRGenerator {
   ): string {
     const srcIsFloat = sourceType.name === "f32" || sourceType.name === "f64";
     const tgtIsFloat = targetType.name === "f32" || targetType.name === "f64";
-    const srcIsPtr = sourceType.isPointer > 0;
-    const tgtIsPtr = targetType.isPointer > 0;
+    const srcIsPtr = sourceType.isPointer > 0 || sourceType.isArray.length > 0;
+    const tgtIsPtr = targetType.isPointer > 0 || targetType.isArray.length > 0;
 
     // Pointer to pointer
     if (srcIsPtr && tgtIsPtr) {
-      return this.emitBitcast(sourceValue, sourceIRType, targetIRType);
+      let actualSrcType = sourceIRType;
+      if (sourceType.isArray.length > 0) {
+        actualSrcType = { type: "pointer", base: { type: "i8" } };
+      }
+      return this.emitBitcast(sourceValue, actualSrcType, targetIRType);
     }
 
     // Pointer to integer

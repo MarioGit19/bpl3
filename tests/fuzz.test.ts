@@ -143,7 +143,9 @@ describe("Parser Fuzzing", () => {
 
   it("should handle random token sequences gracefully", () => {
     for (let i = 0; i < ITERATIONS; i++) {
-      const input = generateRandomTokenString(Math.floor(Math.random() * MAX_LENGTH));
+      const input = generateRandomTokenString(
+        Math.floor(Math.random() * MAX_LENGTH),
+      );
       try {
         const lexer = new Lexer(input);
         const tokens = lexer.tokenize();

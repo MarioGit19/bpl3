@@ -1,14 +1,39 @@
 {
-  "name": "transpiler",
-  "module": "index.ts",
+  "name": "the-best-programming-language-v3",
+  "version": "0.1.2",
+  "description": "A transpiler for the BPL programming language targeting LLVM IR.",
+  "main": "index.ts",
+  "bin": {
+    "bpl": "./bpl"
+  },
+  "scripts": {
+    "start": "bun index.ts",
+    "build": "./build.sh",
+    "test": "./tests.sh",
+    "format": "bun index.ts format"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pr0h0/bpl3.git"
+  },
+  "keywords": [
+    "compiler",
+    "transpiler",
+    "llvm",
+    "bpl",
+    "language"
+  ],
+  "author": "pr0h0",
+  "license": "Apache-2.0",
   "type": "commonjs",
-  "private": true,
+  "private": false,
   "devDependencies": {
-    "@types/bun": "latest",
-    "ts-node": "^10.9.2"
+    "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
-  "license": "Apache-2.0"
+  "dependencies": {
+    "commander": "^14.0.2"
+  }
 }

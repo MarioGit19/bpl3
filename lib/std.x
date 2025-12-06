@@ -1,23 +1,13 @@
-import strlen, popen, pclose, fread, malloc from "libc";
-extern strlen(str: *u8) ret u64;
+import print_str from "io.x";
+import sys_exit from "syscalls.x";
+import popen, pclose, fread, malloc from "libc";
 
 frame print(s: *u8) {
-    local len: u64 = call strlen(s);
-    asm {
-        mov rax, 1
-        mov rdi, 1
-        mov rsi, [(s)]
-        mov rdx, [(len)]
-        syscall
-    }
+    call print_str(s);
 }
 
 frame exit(code: u64) {
-    asm {
-        mov rax, 60
-        mov rdi, [(code)]
-        syscall
-    }
+    call sys_exit(code);
 }
 
 extern popen(command: *u8, mode: *u8) ret *u8;

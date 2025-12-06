@@ -15,6 +15,10 @@ export enum IROpcode {
   GT,
   LE,
   GE,
+  ULT,
+  UGT,
+  ULE,
+  UGE,
 
   ALLOCA,
   LOAD,

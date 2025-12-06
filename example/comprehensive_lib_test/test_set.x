@@ -56,7 +56,6 @@ frame main() {
         if i >= 100 {
             break;
         }
-        # call printf("Adding %d\n", i);
         call largeSet.add(i);
         i = i + 1;
     }

@@ -69,6 +69,18 @@ export class BinaryInst extends IRInstruction {
       case IROpcode.GE:
         opStr = "icmp sge";
         break;
+      case IROpcode.ULT:
+        opStr = "icmp ult";
+        break;
+      case IROpcode.UGT:
+        opStr = "icmp ugt";
+        break;
+      case IROpcode.ULE:
+        opStr = "icmp ule";
+        break;
+      case IROpcode.UGE:
+        opStr = "icmp uge";
+        break;
       case IROpcode.FADD:
         opStr = "fadd";
         break;
@@ -216,12 +228,12 @@ export class InlineAsmInst extends IRInstruction {
   constructor(
     public asm: string,
     public constraints: string,
-    public args: string[],
+    public args: { value: string; type: IRType }[],
   ) {
     super(IROpcode.INLINE_ASM);
   }
   toString(): string {
-    return `asm "${this.asm}" constraints "${this.constraints}" args [${this.args.join(", ")}]`;
+    return `asm "${this.asm}" constraints "${this.constraints}" args [${this.args.map((a) => a.value).join(", ")}]`;
   }
 }
 

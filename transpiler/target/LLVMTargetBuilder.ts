@@ -110,6 +110,10 @@ export class LLVMTargetBuilder implements TargetBuilder {
       case IROpcode.GT:
       case IROpcode.LE:
       case IROpcode.GE:
+      case IROpcode.ULT:
+      case IROpcode.UGT:
+      case IROpcode.ULE:
+      case IROpcode.UGE:
       case IROpcode.FADD:
       case IROpcode.FSUB:
       case IROpcode.FMUL:
@@ -173,7 +177,24 @@ export class LLVMTargetBuilder implements TargetBuilder {
       }
       case IROpcode.INLINE_ASM: {
         const asm = inst as InlineAsmInst;
-        return `call void asm sideeffect inteldialect "${asm.asm}", "${asm.constraints}"(${asm.args.map((a) => "ptr " + a).join(", ")})`;
+        const constraintList = asm.constraints
+          .split(",")
+          .filter((c) => !c.startsWith("~"));
+        const args = asm.args
+          .map((a, index) => {
+            const constraint = constraintList[index] || "";
+            const typeStr = this.typeToString(a.type);
+            if (
+              constraint.includes("*") &&
+              a.type.type === "pointer" &&
+              a.type.base
+            ) {
+              return `${typeStr} elementtype(${this.typeToString(a.type.base)}) ${a.value}`;
+            }
+            return `${typeStr} ${a.value}`;
+          })
+          .join(", ");
+        return `call void asm sideeffect inteldialect "${asm.asm}", "${asm.constraints}"(${args})`;
       }
       case IROpcode.SEXT:
       case IROpcode.ZEXT:
@@ -214,12 +235,17 @@ export class LLVMTargetBuilder implements TargetBuilder {
     if (op === "fmod") llvmOp = "frem";
     if (op === "shr") llvmOp = "ashr"; // Default to arithmetic shift right
     if (op === "shl") llvmOp = "shl";
-    if (["eq", "ne", "lt", "gt", "le", "ge"].includes(op)) {
+    if (
+      ["eq", "ne", "lt", "gt", "le", "ge", "ult", "ugt", "ule", "uge"].includes(
+        op,
+      )
+    ) {
       let pred = op;
       if (op === "lt") pred = "slt";
       if (op === "gt") pred = "sgt";
       if (op === "le") pred = "sle";
       if (op === "ge") pred = "sge";
+      // ult, ugt, ule, uge are already correct predicates
       llvmOp = "icmp " + pred;
     }
     if (["foeq", "fone", "folt", "fogt", "fole", "foge"].includes(op)) {

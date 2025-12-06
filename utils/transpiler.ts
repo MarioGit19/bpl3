@@ -1,4 +1,5 @@
 import { dirname, resolve } from "path";
+import { existsSync } from "fs";
 
 import { ErrorReporter, CompilerError } from "../errors";
 import { MemorySafetyAnalyzer } from "../transpiler/analysis/MemorySafetyAnalyzer";
@@ -30,7 +31,7 @@ export function transpileProgram(program: ProgramExpr, scope?: Scope): string {
   analyzer.analyze(program, scope, true);
 
   for (const warning of analyzer.warnings) {
-    // ErrorReporter.warn(warning);
+    ErrorReporter.warn(warning);
   }
 
   // Run memory safety analysis
@@ -42,7 +43,7 @@ export function transpileProgram(program: ProgramExpr, scope?: Scope): string {
   }
 
   for (const warning of memorySafety.warnings) {
-    // ErrorReporter.warn(warning);
+    ErrorReporter.warn(warning);
   }
 
   // Halt compilation if memory safety errors were found
@@ -65,6 +66,7 @@ export function parseLibraryFile(
   libFilePath: string,
   scope: Scope,
   visited: Set<string> = new Set(),
+  moduleCache: Map<string, Scope> = new Map(),
 ): string[] {
   const absoluteLibPath = resolve(libFilePath);
   if (visited.has(absoluteLibPath)) {
@@ -96,28 +98,48 @@ export function parseLibraryFile(
       const libDir = dirname(resolve(libFilePath));
       absolutePath = resolve(libDir, moduleName);
     } else {
-      continue;
+      // Try to resolve from lib directory
+      const libPath = resolve(__dirname, "../lib", moduleName);
+      if (existsSync(libPath)) {
+        absolutePath = libPath;
+      } else {
+        continue;
+      }
     }
 
     if (absolutePath.endsWith(".x")) {
-      const importedScope = new Scope();
+      let importedScope: Scope;
+      let shouldTranspile = true;
+
+      if (moduleCache.has(absolutePath)) {
+        importedScope = moduleCache.get(absolutePath)!;
+        shouldTranspile = false;
+      } else {
+        importedScope = new Scope();
+        moduleCache.set(absolutePath, importedScope);
+      }
+
       try {
-        const nestedLibs = parseLibraryFile(
-          absolutePath,
-          importedScope,
-          visited,
-        );
-        objectFiles.push(...nestedLibs);
+        if (shouldTranspile) {
+          const nestedLibs = parseLibraryFile(
+            absolutePath,
+            importedScope,
+            visited,
+            moduleCache,
+          );
+          objectFiles.push(...nestedLibs);
+
+          const importedProgram = parseFile(absolutePath);
+
+          const asmContent = transpileProgram(importedProgram, importedScope);
+
+          const asmFile = absolutePath.replace(/\.x$/, ".ll");
+          saveToFile(asmFile, asmContent);
+          const objFile = compileLlvmIrToObject(asmFile);
+          objectFiles.push(objFile);
+        }
 
         const importedProgram = parseFile(absolutePath);
-
-        const asmContent = transpileProgram(importedProgram, importedScope);
-
-        const asmFile = absolutePath.replace(/\.x$/, ".ll");
-        saveToFile(asmFile, asmContent);
-        const objFile = compileLlvmIrToObject(asmFile);
-        objectFiles.push(objFile);
-
         const importedExports = extractExportStatements(
           importedProgram,
         ) as ExportExpr[];

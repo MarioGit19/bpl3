@@ -276,7 +276,6 @@ local arr_size: u64 = sizeof(u64) * 10;
 local ptr: *u8 = call malloc(sizeof(MyStruct));
 ```
 
-
 ```
 
 ```

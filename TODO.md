@@ -1,5 +1,4 @@
 [x] - Introduce intermediate representation (IR) for transformations
-[ ] - Add plugin system for custom passes
 [x] - Create performance benchmarks and profiling scripts
 [x] - Implement advanced optimization passes (loop unrolling, inlining)
 [ ] - Add support for custom calling conventions
@@ -13,5 +12,7 @@
 [x] - Support cross-compilation to multiple assembly dialects
 [x] - Add static analysis for undefined behavior detection
 [x] - Add memory safety verification pass
-[ ] - Implement optimization hints and pragmas
 [x] - Create interactive tutorial and playground
+[ ] - Implement plugin architecture for extensibility
+[x] - Add code formatting and linting tools
+[ ] - Improve error reporting with suggestions
