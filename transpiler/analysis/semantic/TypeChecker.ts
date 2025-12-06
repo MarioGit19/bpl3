@@ -225,6 +225,15 @@ export class TypeChecker {
     const expSize = this.getIntSize(expected.name);
     const actSize = this.getIntSize(actual.name);
     if (expSize && actSize) {
+      // Check if literal fits in expected type
+      if (actual.isLiteral && typeof actual.literalValue === "number") {
+        const val = actual.literalValue;
+        const range = this.getIntRange(expected.name);
+        if (range && val >= range[0] && val <= range[1]) {
+          return null; // Fits, no warning
+        }
+      }
+
       if (expSize > actSize) {
         return `Implicit integer promotion from '${actual.name}' to '${expected.name}'`;
       }
@@ -240,6 +249,29 @@ export class TypeChecker {
     }
 
     return null;
+  }
+
+  public getIntRange(name: string): [number, number] | null {
+    switch (name) {
+      case "i8":
+        return [-128, 127];
+      case "u8":
+        return [0, 255];
+      case "i16":
+        return [-32768, 32767];
+      case "u16":
+        return [0, 65535];
+      case "i32":
+        return [-2147483648, 2147483647];
+      case "u32":
+        return [0, 4294967295];
+      case "i64":
+        return [Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER];
+      case "u64":
+        return [0, Number.MAX_SAFE_INTEGER];
+      default:
+        return null;
+    }
   }
 
   public getIntSize(name: string): number {

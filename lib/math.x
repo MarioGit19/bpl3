@@ -61,7 +61,7 @@ frame lcm(a: u64, b: u64) ret u64 {
     if a == 0 || b == 0 {
         return 0;
     }
-    return (a * b) / call gcd(a, b);
+    return a * b // call gcd(a, b);
 }
 
 export min_u64;

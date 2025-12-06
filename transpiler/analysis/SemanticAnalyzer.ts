@@ -242,9 +242,21 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
       case ExpressionType.NumberLiteralExpr: {
         const numExpr = expr as NumberLiteralExpr;
         if (numExpr.value.includes(".")) {
-          return { name: "f64", isPointer: 0, isArray: [], isLiteral: true };
+          return {
+            name: "f64",
+            isPointer: 0,
+            isArray: [],
+            isLiteral: true,
+            literalValue: parseFloat(numExpr.value),
+          };
         }
-        return { name: "u64", isPointer: 0, isArray: [], isLiteral: true };
+        return {
+          name: "u64",
+          isPointer: 0,
+          isArray: [],
+          isLiteral: true,
+          literalValue: parseInt(numExpr.value),
+        };
       }
       case ExpressionType.StringLiteralExpr:
         return { name: "u8", isPointer: 1, isArray: [], isLiteral: true };

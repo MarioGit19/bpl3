@@ -1,5 +1,5 @@
 import strlen, popen, pclose, fread, malloc from "libc";
-extern strlen (str: *u8) ret u64;
+extern strlen(str: *u8) ret u64;
 
 frame print(s: *u8) {
     local len: u64 = call strlen(s);
@@ -31,18 +31,19 @@ frame exec(command: *u8) ret *u8 {
     if fp == NULL {
         return NULL;
     }
-    
+
     local buffer: *u8 = call malloc(4096);
     if buffer == NULL {
         call pclose(fp);
         return NULL;
     }
-    
+
     local read: u64 = call fread(buffer, 1, 4095, fp);
     buffer[read] = 0;
-    
+
     call pclose(fp);
     return buffer;
-}export print;
+}
+export print;
 export exit;
 export exec;

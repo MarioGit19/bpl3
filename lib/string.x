@@ -62,7 +62,7 @@ frame is_digit(c: u8) ret u8 {
 }
 
 frame is_alpha(c: u8) ret u8 {
-    if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
+    if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' {
         return 1;
     }
     return 0;
@@ -145,7 +145,6 @@ export is_space;
 export to_upper;
 export to_lower;
 export atoi;
-
 
 # String struct with methods
 struct String {

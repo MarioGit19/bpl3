@@ -17,6 +17,7 @@ export type VariableType = {
   isArray: number[];
   token?: Token;
   isLiteral?: boolean;
+  literalValue?: number | string;
   genericArgs?: VariableType[];
 };
 

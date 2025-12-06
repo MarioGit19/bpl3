@@ -19,23 +19,23 @@ frame main() ret u64 {
     call println_str("Testing String...");
     local s1: *u8 = "Hello";
     call printf("strlen('Hello'): %lu\n", call strlen(s1));
-    
+
     local s2: *u8 = call malloc(20);
     call strcpy(s2, "World");
     call printf("strcpy: %s\n", s2);
-    
+
     local s3: *u8 = call malloc(20);
     call strcpy(s3, "Hello");
     call strcat(s3, " World");
     call printf("strcat: %s\n", s3);
-    
+
     call printf("streq('Hello', 'Hello'): %lu\n", call streq(s1, "Hello"));
     call printf("streq('Hello', 'World'): %lu\n", call streq(s1, "World"));
-    
+
     local s4: u8[10] = "abc";
     call to_upper(s4);
     call printf("to_upper: %s\n", s4);
-    
+
     call printf("atoi('123'): %ld\n", call atoi("123"));
     call printf("atoi('-456'): %ld\n", call atoi("-456"));
 
@@ -44,17 +44,17 @@ frame main() ret u64 {
     call array_fill_u64(arr, 5, 7);
     call printf("arr[0] (fill 7): %lu\n", arr[0]);
     call printf("arr[4] (fill 7): %lu\n", arr[4]);
-    
+
     arr[0] = 1;
     arr[1] = 2;
     arr[2] = 3;
     arr[3] = 4;
     arr[4] = 5;
     call printf("sum(1..5): %lu\n", call array_sum_u64(arr, 5));
-    
+
     call array_reverse_u64(arr, 5);
     call printf("arr[0] (reversed): %lu\n", arr[0]);
-    
+
     call printf("find(3): %ld\n", call array_find_u64(arr, 5, 3));
     call printf("find(99): %ld\n", call array_find_u64(arr, 5, 99));
 
@@ -63,7 +63,7 @@ frame main() ret u64 {
     if rnd >= 10 && rnd < 20 {
         call println_str("Random OK");
     }
-    
+
     call free(s2);
     call free(s3);
 

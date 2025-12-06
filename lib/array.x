@@ -1,4 +1,4 @@
-import printf, malloc, realloc, free from 'libc';
+import printf, malloc, realloc, free from "libc";
 
 extern malloc(size: u64) ret *u8;
 extern realloc(ptr: *u8, size: u64) ret *u8;
@@ -97,7 +97,7 @@ struct Array<T> {
             if i >= this.length {
                 break;
             }
-            if call this.data[i].equals(&other.data[i]) == 0 {
+            if (call this.data[i].equals(&other.data[i])) == 0 {
                 return 0;
             }
             i = i + 1;

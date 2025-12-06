@@ -1,8 +1,7 @@
-import malloc, realloc from 'libc';
-import [Array] from './array.x';
+import malloc, realloc from "libc";
+import [Array] from "./array.x";
 
 export [Map];
-
 
 struct Map<K, V> {
     keys: Array<K>,
@@ -76,11 +75,11 @@ struct Map<K, V> {
                 }
                 this.keys.length = this.keys.length - 1;
                 this.values.length = this.values.length - 1;
-                return 1;  # Successfully deleted
+                return 1; # Successfully deleted
             }
             i = i + 1;
         }
-        return 0;  # Key not found
+        return 0; # Key not found
     }
 
     frame size() ret u64 {

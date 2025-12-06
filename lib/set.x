@@ -1,5 +1,5 @@
-import malloc, realloc from 'libc';
-import [Array] from './array.x';
+import malloc, realloc from "libc";
+import [Array] from "./array.x";
 
 struct Set<T> {
     items: Array<T>,
@@ -7,7 +7,7 @@ struct Set<T> {
     frame add(value: T) {
         # Check if value already exists
         if call this.has(value) {
-            return;  # Value already in set, don't add
+            return; # Value already in set, don't add
         }
         call this.items.push(value);
     }
@@ -44,11 +44,11 @@ struct Set<T> {
                     j = j + 1;
                 }
                 this.items.length = this.items.length - 1;
-                return 1;  # Successfully deleted
+                return 1; # Successfully deleted
             }
             i = i + 1;
         }
-        return 0;  # Item not found
+        return 0; # Item not found
     }
 
     frame size() ret u64 {
@@ -63,6 +63,5 @@ struct Set<T> {
         return &this.items;
     }
 }
-
 
 export [Set];
