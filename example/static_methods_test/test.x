@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 struct Math {
 
@@ -22,13 +22,13 @@ struct Counter {
 frame main() {
     # Test static method call
     local sum: i32 = call Math.add(10, 20);
-    call printf("Sum: %d\n", sum);
+    call Console.log("Sum: ", sum);
 
     # Test static factory method
     local c: Counter = call Counter.new(5);
-    call printf("Counter start: %d\n", c.count);
+    call Console.log("Counter start: ", c.count);
 
     # Test instance method
     call c.increment();
-    call printf("Counter after inc: %d\n", c.count);
+    call Console.log("Counter after inc: ", c.count);
 }

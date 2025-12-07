@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame identity(x: T) ret T {
     return x;

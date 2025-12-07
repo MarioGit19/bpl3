@@ -268,8 +268,14 @@ export class IRGenerator {
         case "div":
           op = IROpcode.DIV;
           break;
+        case "udiv":
+          op = IROpcode.UDIV;
+          break;
         case "mod":
           op = IROpcode.MOD;
+          break;
+        case "umod":
+          op = IROpcode.UMOD;
           break;
         case "and":
           op = IROpcode.AND;
@@ -545,6 +551,15 @@ export class IRGenerator {
     if (type.isArray.length > 0) {
       const base = this.getIRType({ ...type, isArray: type.isArray.slice(1) });
       const size = type.isArray[0];
+
+      if (size === -1) {
+        // Slice: struct { data: *T, length: i64 }
+        return {
+          type: "literal_struct",
+          fields: [{ type: "pointer", base }, { type: "i64" }],
+        };
+      }
+
       if (size === undefined) {
         throw new Error("Array size must be defined");
       }

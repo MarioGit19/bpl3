@@ -3,7 +3,8 @@ import register_user, login_user from "./auth.x";
 import init_rooms, list_available_rooms, get_room from "./rooms.x";
 import create_reservation, check_reservation, change_reservation from "./reservations.x";
 import read_string, print_menu, print_user_menu from "./utils.x";
-import printf, scanf from "libc";
+import scanf from "libc";
+import [Console] from "std/io.x";
 import exit from "std";
 
 frame main() ret u64 {
@@ -25,27 +26,27 @@ frame main() ret u64 {
             call scanf("%d", &choice);
 
             if choice == 1 { # Login
-                call printf("Username: ");
+                call Console.print("Username: ");
                 call read_string(username, 32);
-                call printf("Password: ");
+                call Console.print("Password: ");
                 call read_string(password, 32);
                 current_user = call login_user(username, password);
                 if current_user != NULL {
-                    call printf("Login successful! Welcome, %s.\n", current_user.username);
+                    call Console.log("Login successful! Welcome, ", current_user.username, ".");
                 } else {
-                    call printf("Login failed.\n");
+                    call Console.log("Login failed.");
                 }
             } else if choice == 2 { # Register
-                call printf("New Username: ");
+                call Console.print("New Username: ");
                 call read_string(username, 32);
-                call printf("New Password: ");
+                call Console.print("New Password: ");
                 call read_string(password, 32);
                 call register_user(username, password);
             } else if choice == 3 { # Exit
-                call printf("Goodbye!\n");
+                call Console.log("Goodbye!");
                 call exit(0);
             } else {
-                call printf("Invalid option.\n");
+                call Console.log("Invalid option.");
             }
         } else {
             call print_user_menu();
@@ -53,35 +54,35 @@ frame main() ret u64 {
 
             if choice == 1 { # Reserve Room
                 call list_available_rooms();
-                call printf("Enter Room Number to reserve (0 to cancel): ");
+                call Console.print("Enter Room Number to reserve (0 to cancel): ");
                 call scanf("%d", &room_num);
                 if room_num != 0 {
                     room = call get_room(room_num);
                     if room != NULL {
                         if room.is_reserved == 0 {
-                            call printf("Enter number of nights: ");
+                            call Console.print("Enter number of nights: ");
                             call scanf("%d", &nights);
                             call create_reservation(current_user, room, nights);
                         } else {
-                            call printf("Room is already reserved.\n");
+                            call Console.log("Room is already reserved.");
                         }
                     } else {
-                        call printf("Room not found.\n");
+                        call Console.log("Room not found.");
                     }
                 }
             } else if choice == 2 { # Check Reservation
                 call check_reservation(current_user);
             } else if choice == 3 { # Change Reservation
-                call printf("Enter Reservation ID to change: ");
+                call Console.print("Enter Reservation ID to change: ");
                 call scanf("%lu", &res_id);
-                call printf("Enter new number of nights: ");
+                call Console.print("Enter new number of nights: ");
                 call scanf("%d", &new_nights);
                 call change_reservation(current_user, res_id, new_nights);
             } else if choice == 4 { # Logout
                 current_user = NULL;
-                call printf("Logged out.\n");
+                call Console.log("Logged out.");
             } else {
-                call printf("Invalid option.\n");
+                call Console.log("Invalid option.");
             }
         }
     }

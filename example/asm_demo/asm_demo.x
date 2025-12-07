@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame get_rnd_u64() ret u64 {
     local rnd: u64 = 0;
@@ -14,7 +14,7 @@ frame main() ret u8 {
     local b: u64 = 20;
     local result: u64 = 0;
 
-    call printf("Before ASM: a=%d, b=%d, result=%d\n", a, b, result);
+    call Console.log("Before ASM: a=", a, ", b=", b, ", result=", result);
 
     asm {
         mov rax, [(a)] ; Load 'a' into rax
@@ -22,7 +22,7 @@ frame main() ret u8 {
         mov [(result)], rax ; Store result in 'result'
     }
 
-    call printf("After ASM (a + b): result=%d\n", result);
+    call Console.log("After ASM (a + b): result=", result);
 
     # Another example: direct syscall using asm
     # We will write "Hi\n" to stdout (fd 1)
@@ -42,7 +42,7 @@ frame main() ret u8 {
     # Another example: calling get_rnd_u64 from asm
     local random_value: u64 = 0;
     random_value = call get_rnd_u64();
-    call printf("Random value from get_rnd_u64: %llu\n", random_value);
+    call Console.log("Random value from get_rnd_u64: ", random_value);
 
     return 0;
 }

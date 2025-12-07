@@ -3,7 +3,7 @@ import [Rectangle] from "./shapes.x";
 import magnitudeSquared from "./vector.x";
 import rectArea from "./area.x";
 import logNumber, logGlobal from "./printer.x";
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame main() ret u8 {
     local p: Point = {x: 5, y: 4};

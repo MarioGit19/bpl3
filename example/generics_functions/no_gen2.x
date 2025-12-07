@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame identity(x: u64) ret u64 {
     return x;
@@ -6,6 +6,6 @@ frame identity(x: u64) ret u64 {
 
 frame main() ret i32 {
     local y: u64 = call identity(42);
-    call printf("%llu\n", y);
+    call Console.log(y);
     return 0;
 }

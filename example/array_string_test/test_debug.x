@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 import [Array] from "std/array.x";
 
 frame main() {
@@ -8,7 +8,7 @@ frame main() {
     call arr.push(10);
     call arr.push(20);
     call arr.push(30);
-    call printf("Array length: %d\n", call arr.len());
-    call printf("Array pop: %d\n", call arr.pop());
-    call printf("Array length after pop: %d\n", call arr.len());
+    call Console.log("Array length: ", call arr.len());
+    call Console.log("Array pop: ", call arr.pop());
+    call Console.log("Array length after pop: ", call arr.len());
 }

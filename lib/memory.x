@@ -16,7 +16,7 @@ frame init_heap() {
     HEAP_END = HEAP_START + HEAP_SIZE;
 }
 
-frame malloc(size: u64) ret *u8 {
+frame std_malloc(size: u64) ret *u8 {
     if HEAP_START == NULL {
         call init_heap();
     }
@@ -42,13 +42,13 @@ frame malloc(size: u64) ret *u8 {
     return user_ptr;
 }
 
-frame free(ptr: *u8) {
+frame std_free(ptr: *u8) {
     # No-op for bump allocator
 }
 
-frame realloc(ptr: *u8, new_size: u64) ret *u8 {
+frame std_realloc(ptr: *u8, new_size: u64) ret *u8 {
     if ptr == NULL {
-        return call malloc(new_size);
+        return call std_malloc(new_size);
     }
 
     local header_ptr: *u64 = cast<*u64>(ptr - 8);
@@ -58,7 +58,7 @@ frame realloc(ptr: *u8, new_size: u64) ret *u8 {
         return ptr;
     }
 
-    local new_ptr: *u8 = call malloc(new_size);
+    local new_ptr: *u8 = call std_malloc(new_size);
     if new_ptr == NULL {
         return NULL;
     }
@@ -76,6 +76,6 @@ frame realloc(ptr: *u8, new_size: u64) ret *u8 {
     return new_ptr;
 }
 
-export malloc;
-export free;
-export realloc;
+export std_malloc;
+export std_free;
+export std_realloc;

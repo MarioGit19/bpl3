@@ -1,5 +1,5 @@
 import [Array] from "std/array.x";
-import printf from "libc";
+import [Console] from "std/io.x";
 import assert from "./utils.x";
 
 frame main() {

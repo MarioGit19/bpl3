@@ -1,21 +1,21 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame test_switch(val: u64) {
     switch val {
         case 1: {
-            call printf("One\n");
+            call Console.log("One");
         }
         case 2: {
-            call printf("Two\n");
+            call Console.log("Two");
         }
         case 3: {
-            call printf("Three\n");
+            call Console.log("Three");
         }
         case 10: {
-            call printf("Ten\n");
+            call Console.log("Ten");
         }
         default: {
-            call printf("Other: %d\n", val);
+            call Console.log("Other: ", val);
         }
     }
 }

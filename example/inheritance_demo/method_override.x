@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 struct Animal {
     species: *u8,
@@ -8,7 +8,7 @@ struct Animal {
     }
 
     frame speak() {
-        call printf("The %s makes a sound.\n", this.species);
+        call Console.log("The ", this.species, " makes a sound.");
     }
 }
 
@@ -23,7 +23,7 @@ struct Dog: Animal {
     frame speak() {
         # Overrides Animal.speak
 
-        call printf("The %s (%s) barks: Woof!\n", this.species, this.breed);
+        call Console.log("The ", this.species, " (", this.breed, ") barks: Woof!");
     }
 }
 
@@ -38,7 +38,7 @@ struct Cat: Animal {
     frame speak() {
         # Overrides Animal.speak
 
-        call printf("The %s meows. Lives left: %d\n", this.species, this.lives);
+        call Console.log("The ", this.species, " meows. Lives left: ", this.lives);
     }
 }
 

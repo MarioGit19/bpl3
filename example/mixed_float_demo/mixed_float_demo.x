@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame main() ret u64 {
     local f: f64 = 10.5;
@@ -13,7 +13,7 @@ frame main() ret u64 {
     local f2: f64 = 1.5;
     local res4: f64 = f + f2; # 12.0
 
-    call printf("res1: %f, res2: %f, res3: %f, res4: %f\n", res1, res2, res3, res4);
+    call Console.log("res1: ", res1, ", res2: ", res2, ", res3: ", res3, ", res4: ", res4);
 
     return 0;
 }

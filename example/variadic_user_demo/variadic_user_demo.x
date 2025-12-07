@@ -1,6 +1,6 @@
-import printf, free, malloc from "libc";
+import free, malloc from "libc";
+import [Console] from "std/io.x";
 
-extern printf(fmt: *u8, ...);
 extern malloc(size: u64) ret *u8;
 extern free(ptr: *u8);
 
@@ -45,12 +45,12 @@ frame concat_strings(count: u64, dest: *u8, ...:u64) {
 
 frame main() ret u64 {
     local sumRes: u64 = call sum(5, 10, 20, 30, 40, 50);
-    call printf("Sum result: %d\n", sumRes);
+    call Console.log("Sum result: ", sumRes);
 
     local res3: *u8 = call malloc(128);
 
     call concat_strings(4, res3, "Hello, ", "variadic ", "world!", "\n");
-    call printf("Final string: %s\n", res3);
+    call Console.log("Final string: ", res3);
     call free(res3);
 
     return 0;

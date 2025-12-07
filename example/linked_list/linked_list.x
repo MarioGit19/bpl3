@@ -1,5 +1,6 @@
 import print, exit from "std";
-import printf, malloc, free from "libc";
+import malloc, free from "libc";
+import [Console] from "std/io.x";
 
 extern malloc(size: u64) ret *u8;
 
@@ -44,10 +45,10 @@ frame print_list(head: *Node) {
         if current == NULL {
             break;
         }
-        call printf("%d -> ", current.value);
+        call Console.print(current.value, " -> ");
         current = current.next;
     }
-    call printf("NULL\n");
+    call Console.log("NULL");
 }
 
 frame free_list(head: *Node) {

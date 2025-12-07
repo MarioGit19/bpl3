@@ -1,4 +1,5 @@
-import printf, malloc, realloc, free, cast from "libc";
+import malloc, realloc, free, cast from "libc";
+import [Console] from "std/io.x";
 
 extern malloc(size: u64) ret *u8;
 extern realloc(ptr: *u8, size: u64) ret *u8;
@@ -18,10 +19,10 @@ frame main() ret i32 {
     data[4] = 50;
     length = 5;
 
-    call printf("Array length: %llu\n", length);
-    call printf("Array capacity: %llu\n", capacity);
-    call printf("First element: %llu\n", data[0]);
-    call printf("Last element: %llu\n", data[length - 1]);
+    call Console.log("Array length: ", length);
+    call Console.log("Array capacity: ", capacity);
+    call Console.log("First element: ", data[0]);
+    call Console.log("Last element: ", data[length - 1]);
 
     # Grow array
     local i: u64 = 5;
@@ -38,9 +39,9 @@ frame main() ret i32 {
         i = i + 1;
     }
 
-    call printf("After growth - length: %llu, capacity: %llu\n", length, capacity);
-    call printf("Element at index 10: %llu\n", data[10]);
-    call printf("Element at index 15: %llu\n", data[15]);
+    call Console.log("After growth - length: ", length, "lu, capacity: ", capacity);
+    call Console.log("Element at index 10: ", data[10]);
+    call Console.log("Element at index 15: ", data[15]);
 
     # Cleanup
     call free(cast<*u8>(data));

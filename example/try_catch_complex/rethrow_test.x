@@ -1,4 +1,5 @@
-import printf, exit from "libc";
+import exit from "libc";
+import [Console] from "std/io.x";
 
 struct MyError {
     code: u32,
@@ -10,21 +11,21 @@ frame rethrow_helper() {
         err.code = 500;
         throw err;
     } catch (e: MyError) {
-        call printf("Caught error in helper: %d. Rethrowing...\n", e.code);
+        call Console.log("Caught error in helper: ", e.code, ". Rethrowing...");
         throw e;
     }
 }
 
 frame main() {
-    call printf("Testing rethrow...\n");
+    call Console.log("Testing rethrow...");
     try {
         call rethrow_helper();
     } catch (e: MyError) {
-        call printf("Caught rethrown error in main: %d\n", e.code);
+        call Console.log("Caught rethrown error in main: ", e.code);
         if e.code == 500 {
-            call printf("Rethrow verification passed.\n");
+            call Console.log("Rethrow verification passed.");
         } else {
-            call printf("Rethrow verification failed.\n");
+            call Console.log("Rethrow verification failed.");
             call exit(1);
         }
     }

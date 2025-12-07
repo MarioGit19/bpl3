@@ -328,10 +328,10 @@ export default class BinaryExpr extends Expression {
         opcode = IROpcode.MUL;
         break;
       case TokenType.SLASH_SLASH:
-        opcode = IROpcode.DIV;
+        opcode = isUnsigned ? IROpcode.UDIV : IROpcode.DIV;
         break;
       case TokenType.PERCENT:
-        opcode = IROpcode.MOD;
+        opcode = isUnsigned ? IROpcode.UMOD : IROpcode.MOD;
         break;
       case TokenType.AMPERSAND:
         opcode = IROpcode.AND;

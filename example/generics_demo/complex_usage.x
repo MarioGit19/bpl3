@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 struct ArrayWrapper<T> {
     data: T[5],
@@ -24,20 +24,20 @@ frame main() ret u64 {
     aw.data[0] = 10;
     aw.data[1] = 20;
     aw.data[4] = 50;
-    call printf("ArrayWrapper: %lu, %lu, %lu\n", aw.data[0], aw.data[1], aw.data[4]);
+    call Console.log("ArrayWrapper: ", aw.data[0], ", ", aw.data[1], ", ", aw.data[4]);
 
     # 2. Generic with Pointer
     local val: u64 = 123;
     local pw: PointerWrapper<u64>;
     pw.ptr = &val;
-    call printf("PointerWrapper: %lu\n", *pw.ptr);
+    call Console.log("PointerWrapper: ", *pw.ptr, "u");
 
     # 3. Mixed Generics
     local t: Triple<u8, u16, u32>;
     t.p.first = 1;
     t.p.second = 2;
     t.third = 3;
-    call printf("Triple: %d, %d, %d\n", t.p.first, t.p.second, t.third);
+    call Console.log("Triple: ", t.p.first, ", ", t.p.second, ", ", t.third);
 
     # 4. Generic Struct with Generic Struct Field
     local p1: Pair<u64, u64>;
@@ -48,6 +48,6 @@ frame main() ret u64 {
     p2.first = p1;
     p2.second = 300;
 
-    call printf("Nested Pair: %lu, %lu, %lu\n", p2.first.first, p2.first.second, p2.second);
+    call Console.log("Nested Pair: ", p2.first.first, ", ", p2.first.second, ", ", p2.second);
     return 0;
 }

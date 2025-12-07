@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame collatz_length(n: u64) ret u64 {
     local count: u64 = 1;
@@ -23,7 +23,7 @@ frame main() ret u64 {
     local i: u64 = 1;
     local len: u64 = 0;
 
-    call printf("Finding longest Collatz chain under %d...\n", limit);
+    call Console.log("Finding longest Collatz chain under ", limit, "...");
 
     loop {
         if i >= limit {
@@ -37,6 +37,6 @@ frame main() ret u64 {
         i = i + 1;
     }
 
-    call printf("Longest chain: %d (length %d)\n", max_n, max_len);
+    call Console.log("Longest chain: ", max_n, " (length ", max_len, ")");
     return 0;
 }

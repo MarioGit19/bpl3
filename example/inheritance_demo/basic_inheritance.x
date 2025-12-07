@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 struct Point {
     x: i32,
@@ -10,7 +10,7 @@ struct Point {
     }
 
     frame print() {
-        call printf("Point(%d, %d)\n", this.x, this.y);
+        call Console.log("Point(", this.x, ", ", this.y, ")");
     }
 }
 
@@ -24,7 +24,7 @@ struct Point3D: Point {
     }
 
     frame print3D() {
-        call printf("Point3D(%d, %d, %d)\n", this.x, this.y, this.z);
+        call Console.log("Point3D(", this.x, ", ", this.y, ", ", this.z, ")");
     }
 }
 
@@ -32,12 +32,12 @@ frame main() {
     local p: Point3D;
     call p.init3D(10, 20, 30);
 
-    call printf("Accessing inherited fields: x=%d, y=%d\n", p.x, p.y);
-    call printf("Accessing own field: z=%d\n", p.z);
+    call Console.log("Accessing inherited fields: x=", p.x, ", y=", p.y);
+    call Console.log("Accessing own field: z=", p.z);
 
-    call printf("Calling inherited method:\n");
+    call Console.log("Calling inherited method: ");
     call p.print();
 
-    call printf("Calling own method:\n");
+    call Console.log("Calling own method: ");
     call p.print3D();
 }

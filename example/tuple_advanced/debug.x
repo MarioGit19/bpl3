@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame safe_divide(a: i64, b: i64) ret (i64, u8) {
     local zero: i64 = 0;
@@ -11,15 +11,15 @@ frame safe_divide(a: i64, b: i64) ret (i64, u8) {
 }
 
 frame main() ret u8 {
-    call printf("Test: Safe division\n");
+    call Console.log("Test: Safe division");
 
     local div_result: (i64, u8) = call safe_divide(20, 4);
-    call printf("Result tuple created\n");
+    call Console.log("Result tuple created");
 
     local (quotient: i64, err: u8) = div_result;
-    call printf("Destructured\n");
+    call Console.log("Destructured");
 
-    call printf("Quotient: %lld, Error: %d\n", quotient, err);
+    call Console.log("Quotient: ", quotient, ", Error: ", err);
 
     return cast<u8>(0);
 }

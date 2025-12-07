@@ -1,6 +1,6 @@
 import print, exit from "std";
 import [File], removeFile from "std/file";
-import printf from "libc";
+import [Console] from "std/io.x";
 
 struct Player {
     id: u64,
@@ -23,7 +23,7 @@ frame main() {
     p1.health = 85;
     p1.score = 999999;
 
-    call printf("Original Player: ID=%lu, Level=%u, Health=%d, Score=%lu\n", p1.id, p1.level, p1.health, p1.score);
+    call Console.log("Original Player: ID=", p1.id, "u, Level=", p1.level, ", Health=", p1.health, ", Score=", p1.score, "u");
 
     # 2. Save Player 1 to file
     call print("Saving player to file...\n");
@@ -67,7 +67,7 @@ frame main() {
         call exit(1);
     }
 
-    call printf("Restored Player: ID=%lu, Level=%u, Health=%d, Score=%lu\n", p2.id, p2.level, p2.health, p2.score);
+    call Console.log("Restored Player: ID=", p2.id, "u, Level=", p2.level, ", Health=", p2.health, ", Score=", p2.score, "u");
 
     # 4. Verify equality
     if p1.id == p2.id {

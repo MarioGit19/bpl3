@@ -1,5 +1,6 @@
 # Standard C Library Wrappers
-import printf, malloc, free, memset, memcpy, exit, rand, srand, time, getchar, system, fopen, fclose, fread, fwrite, fseek, ftell, rewind from "libc";
+import malloc, free, memset, memcpy, exit, rand, srand, time, getchar, system, fopen, fclose, fread, fwrite, fseek, ftell, rewind from "libc";
+import [Console] from "std/io.x";
 
 extern printf(fmt: *u8, ...);
 extern malloc(size: u64) ret *u8;

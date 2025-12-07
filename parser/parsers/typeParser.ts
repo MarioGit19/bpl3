@@ -66,10 +66,8 @@ export class TypeParser {
         const sizeToken = this.parser.consume(TokenType.NUMBER_LITERAL);
         size = Number(sizeToken.value);
       } else if (this.parser.peek()?.type === TokenType.CLOSE_BRACKET) {
-        throw new CompilerError(
-          "Array size must be specified as a number literal or numeric expression.",
-          this.parser.peek()?.line || 0,
-        );
+        // Allow empty brackets for slice type (T[])
+        size = -1;
       }
 
       this.parser.consume(

@@ -62,6 +62,22 @@ export default class MemberAccessExpr extends Expression {
         return null;
       } else {
         // Member or tuple element access
+
+        // Handle slice properties
+        if (objectType.isArray.length > 0 && objectType.isArray[0] === -1) {
+          const propertyName = (expr.property as IdentifierExpr).name;
+          if (propertyName === "length") {
+            return { name: "u64", isPointer: 0, isArray: [] };
+          }
+          if (propertyName === "data") {
+            return {
+              name: objectType.name,
+              isPointer: objectType.isPointer + 1,
+              isArray: [],
+            };
+          }
+        }
+
         // Check if it's a tuple
         if (objectType.tupleElements && objectType.tupleElements.length > 0) {
           const propertyExpr = expr.property;
@@ -276,7 +292,7 @@ export default class MemberAccessExpr extends Expression {
 
     if (objectType.isPointer > 0) {
       basePtr = this.object.toIR(gen, scope);
-    } else if (objectType.isArray.length > 0) {
+    } else if (objectType.isArray.length > 0 && objectType.isArray[0] !== -1) {
       basePtr = this.object.toIR(gen, scope);
     } else {
       basePtr = this.object.getAddress(gen, scope);
@@ -312,6 +328,18 @@ export default class MemberAccessExpr extends Expression {
       const irElemType = gen.getIRType(elemType);
       return gen.emitGEP(irElemType, basePtr, [index]);
     } else {
+      // Handle slice properties
+      if (objectType.isArray.length > 0 && objectType.isArray[0] === -1) {
+        const propertyName = (this.property as IdentifierExpr).name;
+        const structType = gen.getIRType(objectType);
+        if (propertyName === "length") {
+          return gen.emitGEP(structType, basePtr, ["0", "1"]);
+        }
+        if (propertyName === "data") {
+          return gen.emitGEP(structType, basePtr, ["0", "0"]);
+        }
+      }
+
       // Check if accessing tuple element
       if (objectType.tupleElements && objectType.tupleElements.length > 0) {
         if (this.property instanceof NumberLiteralExpr) {

@@ -1,4 +1,4 @@
-import malloc, realloc, free from "std/memory.x";
+import std_malloc, std_realloc, std_free from "std/memory.x";
 
 # Generic Array struct with methods
 struct Array<T> {
@@ -9,11 +9,11 @@ struct Array<T> {
     frame push(value: T) {
         if this.capacity == 0 {
             this.capacity = 4;
-            this.data = cast<*T>(call malloc(this.capacity * sizeof(T)));
+            this.data = cast<*T>(call std_malloc(this.capacity * sizeof(T)));
             this.length = 0;
         } else if this.length >= this.capacity {
             this.capacity = this.capacity * 2;
-            this.data = cast<*T>(call realloc(cast<*u8>(this.data), this.capacity * sizeof(T)));
+            this.data = cast<*T>(call std_realloc(cast<*u8>(this.data), this.capacity * sizeof(T)));
         }
 
         this.data[this.length] = value;
@@ -48,7 +48,7 @@ struct Array<T> {
 
     frame free() {
         if this.data != NULL {
-            call free(cast<*u8>(this.data));
+            call std_free(cast<*u8>(this.data));
             this.data = NULL;
         }
         this.length = 0;
@@ -84,7 +84,7 @@ struct Array<T> {
         this.length = this.length - 1;
     }
 
-    frame equals(other: *Array<T>) ret u8 {
+    frame equals(other: *Array<T>) ret u64 {
         if this.length != other.length {
             return 0;
         }
@@ -99,6 +99,45 @@ struct Array<T> {
             i = i + 1;
         }
         return 1;
+    }
+
+    static empty(capacity: u64) ret Array<T> {
+        local arr: Array<T>;
+        if capacity > 0 {
+            arr.capacity = capacity;
+            arr.data = cast<*T>(call std_malloc(capacity * sizeof(T)));
+        } else {
+            arr.capacity = 0;
+            arr.data = NULL;
+        }
+        arr.length = 0;
+        return arr;
+    }
+
+    static new(items: T[]) ret Array<T> {
+        local arr: Array<T>;
+        local size: u64 = items.length;
+
+        if size > 0 {
+            arr.capacity = size;
+            arr.data = cast<*T>(call std_malloc(size * sizeof(T)));
+
+            local i: u64 = 0;
+            loop {
+                if i >= size {
+                    break;
+                }
+                arr.data[i] = items.data[i];
+                i = i + 1;
+            }
+
+            arr.length = size;
+        } else {
+            arr.capacity = 0;
+            arr.data = NULL;
+            arr.length = 0;
+        }
+        return arr;
     }
 }
 

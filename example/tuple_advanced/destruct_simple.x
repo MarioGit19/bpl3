@@ -1,8 +1,8 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame main() ret u8 {
     local t: (i64, i64) = (10, 20);
     local (a: i64, b: i64) = t;
-    call printf("a=%ld, b=%ld\n", a, b);
+    call Console.log("a=", a, ", b=", b);
     return 0;
 }

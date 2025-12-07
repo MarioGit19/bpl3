@@ -1,31 +1,32 @@
 import [File], removeFile from "std/file.x";
-import print_str, println from "std/io.x";
-import streq from "std/string.x";
+import [Console] from "std/io.x";
+import [String] from "std/string.x";
 
 frame main() {
-    call print_str("--- Testing File I/O ---\n");
+    call Console.print_str("--- Testing File I/O ---\n");
 
+    local _dummy: String; # Workaround for compiler bug
     local filename: *u8 = "test_file.txt";
     local file: File;
 
     # Test Write
-    call print_str("Opening file for writing...\n");
+    call Console.print_str("Opening file for writing...\n");
     if (call file.open(filename, "w")) == 0 {
-        call print_str("Failed to open file for writing\n");
+        call Console.print_str("Failed to open file for writing\n");
         return;
     }
 
-    call print_str("Writing data...\n");
+    call Console.print_str("Writing data...\n");
     call file.writeString("Hello File I/O!\n");
     call file.writeString("Second line.\n");
 
     call file.close();
-    call print_str("File closed.\n");
+    call Console.print_str("File closed.\n");
 
     # Test Read
-    call print_str("Opening file for reading...\n");
+    call Console.print_str("Opening file for reading...\n");
     if (call file.open(filename, "r")) == 0 {
-        call print_str("Failed to open file for reading\n");
+        call Console.print_str("Failed to open file for reading\n");
         return;
     }
 
@@ -40,17 +41,17 @@ frame main() {
         i = i + 1;
     }
 
-    call print_str("Reading data...\n");
+    call Console.print_str("Reading data...\n");
     local bytes_read: u64 = call file.read(cast<*u8>(buffer), 99);
-    call print_str("Read ");
-    call print_str(" bytes:\n");
-    call print_str(cast<*u8>(buffer));
+    call Console.print_str("Read ");
+    call Console.print_str(" bytes:\n");
+    call Console.print_str(cast<*u8>(buffer));
 
     call file.close();
 
     # Cleanup
-    call print_str("Removing file...\n");
+    call Console.print_str("Removing file...\n");
     call removeFile(filename);
 
-    call print_str("--- File Test Complete ---\n");
+    call Console.print_str("--- File Test Complete ---\n");
 }

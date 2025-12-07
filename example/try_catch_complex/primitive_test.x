@@ -1,29 +1,30 @@
-import printf, exit from "libc";
+import exit from "libc";
+import [Console] from "std/io.x";
 
 frame test_u64() {
-    call printf("Testing u64 throw...\n");
+    call Console.log("Testing u64 throw...");
     try {
         throw 12345;
     } catch (e: u64) {
-        call printf("Caught u64: %lu\n", e);
+        call Console.log("Caught u64: ", e, "u");
         if e != 12345 {
-            call printf("u64 verification failed.\n");
+            call Console.log("u64 verification failed.");
             call exit(1);
         }
     }
 }
 
 frame test_string() {
-    call printf("Testing string throw...\n");
+    call Console.log("Testing string throw...");
     try {
         throw "Error Message";
     } catch (e: *u8) {
-        call printf("Caught string: %s\n", e);
+        call Console.log("Caught string: ", e);
     }
 }
 
 frame main() {
     call test_u64();
     call test_string();
-    call printf("Primitive tests passed.\n");
+    call Console.log("Primitive tests passed.");
 }

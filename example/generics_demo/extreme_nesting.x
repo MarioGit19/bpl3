@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 struct Box<T> {
     value: T,
@@ -39,6 +39,6 @@ frame main() ret u64 {
 
     # Accessing the value back
     local val: u64 = b10.value.value.value.value.value.value.value.value.value.value;
-    call printf("Deeply nested value: %lu\n", val);
+    call Console.log("Deeply nested value: ", val, "u");
     return 0;
 }

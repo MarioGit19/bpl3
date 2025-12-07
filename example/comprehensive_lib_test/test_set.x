@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 import [Set] from "std/set.x";
 import [Array] from "std/array.x";
 import assert from "./utils.x";
@@ -40,12 +40,12 @@ frame main() {
     call assert((call values.len()) == 2, "Values array length is 2");
     call assert((call values.get(0)) == 1, "Value 0 is 1");
 
-    call printf("Freeing set items...\n");
+    call Console.log("Freeing set items...");
     call set.items.free();
-    call printf("Freed set items.\n");
+    call Console.log("Freed set items.");
 
     # Test Large Set (Resize)
-    call printf("Testing Large Set...\n");
+    call Console.log("Testing Large Set...");
     local largeSet: Set<u64>;
     largeSet.items.length = 0;
     largeSet.items.capacity = 0;
@@ -59,7 +59,7 @@ frame main() {
         call largeSet.add(i);
         i = i + 1;
     }
-    call printf("Large Set populated.\n");
+    call Console.log("Large Set populated.");
     call assert((call largeSet.size()) == 100, "Large set size is 100");
     call assert((call largeSet.has(50)) == 1, "Large set has 50");
     call assert((call largeSet.has(99)) == 1, "Large set has 99");
@@ -68,7 +68,7 @@ frame main() {
     call largeSet.items.free();
 
     # Test Set<u8>
-    call printf("Testing Set<u8>...\n");
+    call Console.log("Testing Set<u8>...");
     local byteSet: Set<u8>;
     byteSet.items.length = 0;
     byteSet.items.capacity = 0;

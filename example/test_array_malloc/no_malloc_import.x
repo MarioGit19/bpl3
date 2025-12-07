@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 import [Array] from "std/array.x";
 
 extern printf(format: *u8, ...);
@@ -19,11 +19,11 @@ frame main() ret i32 {
         if i >= (call numbers.len()) {
             break;
         }
-        call printf("numbers[%llu] = %llu\n", i, call numbers.get(i));
+        call Console.log("numbers[", i, "] = ", call numbers.get(i));
         i = i + 1;
     }
 
-    call printf("\nTotal elements: %llu\n", call numbers.len());
+    call Console.log("\nTotal elements: ", call numbers.len());
 
     return 0;
 }

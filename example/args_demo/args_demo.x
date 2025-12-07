@@ -1,7 +1,7 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame main(argc: u32, argv: **u8) ret u8 {
-    call printf("Number of arguments (argc): %d\n", argc);
+    call Console.log("Number of arguments (argc): ", argc);
 
     local i: u32 = 0;
     loop {
@@ -9,7 +9,7 @@ frame main(argc: u32, argv: **u8) ret u8 {
             break;
         }
         local arg: *u8 = argv[i];
-        call printf("Arg %d: %s\n", i, arg);
+        call Console.log("Arg ", i, ": ", arg);
         i = i + 1;
     }
     return 0;

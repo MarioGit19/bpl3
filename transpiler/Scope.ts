@@ -132,7 +132,8 @@ export default class Scope {
   }
 
   resolveFunction(name: string): FunctionInfo | null {
-    return this.symbolTable.getFunction(name) || null;
+    const func = this.symbolTable.getFunction(name);
+    return func || null;
   }
 
   resolveMethod(structName: string, methodName: string): FunctionInfo | null {

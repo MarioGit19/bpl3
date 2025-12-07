@@ -480,6 +480,21 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
             "Ensure the variable is an array or pointer.",
           );
         } else {
+          // Handle slice properties (T[])
+          if (objectType.isArray.length > 0 && objectType.isArray[0] === -1) {
+            const propertyName = (memberExpr.property as IdentifierExpr).name;
+            if (propertyName === "length") {
+              return { name: "u64", isPointer: 0, isArray: [] };
+            }
+            if (propertyName === "data") {
+              return {
+                name: objectType.name,
+                isPointer: objectType.isPointer + 1,
+                isArray: [],
+              };
+            }
+          }
+
           // Check for tuple access
           if (objectType.tupleElements && objectType.tupleElements.length > 0) {
             if (memberExpr.property.type === ExpressionType.NumberLiteralExpr) {
@@ -1766,7 +1781,12 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
         const ident = expr.receiver as IdentifierExpr;
         const typeInfo = scope.resolveType(ident.name);
         if (typeInfo) {
-          receiverType = { name: ident.name, isPointer: 0, isArray: [] };
+          receiverType = {
+            name: ident.name,
+            isPointer: 0,
+            isArray: [],
+            genericArgs: ident.genericArgs,
+          };
           isStaticCall = true;
         }
       }
@@ -1799,6 +1819,17 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
     // Mangle and resolve method
     const mangledName = mangleMethod(structName, expr.methodName);
     let func = scope.resolveFunction(mangledName);
+
+    // Intrinsic: Console.log / Console.print
+    if (
+      structName === "Console" &&
+      (expr.methodName === "log" || expr.methodName === "print")
+    ) {
+      for (const arg of expr.args) {
+        this.analyzeExpression(arg, scope);
+      }
+      return;
+    }
 
     // Inheritance lookup
     if (!func) {

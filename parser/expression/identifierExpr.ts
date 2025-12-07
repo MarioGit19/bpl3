@@ -3,9 +3,13 @@ import { CompilerError } from "../../errors";
 import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
+import type { VariableType } from "./variableDeclarationExpr";
 
 export default class IdentifierExpr extends Expression {
-  constructor(public name: string) {
+  constructor(
+    public name: string,
+    public genericArgs: VariableType[] = [],
+  ) {
     super(ExpressionType.IdentifierExpr);
   }
 
@@ -15,6 +19,11 @@ export default class IdentifierExpr extends Expression {
     output += "[ Identifier ]\n";
     this.depth++;
     output += this.getDepth() + `Name: ${this.name}\n`;
+    if (this.genericArgs.length > 0) {
+      output +=
+        this.getDepth() +
+        `Generic Args: <${this.genericArgs.map((a) => a.name).join(", ")}>\n`;
+    }
     this.depth--;
     output += this.getDepth() + "/[ Identifier ]\n";
     return output;

@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame ackermann(m: u64, n: u64) ret u64 {
     if m == 0 {
@@ -13,8 +13,8 @@ frame ackermann(m: u64, n: u64) ret u64 {
 frame main() ret u64 {
     local m: u64 = 3;
     local n: u64 = 11;
-    call printf("Calculating Ackermann(%d, %d)...\n", m, n);
+    call Console.log("Calculating Ackermann(", m, ", ", n, ")...");
     local res: u64 = call ackermann(m, n);
-    call printf("Result: %llu\n", res);
+    call Console.log("Result: ", res);
     return 0;
 }

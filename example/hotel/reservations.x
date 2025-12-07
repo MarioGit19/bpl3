@@ -1,5 +1,6 @@
 import [Reservation], [User], [Room] from "./types.x";
-import printf, malloc, free from "libc";
+import malloc, free from "libc";
+import [Console] from "std/io.x";
 
 extern malloc(size: u64) ret *u8;
 
@@ -7,13 +8,13 @@ global g_res_head: *Reservation = NULL;
 global g_res_id_counter: u64 = 1;
 
 frame print_invoice(res: *Reservation) {
-    call printf("\n--- INVOICE ---\n");
-    call printf("Reservation ID: %d\n", res.id);
-    call printf("User ID: %d\n", res.user_id);
-    call printf("Room Number: %d\n", res.room_number);
-    call printf("Nights: %d\n", res.nights);
-    call printf("Total Price: $%d\n", res.total_price);
-    call printf("----------------\n");
+    call Console.log("\n--- INVOICE ---");
+    call Console.log("Reservation ID: ", res.id);
+    call Console.log("User ID: ", res.user_id);
+    call Console.log("Room Number: ", res.room_number);
+    call Console.log("Nights: ", res.nights);
+    call Console.log("Total Price: $", res.total_price);
+    call Console.log("----------------");
 }
 
 frame create_reservation(user: *User, room: *Room, nights: u32) {
@@ -29,12 +30,12 @@ frame create_reservation(user: *User, room: *Room, nights: u32) {
 
     room.is_reserved = 1;
 
-    call printf("Reservation created successfully!\n");
+    call Console.log("Reservation created successfully!");
     call print_invoice(res);
 }
 
 frame check_reservation(user: *User) {
-    call printf("\nYour Reservations:\n");
+    call Console.log("\nYour Reservations: ");
     local current: *Reservation = g_res_head;
     local found: u8 = 0;
     loop {
@@ -48,7 +49,7 @@ frame check_reservation(user: *User) {
         current = current.next;
     }
     if found == 0 {
-        call printf("No reservations found.\n");
+        call Console.log("No reservations found.");
     }
 }
 
@@ -63,17 +64,17 @@ frame change_reservation(user: *User, res_id: u64, new_nights: u32) {
                 local price_per_night: u32 = current.total_price // current.nights;
                 current.nights = new_nights;
                 current.total_price = price_per_night * new_nights;
-                call printf("Reservation updated.\n");
+                call Console.log("Reservation updated.");
                 call print_invoice(current);
                 return;
             } else {
-                call printf("Error: Reservation does not belong to you.\n");
+                call Console.log("Error: Reservation does not belong to you.");
                 return;
             }
         }
         current = current.next;
     }
-    call printf("Error: Reservation not found.\n");
+    call Console.log("Error: Reservation not found.");
 }
 
 export create_reservation;

@@ -1,4 +1,5 @@
-import malloc, free, printf from "./libc.x";
+import malloc, free from "./libc.x";
+import [Console] from "std/io.x";
 
 # VM Instructions
 # 1: PUSH <val>
@@ -115,11 +116,11 @@ frame vm_run(vm: *VM) {
             vm.sp = vm.sp - 1;
             val_ptr = vm.stack + vm.sp;
             val = *val_ptr;
-            call printf("VM Output: %d\n", val);
+            call Console.log("VM Output: ", val);
         } else if instr == 8 { # HALT
             running = 0;
         } else {
-            call printf("Unknown instruction: %d\n", instr);
+            call Console.log("Unknown instruction: ", instr);
             running = 0;
         }
     }

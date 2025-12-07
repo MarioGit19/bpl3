@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame is_prime(n: u64) ret u64 {
     if n <= 1 {
@@ -26,7 +26,7 @@ frame main() ret u64 {
     local count: u64 = 0;
     local i: u64 = 0;
 
-    call printf("Counting primes up to %d...\n", limit);
+    call Console.log("Counting primes up to ", limit, "...");
 
     loop {
         if i > limit {
@@ -38,6 +38,6 @@ frame main() ret u64 {
         i = i + 1;
     }
 
-    call printf("Found %d primes.\n", count);
+    call Console.log("Found ", count, " primes.");
     return 0;
 }

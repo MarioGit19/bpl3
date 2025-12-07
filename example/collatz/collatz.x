@@ -1,8 +1,9 @@
-import scanf, printf from "libc";
+import scanf from "libc";
+import [Console] from "std/io.x";
 
 frame get_input() ret u64 {
     local n: u64;
-    call printf("Enter the number: ");
+    call Console.print("Enter the number: ");
     call scanf("%llu", &n);
     return n;
 }
@@ -11,7 +12,7 @@ frame collatz() {
     local n: u64 = call get_input();
     local c: u64 = 0;
 
-    call printf("[0]: %d\n", n);
+    call Console.log("[0]: ", n);
 
     loop {
         if n < 2 {
@@ -25,10 +26,10 @@ frame collatz() {
         }
 
         c += 1;
-        call printf("[%d]: %llu\n", c, n);
+        call Console.log("[", c, "]: ", n);
     }
 
-    call printf("Found solution in %d steps\n", c);
+    call Console.log("Found solution in ", c, " steps");
 }
 
 frame main() ret u8 {

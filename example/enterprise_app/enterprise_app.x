@@ -12,7 +12,8 @@
 # - Imports
 # ==================================================================================
 
-import printf, malloc, free, strcpy from "libc";
+import malloc, free, strcpy from "libc";
+import [Console] from "std/io.x";
 import exit from "std";
 
 extern malloc(size: u64) ret *u8;
@@ -59,7 +60,7 @@ frame create_employee(name: *u8, salary: u64) ret *Employee {
     local emp: *Employee = call malloc(96);
 
     if emp == NULL {
-        call printf("CRITICAL ERROR: Enterprise Out Of Memory!\n");
+        call Console.log("CRITICAL ERROR: Enterprise Out Of Memory!");
         call exit(1);
     }
 
@@ -69,7 +70,7 @@ frame create_employee(name: *u8, salary: u64) ret *Employee {
     emp.tasks = NULL;
     emp.next = NULL;
 
-    call printf("[LOG] Created Employee: %s (ID: %d)\n", emp.name, emp.id);
+    call Console.log("[LOG] Created Employee: ", emp.name, " (ID: ", emp.id, ")");
     return emp;
 }
 
@@ -101,7 +102,7 @@ frame add_task(emp: *Employee, desc: *u8, priority: u8) {
     task.next = emp.tasks; # Prepend to list
 
     emp.tasks = task;
-    call printf("[LOG] Assigned Task '%s' to %s\n", desc, emp.name);
+    call Console.log("[LOG] Assigned Task '", desc, "' to ", emp.name);
 }
 
 # --- Enterprise Logic ---
@@ -121,7 +122,7 @@ frame calculate_tax(salary: u64) ret u64 {
 }
 
 frame print_payroll_report() {
-    call printf("\n=== ENTERPRISE PAYROLL REPORT ===\n");
+    call Console.log("\n=== ENTERPRISE PAYROLL REPORT ===");
     local current: *Employee = head_employee;
     local total_payout: u64 = 0;
 
@@ -133,8 +134,8 @@ frame print_payroll_report() {
         local tax: u64 = call calculate_tax(current.salary);
         local net: u64 = current.salary - tax;
 
-        call printf("ID: %d | Name: %s | Gross: $%d | Tax: $%d | ", current.id, current.name, current.salary, tax);
-        call printf("Net: $%d | Role: %s\n", net, current.salary > 100000 ? "Executive" : "Staff");
+        call Console.print("ID: ", current.id, " | Name: ", current.name, " | Gross: $", current.salary, " | Tax: $", tax, " | ");
+        call Console.log("Net: $", net, " | Role: ", current.salary > 100000 ? "Executive" : "Staff");
 
         # Print Tasks
         local t: *Task = current.tasks;
@@ -142,22 +143,22 @@ frame print_payroll_report() {
             if t == NULL {
                 break;
             }
-            call printf("  - [Priority %d] Task: %s\n", t.priority, t.description);
+            call Console.log("  - [Priority ", t.priority, "] Task: ", t.description);
             t = t.next;
         }
 
         total_payout = total_payout + current.salary;
         current = current.next;
     }
-    call printf("---------------------------------\n");
-    call printf("Total Monthly Burn: $%d\n", total_payout);
-    call printf("=================================\n");
+    call Console.log("---------------------------------");
+    call Console.log("Total Monthly Burn: $", total_payout);
+    call Console.log("=================================");
 }
 
 # --- Main Execution ---
 
 frame main() ret u64 {
-    call printf("Initializing Enterprise System v1.0...\n");
+    call Console.log("Initializing Enterprise System v1.0...");
 
     # Hire Employees
     local emp1: *Employee = call create_employee("Alice CEO", 150000);

@@ -1,7 +1,7 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame util_func() {
-    call printf("Utility function called\n");
+    call Console.log("Utility function called");
 }
 
 export util_func;

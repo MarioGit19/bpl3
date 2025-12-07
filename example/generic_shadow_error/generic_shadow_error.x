@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 # This should throw an error: method generic T shadows struct generic T
 struct BadExample<T> {

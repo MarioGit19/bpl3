@@ -642,8 +642,16 @@ export class ExpressionParser {
       }
 
       // Parse generic type arguments if present
-      const genericArgs: VariableType[] = [];
-      if (this.parser.peek()?.type === TokenType.LESS_THAN) {
+      let genericArgs: VariableType[] = [];
+
+      // If the receiver identifier already has generic args (parsed in parseReceiverChain), use them
+      if (
+        potentialReceiver instanceof IdentifierExpr &&
+        potentialReceiver.genericArgs &&
+        potentialReceiver.genericArgs.length > 0
+      ) {
+        genericArgs = potentialReceiver.genericArgs;
+      } else if (this.parser.peek()?.type === TokenType.LESS_THAN) {
         this.parser.consume(TokenType.LESS_THAN);
 
         do {
@@ -687,6 +695,37 @@ export class ExpressionParser {
   parseReceiverChain(): Expression {
     return this.parser.withRange(() => {
       let expr = this.parseGrouping();
+
+      // Check for generic arguments on the identifier (e.g. Array<T>)
+      if (
+        expr instanceof IdentifierExpr &&
+        this.parser.peek()?.type === TokenType.LESS_THAN
+      ) {
+        this.parser.consume(TokenType.LESS_THAN);
+        const genericArgs: VariableType[] = [];
+        do {
+          const typeArg = this.parser.parseType();
+          genericArgs.push(typeArg);
+
+          if (this.parser.peek()?.type === TokenType.COMMA) {
+            this.parser.consume(TokenType.COMMA);
+          } else if (this.parser.peek()?.type === TokenType.GREATER_THAN) {
+            break;
+          } else {
+            throw new CompilerError(
+              "Expected ',' or '>' in generic type argument list",
+              this.parser.peek()?.line || 0,
+            );
+          }
+        } while (true);
+
+        this.parser.consume(
+          TokenType.GREATER_THAN,
+          "Expected '>' after generic type arguments",
+        );
+
+        (expr as IdentifierExpr).genericArgs = genericArgs;
+      }
 
       while (true) {
         // Check if we're at a method call pattern: .identifier( OR .identifier<

@@ -1,8 +1,9 @@
-import printf, malloc, free from "libc";
+import malloc, free from "libc";
+import [Console] from "std/io.x";
 
 frame main() ret u64 {
     local N: u64 = 500;
-    call printf("Matrix multiplication %dx%d...\n", N, N);
+    call Console.log("Matrix multiplication ", N, N, "...");
 
     local size: u64 = N * N * 8;
     local A: *u64 = cast<*u64>(call malloc(size));
@@ -47,7 +48,7 @@ frame main() ret u64 {
         row = row + 1;
     }
 
-    call printf("Done. C[0] = %llu\n", C[0]);
+    call Console.log("Done. C[0] = ", C[0]);
 
     call free(A);
     call free(B);

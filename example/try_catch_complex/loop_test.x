@@ -1,7 +1,8 @@
-import printf, exit from "libc";
+import exit from "libc";
+import [Console] from "std/io.x";
 
 frame main() {
-    call printf("Testing throw from loop...\n");
+    call Console.log("Testing throw from loop...");
     try {
         local i: u64 = 0;
         loop {
@@ -14,11 +15,11 @@ frame main() {
             i = i + 1;
         }
     } catch (e: u64) {
-        call printf("Caught from loop: %lu\n", e);
+        call Console.log("Caught from loop: ", e, "u");
         if e == 5 {
-            call printf("Loop throw verification passed.\n");
+            call Console.log("Loop throw verification passed.");
         } else {
-            call printf("Loop throw verification failed.\n");
+            call Console.log("Loop throw verification failed.");
             call exit(1);
         }
     }

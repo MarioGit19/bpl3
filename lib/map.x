@@ -1,7 +1,5 @@
-import malloc, realloc from "std/memory.x";
+import std_malloc, std_realloc from "std/memory.x";
 import [Array] from "std/array.x";
-
-export [Map];
 
 struct Map<K, V> {
     keys: Array<K>,
@@ -42,7 +40,7 @@ struct Map<K, V> {
         return v;
     }
 
-    frame has(key: K) ret u8 {
+    frame has(key: K) ret u64 {
         local i: u64 = 0;
         loop {
             if i >= this.keys.length {
@@ -56,7 +54,7 @@ struct Map<K, V> {
         return 0;
     }
 
-    frame delete(key: K) ret u8 {
+    frame delete(key: K) ret u64 {
         local i: u64 = 0;
         loop {
             if i >= this.keys.length {
@@ -90,4 +88,11 @@ struct Map<K, V> {
         call this.keys.clear();
         call this.values.clear();
     }
+
+    static new() ret Map<K, V> {
+        local map: Map<K, V>;
+        return map;
+    }
 }
+
+export [Map];

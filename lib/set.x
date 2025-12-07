@@ -1,4 +1,4 @@
-import malloc, realloc from "std/memory.x";
+import std_malloc, std_realloc from "std/memory.x";
 import [Array] from "std/array.x";
 
 struct Set<T> {
@@ -12,8 +12,11 @@ struct Set<T> {
         call this.items.push(value);
     }
 
-    frame has(value: T) ret u8 {
+    frame has(value: T) ret u64 {
         local i: u64 = 0;
+        if this.items.length == 0 {
+            return 0;
+        }
         loop {
             if i >= this.items.length {
                 break;
@@ -27,8 +30,12 @@ struct Set<T> {
         return 0;
     }
 
-    frame delete(value: T) ret u8 {
+    frame delete(value: T) ret u64 {
         local i: u64 = 0;
+        if (call this.has(value)) == 0 {
+            return 0; # Value not found
+        }
+
         loop {
             if i >= this.items.length {
                 break;
@@ -48,7 +55,7 @@ struct Set<T> {
             }
             i = i + 1;
         }
-        return 0; # Item not found
+        return 0;
     }
 
     frame size() ret u64 {
@@ -61,6 +68,11 @@ struct Set<T> {
 
     frame values() ret *Array<T> {
         return &this.items;
+    }
+
+    static new() ret Set<T> {
+        local set: Set<T>;
+        return set;
     }
 }
 

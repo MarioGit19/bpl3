@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 extern printf(fmt: *i8, ...) ret i32;
 
 frame main() ret i64 {
@@ -6,7 +6,7 @@ frame main() ret i64 {
     local b: i64 = 20;
     local c: i64 = 30;
 
-    call printf("a=%d, b=%d, c=%d\n", a, b, c);
+    call Console.log("a=", a, ", b=", b, ", c=", c);
 
     return 0;
 }

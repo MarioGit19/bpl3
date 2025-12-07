@@ -1,36 +1,38 @@
-import printf from "libc";
+import [Console] from "io.x";
 import exit from "./std.x";
 
 frame print_u64(n: u64) {
-    call printf("%lu", n);
+    call Console.print(n);
 }
 
 frame println_u64(n: u64) {
-    call printf("%lu\n", n);
+    call Console.log(n);
 }
 
 frame print_i64(n: i64) {
-    call printf("%ld", n);
+    call Console.print(n);
 }
 
 frame println_i64(n: i64) {
-    call printf("%ld\n", n);
+    call Console.log(n);
 }
 
 frame print_str(s: *u8) {
-    call printf("%s", s);
+    call Console.print(s);
 }
 
 frame println_str(s: *u8) {
-    call printf("%s\n", s);
+    call Console.log(s);
 }
 
 frame print_char(c: u8) {
-    call printf("%c", c);
+    # Console.print handles u8 as char if it's a pointer, but here it is value.
+    # Console.print_char is defined in io.x
+    call Console.print_char(c);
 }
 
 frame println() {
-    call printf("\n");
+    call Console.println();
 }
 
 frame exit_program(code: i32) {

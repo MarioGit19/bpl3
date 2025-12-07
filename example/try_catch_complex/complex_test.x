@@ -1,4 +1,5 @@
-import printf, exit from "libc";
+import exit from "libc";
+import [Console] from "std/io.x";
 
 struct ComplexError {
     id: u64,
@@ -15,7 +16,7 @@ struct DerivedError: BaseError {
 }
 
 frame test_complex_struct() {
-    call printf("Testing complex struct exception...\n");
+    call Console.log("Testing complex struct exception...");
     try {
         local err: ComplexError;
         err.id = 123;
@@ -26,19 +27,19 @@ frame test_complex_struct() {
         err.data[3] = 40;
         throw err;
     } catch (e: ComplexError) {
-        call printf("Caught ComplexError: id=%lu, msg=%s, data=[%lu, %lu, %lu, %lu]\n", e.id, e.msg, e.data[0], e.data[1], e.data[2], e.data[3]);
+        call Console.log("Caught ComplexError: id=", e.id, ", msg=", e.msg, ", data=[", e.data[0], ", ", e.data[1], ", ", e.data[2], ", ", e.data[3], "]");
 
         if e.id == 123 && e.data[3] == 40 {
-            call printf("Complex struct verification passed.\n");
+            call Console.log("Complex struct verification passed.");
         } else {
-            call printf("Complex struct verification failed.\n");
+            call Console.log("Complex struct verification failed.");
             call exit(1);
         }
     }
 }
 
 frame test_inheritance_fail() {
-    call printf("Testing inheritance exception (expecting NO catch by base)...\n");
+    call Console.log("Testing inheritance exception (expecting NO catch by base)...");
     try {
         try {
             local err: DerivedError;
@@ -46,16 +47,16 @@ frame test_inheritance_fail() {
             err.details = "Not Found";
             throw err;
         } catch (e: BaseError) {
-            call printf("Caught DerivedError as BaseError! (Unexpected for current impl)\n");
+            call Console.log("Caught DerivedError as BaseError! (Unexpected for current impl)");
             call exit(1);
         }
     } catch (e: DerivedError) {
-        call printf("Caught DerivedError explicitly. (Expected)\n");
+        call Console.log("Caught DerivedError explicitly. (Expected)");
     }
 }
 
 frame main() {
     call test_complex_struct();
     call test_inheritance_fail();
-    call printf("All tests passed.\n");
+    call Console.log("All tests passed.");
 }

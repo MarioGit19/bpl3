@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 struct Box<T> {
     value: T,
@@ -12,14 +12,14 @@ struct Pair<A, B> {
 frame main() ret u8 {
     local b: Box<u64>;
     b.value = 123;
-    call printf("%llu\n", b.value);
+    call Console.log(b.value);
 
     local p: Pair<u64, Box<u64>>;
     p.first = 456;
     p.second.value = 789;
 
-    call printf("%llu\n", p.first);
-    call printf("%llu\n", p.second.value);
+    call Console.log(p.first);
+    call Console.log(p.second.value);
 
     return 0;
 }

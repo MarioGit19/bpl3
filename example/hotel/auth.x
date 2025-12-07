@@ -1,5 +1,6 @@
 import [User] from "./types.x";
-import printf, malloc, free, strcmp, strcpy from "libc";
+import malloc, free, strcmp, strcpy from "libc";
+import [Console] from "std/io.x";
 
 extern malloc(size: u64) ret *u8;
 
@@ -13,7 +14,7 @@ frame register_user(username: *u8, password: *u8) ret u8 {
             break;
         }
         if call strcmp(current.username, username) == 0 {
-            call printf("Error: Username already exists.\n");
+            call Console.log("Error: Username already exists.");
             return 0;
         }
         current = current.next;
@@ -21,7 +22,7 @@ frame register_user(username: *u8, password: *u8) ret u8 {
 
     local new_user: *User = call malloc(80);
     if new_user == NULL {
-        call printf("Error: Memory allocation failed.\n");
+        call Console.log("Error: Memory allocation failed.");
         return 0;
     }
 
@@ -32,7 +33,7 @@ frame register_user(username: *u8, password: *u8) ret u8 {
     new_user.next = g_users_head;
     g_users_head = new_user;
 
-    call printf("User registered successfully! ID: %d\n", new_user.id);
+    call Console.log("User registered successfully! ID: ", new_user.id);
     return 1;
 }
 

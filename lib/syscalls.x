@@ -49,8 +49,8 @@ frame sys_write(fd: u64, buf: *u8, count: u64) ret u64 {
         mov rsi, [(buf)]
         mov rdx, [(count)]
         syscall
-        mov rbx, (ret_val)
-        mov [rbx], rax
+        mov rcx, (ret_val)
+        mov [rcx], rax
     }
     return ret_val;
 }
@@ -63,8 +63,8 @@ frame sys_read(fd: u64, buf: *u8, count: u64) ret u64 {
         mov rsi, [(buf)]
         mov rdx, [(count)]
         syscall
-        mov rbx, (ret_val)
-        mov [rbx], rax
+        mov rcx, (ret_val)
+        mov [rcx], rax
     }
     return ret_val;
 }
@@ -88,8 +88,8 @@ frame sys_mmap(addr: *u8, length: u64, prot: u64, flags: u64, fd: u64, offset: u
         mov r8, [(fd)]
         mov r9, [(offset)]
         syscall
-        mov rbx, (ret_val)
-        mov [rbx], rax
+        mov rcx, (ret_val)
+        mov [rcx], rax
     }
     return ret_val;
 }
@@ -101,8 +101,8 @@ frame sys_munmap(addr: *u8, length: u64) ret u64 {
         mov rdi, [(addr)]
         mov rsi, [(length)]
         syscall
-        mov rbx, (ret_val)
-        mov [rbx], rax
+        mov rcx, (ret_val)
+        mov [rcx], rax
     }
     return ret_val;
 }
@@ -115,8 +115,8 @@ frame sys_open(filename: *u8, flags: u64, mode: u64) ret u64 {
         mov rsi, [(flags)]
         mov rdx, [(mode)]
         syscall
-        mov rbx, (ret_val)
-        mov [rbx], rax
+        mov rcx, (ret_val)
+        mov [rcx], rax
     }
     return ret_val;
 }
@@ -127,8 +127,8 @@ frame sys_close(fd: u64) ret u64 {
         mov rax, 3
         mov rdi, [(fd)]
         syscall
-        mov rbx, (ret_val)
-        mov [rbx], rax
+        mov rcx, (ret_val)
+        mov [rcx], rax
     }
     return ret_val;
 }
@@ -141,8 +141,8 @@ frame sys_lseek(fd: u64, offset: u64, whence: u64) ret u64 {
         mov rsi, [(offset)]
         mov rdx, [(whence)]
         syscall
-        mov rbx, (ret_val)
-        mov [rbx], rax
+        mov rcx, (ret_val)
+        mov [rcx], rax
     }
     return ret_val;
 }
@@ -153,8 +153,8 @@ frame sys_unlink(filename: *u8) ret u64 {
         mov rax, 87
         mov rdi, [(filename)]
         syscall
-        mov rbx, (ret_val)
-        mov [rbx], rax
+        mov rcx, (ret_val)
+        mov [rcx], rax
     }
     return ret_val;
 }

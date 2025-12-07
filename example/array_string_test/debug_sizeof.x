@@ -1,13 +1,13 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 import [Array] from "std/array.x";
 import [String] from "std/string.x";
 
 frame main() {
-    call printf("sizeof(String) = %d\n", sizeof(String));
-    call printf("sizeof(Array<String>) = %d\n", sizeof(Array<String>));
+    call Console.log("sizeof(String) = ", sizeof(String));
+    call Console.log("sizeof(Array<String>) = ", sizeof(Array<String>));
 
     local arr: Array<String>;
-    call printf("arr.data before init = %p\n", arr.data);
-    call printf("arr.length before init = %d\n", arr.length);
-    call printf("arr.capacity before init = %d\n", arr.capacity);
+    call Console.log("arr.data before init = ", arr.data);
+    call Console.log("arr.length before init = ", arr.length);
+    call Console.log("arr.capacity before init = ", arr.capacity);
 }

@@ -3,7 +3,7 @@ source ../test_utils.sh
 # Configuration
 SOURCE_FILE="mixed_float_demo.x"
 INPUT=""
-EXPECTED="res1: 12.500000, res2: 12.500000, res3: 7.500000, res4: 12.000000"
+EXPECTED="res1: 12.50000000000000000, res2: 12.50000000000000000, res3: 7.50000000000000000, res4: 12.00000000000000000"
 
 # Compile
 compile "$SOURCE_FILE"

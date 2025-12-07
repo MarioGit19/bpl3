@@ -1,8 +1,9 @@
-import scanf, printf from "c";
+import scanf from "libc";
+import [Console] from "std/io.x";
 
 frame get_input() ret u64 {
     local num: u64 = 0;
-    call printf("Enter a number: ");
+    call Console.print("Enter a number: ");
     call scanf("%llu", &num);
     return num;
 }
@@ -37,7 +38,7 @@ frame fib_iterative(n: u64) {
     local temp: u64 = 0;
     local i: u64 = 0;
 
-    call printf("Iterative Sequence:\n");
+    call Console.log("Iterative Sequence: ");
     loop {
         if i >= n {
             break;
@@ -47,7 +48,9 @@ frame fib_iterative(n: u64) {
         b = temp;
         i = i + 1;
 
-        call printf("[%d]: %llu\n", i, b);
+        call Console.print("[", i, "]: ");
+        call Console.print_u64(cast<u64>(b));
+        call Console.print_str("\n");
     }
 }
 
@@ -58,9 +61,9 @@ frame main() ret u8 {
 
     n = call get_input();
 
-    call printf("\nRecursive Calculation for %d-th number:\n", n);
+    call Console.log("\nRecursive Calculation for ", n, "-th number: ");
     local res: u64 = call fib_recursive_optimized(n); # 0-indexed
-    call printf("Result: %llu\n", res);
+    call Console.log("Result: ", res);
 
     return 0;
 }

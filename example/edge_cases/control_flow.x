@@ -1,14 +1,14 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame main() ret u64 {
-    call printf("--- Control Flow ---\n");
+    call Console.log("--- Control Flow ---");
 
     local i: u64 = 0;
     loop {
         if i >= 3 {
             break;
         }
-        call printf("Outer loop i=%ld\n", i);
+        call Console.log("Outer loop i=", i);
 
         local j: u64 = 0;
         loop {
@@ -21,7 +21,7 @@ frame main() ret u64 {
                 continue;
             }
 
-            call printf("  Inner loop j=%ld\n", j);
+            call Console.log("  Inner loop j=", j);
             j += 1;
         }
         i += 1;

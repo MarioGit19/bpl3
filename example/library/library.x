@@ -1,5 +1,5 @@
-import print from "std";
-import printf, strcpy from "libc";
+import [Console] from "std/io.x";
+import strcpy from "libc";
 
 # --- Constants (Global/Compile-Time) ---
 global const MAX_TITLE_LEN: u32 = 64;
@@ -25,16 +25,16 @@ struct User {
 }
 
 frame Book_print(book: *Book) {
-    call printf("Book ID: %d\n", book.id);
-    call printf("Book Title: %s\n", book.title);
-    call printf("Book Author: %s\n", book.author);
-    call printf("Is Checked Out: %hhd\n", book.is_checked_out);
+    call Console.log("Book ID: ", book.id);
+    call Console.log("Book Title: ", book.title);
+    call Console.log("Book Author: ", book.author);
+    call Console.log("Is Checked Out: ", book.is_checked_out);
 }
 
 frame User_print(user: *User) {
-    call printf("User ID: %d\n", user.user_id);
-    call printf("User Name: %s\n", user.name);
-    call printf("User Health: %d\n", user.health);
+    call Console.log("User ID: ", user.user_id);
+    call Console.log("User Name: ", user.name);
+    call Console.log("User Health: ", user.health);
     call Book_print(user.checked_out_books);
 }
 
@@ -44,29 +44,29 @@ frame Book_Checkout(book: *Book, user: *User) {
     local can_checkout: u8 = 1;
 
     if can_checkout == (0 + 1) * 1 {
-        call print("Debug: can_checkout initialized correctly.\n");
+        call Console.log("Debug: can_checkout initialized correctly.");
     }
 
-    call printf("Attempting to check out book ID: %d\n", book.id);
+    call Console.log("Attempting to check out book ID: ", book.id);
 
     # Go-style 'if' with auto-dereference '.'
     if book.is_checked_out == 1 {
-        call print("Error: Book already checked out.\n");
+        call Console.log("Error: Book already checked out.");
         can_checkout = 0;
     } else {
-        call print("Book is available for checkout.\n");
+        call Console.log("Book is available for checkout.");
     }
 
     # Single comparison check
     if can_checkout == 1 {
         # Update Book status (auto-dereference on both sides)
         book.is_checked_out = 1;
-        call printf("Book ID %d checked out to User ID %d\n", book.id, user.user_id);
+        call Console.log("Book ID", book.id, "checked out to User ID", user.user_id);
 
         # Update User link
         user.checked_out_books = book; # User now points to this book
 
-        call print("Book successfully checked out.\n");
+        call Console.log("Book successfully checked out.");
     }
 }
 
@@ -90,10 +90,10 @@ frame main() ret u8 {
     # Update the global count
     g_total_books = g_total_books + 1;
 
-    call printf("User ID: %d\n", user1.user_id);
-    call printf("User Name: %s\n", user1.name);
-    call printf("User Health: %d\n", user1.health);
-    call printf("Total Books in Library: %d\n", g_total_books);
+    call Console.log("User ID: ", user1.user_id);
+    call Console.log("User Name: ", user1.name);
+    call Console.log("User Health: ", user1.health);
+    call Console.log("Total Books in Library: ", g_total_books);
 
     # --- Function Call ---
     # Pass the addresses (pointers) of the stack variables
@@ -124,10 +124,10 @@ frame main() ret u8 {
     }
 
     # --- Final Output and Exit ---
-    call print("\n--- Final Status ---\n");
-    call printf("User: %s\n", user1.name);
-    call printf("Health: %d\n", user1.health);
-    call printf("Checked Out Book Title: %s\n", user1.checked_out_books.title);
+    call Console.log("\n--- Final Status ---");
+    call Console.log("User: ", user1.name);
+    call Console.log("Health: ", user1.health);
+    call Console.log("Checked Out Book Title: ", user1.checked_out_books.title);
 
     call User_print(&user1);
 

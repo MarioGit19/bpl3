@@ -151,11 +151,15 @@ export function resolveExpressionType(
     const rightSize = rightType ? getIntSize(rightType.name) : 8;
     const maxSize = Math.max(leftSize, rightSize);
 
+    const isUnsigned =
+      (leftType?.name.startsWith("u") || false) &&
+      (rightType?.name.startsWith("u") || false);
+
     if (maxSize <= 4) {
-      return { name: "i32", isPointer: 0, isArray: [] };
+      return { name: isUnsigned ? "u32" : "i32", isPointer: 0, isArray: [] };
     }
 
-    return { name: "i64", isPointer: 0, isArray: [] };
+    return { name: isUnsigned ? "u64" : "i64", isPointer: 0, isArray: [] };
   }
   if (expr.type === ExpressionType.MemberAccessExpression) {
     const memberExpr = expr as MemberAccessExpr;

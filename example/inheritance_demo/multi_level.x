@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 struct Entity {
     id: i32,
@@ -8,7 +8,7 @@ struct Entity {
     }
 
     frame describe() {
-        call printf("Entity(id=%d)\n", this.id);
+        call Console.log("Entity(id=", this.id, ")");
     }
 }
 
@@ -23,12 +23,12 @@ struct Player: Entity {
     frame describe() {
         # Override
 
-        call printf("Player(id=%d, level=%d)\n", this.id, this.level);
+        call Console.log("Player(id=", this.id, ", level=", this.level, ")");
     }
 
     frame levelUp() {
         this.level = this.level + 1;
-        call printf("Player leveled up to %d\n", this.level);
+        call Console.log("Player leveled up to ", this.level);
     }
 }
 
@@ -44,11 +44,11 @@ struct SuperPlayer: Player {
     frame describe() {
         # Override
 
-        call printf("SuperPlayer(id=%d, level=%d, power=%d)\n", this.id, this.level, this.power);
+        call Console.log("SuperPlayer(id=", this.id, ", level=", this.level, ", power=", this.power, ")");
     }
 
     frame usePower() {
-        call printf("SuperPlayer uses power %d!\n", this.power);
+        call Console.log("SuperPlayer uses power ", this.power, "!");
     }
 }
 

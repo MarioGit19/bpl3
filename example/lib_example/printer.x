@@ -1,16 +1,16 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame logNumber(n: u64) {
-    call printf("Number: %d\n", n);
+    call Console.log("Number: ", n);
 }
 export logNumber;
 
 global value: u64 = 69;
 frame logGlobal() {
     if value == 69 {
-        call printf("NICE\n");
+        call Console.log("NICE");
     } else {
-        call printf("NOT NoICE\n");
+        call Console.log("NOT NoICE");
     }
 }
 export logGlobal;

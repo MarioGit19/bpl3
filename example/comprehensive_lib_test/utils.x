@@ -1,11 +1,12 @@
-import printf, exit from "libc";
+import exit from "libc";
+import [Console] from "std/io.x";
 
-frame assert(condition: u8, message: *u8) {
+frame assert(condition: u64, message: *u8) {
     if condition == 0 {
-        call printf("FAIL: %s\n", message);
+        call Console.log("FAIL: ", message);
         call exit(1);
     }
-    call printf("PASS: %s\n", message);
+    call Console.log("PASS: ", message);
 }
 
 export assert;

@@ -1,4 +1,5 @@
 import type { ISemanticAnalyzer } from "./ISemanticAnalyzer";
+import { Logger } from "../../../utils/Logger";
 import { CompilerError } from "../../../errors";
 import ArrayLiteralExpr from "../../../parser/expression/arrayLiteralExpr";
 import BinaryExpr from "../../../parser/expression/binaryExpr";
@@ -230,12 +231,14 @@ export class GenericsAnalyzer {
     // Store the this type on the declaration for later use
     clonedDecl.thisType = thisType;
 
-    const thisParam = {
-      name: "this",
-      type: thisType,
-    };
-
-    const finalArgs = [thisParam, ...clonedDecl.args];
+    let finalArgs = clonedDecl.args;
+    if (!methodAst.isStatic) {
+      const thisParam = {
+        name: "this",
+        type: thisType,
+      };
+      finalArgs = [thisParam, ...clonedDecl.args];
+    }
 
     // Define in scope - register in BOTH the defining scope (if different) and current scope
     const funcInfo: FunctionInfo = {
@@ -251,6 +254,7 @@ export class GenericsAnalyzer {
       genericParams: [],
       astDeclaration: clonedDecl,
       isMethod: true,
+      isStatic: methodAst.isStatic,
       receiverStruct: structName,
       originalName: methodAst.name,
       definitionScope: definingScope,

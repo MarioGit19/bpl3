@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 # Test function-level generics
 frame identity(val: T) ret T {
@@ -6,7 +6,7 @@ frame identity(val: T) ret T {
 }
 
 frame swap(a: A, b: B) ret A {
-    call printf("Before swap: a=%d, b=%d\n", a, b);
+    call Console.log("Before swap: a=", a, ", b=", b);
     return a;
 }
 
@@ -17,7 +17,7 @@ struct Box<T> {
     frame wrap(other: U) ret U {
         # Method with different generic parameter (OK)
 
-        call printf("Wrapping value %d with %d\n", this.value, other);
+        call Console.log("Wrapping value ", this.value, " with ", other);
         return other;
     }
 }
@@ -27,7 +27,7 @@ struct Container {
     count: u64,
 
     frame process(item: T) ret T {
-        call printf("Processing item: %d (count=%d)\n", item, this.count);
+        call Console.log("Processing item: ", item, " (count=", this.count, ")");
         return item;
     }
 }
@@ -35,20 +35,20 @@ struct Container {
 frame main() ret u8 {
     # Test generic function
     local x: u64 = call identity(42);
-    call printf("Identity of 42: %d\n", x);
+    call Console.log("Identity of 42: ", x);
 
     local y: u64 = call swap(100, 200);
-    call printf("Result: %d\n", y);
+    call Console.log("Result: ", y);
 
     # Test generic struct method
     local box: Box<u64> = {value: 10};
     local result: u32 = call box.wrap(20);
-    call printf("Wrap result: %d\n", result);
+    call Console.log("Wrap result: ", result);
 
     # Test non-generic struct with generic method
     local c: Container = {count: 5};
     local v: u64 = call c.process(999);
-    call printf("Process result: %d\n", v);
+    call Console.log("Process result: ", v);
 
     return 0;
 }

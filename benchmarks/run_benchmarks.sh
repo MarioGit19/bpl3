@@ -16,7 +16,7 @@ if [ ${#BENCHMARKS[@]} -eq 0 ]; then
 fi
 
 echo "========================================"
-echo "   BPL Performance Benchmark Suite (LLVM)"
+echo "  BPL Performance Benchmark Suite (LLVM)"
 echo "========================================"
 echo ""
 

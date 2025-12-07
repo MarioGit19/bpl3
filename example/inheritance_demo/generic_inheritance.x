@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 struct Base {
     id: i32,
@@ -8,7 +8,7 @@ struct Base {
     }
 
     frame printId() {
-        call printf("Base ID: %d\n", this.id);
+        call Console.log("Base ID: ", this.id);
     }
 }
 
@@ -24,7 +24,7 @@ struct Container<T>: Base {
         call this.printId();
         # We can't easily print T generically without traits/interfaces, 
         # but we can verify the method call and field access works.
-        call printf("Container initialized.\n");
+        call Console.log("Container initialized.");
     }
 
     frame getValue() ret T {
@@ -39,7 +39,7 @@ frame main() {
     call c.printValue();
 
     local val: i32 = call c.getValue();
-    call printf("Value retrieved: %d\n", val);
+    call Console.log("Value retrieved: ", val);
 
     # Test with another type
     local c2: Container<i64>;

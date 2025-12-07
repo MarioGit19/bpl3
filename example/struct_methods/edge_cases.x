@@ -1,6 +1,6 @@
 # Edge cases for struct methods implementation
 
-import printf from "libc";
+import [Console] from "std/io.x";
 
 # Test 1: Method with no parameters
 struct Counter {
@@ -53,7 +53,7 @@ struct StringHolder {
     }
 
     frame print() {
-        call printf("Text: %s, Length: %d\n", this.text, this.length);
+        call Console.log("Text: ", this.text, ", Length: ", this.length);
     }
 }
 
@@ -190,35 +190,35 @@ struct IntArray {
 
 frame main() ret i32 {
     # Test 1: Counter
-    call printf("=== Test 1: Counter ===\n");
+    call Console.log("=== Test 1: Counter ===");
     local c: Counter;
     c.value = 10;
     call c.increment();
     call c.increment();
     local cval1: i32 = call c.get();
-    call printf("After 2 increments: %d\n", cval1);
+    call Console.log("After 2 increments: ", cval1);
     call c.decrement();
     local cval2: i32 = call c.get();
-    call printf("After 1 decrement: %d\n", cval2);
+    call Console.log("After 1 decrement: ", cval2);
     call c.reset();
     local cval3: i32 = call c.get();
-    call printf("After reset: %d\n", cval3);
+    call Console.log("After reset: ", cval3);
 
     # Test 2: Rectangle
-    call printf("\n=== Test 2: Rectangle ===\n");
+    call Console.log("\n=== Test 2: Rectangle ===");
     local rect: Rectangle;
     rect.width = 10;
     rect.height = 20;
     local rectArea1: i32 = call rect.area();
-    call printf("Area: %d\n", rectArea1);
+    call Console.log("Area: ", rectArea1);
     local rectPerim: i32 = call rect.perimeter();
-    call printf("Perimeter: %d\n", rectPerim);
+    call Console.log("Perimeter: ", rectPerim);
     call rect.resize(5, 15);
     local rectArea2: i32 = call rect.area();
-    call printf("After resize - Area: %d\n", rectArea2);
+    call Console.log("After resize - Area: ", rectArea2);
 
     # Test 3: StringHolder
-    call printf("\n=== Test 3: StringHolder ===\n");
+    call Console.log("\n=== Test 3: StringHolder ===");
     local sh: StringHolder = {text: "Hello", length: 5};
     call sh.print();
     call sh.setText("World");
@@ -226,52 +226,52 @@ frame main() ret i32 {
     call sh.print();
 
     # Test 4: Point
-    call printf("\n=== Test 4: Point ===\n");
+    call Console.log("\n=== Test 4: Point ===");
     local p: Point;
     p.x = 3;
     p.y = 4;
     local pdist: i32 = call p.distanceFromOrigin();
-    call printf("Distance from origin: %d\n", pdist);
+    call Console.log("Distance from origin: ", pdist);
     call p.moveTo(10, 20);
-    call printf("After moveTo(10,20): x=%d, y=%d\n", p.x, p.y);
+    call Console.log("After moveTo(10,20): x=", p.x, ", y=", p.y);
     call p.moveBy(5, -10);
-    call printf("After moveBy(5,-10): x=%d, y=%d\n", p.x, p.y);
+    call Console.log("After moveBy(5,-10): x=", p.x, ", y=", p.y);
 
     # Test 5: Node (linked structure)
-    call printf("\n=== Test 5: Node ===\n");
+    call Console.log("\n=== Test 5: Node ===");
     local n1: Node;
     n1.value = 100;
     n1.next = NULL;
     local nval: i32 = call n1.getValue();
-    call printf("Node value: %d\n", nval);
+    call Console.log("Node value: ", nval);
 
     # Test 6: Account
-    call printf("\n=== Test 6: Account ===\n");
+    call Console.log("\n=== Test 6: Account ===");
     local acc: Account;
     acc.balance = 1000;
     call acc.deposit(500);
     local bal1: i32 = call acc.getBalance();
-    call printf("After deposit 500: %d\n", bal1);
+    call Console.log("After deposit 500: ", bal1);
     local success: i8 = call acc.withdraw(300);
     local bal2: i32 = call acc.getBalance();
-    call printf("Withdraw 300 success: %d, Balance: %d\n", success, bal2);
+    call Console.log("Withdraw 300 success: ", success, ", Balance: ", bal2);
     success = (call acc.withdraw(2000));
     local bal3: i32 = call acc.getBalance();
-    call printf("Withdraw 2000 success: %d, Balance: %d\n", success, bal3);
+    call Console.log("Withdraw 2000 success: ", success, ", Balance: ", bal3);
 
     # Test 7: Calculator (method calling method)
-    call printf("\n=== Test 7: Calculator ===\n");
+    call Console.log("\n=== Test 7: Calculator ===");
     local calc: Calculator;
     calc.result = 10;
     call calc.addTwice(5);
-    call printf("After addTwice(5): %d\n", calc.result);
+    call Console.log("After addTwice(5): ", calc.result);
     call calc.subtract(3);
-    call printf("After subtract(3): %d\n", calc.result);
+    call Console.log("After subtract(3): ", calc.result);
     call calc.clear();
-    call printf("After clear: %d\n", calc.result);
+    call Console.log("After clear: ", calc.result);
 
     # Test 8: IntArray
-    call printf("\n=== Test 8: IntArray ===\n");
+    call Console.log("\n=== Test 8: IntArray ===");
     local arr: IntArray;
     arr.size = 5;
     call arr.set(0, 10);
@@ -280,10 +280,10 @@ frame main() ret i32 {
     call arr.set(3, 40);
     call arr.set(4, 50);
     local val2: i32 = call arr.get(2);
-    call printf("arr[2] = %d\n", val2);
+    call Console.log("arr[2] = ", val2);
     local arrSum: i32 = call arr.sum();
-    call printf("Sum of array: %d\n", arrSum);
+    call Console.log("Sum of array: ", arrSum);
 
-    call printf("\n=== All tests completed ===\n");
+    call Console.log("\n=== All tests completed ===");
     return 0;
 }

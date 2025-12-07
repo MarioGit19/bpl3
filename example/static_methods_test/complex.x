@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 struct Math {
 
@@ -17,7 +17,7 @@ struct Math {
 struct Logger {
 
     static log(msg: *u8) {
-        call printf("[LOG]: %s\n", msg);
+        call Console.log("[LOG]: ", msg);
     }
 }
 
@@ -26,7 +26,7 @@ struct Worker {
 
     frame doWork() {
         call Logger.log("Worker started");
-        call printf("Worker ID: %d\n", this.id);
+        call Console.log("Worker ID: ", this.id);
     }
 }
 
@@ -43,13 +43,13 @@ struct Factory {
 frame main() {
     # 1. Recursive Static Call
     local f: i64 = call Math.fib(10);
-    call printf("Fib(10): %lld\n", f);
+    call Console.log("Fib(10): ", f);
 
     # 2. Generic Static Method
     local x: i32 = call Math.identity<i32>(42);
-    call printf("Identity: %d\n", x);
+    call Console.log("Identity: ", x);
 
     # 3. Static Factory & Instance Call
     local w: Worker = call Factory.new(99);
-    call printf("Created worker with ID: %d\n", w.id);
+    call Console.log("Created worker with ID: ", w.id);
 }

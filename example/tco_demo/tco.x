@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 extern printf(fmt: *u8, ...);
 
 frame factorial(n: u64, acc: u64) ret u64 {
@@ -10,7 +10,7 @@ frame factorial(n: u64, acc: u64) ret u64 {
 
 frame main() ret u8 {
     local result: u64 = call factorial(5, 1);
-    call printf("Factorial: %llu\n", result);
+    call Console.log("Factorial: ", result);
 
     return 0;
 }

@@ -1,4 +1,4 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 struct Vec2<T> {
     x: T,
@@ -31,7 +31,7 @@ frame main() ret u64 {
     v2.y = 40;
 
     local v3: Vec2<u64> = call add_u64(v1, v2);
-    call printf("Vec2<u64>: (%lu, %lu)\n", v3.x, v3.y);
+    call Console.log("Vec2<u64>: (", v3.x, ", ", v3.y, ")");
 
     local f1: Vec2<f64>;
     f1.x = 1.5;
@@ -42,6 +42,6 @@ frame main() ret u64 {
     f2.y = 4.5;
 
     local f3: Vec2<f64> = call add_f64(f1, f2);
-    call printf("Vec2<f64>: (%f, %f)\n", f3.x, f3.y);
+    call Console.log("Vec2<f64>: (", f3.x, ", ", f3.y, ")");
     return 0;
 }

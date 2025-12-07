@@ -1,4 +1,5 @@
-import printf, malloc, realloc from "libc";
+import malloc, realloc from "libc";
+import [Console] from "std/io.x";
 import [String] from "std/string.x";
 import [Array] from "std/array.x";
 
@@ -7,22 +8,12 @@ extern realloc(ptr: *u8, size: u64) ret *u8;
 
 # Helper to initialize string from literal
 frame s_init(s: *String, literal: *u8) {
-    local i: u64 = 0;
-    loop {
-        local c: u8 = literal[i];
-        if c == 0 {
-            break;
-        }
-        s.data[i] = c;
-        i = i + 1;
-    }
-    s.data[i] = 0;
-    s.length = i;
+    call s.from_c_str(literal);
 }
 
 frame main() {
     # Demonstrate Set-like behavior using Array
-    call printf("=== Demonstrating Set (unique values) ===\n");
+    call Console.log("=== Demonstrating Set (unique values) ===");
     local uniqueNumbers: Array<u64>;
     uniqueNumbers.length = 0;
     uniqueNumbers.capacity = 0;
@@ -33,13 +24,13 @@ frame main() {
     call uniqueNumbers.push(2);
     call uniqueNumbers.push(3);
 
-    call printf("Map size: %d\n", 2);
-    call printf("Contains Fruits: %d\n", 1);
-    call printf("Contains Vegetables: %d\n", 1);
-    call printf("Contains Cars: %d\n", 0);
-    call printf("Fruits count: %d\n", 2);
-    call printf("Fruit 0: Apple\n");
-    call printf("Fruits count after update: %d\n", 3);
-    call printf("Map size after remove: %d\n", 1);
-    call printf("Contains Vegetables after remove: %d\n", 0);
+    call Console.log("Map size: ", 2);
+    call Console.log("Contains Fruits: ", 1);
+    call Console.log("Contains Vegetables: ", 1);
+    call Console.log("Contains Cars: ", 0);
+    call Console.log("Fruits count: ", 2);
+    call Console.log("Fruit 0: Apple");
+    call Console.log("Fruits count after update: ", 3);
+    call Console.log("Map size after remove: ", 1);
+    call Console.log("Contains Vegetables after remove: ", 0);
 }

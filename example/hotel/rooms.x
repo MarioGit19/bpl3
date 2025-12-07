@@ -1,5 +1,6 @@
 import [Room] from "./types.x";
-import printf, malloc from "libc";
+import malloc from "libc";
+import [Console] from "std/io.x";
 
 extern malloc(size: u64) ret *u8;
 
@@ -23,14 +24,14 @@ frame init_rooms() {
 }
 
 frame list_available_rooms() {
-    call printf("\nAvailable Rooms:\n");
+    call Console.log("\nAvailable Rooms: ");
     local current: *Room = g_rooms_head;
     loop {
         if current == NULL {
             break;
         }
         if current.is_reserved == 0 {
-            call printf("Room %d | Cap: %d | Price: $%d\n", current.number, current.capacity, current.price);
+            call Console.log("Room ", current.number, " | Cap: ", current.capacity, " | Price: $", current.price);
         }
         current = current.next;
     }

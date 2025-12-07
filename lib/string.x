@@ -1,211 +1,243 @@
-frame strlen(str: *u8) ret u64 {
-    local len: u64 = 0;
-    loop {
-        if str[len] == 0 {
-            break;
-        }
-        len = len + 1;
-    }
-    return len;
-}
+import std_malloc, std_realloc, std_free from "std/memory.x";
 
-frame strcpy(dest: *u8, src: *u8) {
-    local i: u64 = 0;
-    loop {
-        dest[i] = src[i];
-        if src[i] == 0 {
-            break;
-        }
-        i = i + 1;
-    }
-}
-
-frame strcat(dest: *u8, src: *u8) {
-    local dest_len: u64 = call strlen(dest);
-    local i: u64 = 0;
-    loop {
-        dest[dest_len + i] = src[i];
-        if src[i] == 0 {
-            break;
-        }
-        i = i + 1;
-    }
-}
-
-frame strcmp(s1: *u8, s2: *u8) ret i32 {
-    local i: u64 = 0;
-    loop {
-        if s1[i] != s2[i] {
-            return s1[i] - s2[i];
-        }
-        if s1[i] == 0 {
-            return 0;
-        }
-        i = i + 1;
-    }
-    return 0;
-}
-
-frame streq(s1: *u8, s2: *u8) ret u8 {
-    local res: i32 = call strcmp(s1, s2);
-    if res == 0 {
-        return 1;
-    }
-    return 0;
-}
-
-frame is_digit(c: u8) ret u8 {
-    if c >= '0' && c <= '9' {
-        return 1;
-    }
-    return 0;
-}
-
-frame is_alpha(c: u8) ret u8 {
-    if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' {
-        return 1;
-    }
-    return 0;
-}
-
-frame is_space(c: u8) ret u8 {
-    if c == 32 || c == 9 || c == 10 || c == 13 {
-        return 1;
-    }
-    return 0;
-}
-
-frame to_upper(str: *u8) {
-    local i: u64 = 0;
-    loop {
-        if str[i] == 0 {
-            break;
-        }
-        if str[i] >= 'a' && str[i] <= 'z' {
-            str[i] = str[i] - 32;
-        }
-        i = i + 1;
-    }
-}
-
-frame to_lower(str: *u8) {
-    local i: u64 = 0;
-    loop {
-        if str[i] == 0 {
-            break;
-        }
-        if str[i] >= 'A' && str[i] <= 'Z' {
-            str[i] = str[i] + 32;
-        }
-        i = i + 1;
-    }
-}
-
-frame atoi(str: *u8) ret i64 {
-    local res: i64 = 0;
-    local sign: i64 = 1;
-    local i: u64 = 0;
-
-    # Skip whitespace
-    loop {
-        if call is_space(str[i]) == 0 {
-            break;
-        }
-        i = i + 1;
-    }
-
-    if str[i] == '-' {
-        sign = -1;
-        i = i + 1;
-    } else if str[i] == '+' {
-        i = i + 1;
-    }
-
-    loop {
-        if str[i] == 0 {
-            break;
-        }
-        if call is_digit(str[i]) == 0 {
-            break;
-        }
-        res = res * 10 + (str[i] - '0');
-        i = i + 1;
-    }
-    return res * sign;
-}
-
-export strlen;
-export strcpy;
-export strcat;
-export strcmp;
-export streq;
-export is_digit;
-export is_alpha;
-export is_space;
-export to_upper;
-export to_lower;
-export atoi;
-
-# String struct with methods
+# Dynamic String struct
 struct String {
-    data: u8[128],
+    buffer: *u8,
     length: u64,
+    capacity: u64,
+
+    static strlen(str: *u8) ret u64 {
+        local len: u64 = 0;
+        loop {
+            if str[len] == 0 {
+                break;
+            }
+            len = len + 1;
+        }
+        return len;
+    }
+
+    static strcpy(dest: *u8, src: *u8) {
+        local i: u64 = 0;
+        loop {
+            dest[i] = src[i];
+            if src[i] == 0 {
+                break;
+            }
+            i = i + 1;
+        }
+    }
+
+    static strcat(dest: *u8, src: *u8) {
+        local dest_len: u64 = call String.strlen(dest);
+        local i: u64 = 0;
+        loop {
+            dest[dest_len + i] = src[i];
+            if src[i] == 0 {
+                break;
+            }
+            i = i + 1;
+        }
+    }
+
+    static strcmp(s1: *u8, s2: *u8) ret i64 {
+        local i: u64 = 0;
+        loop {
+            if s1[i] != s2[i] {
+                return cast<i64>(s1[i]) - cast<i64>(s2[i]);
+            }
+            if s1[i] == 0 {
+                return 0;
+            }
+            i = i + 1;
+        }
+        return 0;
+    }
+
+    static streq(s1: *u8, s2: *u8) ret u64 {
+        local res: i64 = call String.strcmp(s1, s2);
+        if res == 0 {
+            return 1;
+        }
+        return 0;
+    }
+
+    static is_digit(c: u8) ret u64 {
+        if c >= '0' && c <= '9' {
+            return 1;
+        }
+        return 0;
+    }
+
+    static is_alpha(c: u8) ret u64 {
+        if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' {
+            return 1;
+        }
+        return 0;
+    }
+
+    static is_space(c: u8) ret u64 {
+        if c == 32 || c == 9 || c == 10 || c == 13 {
+            return 1;
+        }
+        return 0;
+    }
+
+    static to_upper(str: *u8) {
+        local i: u64 = 0;
+        loop {
+            if str[i] == 0 {
+                break;
+            }
+            if str[i] >= 'a' && str[i] <= 'z' {
+                str[i] = str[i] - 32;
+            }
+            i = i + 1;
+        }
+    }
+
+    static to_lower(str: *u8) {
+        local i: u64 = 0;
+        loop {
+            if str[i] == 0 {
+                break;
+            }
+            if str[i] >= 'A' && str[i] <= 'Z' {
+                str[i] = str[i] + 32;
+            }
+            i = i + 1;
+        }
+    }
+
+    static atoi(str: *u8) ret i64 {
+        local res: i64 = 0;
+        local sign: i64 = 1;
+        local i: u64 = 0;
+
+        # Skip whitespace
+        loop {
+            if (call String.is_space(str[i])) == 0 {
+                break;
+            }
+            i = i + 1;
+        }
+
+        if str[i] == '-' {
+            sign = -1;
+            i = i + 1;
+        } else if str[i] == '+' {
+            i = i + 1;
+        }
+
+        loop {
+            if str[i] == 0 {
+                break;
+            }
+            if (call String.is_digit(str[i])) == 0 {
+                break;
+            }
+            res = res * 10 + (str[i] - '0');
+            i = i + 1;
+        }
+        return res * sign;
+    }
+
+    frame init() {
+        this.length = 0;
+        this.capacity = 16;
+        this.buffer = cast<*u8>(call std_malloc(this.capacity));
+        this.buffer[0] = 0;
+    }
+
+    frame from_c_str(s: *u8) {
+        this.length = (call String.strlen(s));
+        this.capacity = this.length + 1;
+        if this.capacity < 16 {
+            this.capacity = 16;
+        }
+        this.buffer = call std_malloc(this.capacity);
+        call String.strcpy(this.buffer, s);
+    }
 
     frame len() ret u64 {
         return this.length;
     }
 
-    frame concat(other: *String) {
-        local i: u64 = 0;
-        loop {
-            if i >= other.length {
-                break;
-            }
-            this.data[this.length + i] = other.data[i];
-            i = i + 1;
+    frame ensure_capacity(min_cap: u64) {
+        if this.capacity >= min_cap {
+            return;
         }
-        this.length = this.length + other.length;
-        this.data[this.length] = 0;
+        local new_cap: u64 = this.capacity * 2;
+        if new_cap < min_cap {
+            new_cap = min_cap;
+        }
+        this.buffer = cast<*u8>(call std_realloc(this.buffer, new_cap));
+        this.capacity = new_cap;
+    }
+
+    frame append(s: *u8) {
+        local s_len: u64 = call String.strlen(s);
+        call this.ensure_capacity(this.length + s_len + 1);
+        call String.strcpy(this.buffer + this.length, s);
+        this.length = this.length + s_len;
+    }
+
+    frame append_char(c: u8) {
+        call this.ensure_capacity(this.length + 2);
+        this.buffer[this.length] = c;
+        this.length = this.length + 1;
+        this.buffer[this.length] = 0;
+    }
+
+    frame concat(other: *String) {
+        call this.append(other.buffer);
     }
 
     frame slice(start: u64, end: u64, dest: *String) {
-        local i: u64 = start;
-        local j: u64 = 0;
+        if start >= this.length {
+            call dest.init();
+            return;
+        }
+        if end > this.length {
+            end = this.length;
+        }
+        local len: u64 = end - start;
+        dest.length = len;
+        dest.capacity = len + 1;
+        if dest.capacity < 16 {
+            dest.capacity = 16;
+        }
+        dest.buffer = cast<*u8>(call std_malloc(dest.capacity));
+
+        local i: u64 = 0;
         loop {
-            if i >= end {
+            if i >= len {
                 break;
             }
-            dest.data[j] = this.data[i];
+            dest.buffer[i] = this.buffer[start + i];
             i = i + 1;
-            j = j + 1;
         }
-        dest.length = j;
-        dest.data[j] = 0;
+        dest.buffer[len] = 0;
     }
 
     frame charAt(index: u64) ret u8 {
-        return this.data[index];
+        if index >= this.length {
+            return 0;
+        }
+        return this.buffer[index];
     }
 
     frame setChar(index: u64, c: u8) {
-        this.data[index] = c;
+        if index < this.length {
+            this.buffer[index] = c;
+        }
     }
 
-    frame equals(other: *String) ret u8 {
+    frame equals(other: *String) ret u64 {
         if this.length != other.length {
             return 0;
         }
-        local i: u64 = 0;
-        loop {
-            if i >= this.length {
-                break;
-            }
-            if this.data[i] != other.data[i] {
-                return 0;
-            }
-            i = i + 1;
-        }
-        return 1;
+        return call String.streq(this.buffer, other.buffer);
     }
 
     frame indexOf(c: u8) ret i64 {
@@ -214,12 +246,31 @@ struct String {
             if i >= this.length {
                 break;
             }
-            if this.data[i] == c {
+            if this.buffer[i] == c {
                 return i;
             }
             i = i + 1;
         }
         return -1;
+    }
+
+    frame c_str() ret *u8 {
+        return this.buffer;
+    }
+
+    frame free() {
+        if this.buffer != NULL {
+            call std_free(this.buffer);
+            this.buffer = NULL;
+        }
+        this.length = 0;
+        this.capacity = 0;
+    }
+
+    static new(s: *u8) ret String {
+        local str: String;
+        call str.from_c_str(s);
+        return str;
     }
 }
 

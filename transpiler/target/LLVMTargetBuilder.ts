@@ -144,7 +144,9 @@ end:
       case IROpcode.SUB:
       case IROpcode.MUL:
       case IROpcode.DIV:
+      case IROpcode.UDIV:
       case IROpcode.MOD:
+      case IROpcode.UMOD:
       case IROpcode.AND:
       case IROpcode.OR:
       case IROpcode.XOR:
@@ -277,7 +279,9 @@ end:
     const op = IROpcode[inst.opcode].toLowerCase();
     let llvmOp = op;
     if (op === "mod") llvmOp = "srem";
+    if (op === "umod") llvmOp = "urem";
     if (op === "div") llvmOp = "sdiv";
+    if (op === "udiv") llvmOp = "udiv";
     if (op === "fmod") llvmOp = "frem";
     if (op === "shr") llvmOp = "ashr"; // Default to arithmetic shift right
     if (op === "shl") llvmOp = "shl";

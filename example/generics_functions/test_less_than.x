@@ -1,9 +1,9 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame test() {
     local x: u64 = 1;
     if x < 5 {
-        call printf("yes\n");
+        call Console.log("yes");
     }
 }
 

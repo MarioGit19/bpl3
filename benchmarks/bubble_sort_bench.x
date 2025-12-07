@@ -1,8 +1,9 @@
-import printf, malloc, free, rand, srand, time from "libc";
+import malloc, free, rand, srand, time from "libc";
+import [Console] from "std/io.x";
 
 frame main() ret u64 {
     local size: u64 = 5000;
-    call printf("Bubble sorting array of size %d...\n", size);
+    call Console.log("Bubble sorting array of size ", size, "...");
 
     local arr: *u64 = cast<*u64>(call malloc(size * 8));
 
@@ -39,7 +40,7 @@ frame main() ret u64 {
         }
     }
 
-    call printf("Done.\n");
+    call Console.log("Done.");
     call free(arr);
     return 0;
 }

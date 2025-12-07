@@ -38,6 +38,30 @@ export default class ImportExpr extends Expression {
     for (const importItem of this.importName) {
       if (importItem.type === "type") {
         const typeName = importItem.name;
+
+        // Emit struct definition if not already present
+        if (!gen.module.structs.some((s) => s.name === typeName)) {
+          const typeInfo = scope.resolveType(typeName);
+          if (typeInfo) {
+            // Logger.info(`Emitting imported struct ${typeName} in ${gen.module.name}`);
+            if (typeInfo.members.size > 0) {
+              const sortedMembers = Array.from(typeInfo.members.values()).sort(
+                (a, b) => (a.index ?? 0) - (b.index ?? 0),
+              );
+
+              const fields = sortedMembers.map((m) => {
+                const varType: VariableType = {
+                  name: m.name,
+                  isPointer: m.isPointer,
+                  isArray: m.isArray,
+                };
+                return gen.getIRType(varType);
+              });
+              gen.module.addStruct(typeName, fields);
+            }
+          }
+        }
+
         for (const [funcName, funcInfo] of scope.functions) {
           if (
             funcInfo.isMethod &&

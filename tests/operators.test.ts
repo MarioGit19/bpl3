@@ -43,7 +43,7 @@ describe("Arithmetic Operators", () => {
 
   it("should generate modulo", () => {
     const ir = generateIR("frame test() { local x: u64 = 10 % 3; }");
-    expect(ir).toContain("srem i64 10, 3");
+    expect(ir).toContain("urem i64 10, 3");
   });
 });
 

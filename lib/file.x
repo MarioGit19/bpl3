@@ -1,6 +1,6 @@
 import sys_open, sys_close, sys_read, sys_write, sys_lseek, sys_unlink from "std/syscalls.x";
-import strcmp from "std/string.x";
-import print_int, println, print_str from "std/io.x";
+import [String] from "std/string.x";
+import [Console] from "std/io.x";
 
 # File flags
 frame O_RDONLY() ret u64 {
@@ -43,23 +43,26 @@ struct File {
         # Open a file with the given path and mode
         # Modes: "r", "w", "a", "r+", "w+", "a+"
 
+        # Workaround for compiler bug: ensure String type is emitted
+        local _dummy: String;
+
         this.path = path;
         this.mode = mode;
 
         local flags: u64 = 0;
         local mode_val: u64 = 438; # 0666 in octal (rw-rw-rw-)
 
-        if call strcmp(mode, "r") == 0 {
+        if (call String.strcmp(mode, "r")) == 0 {
             flags = call O_RDONLY();
-        } else if call strcmp(mode, "w") == 0 {
+        } else if (call String.strcmp(mode, "w")) == 0 {
             flags = call O_WRONLY() | call O_CREAT() | call O_TRUNC();
-        } else if call strcmp(mode, "a") == 0 {
+        } else if (call String.strcmp(mode, "a")) == 0 {
             flags = call O_WRONLY() | call O_CREAT() | call O_APPEND();
-        } else if call strcmp(mode, "r+") == 0 {
+        } else if (call String.strcmp(mode, "r+")) == 0 {
             flags = call O_RDWR();
-        } else if call strcmp(mode, "w+") == 0 {
+        } else if (call String.strcmp(mode, "w+")) == 0 {
             flags = call O_RDWR() | call O_CREAT() | call O_TRUNC();
-        } else if call strcmp(mode, "a+") == 0 {
+        } else if (call String.strcmp(mode, "a+")) == 0 {
             flags = call O_RDWR() | call O_CREAT() | call O_APPEND();
         } else {
             return 0; # Invalid mode
@@ -73,8 +76,8 @@ struct File {
         # -4096 in u64 is 0xFFFFFFFFFFFFF000
 
         if res > 0xFFFFFFFFFFFFF000 {
-            call print_int(cast<i64>(res));
-            call println();
+            call Console.print_int(cast<i64>(res));
+            call Console.println();
             this.is_open = 0;
             return 0;
         }

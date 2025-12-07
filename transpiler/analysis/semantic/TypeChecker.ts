@@ -75,6 +75,16 @@ export class TypeChecker {
         return true;
     }
 
+    // Slice compatibility: T[] accepts T[N]
+    if (
+      expected.isArray.length > 0 &&
+      expected.isArray[0] === -1 &&
+      actual.isArray.length > 0 &&
+      expected.name === actual.name
+    ) {
+      return true;
+    }
+
     if (expected.isPointer > 0 && actual.isArray.length > 0) {
       // Array decays to pointer
       if (

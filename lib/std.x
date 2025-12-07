@@ -1,39 +1,55 @@
-import print_str from "io.x";
+import [Console] from "io.x";
 import sys_exit from "syscalls.x";
-import popen, pclose, fread, malloc from "libc";
+import popen, pclose, fread from "libc";
+import std_malloc from "memory.x";
+import [Option] from "option.x";
+import [Result] from "result.x";
+import [String] from "string.x";
+import [Array] from "array.x";
+import [Map] from "map.x";
+import [Set] from "set.x";
 
 frame print(s: *u8) {
-    call print_str(s);
+    call Console.print_str(s);
 }
 
 frame exit(code: u64) {
     call sys_exit(code);
 }
 
-extern popen(command: *u8, mode: *u8) ret *u8;
-extern pclose(stream: *u8) ret i32;
-extern fread(ptr: *u8, size: u64, nmemb: u64, stream: *u8) ret u64;
-extern malloc(size: u64) ret *u8;
-
-frame exec(command: *u8) ret *u8 {
-    local mode: *u8 = "r";
-    local fp: *u8 = call popen(command, mode);
+frame exec(cmd: *u8) ret *u8 {
+    local fp: *u8 = cast<*u8>(call popen(cmd, "r"));
     if fp == NULL {
         return NULL;
     }
 
-    local buffer: *u8 = call malloc(4096);
-    if buffer == NULL {
-        call pclose(fp);
-        return NULL;
+    local size: u64 = 1024;
+    local buffer: *u8 = call std_malloc(size);
+    local total_read: u64 = 0;
+
+    loop {
+        local bytes_read: u64 = call fread(buffer + total_read, 1, size - total_read - 1, fp);
+        if bytes_read == 0 {
+            break;
+        }
+        total_read = total_read + bytes_read;
+        # TODO: Realloc if needed
     }
-
-    local read: u64 = call fread(buffer, 1, 4095, fp);
-    buffer[read] = 0;
-
+    buffer[total_read] = 0;
     call pclose(fp);
     return buffer;
 }
+
+extern popen(command: *u8, mode: *u8) ret *u8;
+extern pclose(stream: *u8) ret i32;
+extern fread(ptr: *u8, size: u64, nmemb: u64, stream: *u8) ret u64;
+
 export print;
 export exit;
 export exec;
+export [Option];
+export [Result];
+export [String];
+export [Array];
+export [Map];
+export [Set];

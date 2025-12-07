@@ -1,11 +1,11 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame main() ret u64 {
     local limit: u64 = 1000000000;
     local sum: u64 = 0;
     local i: u64 = 0;
 
-    call printf("Summing numbers up to %llu...\n", limit);
+    call Console.log("Summing numbers up to ", limit, "lu...");
 
     loop {
         if i >= limit {
@@ -17,6 +17,6 @@ frame main() ret u64 {
         i = i + 1;
     }
 
-    call printf("Sum: %llu\n", sum);
+    call Console.log("Sum: ", sum);
     return 0;
 }

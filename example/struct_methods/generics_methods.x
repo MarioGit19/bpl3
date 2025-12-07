@@ -1,6 +1,6 @@
 # Test generics with struct methods
 
-import printf from "libc";
+import [Console] from "std/io.x";
 
 # Test 1: Generic struct with methods that return T
 struct Box<T> {
@@ -53,54 +53,54 @@ struct Container<T> {
 
 frame main() ret i32 {
     # Test 1: Box<i32>
-    call printf("=== Test 1: Box<i32> ===\n");
+    call Console.log("=== Test 1: Box<i32> ===");
     local intBox: Box<i32>;
     intBox.value = 42;
     local val1: i32 = call intBox.getValue();
-    call printf("Box<i32> value: %d\n", val1);
+    call Console.log("Box<i32> value: ", val1);
 
     call intBox.setValue(100);
     local val2: i32 = call intBox.getValue();
-    call printf("After setValue(100): %d\n", val2);
+    call Console.log("After setValue(100): ", val2);
 
     # Test 2: Box<i64>
-    call printf("\n=== Test 2: Box<i64> ===\n");
+    call Console.log("\n=== Test 2: Box<i64> ===");
     local longBox: Box<i64>;
     longBox.value = 9999;
     local val3: i64 = call longBox.getValue();
-    call printf("Box<i64> value: %lld\n", val3);
+    call Console.log("Box<i64> value: ", val3);
 
     # Test 3: Pair<i32, i64>
-    call printf("\n=== Test 3: Pair<i32, i64> ===\n");
+    call Console.log("\n=== Test 3: Pair<i32, i64> ===");
     local pair: Pair<i32, i64>;
     pair.first = 10;
     pair.second = 20;
 
     local f1: i32 = call pair.getFirst();
     local s1: i64 = call pair.getSecond();
-    call printf("Pair: first=%d, second=%lld\n", f1, s1);
+    call Console.log("Pair: first=", f1, ", second=", s1);
 
     call pair.setFirst(99);
     call pair.setSecond(88);
 
     local f2: i32 = call pair.getFirst();
     local s2: i64 = call pair.getSecond();
-    call printf("After set: first=%d, second=%lld\n", f2, s2);
+    call Console.log("After set: first=", f2, ", second=", s2);
 
     # Test 4: Container<i32>
-    call printf("\n=== Test 4: Container<i32> ===\n");
+    call Console.log("\n=== Test 4: Container<i32> ===");
     local intContainer: Container<i32>;
     intContainer.value = 777;
     intContainer.count = 0;
 
     local cnt1: i32 = call intContainer.getCount();
-    call printf("Initial count: %d\n", cnt1);
+    call Console.log("Initial count: ", cnt1);
 
     call intContainer.incrementCount();
     call intContainer.incrementCount();
     local cnt2: i32 = call intContainer.getCount();
-    call printf("After 2 increments: %d\n", cnt2);
+    call Console.log("After 2 increments: ", cnt2);
 
-    call printf("\n=== All generic method tests completed ===\n");
+    call Console.log("\n=== All generic method tests completed ===");
     return 0;
 }

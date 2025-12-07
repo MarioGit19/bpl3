@@ -1,4 +1,4 @@
-extern printf(fmt: *u8, ...) ret i32;
+import [Console] from "std/io.x";
 
 struct MyError {
     code: i32,
@@ -10,60 +10,60 @@ struct OtherError {
 
 frame thrower(val: i32) {
     if val < 0 {
-        call printf("Throwing MyError...\n");
+        call Console.log("Throwing MyError...");
         throw cast<MyError>({code: val});
     }
     if val == 0 {
-        call printf("Throwing OtherError...\n");
+        call Console.log("Throwing OtherError...");
         throw cast<OtherError>({msg: "Zero is not allowed"});
     }
-    call printf("Value is good: %d\n", val);
+    call Console.log("Value is good: ", val);
 }
 
 frame main() ret i32 {
-    call printf("Starting try/catch demo...\n");
+    call Console.log("Starting try/catch demo...");
 
-    call printf("\n--- Test 1: Catch MyError ---\n");
+    call Console.log("\n--- Test 1: Catch MyError ---");
     try {
         call thrower(-1);
     } catch (e: MyError) {
-        call printf("Caught MyError with code: %d\n", e.code);
+        call Console.log("Caught MyError with code: ", e.code);
     }
 
-    call printf("\n--- Test 2: Catch OtherError ---\n");
+    call Console.log("\n--- Test 2: Catch OtherError ---");
     try {
         call thrower(0);
     } catch (e: OtherError) {
-        call printf("Caught OtherError with msg: %s\n", e.msg);
+        call Console.log("Caught OtherError with msg: ", e.msg);
     }
 
-    call printf("\n--- Test 3: No Exception ---\n");
+    call Console.log("\n--- Test 3: No Exception ---");
     try {
         call thrower(10);
     } catch (e: MyError) {
-        call printf("Should not be here (MyError)\n");
+        call Console.log("Should not be here (MyError)");
     } catch (e: OtherError) {
-        call printf("Should not be here (OtherError)\n");
+        call Console.log("Should not be here (OtherError)");
     }
 
-    call printf("\n--- Test 4: Multiple Catches (Match First) ---\n");
+    call Console.log("\n--- Test 4: Multiple Catches (Match First) ---");
     try {
         call thrower(-5);
     } catch (e: MyError) {
-        call printf("Caught MyError: %d\n", e.code);
+        call Console.log("Caught MyError: ", e.code);
     } catch (e: OtherError) {
-        call printf("Caught OtherError\n");
+        call Console.log("Caught OtherError");
     }
 
-    call printf("\n--- Test 5: Multiple Catches (Match Second) ---\n");
+    call Console.log("\n--- Test 5: Multiple Catches (Match Second) ---");
     try {
         call thrower(0);
     } catch (e: MyError) {
-        call printf("Caught MyError\n");
+        call Console.log("Caught MyError");
     } catch (e: OtherError) {
-        call printf("Caught OtherError: %s\n", e.msg);
+        call Console.log("Caught OtherError: ", e.msg);
     }
 
-    call printf("\nDone.\n");
+    call Console.log("\nDone.");
     return 0;
 }

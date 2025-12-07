@@ -1,3 +1,5 @@
+import malloc, free, sprintf, strlen, strcpy, strcat, printf, fflush from "libc";
+
 extern malloc(size: u64) ret *u8;
 extern free(ptr: *u8);
 extern sprintf(str: *u8, format: *u8, ...) ret i32;

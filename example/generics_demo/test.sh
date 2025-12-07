@@ -156,7 +156,7 @@ rm -f *.ll
 
 # Run generic struct methods test
 SOURCE_FILE="generic_struct_methods.x"
-EXPECTED=("Vec2<u64>: (40, 60)" "Vec2<f64>: (5.000000, 7.000000)")
+EXPECTED=("Vec2<u64>: (40, 60)" "Vec2<f64>: (5.00000000000000000, 7.00000000000000000)")
 # Compile
 compile "$SOURCE_FILE"
 if [ $? -ne 0 ]; then

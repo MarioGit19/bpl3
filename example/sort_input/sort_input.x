@@ -1,25 +1,26 @@
-import printf, scanf, malloc, free from "libc";
+import scanf, malloc, free from "libc";
+import [Console] from "std/io.x";
 
 extern malloc(size: u64) ret *u8;
 
 frame main() ret u64 {
     local n: u64 = 0;
-    call printf("Enter number of elements: ");
+    call Console.print("Enter number of elements: ");
     call scanf("%lu", &n);
 
     if n == 0 {
-        call printf("No elements to sort.\n");
+        call Console.log("No elements to sort.");
         return 0;
     }
 
     # Allocate memory for array
     local arr: *u64 = call malloc(n * 8);
     if arr == NULL {
-        call printf("Memory allocation failed.\n");
+        call Console.log("Memory allocation failed.");
         return 1;
     }
 
-    call printf("Enter %lu numbers:\n", n);
+    call Console.log("Enter", n, "numbers: ");
     local i: u64 = 0;
     loop {
         if i >= n {
@@ -54,16 +55,17 @@ frame main() ret u64 {
         i = i + 1;
     }
 
-    call printf("Sorted numbers:\n");
+    call Console.log("Sorted numbers: ");
     i = 0;
     loop {
         if i >= n {
             break;
         }
-        call printf("%li ", arr[i]);
+        call Console.print(arr[i]);
+        call Console.print(" ");
         i = i + 1;
     }
-    call printf("\n");
+    call Console.println();
 
     call free(arr);
     return 0;

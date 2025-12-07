@@ -1,11 +1,11 @@
-import printf from "libc";
+import [Console] from "std/io.x";
 
 struct User {
     name: *u8,
     age: i32,
 
     frame sayHello() {
-        call printf("Hello, my name is %s and I am %d years old\n", this.name, this.age);
+        call Console.log("Hello, my name is ", this.name, " and I am ", this.age, " years old");
         # Test if we can reassign 'this' - this should error!
         this = NULL;
     }
@@ -30,14 +30,14 @@ frame main() ret i32 {
     call user.sayHello();
 
     call user.setAge(30);
-    call printf("After setAge: ");
+    call Console.print("After setAge: ");
     call user.sayHello();
 
     local adult: i8 = call user.isAdult();
     if adult {
-        call printf("User is an adult\n");
+        call Console.log("User is an adult");
     } else {
-        call printf("User is not an adult\n");
+        call Console.log("User is not an adult");
     }
 
     return 0;

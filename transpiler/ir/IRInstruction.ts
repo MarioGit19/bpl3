@@ -33,8 +33,14 @@ export class BinaryInst extends IRInstruction {
       case IROpcode.DIV:
         opStr = "sdiv";
         break; // Default to signed div for now
+      case IROpcode.UDIV:
+        opStr = "udiv";
+        break;
       case IROpcode.MOD:
         opStr = "srem";
+        break;
+      case IROpcode.UMOD:
+        opStr = "urem";
         break;
       case IROpcode.AND:
         opStr = "and";

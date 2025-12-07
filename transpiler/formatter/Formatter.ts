@@ -551,7 +551,11 @@ export class Formatter {
   }
 
   private visitIdentifier(expr: IdentifierExpr): string {
-    return expr.name;
+    let output = expr.name;
+    if (expr.genericArgs && expr.genericArgs.length > 0) {
+      output += `<${expr.genericArgs.map((arg) => this.formatType(arg)).join(", ")}>`;
+    }
+    return output;
   }
 
   private visitNumberLiteral(expr: NumberLiteralExpr): string {
@@ -760,7 +764,13 @@ export class Formatter {
       }
     }
     for (let i = 0; i < type.isPointer; i++) s = "*" + s;
-    for (const dim of type.isArray) s += `[${dim}]`;
+    for (const dim of type.isArray) {
+      if (dim === -1) {
+        s += "[]";
+      } else {
+        s += `[${dim}]`;
+      }
+    }
     return s;
   }
 

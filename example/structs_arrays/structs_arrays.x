@@ -1,4 +1,5 @@
-import printf, rand, srand, time from "libc";
+import rand, srand, time from "libc";
+import [Console] from "std/io.x";
 
 extern srand(seed: u64);
 extern time(t: u64) ret u64;
@@ -63,7 +64,7 @@ frame print_points() {
         if i >= 5 {
             break;
         }
-        call printf("Point[%d]: (%d, %d)\n", i, points[i].x, points[i].y);
+        call Console.log("Point[", i, "]: (", points[i].x, ", ", points[i].y, ")");
         i = i + 1;
     }
 }
@@ -74,7 +75,7 @@ frame main() ret u8 {
     call initialize_points();
     call print_points();
     call shuffle_points();
-    call printf("After shuffling:\n");
+    call Console.log("After shuffling: ");
     call print_points();
 
     return 0;

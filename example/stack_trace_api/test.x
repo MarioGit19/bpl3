@@ -1,8 +1,8 @@
 import print_stack_trace, get_stack_trace from "../../lib/debug.x";
-import printf from "libc";
+import [Console] from "std/io.x";
 
 frame func_c() {
-    call printf("Printing stack trace directly:\n");
+    call Console.log("Printing stack trace directly: ");
     call print_stack_trace();
 }
 

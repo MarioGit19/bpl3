@@ -1,11 +1,17 @@
 import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
-import { IRVoid, irTypeToString } from "../../transpiler/ir/IRType";
+import {
+  IRVoid,
+  irTypeToString,
+  type IRType,
+} from "../../transpiler/ir/IRType";
+import { IROpcode } from "../../transpiler/ir/IRInstruction";
 import { CompilerError } from "../../errors";
 import { mangleMethod } from "../../utils/methodMangler";
 import { resolveExpressionType } from "../../utils/typeResolver";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
 import IdentifierExpr from "./identifierExpr";
+import ArrayLiteralExpr from "./arrayLiteralExpr";
 
 import type Scope from "../../transpiler/Scope";
 import type { VariableType } from "./variableDeclarationExpr";
@@ -50,7 +56,12 @@ export default class MethodCallExpr extends Expression {
         const ident = this.receiver as IdentifierExpr;
         const typeInfo = scope.resolveType(ident.name);
         if (typeInfo) {
-          receiverType = { name: ident.name, isPointer: 0, isArray: [] };
+          receiverType = {
+            name: ident.name,
+            isPointer: 0,
+            isArray: [],
+            genericArgs: ident.genericArgs,
+          };
           isStaticCall = true;
         }
       }
@@ -82,6 +93,104 @@ export default class MethodCallExpr extends Expression {
       if (typeInfo) {
         structName = typeInfo.name;
       }
+    }
+
+    // --- Intrinsic: Console.log / Console.print ---
+    if (
+      structName === "Console" &&
+      (this.methodName === "log" || this.methodName === "print")
+    ) {
+      this.args.forEach((arg, index) => {
+        const argType = resolveExpressionType(arg, scope);
+        const argVal = arg.toIR(gen, scope);
+
+        if (!argType) return;
+
+        let methodToCall = "print_u64";
+        let expectedType: IRType = { type: "i64" };
+
+        if (argType.isPointer > 0) {
+          if (argType.name === "u8" || argType.name === "char") {
+            methodToCall = "print_str";
+            expectedType = { type: "pointer", base: { type: "i8" } };
+          } else {
+            methodToCall = "print_ptr";
+            expectedType = { type: "pointer", base: { type: "i8" } };
+          }
+        } else if (argType.isArray.length > 0) {
+          if (argType.name === "u8" || argType.name === "char") {
+            methodToCall = "print_str";
+            expectedType = { type: "pointer", base: { type: "i8" } };
+          } else {
+            methodToCall = "print_ptr";
+            expectedType = { type: "pointer", base: { type: "i8" } };
+          }
+        } else {
+          if (argType.name === "bool") {
+            methodToCall = "print_bool";
+            expectedType = { type: "i8" };
+          } else if (argType.name === "f32" || argType.name === "f64") {
+            methodToCall = "print_f64";
+            expectedType = { type: "f64" };
+          } else if (argType.name.startsWith("i")) {
+            methodToCall = "print_int";
+            expectedType = { type: "i64" };
+          } else {
+            methodToCall = "print_u64";
+            expectedType = { type: "i64" };
+          }
+        }
+
+        const mangled = mangleMethod("Console", methodToCall);
+        const currentIRType = gen.getIRType(argType);
+        let finalVal = argVal;
+
+        if (methodToCall === "print_int" || methodToCall === "print_u64") {
+          if (currentIRType.type !== "i64") {
+            const isSigned = argType.name.startsWith("i");
+            finalVal = gen.emitCast(
+              isSigned ? IROpcode.SEXT : IROpcode.ZEXT,
+              argVal,
+              expectedType,
+              currentIRType,
+            );
+          }
+        } else if (methodToCall === "print_f64") {
+          if (currentIRType.type === "f32") {
+            finalVal = gen.emitCast(
+              IROpcode.FP_EXT,
+              argVal,
+              expectedType,
+              currentIRType,
+            );
+          }
+        } else if (
+          methodToCall === "print_str" ||
+          methodToCall === "print_ptr"
+        ) {
+          if (currentIRType.type === "array") {
+            finalVal = gen.emitGEP(currentIRType, argVal, ["0", "0"]);
+          } else if (currentIRType.type !== expectedType.type) {
+            finalVal = gen.emitCast(
+              IROpcode.BITCAST,
+              argVal,
+              expectedType,
+              currentIRType,
+            );
+          }
+        }
+
+        gen.emitCall(mangled, [{ value: finalVal, type: expectedType }], {
+          type: "void",
+        });
+      });
+
+      if (this.methodName === "log") {
+        const println = mangleMethod("Console", "println");
+        gen.emitCall(println, [], { type: "void" });
+      }
+
+      return "";
     }
 
     // Mangle method name
@@ -120,7 +229,7 @@ export default class MethodCallExpr extends Expression {
 
     if (!func) {
       throw new CompilerError(
-        `Method '${this.methodName}' not found on type '${structName}'`,
+        `Method '${this.methodName}' not found on type '${structName}' (in method call)`,
         this.startToken?.line || 0,
       );
     }
@@ -168,15 +277,74 @@ export default class MethodCallExpr extends Expression {
 
       let type: any;
       if (func.args && func.args[paramIndex]) {
-        type = gen.getIRType(func.args[paramIndex].type);
+        const paramVarType = func.args[paramIndex].type;
+        type = gen.getIRType(paramVarType);
 
-        // Check if cast is needed
-        const argType = resolveExpressionType(arg, scope);
-        if (argType) {
-          const argIRType = gen.getIRType(argType);
-          // Apply same casting logic as FunctionCallExpr
-          if (argIRType.type !== type.type) {
-            val = this.applyCast(gen, val, argIRType, type);
+        // Handle slice conversion (T[])
+        if (paramVarType.isArray.length > 0 && paramVarType.isArray[0] === -1) {
+          let size = 0;
+          if (arg instanceof ArrayLiteralExpr) {
+            size = arg.elements.length;
+          } else {
+            const argType = resolveExpressionType(arg, scope);
+            if (argType && argType.isArray.length > 0) {
+              size = argType.isArray[0] ?? 0;
+            }
+          }
+
+          // Construct slice struct { ptr, size }
+          const structType = type;
+          const structAlloca = gen.emitAlloca(structType);
+
+          // Store ptr
+          const ptrPtr = gen.emitGEP(structType, structAlloca, ["0", "0"]);
+
+          const argType = resolveExpressionType(arg, scope);
+          const argIRType: IRType = argType
+            ? gen.getIRType(argType)
+            : { type: "pointer", base: { type: "i8" } };
+          const elemPtrType = structType.fields[0];
+
+          let ptrVal = val;
+          if (argIRType.type === "array") {
+            // Array literal returns pointer to array [N x T]*
+            // We need *T. GEP 0, 0
+            ptrVal = gen.emitGEP(argIRType, val, ["0", "0"]);
+          } else if (
+            argIRType.type === "pointer" &&
+            argIRType.base.type === "array"
+          ) {
+            // Pointer to array -> pointer to first element
+            ptrVal = gen.emitGEP(argIRType.base, val, ["0", "0"]);
+          } else {
+            // Already a pointer, just cast if needed
+            if (argIRType.type !== elemPtrType.type) {
+              ptrVal = gen.emitCast(
+                IROpcode.BITCAST,
+                val,
+                argIRType,
+                elemPtrType,
+              );
+            }
+          }
+
+          gen.emitStore(elemPtrType, ptrVal, ptrPtr);
+
+          // Store size
+          const sizePtr = gen.emitGEP(structType, structAlloca, ["0", "1"]);
+          gen.emitStore({ type: "i64" }, size.toString(), sizePtr);
+
+          // Load struct to pass by value
+          val = gen.emitLoad(structType, structAlloca);
+        } else {
+          // Check if cast is needed
+          const argType = resolveExpressionType(arg, scope);
+          if (argType) {
+            const argIRType = gen.getIRType(argType);
+            // Apply same casting logic as FunctionCallExpr
+            if (argIRType.type !== type.type) {
+              val = this.applyCast(gen, val, argIRType, type);
+            }
           }
         }
       } else {

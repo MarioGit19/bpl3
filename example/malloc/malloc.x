@@ -1,12 +1,13 @@
-import printf, malloc, free from "libc";
+import malloc, free from "libc";
+import [Console] from "std/io.x";
 
 extern malloc(size: u64) ret *u8;
 
 frame main() ret u8 {
     local arr: *u64 = call malloc(5 * 8); # Allocate memory for 5 u64 integers
-    call printf("Allocated array address: %p\n", arr);
+    call Console.log("Allocated array address: ", arr);
     if arr == NULL {
-        call printf("Memory allocation failed\n");
+        call Console.log("Memory allocation failed");
         return 1;
     }
 
@@ -17,11 +18,11 @@ frame main() ret u8 {
             break;
         }
         arr + i = i * 10 + 4;
-        call printf("arr[%d] = %d\n", i, arr[i]);
+        call Console.log("arr[", i, "] = ", arr[i]);
         i += 1;
     }
 
-    call printf("Array contents after initialization:\n");
+    call Console.log("Array contents after initialization: ");
 
     i = 0;
     loop {
@@ -35,7 +36,7 @@ frame main() ret u8 {
         # or we can do manual pointer arithmetic if needed.
 
         arr[i] = *(arr + i) + 1;
-        call printf("arr[%d] = %d\n", i, arr[i]);
+        call Console.log("arr[", i, "] = ", arr[i]);
         i = i + 1;
     }
 

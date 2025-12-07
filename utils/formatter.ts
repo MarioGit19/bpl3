@@ -16,6 +16,8 @@ export function formatFiles(
     process.exit(1);
   }
 
+  let changedCount = 0;
+
   for (const file of files) {
     if (ignoreUnknown && !file.endsWith(".x")) {
       continue;
@@ -51,6 +53,7 @@ export function formatFiles(
           Logger.log(formattedContent);
         }
       } else {
+        changedCount++;
         if (write) {
           saveToFile(file, formattedContent);
           Logger.log(`${file} - changed`);
@@ -61,5 +64,11 @@ export function formatFiles(
     } catch (e: any) {
       Logger.error(`Error formatting ${file}: ${e.message}`);
     }
+  }
+
+  if (write && changedCount) {
+    Logger.log(`Formatting complete. ${changedCount} file(s) were modified.`);
+  } else if (write) {
+    Logger.log("Formatting complete. No changes made.");
   }
 }
