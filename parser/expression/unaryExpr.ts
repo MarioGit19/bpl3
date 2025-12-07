@@ -14,6 +14,8 @@ import type { IRGenerator } from "../../transpiler/ir/IRGenerator";
 import type { VariableType } from "./variableDeclarationExpr";
 
 export default class UnaryExpr extends Expression {
+  public ignoreDereference: boolean = false;
+
   constructor(
     public operator: Token,
     public right: Expression,
@@ -134,6 +136,11 @@ export default class UnaryExpr extends Expression {
     } else if (expr.type === ExpressionType.UnaryExpression) {
       const unaryExpr = expr as UnaryExpr;
       if (unaryExpr.operator.value === "*") {
+        // Check for redundant dereference
+        if (unaryExpr.ignoreDereference) {
+          return this.resolveExpressionType(unaryExpr.right, scope);
+        }
+
         const opType = this.resolveExpressionType(unaryExpr.right, scope);
         if (opType && opType.isPointer > 0) {
           return {
@@ -175,6 +182,12 @@ export default class UnaryExpr extends Expression {
     }
 
     if (this.operator.type === TokenType.STAR) {
+      // If SemanticAnalyzer marked this as a redundant dereference (e.g. *t.0),
+      // just return the value of the operand directly.
+      if (this.ignoreDereference) {
+        return this.right.toIR(gen, scope);
+      }
+
       const isLHS = scope.getCurrentContext("LHS");
       if (isLHS) scope.removeCurrentContext("LHS");
 

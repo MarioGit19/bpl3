@@ -20,6 +20,7 @@ export type VariableType = {
   isLiteral?: boolean;
   literalValue?: number | string;
   genericArgs?: VariableType[];
+  tupleElements?: VariableType[];
 };
 
 export default class VariableDeclarationExpr extends Expression {

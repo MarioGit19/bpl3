@@ -8,16 +8,25 @@ export class TypeParser {
   constructor(private parser: ParserBase) {}
 
   public parse(): VariableType {
-    const typeInfo: VariableType = {
-      name: "",
-      isPointer: 0,
-      isArray: [],
-    };
-
+    // Handle pointers first
+    let pointerCount = 0;
     while (this.parser.peek()?.type === TokenType.STAR) {
       this.parser.consume(TokenType.STAR);
-      typeInfo.isPointer++;
+      pointerCount++;
     }
+
+    // Check for tuple type: (T1, T2, ...)
+    if (this.parser.peek()?.type === TokenType.OPEN_PAREN) {
+      const tupleType = this.parseTupleType();
+      tupleType.isPointer = pointerCount;
+      return tupleType;
+    }
+
+    const typeInfo: VariableType = {
+      name: "",
+      isPointer: pointerCount,
+      isArray: [],
+    };
 
     const typeName = this.parser.consume(
       TokenType.IDENTIFIER,
@@ -71,5 +80,57 @@ export class TypeParser {
     }
 
     return typeInfo;
+  }
+
+  private parseTupleType(): VariableType {
+    const openParen = this.parser.consume(TokenType.OPEN_PAREN);
+    const tupleElements: VariableType[] = [];
+
+    // Parse first element
+    if (this.parser.peek()?.type === TokenType.CLOSE_PAREN) {
+      throw new CompilerError("Empty tuples are not supported", openParen.line);
+    }
+
+    tupleElements.push(this.parse());
+
+    // Check for comma (distinguishes tuple from grouping)
+    if (this.parser.peek()?.type !== TokenType.COMMA) {
+      // Single element without comma - could be (T) or error
+      if (this.parser.peek()?.type === TokenType.CLOSE_PAREN) {
+        // For now, treat (T) as grouping, not single-element tuple
+        // User must use (T,) for single-element tuples
+        this.parser.consume(TokenType.CLOSE_PAREN);
+        return tupleElements[0]!;
+      }
+      throw new CompilerError(
+        "Expected ',' or ')' in tuple type",
+        this.parser.peek()?.line || 0,
+      );
+    }
+
+    // Parse remaining elements
+    while (this.parser.peek()?.type === TokenType.COMMA) {
+      this.parser.consume(TokenType.COMMA);
+
+      // Allow trailing comma: (T1, T2,)
+      if (this.parser.peek()?.type === TokenType.CLOSE_PAREN) {
+        break;
+      }
+
+      tupleElements.push(this.parse());
+    }
+
+    this.parser.consume(
+      TokenType.CLOSE_PAREN,
+      "Expected ')' after tuple type elements",
+    );
+
+    return {
+      name: "tuple",
+      isPointer: 0,
+      isArray: [],
+      tupleElements,
+      token: openParen,
+    };
   }
 }

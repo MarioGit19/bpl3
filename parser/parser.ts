@@ -12,6 +12,7 @@ import StructDeclarationExpr from "./expression/structDeclarationExpr";
 import VariableDeclarationExpr, {
   type VariableType,
 } from "./expression/variableDeclarationExpr";
+import DestructuringDeclarationExpr from "./expression/destructuringDeclarationExpr";
 import { ParserBase } from "./parserBase";
 import { ControlFlowParser } from "./parsers/controlFlowParser";
 import { DeclarationParser } from "./parsers/declarationParser";
@@ -113,7 +114,9 @@ export class Parser extends ParserBase implements IParser {
     return this.controlFlowParser.parseThrowExpression();
   }
 
-  parseVariableDeclaration(): VariableDeclarationExpr {
+  parseVariableDeclaration():
+    | VariableDeclarationExpr
+    | DestructuringDeclarationExpr {
     return this.declarationParser.parseVariableDeclaration();
   }
 

@@ -13,6 +13,7 @@ import MemberAccessExpr from "../parser/expression/memberAccessExpr";
 import UnaryExpr from "../parser/expression/unaryExpr";
 import TernaryExpr from "../parser/expression/ternaryExpr";
 import CastExpr from "../parser/expression/castExpr";
+import TupleLiteralExpr from "../parser/expression/tupleLiteralExpr";
 
 export function resolveExpressionType(
   expr: Expression,
@@ -177,6 +178,21 @@ export function resolveExpressionType(
       }
       return null;
     } else {
+      // Check for tuple access
+      if (objectType.tupleElements && objectType.tupleElements.length > 0) {
+        if (memberExpr.property instanceof NumberLiteralExpr) {
+          const index = parseInt(memberExpr.property.value);
+          if (
+            index >= 0 &&
+            index < objectType.tupleElements.length &&
+            objectType.tupleElements[index]
+          ) {
+            return objectType.tupleElements[index]!;
+          }
+        }
+        return null;
+      }
+
       let typeInfo;
       if (objectType.genericArgs && objectType.genericArgs.length > 0) {
         typeInfo = scope.resolveGenericType(
@@ -222,6 +238,11 @@ export function resolveExpressionType(
   if (expr.type === ExpressionType.UnaryExpression) {
     const unaryExpr = expr as UnaryExpr;
     if (unaryExpr.operator.value === "*") {
+      // Check for redundant dereference
+      if (unaryExpr.ignoreDereference) {
+        return resolveExpressionType(unaryExpr.right, scope);
+      }
+
       const opType = resolveExpressionType(unaryExpr.right, scope);
       if (opType && opType.isPointer > 0) {
         return {
@@ -253,6 +274,21 @@ export function resolveExpressionType(
     const trueType = resolveExpressionType(ternaryExpr.trueExpr, scope);
     if (trueType) return trueType;
     return resolveExpressionType(ternaryExpr.falseExpr, scope);
+  }
+  if (expr.type === ExpressionType.TupleLiteralExpr) {
+    const tupleExpr = expr as TupleLiteralExpr;
+    const elementTypes: VariableType[] = [];
+    for (const elem of tupleExpr.elements) {
+      const type = resolveExpressionType(elem, scope);
+      if (!type) return null;
+      elementTypes.push(type);
+    }
+    return {
+      name: "tuple",
+      isPointer: 0,
+      isArray: [],
+      tupleElements: elementTypes,
+    };
   }
   return null;
 }

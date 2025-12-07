@@ -313,3 +313,33 @@ export class UnreachableInst extends IRInstruction {
     return "unreachable";
   }
 }
+
+export class InsertValueInst extends IRInstruction {
+  constructor(
+    public aggType: IRType,
+    public aggregate: string,
+    public elemType: IRType,
+    public element: string,
+    public index: number,
+    public dest: string,
+  ) {
+    super(IROpcode.INSERTVALUE);
+  }
+  toString(): string {
+    return `${this.dest} = insertvalue ${JSON.stringify(this.aggType)} ${this.aggregate}, ${JSON.stringify(this.elemType)} ${this.element}, ${this.index}`;
+  }
+}
+
+export class ExtractValueInst extends IRInstruction {
+  constructor(
+    public aggType: IRType,
+    public aggregate: string,
+    public index: number,
+    public dest: string,
+  ) {
+    super(IROpcode.EXTRACTVALUE);
+  }
+  toString(): string {
+    return `${this.dest} = extractvalue ${JSON.stringify(this.aggType)} ${this.aggregate}, ${this.index}`;
+  }
+}

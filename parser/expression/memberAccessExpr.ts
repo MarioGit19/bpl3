@@ -6,6 +6,7 @@ import ExpressionType from "../expressionType";
 import BinaryExpr from "./binaryExpr";
 import Expression from "./expr";
 import IdentifierExpr from "./identifierExpr";
+import NumberLiteralExpr from "./numberLiteralExpr";
 import UnaryExpr from "./unaryExpr";
 
 import type { VariableType } from "./variableDeclarationExpr";
@@ -44,6 +45,7 @@ export default class MemberAccessExpr extends Expression {
       if (!objectType) return null;
 
       if (expr.isIndexAccess) {
+        // Array or pointer index access
         if (objectType.isArray.length > 0) {
           return {
             name: objectType.name,
@@ -59,6 +61,20 @@ export default class MemberAccessExpr extends Expression {
         }
         return null;
       } else {
+        // Member or tuple element access
+        // Check if it's a tuple
+        if (objectType.tupleElements && objectType.tupleElements.length > 0) {
+          const propertyExpr = expr.property;
+          if (propertyExpr.type === ExpressionType.NumberLiteralExpr) {
+            const index = parseInt((propertyExpr as any).value);
+            if (index >= 0 && index < objectType.tupleElements.length) {
+              return objectType.tupleElements[index] ?? null;
+            }
+          }
+          return null;
+        }
+
+        // Regular struct member access
         let typeInfo;
         if (objectType.genericArgs && objectType.genericArgs.length > 0) {
           typeInfo = scope.resolveGenericType(
@@ -296,6 +312,35 @@ export default class MemberAccessExpr extends Expression {
       const irElemType = gen.getIRType(elemType);
       return gen.emitGEP(irElemType, basePtr, [index]);
     } else {
+      // Check if accessing tuple element
+      if (objectType.tupleElements && objectType.tupleElements.length > 0) {
+        if (this.property instanceof NumberLiteralExpr) {
+          const index = parseInt(this.property.value);
+          if (index < 0 || index >= objectType.tupleElements.length) {
+            throw new CompilerError(
+              `Tuple index ${index} out of bounds (size: ${objectType.tupleElements.length})`,
+              this.startToken?.line || 0,
+            );
+          }
+
+          const tupleType = gen.getIRType({
+            ...objectType,
+            isPointer: 0,
+            isArray: [],
+          });
+          return gen.emitGEP(tupleType, basePtr, [
+            { value: "0", type: "i32" },
+            { value: index.toString(), type: "i32" },
+          ]);
+        } else {
+          throw new CompilerError(
+            "Tuple indices must be numeric literals",
+            this.startToken?.line || 0,
+          );
+        }
+      }
+
+      // Regular struct member access
       const propertyName = (this.property as IdentifierExpr).name;
       let typeInfo = scope.resolveType(objectType.name);
       if (objectType.genericArgs && objectType.genericArgs.length > 0) {

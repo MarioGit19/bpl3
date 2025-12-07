@@ -24,10 +24,14 @@ import SwitchExpr from "../../parser/expression/switchExpr";
 import TryExpr from "../../parser/expression/tryExpr";
 import ThrowExpr from "../../parser/expression/throwExpr";
 import TernaryExpr from "../../parser/expression/ternaryExpr";
+import TupleLiteralExpr from "../../parser/expression/tupleLiteralExpr";
 import UnaryExpr from "../../parser/expression/unaryExpr";
+import DestructuringDeclarationExpr from "../../parser/expression/destructuringDeclarationExpr";
+import DestructuringAssignmentExpr from "../../parser/expression/destructuringAssignmentExpr";
 import VariableDeclarationExpr, {
   type VariableType,
 } from "../../parser/expression/variableDeclarationExpr";
+import Token from "../../lexer/token";
 import ExpressionType from "../../parser/expressionType";
 import { mangleMethod } from "../../utils/methodMangler";
 import Scope from "../Scope";
@@ -126,6 +130,18 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
       case ExpressionType.VariableDeclaration:
         this.analyzeVariableDeclaration(expr as VariableDeclarationExpr, scope);
         break;
+      case ExpressionType.DestructuringDeclaration:
+        this.analyzeDestructuringDeclaration(
+          expr as DestructuringDeclarationExpr,
+          scope,
+        );
+        break;
+      case ExpressionType.DestructuringAssignment:
+        this.analyzeDestructuringAssignment(
+          expr as DestructuringAssignmentExpr,
+          scope,
+        );
+        break;
       case ExpressionType.FunctionDeclaration:
         this.analyzeFunctionDeclaration(expr as FunctionDeclarationExpr, scope);
         break;
@@ -177,6 +193,9 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
       case ExpressionType.AsmBlockExpression:
         this.analyzeAsmBlockExpr(expr as AsmBlockExpr, scope);
         break;
+      case ExpressionType.TupleLiteralExpr:
+        this.analyzeTupleLiteralExpr(expr as TupleLiteralExpr, scope);
+        break;
       case ExpressionType.CastExpression:
         this.analyzeCastExpr(expr as CastExpr, scope);
         break;
@@ -190,6 +209,12 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
       case ExpressionType.ContinueExpression:
         break;
       // TODO: Add more cases
+    }
+  }
+
+  private analyzeTupleLiteralExpr(expr: TupleLiteralExpr, scope: Scope): void {
+    for (const elem of expr.elements) {
+      this.analyzeExpression(elem, scope);
     }
   }
 
@@ -398,6 +423,24 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
               isArray: opType.isArray,
             };
           }
+
+          // Special case: *t.0 where t is a pointer to tuple
+          if (unaryExpr.right.type === ExpressionType.MemberAccessExpression) {
+            const memberExpr = unaryExpr.right as MemberAccessExpr;
+            const objType = this.inferType(memberExpr.object, scope);
+            if (objType && objType.isPointer > 0) {
+              unaryExpr.ignoreDereference = true;
+              this.warnings.push(
+                new CompilerWarning(
+                  "Redundant dereference on member access. '*t.0' is treated as '(*t).0' or 't.0'.",
+                  unaryExpr.startToken?.line || 0,
+                  "Remove the leading '*' or use parentheses '(*t).0' to be explicit.",
+                ),
+              );
+              return opType;
+            }
+          }
+
           // Error: dereferencing non-pointer
           return null;
         }
@@ -437,6 +480,22 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
             "Ensure the variable is an array or pointer.",
           );
         } else {
+          // Check for tuple access
+          if (objectType.tupleElements && objectType.tupleElements.length > 0) {
+            if (memberExpr.property.type === ExpressionType.NumberLiteralExpr) {
+              const index = parseInt(
+                (memberExpr.property as NumberLiteralExpr).value,
+              );
+              if (
+                index >= 0 &&
+                index < objectType.tupleElements.length &&
+                objectType.tupleElements[index]
+              ) {
+                return objectType.tupleElements[index]!;
+              }
+            }
+          }
+
           // Resolve the type, handling generics if present
           let typeInfo: TypeInfo | null = null;
           if (objectType.genericArgs && objectType.genericArgs.length > 0) {
@@ -505,6 +564,21 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
           isPointer: firstType.isPointer,
           isArray: [arrExpr.elements.length, ...firstType.isArray],
           isLiteral: true,
+        };
+      }
+      case ExpressionType.TupleLiteralExpr: {
+        const tupleExpr = expr as TupleLiteralExpr;
+        const elementTypes: VariableType[] = [];
+        for (const elem of tupleExpr.elements) {
+          const type = this.inferType(elem, scope);
+          if (!type) return null;
+          elementTypes.push(type);
+        }
+        return {
+          name: "tuple",
+          isPointer: 0,
+          isArray: [],
+          tupleElements: elementTypes,
         };
       }
       case ExpressionType.CastExpression: {
@@ -875,6 +949,89 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
     });
   }
 
+  private analyzeDestructuringDeclaration(
+    expr: DestructuringDeclarationExpr,
+    scope: Scope,
+  ): void {
+    // Analyze the desugared block which contains the actual variable declarations and assignments
+    this.analyzeBlockExpr(expr.desugaredBlock, scope);
+  }
+
+  private analyzeDestructuringAssignment(
+    expr: DestructuringAssignmentExpr,
+    scope: Scope,
+  ): void {
+    // 1. Analyze RHS
+    this.analyzeExpression(expr.value, scope);
+    const rhsType = this.inferType(expr.value, scope);
+
+    if (!rhsType) {
+      throw new CompilerError(
+        "Could not infer type of right-hand side in destructuring assignment",
+        expr.startToken?.line || 0,
+      );
+    }
+
+    if (!rhsType.tupleElements) {
+      throw new CompilerError(
+        `Right-hand side must be a tuple, got '${this.typeChecker.printType(rhsType)}'`,
+        expr.startToken?.line || 0,
+      );
+    }
+
+    if (rhsType.tupleElements.length !== expr.targets.length) {
+      throw new CompilerError(
+        `Destructuring assignment expects ${expr.targets.length} elements, but tuple has ${rhsType.tupleElements.length}`,
+        expr.startToken?.line || 0,
+      );
+    }
+
+    // 2. Construct desugared block
+    const block = new BlockExpr([]);
+
+    // Create temp variable for RHS
+    // We need a unique name to avoid collisions
+    const tempName = `__destruct_assign_temp_${Math.floor(Math.random() * 100000)}`;
+
+    const tempDecl = new VariableDeclarationExpr(
+      "local",
+      false,
+      tempName,
+      rhsType, // Use the inferred type of RHS
+      expr.value,
+      expr.startToken,
+    );
+
+    block.expressions.push(tempDecl);
+
+    // 3. Create assignments for each target
+    expr.targets.forEach((target, index) => {
+      // target = temp.index
+      const tempRef = new IdentifierExpr(tempName);
+      const indexLiteral = new NumberLiteralExpr(
+        index.toString(),
+        expr.startToken!,
+      );
+      const memberAccess = new MemberAccessExpr(tempRef, indexLiteral, false);
+
+      // We need a token for the assignment operator
+      const assignToken = new Token(
+        TokenType.ASSIGN,
+        "=",
+        expr.startToken?.line || 0,
+        expr.startToken?.column || 0,
+      );
+
+      const assignment = new BinaryExpr(target, assignToken, memberAccess);
+      block.expressions.push(assignment);
+    });
+
+    expr.desugaredBlock = block;
+
+    // 4. Analyze the generated block
+    this.analyzeBlockExpr(block, scope);
+  }
+
   public analyzeFunctionDeclaration(
     expr: FunctionDeclarationExpr,
     scope: Scope,
@@ -928,6 +1085,21 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
     }
 
     const functionScope = new Scope(scope);
+
+    // If this is a generic function definition, add generic parameters to scope
+    if (expr.genericParams && expr.genericParams.length > 0) {
+      for (const param of expr.genericParams) {
+        functionScope.typeRegistry.addType(param, {
+          name: param,
+          isPointer: 0,
+          isArray: [],
+          size: 0, // Unknown size, but valid as a type
+          isPrimitive: false,
+          members: new Map(),
+          info: { description: "Generic Type Parameter" },
+        });
+      }
+    }
 
     // Save current state and create new function context
     const previousInitializedVars = new Set(this.initializedVars);

@@ -11,7 +11,7 @@ struct RuntimeStackFrame {
     prev: *RuntimeStackFrame,
     funcName: *u8,
     fileName: *u8,
-    line: u32
+    line: u32,
 }
 
 extern __get_stack_top() ret *RuntimeStackFrame;
@@ -28,7 +28,9 @@ frame get_stack_trace() ret *u8 {
     size = size + 13; # "Stack trace:\n"
 
     loop {
-        if (temp == NULL) { break; }
+        if temp == NULL {
+            break;
+        }
 
         size = size + 20;
         size = size + call strlen(temp.funcName);
@@ -38,7 +40,9 @@ frame get_stack_trace() ret *u8 {
     }
 
     local buffer: *u8 = call malloc(size + 1);
-    if (buffer == NULL) { return NULL; }
+    if buffer == NULL {
+        return NULL;
+    }
 
     buffer[0] = 0; # Initialize as empty string
     call strcat(buffer, "Stack trace:\n");
@@ -47,7 +51,9 @@ frame get_stack_trace() ret *u8 {
     local line_buf: *u8 = call malloc(1024); # Temp buffer for one line
 
     loop {
-        if (temp == NULL) { break; }
+        if temp == NULL {
+            break;
+        }
 
         call sprintf(line_buf, "\tat %s (%s:%d)\n", temp.funcName, temp.fileName, temp.line);
         call strcat(buffer, line_buf);

@@ -3,9 +3,11 @@ import printf from "libc";
 frame collatz_length(n: u64) ret u64 {
     local count: u64 = 1;
     loop {
-        if n <= 1 { break; }
-        if (n % 2) == 0 {
-            n = n // 2;
+        if n <= 1 {
+            break;
+        }
+        if n % 2 == 0 {
+            n = (n // 2);
         } else {
             n = 3 * n + 1;
         }
@@ -15,7 +17,7 @@ frame collatz_length(n: u64) ret u64 {
 }
 
 frame main() ret u64 {
-    local limit: u64 = 100000; 
+    local limit: u64 = 100000;
     local max_len: u64 = 0;
     local max_n: u64 = 0;
     local i: u64 = 1;
@@ -24,7 +26,9 @@ frame main() ret u64 {
     call printf("Finding longest Collatz chain under %d...\n", limit);
 
     loop {
-        if i >= limit { break; }
+        if i >= limit {
+            break;
+        }
         len = call collatz_length(i);
         if len > max_len {
             max_len = len;

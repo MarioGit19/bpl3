@@ -63,4 +63,8 @@ export enum IROpcode {
   INT_TO_PTR,
 
   MOV, // Simple move/copy
+
+  // Tuple/Struct Operations
+  INSERTVALUE,
+  EXTRACTVALUE,
 }

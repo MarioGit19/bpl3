@@ -9,7 +9,8 @@ export type IRType =
   | { type: "f64" }
   | { type: "pointer"; base: IRType }
   | { type: "array"; base: IRType; size: number }
-  | { type: "struct"; name: string; fields?: IRType[] };
+  | { type: "struct"; name: string; fields?: IRType[] }
+  | { type: "literal_struct"; fields: IRType[] };
 
 export const IRVoid: IRType = { type: "void" };
 export const IRI8: IRType = { type: "i8" };
@@ -49,6 +50,10 @@ export function irTypeToString(type: IRType): string {
       name = `"${name}"`;
     }
     return `%${name}`;
+  }
+  if (type.type === "literal_struct") {
+    const fieldStrs = type.fields.map(irTypeToString).join(", ");
+    return `{ ${fieldStrs} }`;
   }
   return "void";
 }

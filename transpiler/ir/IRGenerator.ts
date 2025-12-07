@@ -8,8 +8,10 @@ import {
   CallInst,
   CastInst,
   CondBranchInst,
+  ExtractValueInst,
   GetElementPtrInst,
   InlineAsmInst,
+  InsertValueInst,
   IRInstruction,
   IROpcode,
   LoadInst,
@@ -424,6 +426,28 @@ export class IRGenerator {
     return dest;
   }
 
+  // Helper to emit insertvalue
+  emitInsertValue(
+    aggType: IRType,
+    aggregate: string,
+    elemType: IRType,
+    element: string,
+    index: number,
+  ): string {
+    const dest = this.getTemp("insertval");
+    this.emit(
+      new InsertValueInst(aggType, aggregate, elemType, element, index, dest),
+    );
+    return dest;
+  }
+
+  // Helper to emit extractvalue
+  emitExtractValue(aggType: IRType, aggregate: string, index: number): string {
+    const dest = this.getTemp("extractval");
+    this.emit(new ExtractValueInst(aggType, aggregate, index, dest));
+    return dest;
+  }
+
   // Helper to emit Cast
   emitCast(
     opcode: IROpcode,
@@ -527,6 +551,12 @@ export class IRGenerator {
       return { type: "array", base, size };
     }
 
+    // Handle tuple types
+    if (type.tupleElements && type.tupleElements.length > 0) {
+      const fields = type.tupleElements.map((elem) => this.getIRType(elem));
+      return { type: "literal_struct", fields };
+    }
+
     switch (type.name) {
       case "void":
         return { type: "void" };
@@ -568,7 +598,8 @@ export class IRGenerator {
       return this.stringConstants.get(str)!;
     }
     const name = `@.str.${this.stringConstants.size}`;
-    const len = str.length + 1;
+    // Calculate byte length for UTF-8 string
+    const len = new TextEncoder().encode(str).length + 1;
     const type: IRType = { type: "array", base: { type: "i8" }, size: len };
 
     this.module.addGlobal(name, type, str);
@@ -578,7 +609,7 @@ export class IRGenerator {
 
   getStringPtr(str: string): string {
     const globalName = this.addStringConstant(str);
-    const len = str.length + 1;
+    const len = new TextEncoder().encode(str).length + 1;
     const type: IRType = { type: "array", base: { type: "i8" }, size: len };
     return this.emitGEP(type, globalName, ["0", "0"]);
   }

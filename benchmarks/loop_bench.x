@@ -8,7 +8,9 @@ frame main() ret u64 {
     call printf("Summing numbers up to %llu...\n", limit);
 
     loop {
-        if i >= limit { break; }
+        if i >= limit {
+            break;
+        }
         # Simple arithmetic operations
         sum = sum + i;
         # Add some bitwise ops to make it slightly more complex

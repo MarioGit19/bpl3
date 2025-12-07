@@ -4,11 +4,14 @@ enum ExpressionType {
   NullLiteralExpr = "NullLiteralExpr",
   ArrayLiteralExpr = "ArrayLiteralExpr",
   StructLiteralExpr = "StructLiteralExpr",
+  TupleLiteralExpr = "TupleLiteralExpr",
 
   IdentifierExpr = "IdentifierExpr",
   BlockExpression = "BlockExpression",
 
   VariableDeclaration = "VariableDeclaration",
+  DestructuringDeclaration = "DestructuringDeclaration",
+  DestructuringAssignment = "DestructuringAssignment",
 
   BinaryExpression = "BinaryExpression",
   UnaryExpression = "UnaryExpression",

@@ -2,21 +2,29 @@ import type { IParser } from "../IParser";
 import { CompilerError } from "../../errors";
 import Token from "../../lexer/token";
 import TokenType from "../../lexer/tokenType";
+import BlockExpr from "../expression/blockExpr";
 import ExportExpr from "../expression/exportExpr";
 import ExternDeclarationExpr from "../expression/externDeclarationExpr";
 import FunctionDeclarationExpr from "../expression/functionDeclaration";
+import IdentifierExpr from "../expression/identifierExpr";
 import ImportExpr from "../expression/importExpr";
+import MemberAccessExpr from "../expression/memberAccessExpr";
+import NumberLiteralExpr from "../expression/numberLiteralExpr";
 import StructDeclarationExpr, {
   type StructField,
 } from "../expression/structDeclarationExpr";
 import VariableDeclarationExpr, {
   type VariableType,
 } from "../expression/variableDeclarationExpr";
+import DestructuringDeclarationExpr from "../expression/destructuringDeclarationExpr";
+import type Expression from "../expression/expr";
 
 export class DeclarationParser {
   constructor(private parser: IParser) {}
 
-  parseVariableDeclaration(): VariableDeclarationExpr {
+  parseVariableDeclaration():
+    | VariableDeclarationExpr
+    | DestructuringDeclarationExpr {
     return this.parser.withRange(() => {
       const scopeToken = this.parser.consume(TokenType.IDENTIFIER);
       let isConst = false;
@@ -28,6 +36,15 @@ export class DeclarationParser {
         this.parser.consume(TokenType.IDENTIFIER);
         isConst = true;
       }
+
+      // Check for destructuring: local (a, b) = tuple
+      if (this.parser.peek()?.type === TokenType.OPEN_PAREN) {
+        return this.parseDestructuringDeclaration(
+          scopeToken.value as "global" | "local",
+          isConst,
+        );
+      }
+
       const varNameToken = this.parser.consume(TokenType.IDENTIFIER);
       this.parser.consume(TokenType.COLON, "Expected ':' after variable name.");
 
@@ -64,6 +81,113 @@ export class DeclarationParser {
         varNameToken,
       );
     });
+  }
+
+  private parseDestructuringDeclaration(
+    scope: "global" | "local",
+    isConst: boolean,
+  ): DestructuringDeclarationExpr {
+    const openParen = this.parser.consume(TokenType.OPEN_PAREN);
+
+    // Parse destructuring targets: (a: T1, b: T2) or (a, b)
+    const targets: { name: string; type: VariableType | null }[] = [];
+
+    while (this.parser.peek()?.type !== TokenType.CLOSE_PAREN) {
+      const nameToken = this.parser.consume(
+        TokenType.IDENTIFIER,
+        "Expected variable name in destructuring",
+      );
+
+      let varType: VariableType | null = null;
+      if (this.parser.peek()?.type === TokenType.COLON) {
+        this.parser.consume(TokenType.COLON);
+        varType = this.parser.parseType();
+      }
+
+      targets.push({ name: nameToken.value, type: varType });
+
+      if (this.parser.peek()?.type === TokenType.COMMA) {
+        this.parser.consume(TokenType.COMMA);
+      } else if (this.parser.peek()?.type !== TokenType.CLOSE_PAREN) {
+        throw new CompilerError(
+          "Expected ',' or ')' in destructuring pattern",
+          this.parser.peek()?.line || 0,
+        );
+      }
+    }
+
+    this.parser.consume(TokenType.CLOSE_PAREN);
+    this.parser.consume(
+      TokenType.ASSIGN,
+      "Expected '=' after destructuring pattern",
+    );
+
+    const tupleExpr = this.parser.parseTernary();
+
+    const hasAllTypes = targets.every((t) => t.type !== null);
+
+    if (!hasAllTypes) {
+      throw new CompilerError(
+        "Type inference in destructuring is not yet supported. Please specify types: local (a: T1, b: T2) = tuple",
+        openParen.line,
+      );
+    }
+
+    // Build the tuple type from target types
+    const tupleType: VariableType = {
+      name: "tuple",
+      isPointer: 0,
+      isArray: [],
+      tupleElements: targets.map((t) => t.type!),
+    };
+
+    // Generate expressions array
+    const expressions: Expression[] = [];
+
+    // Create temp variable with explicit tuple type
+    // Use a deterministic counter for temp names to ensure reproducibility
+    if (!(this.parser as any)._tempCounter) {
+      (this.parser as any)._tempCounter = 0;
+    }
+    const tempId = (this.parser as any)._tempCounter++;
+    const tempName = `__tuple_temp_${tempId}`;
+    const tempDecl = new VariableDeclarationExpr(
+      scope,
+      false,
+      tempName,
+      tupleType,
+      tupleExpr,
+      openParen,
+    );
+    expressions.push(tempDecl);
+
+    // Create individual variables: a = __tuple_temp.0, b = __tuple_temp.1
+    for (let i = 0; i < targets.length; i++) {
+      const target = targets[i];
+      const tempIdent = new IdentifierExpr(tempName);
+      const indexExpr = new NumberLiteralExpr(i.toString(), openParen);
+      const memberAccess = new MemberAccessExpr(tempIdent, indexExpr, false);
+
+      const varDecl = new VariableDeclarationExpr(
+        scope,
+        isConst,
+        target?.name ?? "",
+        target?.type || { name: "auto", isPointer: 0, isArray: [] },
+        memberAccess,
+        openParen,
+      );
+      expressions.push(varDecl);
+    }
+
+    const desugaredBlock = new BlockExpr(expressions);
+    return new DestructuringDeclarationExpr(
+      scope,
+      isConst,
+      targets,
+      tupleExpr,
+      desugaredBlock,
+      openParen,
+    );
   }
 
   parseFunctionDeclaration(): FunctionDeclarationExpr {

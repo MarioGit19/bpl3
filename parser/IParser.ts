@@ -4,6 +4,7 @@ import { ParserBase } from "./parserBase";
 import type { VariableType } from "./expression/variableDeclarationExpr";
 import type BlockExpr from "./expression/blockExpr";
 import type VariableDeclarationExpr from "./expression/variableDeclarationExpr";
+import type DestructuringDeclarationExpr from "./expression/destructuringDeclarationExpr";
 import type FunctionDeclarationExpr from "./expression/functionDeclaration";
 import type StructDeclarationExpr from "./expression/structDeclarationExpr";
 import type ExternDeclarationExpr from "./expression/externDeclarationExpr";
@@ -20,7 +21,9 @@ export interface IParser extends ParserBase {
   parsePrimary(): Expression;
 
   // Declarations
-  parseVariableDeclaration(): VariableDeclarationExpr;
+  parseVariableDeclaration():
+    | VariableDeclarationExpr
+    | DestructuringDeclarationExpr;
   parseFunctionDeclaration(): FunctionDeclarationExpr;
   parseStructDeclaration(): StructDeclarationExpr;
   parseExternDeclaration(): ExternDeclarationExpr;

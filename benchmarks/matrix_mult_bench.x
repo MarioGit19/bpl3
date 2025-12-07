@@ -12,7 +12,9 @@ frame main() ret u64 {
     # Initialize
     local i: u64 = 0;
     loop {
-        if i >= (N * N) { break; }
+        if i >= N * N {
+            break;
+        }
         A[i] = i % 10;
         B[i] = i % 10;
         C[i] = 0;
@@ -22,14 +24,20 @@ frame main() ret u64 {
     # Multiply
     local row: u64 = 0;
     loop {
-        if row >= N { break; }
+        if row >= N {
+            break;
+        }
         local col: u64 = 0;
         loop {
-            if col >= N { break; }
+            if col >= N {
+                break;
+            }
             local sum: u64 = 0;
             local k: u64 = 0;
             loop {
-                if k >= N { break; }
+                if k >= N {
+                    break;
+                }
                 sum = sum + A[row * N + k] * B[k * N + col];
                 k = k + 1;
             }
@@ -40,7 +48,7 @@ frame main() ret u64 {
     }
 
     call printf("Done. C[0] = %llu\n", C[0]);
-    
+
     call free(A);
     call free(B);
     call free(C);

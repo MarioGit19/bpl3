@@ -5,12 +5,14 @@ frame main() ret u64 {
     call printf("Bubble sorting array of size %d...\n", size);
 
     local arr: *u64 = cast<*u64>(call malloc(size * 8));
-    
+
     # Initialize with random values
     call srand(call time(0));
     local i: u64 = 0;
     loop {
-        if i >= size { break; }
+        if i >= size {
+            break;
+        }
         arr[i] = cast<u64>(call rand()) % 10000;
         i = i + 1;
     }
@@ -18,11 +20,15 @@ frame main() ret u64 {
     # Bubble Sort
     local swapped: u64 = 1;
     loop {
-        if swapped == 0 { break; }
+        if swapped == 0 {
+            break;
+        }
         swapped = 0;
         local j: u64 = 0;
         loop {
-            if j >= (size - 1) { break; }
+            if j >= size - 1 {
+                break;
+            }
             if arr[j] > arr[j + 1] {
                 local temp: u64 = arr[j];
                 arr[j] = arr[j + 1];

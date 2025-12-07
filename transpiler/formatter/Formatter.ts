@@ -28,8 +28,10 @@ import SwitchExpr from "../../parser/expression/switchExpr";
 import TernaryExpr from "../../parser/expression/ternaryExpr";
 import ThrowExpr from "../../parser/expression/throwExpr";
 import TryExpr from "../../parser/expression/tryExpr";
+import TupleLiteralExpr from "../../parser/expression/tupleLiteralExpr";
 import UnaryExpr from "../../parser/expression/unaryExpr";
 import VariableDeclarationExpr from "../../parser/expression/variableDeclarationExpr";
+import DestructuringDeclarationExpr from "../../parser/expression/destructuringDeclarationExpr";
 import ExpressionType from "../../parser/expressionType";
 
 export class Formatter {
@@ -76,6 +78,10 @@ export class Formatter {
         return this.format(expr as ProgramExpr);
       case ExpressionType.VariableDeclaration:
         return this.visitVariableDeclaration(expr as VariableDeclarationExpr);
+      case ExpressionType.DestructuringDeclaration:
+        return this.visitDestructuringDeclaration(
+          expr as DestructuringDeclarationExpr,
+        );
       case ExpressionType.FunctionDeclaration:
         return this.visitFunctionDeclaration(expr as FunctionDeclarationExpr);
       case ExpressionType.BlockExpression:
@@ -118,6 +124,8 @@ export class Formatter {
         return this.visitMemberAccess(expr as MemberAccessExpr);
       case ExpressionType.ArrayLiteralExpr:
         return this.visitArrayLiteral(expr as ArrayLiteralExpr);
+      case ExpressionType.TupleLiteralExpr:
+        return this.visitTupleLiteral(expr as TupleLiteralExpr);
       case ExpressionType.StructLiteralExpr:
         return this.visitStructLiteral(expr as StructLiteralExpr);
       case ExpressionType.AsmBlockExpression:
@@ -266,6 +274,32 @@ export class Formatter {
     if (expr.value) {
       output += ` = ${this.visit(expr.value)}`;
     }
+    return output + ";";
+  }
+
+  private visitDestructuringDeclaration(
+    expr: DestructuringDeclarationExpr,
+  ): string {
+    let output = "";
+    if (expr.scope === "global") {
+      output += "global ";
+    } else {
+      output += "local ";
+    }
+    if (expr.isConst) {
+      output += "const ";
+    }
+    output += "(";
+    output += expr.targets
+      .map((t) => {
+        if (t.type) {
+          return `${t.name}: ${this.formatType(t.type)}`;
+        }
+        return t.name;
+      })
+      .join(", ");
+    output += ")";
+    output += ` = ${this.visit(expr.value)}`;
     return output + ";";
   }
 
@@ -565,6 +599,10 @@ export class Formatter {
     return `[${expr.elements.map((e) => this.visit(e)).join(", ")}]`;
   }
 
+  private visitTupleLiteral(expr: TupleLiteralExpr): string {
+    return `(${expr.elements.map((e) => this.visit(e)).join(", ")})`;
+  }
+
   private visitStructLiteral(expr: StructLiteralExpr): string {
     if (expr.fields.length === 0) {
       return "{}";
@@ -712,9 +750,14 @@ export class Formatter {
   }
 
   private formatType(type: any): string {
-    let s = type.name;
-    if (type.genericArgs && type.genericArgs.length > 0) {
-      s += `<${type.genericArgs.map((arg: any) => this.formatType(arg)).join(", ")}>`;
+    let s = "";
+    if (type.tupleElements && type.tupleElements.length > 0) {
+      s = `(${type.tupleElements.map((e: any) => this.formatType(e)).join(", ")})`;
+    } else {
+      s = type.name;
+      if (type.genericArgs && type.genericArgs.length > 0) {
+        s += `<${type.genericArgs.map((arg: any) => this.formatType(arg)).join(", ")}>`;
+      }
     }
     for (let i = 0; i < type.isPointer; i++) s = "*" + s;
     for (const dim of type.isArray) s += `[${dim}]`;

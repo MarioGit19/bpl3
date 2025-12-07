@@ -15,6 +15,7 @@
 [x] - Implement static methods for structs
 [x] - Add support for constructors (via static factory convention)
 [x] - Implement stack traces for errors and function calls
+[x] - Add support for tuple types and destructuring
 [ ] - Add support for custom calling conventions
 [ ] - Support incremental recompilation caching
 [ ] - Add target architecture abstraction layer
@@ -27,7 +28,6 @@
 [ ] - Create a package manager for dependency resolution
 [ ] - Add support for multi-threading/concurrency primitives
 [ ] - Implement closures and lambda expressions
-[ ] - Add support for tuple types and destructuring
 [ ] - Create a documentation generator tool
 [ ] - Implement a REPL (Read-Eval-Print Loop)
 [ ] - Add debug information generation (DWARF/Source Maps)

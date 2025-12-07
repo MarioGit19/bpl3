@@ -23,7 +23,9 @@ import StringLiteralExpr from "../expression/stringLiteralExpr";
 import StructLiteralExpr from "../expression/structLiteralExpr";
 import SwitchExpr from "../expression/switchExpr";
 import TernaryExpr from "../expression/ternaryExpr";
+import TupleLiteralExpr from "../expression/tupleLiteralExpr";
 import UnaryExpr from "../expression/unaryExpr";
+import DestructuringAssignmentExpr from "../expression/destructuringAssignmentExpr";
 
 import type { VariableType } from "../expression/variableDeclarationExpr";
 
@@ -65,6 +67,17 @@ export class ExpressionParser {
       ) {
         const operator = this.parser.consume(nextToken!.type);
         const right = this.parseTernary();
+
+        if (
+          expr instanceof TupleLiteralExpr &&
+          operator.type === TokenType.ASSIGN
+        ) {
+          return new DestructuringAssignmentExpr(
+            expr.elements,
+            right,
+            operator,
+          );
+        }
 
         return new BinaryExpr(expr, operator, right);
       }
@@ -339,11 +352,23 @@ export class ExpressionParser {
       while (true) {
         if (this.parser.peek()?.type === TokenType.DOT) {
           this.parser.consume(TokenType.DOT);
-          const propertyToken = this.parser.consume(
-            TokenType.IDENTIFIER,
-            "Expected property name after '.'.",
-          );
-          const accessExpr = new IdentifierExpr(propertyToken.value);
+
+          // Support both identifiers (struct members) and numbers (tuple indices)
+          const nextToken = this.parser.peek();
+          let accessExpr: Expression;
+
+          if (nextToken?.type === TokenType.NUMBER_LITERAL) {
+            const indexToken = this.parser.consume(TokenType.NUMBER_LITERAL);
+            accessExpr = new NumberLiteralExpr(indexToken.value, indexToken);
+          } else if (nextToken?.type === TokenType.IDENTIFIER) {
+            const propertyToken = this.parser.consume(TokenType.IDENTIFIER);
+            accessExpr = new IdentifierExpr(propertyToken.value);
+          } else {
+            throw new CompilerError(
+              "Expected property name or tuple index after '.'",
+              nextToken?.line || 0,
+            );
+          }
 
           expr = new MemberAccessExpr(expr, accessExpr, false);
         } else if (this.parser.peek()?.type === TokenType.OPEN_BRACKET) {
@@ -377,15 +402,51 @@ export class ExpressionParser {
         );
 
       if (nextToken.type === TokenType.OPEN_PAREN) {
-        this.parser.consume(TokenType.OPEN_PAREN);
-        const expr = this.parseTernary();
+        const openParen = this.parser.consume(TokenType.OPEN_PAREN);
+
+        // Check for empty parens (error)
+        if (this.parser.peek()?.type === TokenType.CLOSE_PAREN) {
+          throw new CompilerError(
+            "Empty tuples are not supported. Use (expr) for grouping or (expr,) for single-element tuple.",
+            openParen.line,
+          );
+        }
+
+        const firstExpr = this.parseTernary();
+
+        // Check if this is a tuple literal (has comma) or just grouping
+        if (this.parser.peek()?.type === TokenType.COMMA) {
+          // This is a tuple literal
+          const elements: Expression[] = [firstExpr];
+
+          while (this.parser.peek()?.type === TokenType.COMMA) {
+            this.parser.consume(TokenType.COMMA);
+
+            // Allow trailing comma: (e1, e2,)
+            if (this.parser.peek()?.type === TokenType.CLOSE_PAREN) {
+              break;
+            }
+
+            elements.push(this.parseTernary());
+          }
+
+          this.parser.consume(
+            TokenType.CLOSE_PAREN,
+            "Expected ')' after tuple elements.",
+            "Add a closing parenthesis.",
+          );
+
+          return new TupleLiteralExpr(elements, openParen);
+        }
+
+        // Just a grouped expression
         this.parser.consume(
           TokenType.CLOSE_PAREN,
           "Expected ')' after expression.",
           "Add a closing parenthesis.",
         );
 
-        return expr;
+        return firstExpr;
       }
 
       return this.parsePrimary();

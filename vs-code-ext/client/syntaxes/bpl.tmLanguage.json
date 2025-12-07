@@ -116,6 +116,19 @@
     "types": {
       "patterns": [
         {
+          "begin": "\\(",
+          "end": "\\)",
+          "patterns": [
+            {
+              "include": "#types"
+            },
+            {
+              "match": ",",
+              "name": "punctuation.separator.bpl"
+            }
+          ]
+        },
+        {
           "name": "storage.type.bpl",
           "match": "\\b(u8|u16|u32|u64|i8|i16|i32|i64|f32|f64)\\b"
         },
@@ -274,6 +287,13 @@
     },
     "variables": {
       "patterns": [
+        {
+          "match": "\\b(local|global|const|argument)\\s+(\\()",
+          "captures": {
+            "1": { "name": "keyword.other.bpl" },
+            "2": { "name": "punctuation.section.parens.begin.bpl" }
+          }
+        },
         {
           "match": "\\b(local|global|const|argument)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
           "captures": {
