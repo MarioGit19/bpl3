@@ -209,6 +209,10 @@ export default class MethodCallExpr extends Expression {
       else signature = "...";
     }
 
+    if (gen.enableStackTrace) {
+      gen.updateStackLine(this.startToken?.line || 0);
+    }
+
     const result = gen.emitCall(funcName, argValues, returnType, signature);
     return result || "";
   }

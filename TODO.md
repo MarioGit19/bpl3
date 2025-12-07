@@ -14,6 +14,7 @@
 [x] - Improve error reporting with suggestions
 [x] - Implement static methods for structs
 [x] - Add support for constructors (via static factory convention)
+[x] - Implement stack traces for errors and function calls
 [ ] - Add support for custom calling conventions
 [ ] - Support incremental recompilation caching
 [ ] - Add target architecture abstraction layer
@@ -43,4 +44,3 @@
 [ ] - Implement Reflection API for runtime type inspection
 [ ] - Add Regular Expressions (Regex) support to standard library
 [ ] - Implement Result<T, E> pattern for error handling
-[ ] - Implement stack traces for errors and function calls

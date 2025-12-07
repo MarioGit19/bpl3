@@ -177,6 +177,10 @@ export default class FunctionCallExpr extends Expression {
       else signature = "...";
     }
 
+    if (gen.enableStackTrace) {
+      gen.updateStackLine(this.startToken?.line || 0);
+    }
+
     const result = gen.emitCall(irFuncName, argValues, returnType, signature);
     return result || "";
   }

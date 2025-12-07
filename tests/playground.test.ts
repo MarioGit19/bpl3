@@ -16,6 +16,11 @@ interface Tutorial {
 const tutorialsData = JSON.parse(readFileSync(TUTORIALS_PATH, "utf-8"));
 const tutorials: Tutorial[] = tutorialsData.tutorials;
 
+const EXPECTED_EXIT_CODES: Record<string, number> = {
+  "19. Panic": 1,
+  "30. Exit": 3,
+};
+
 describe("Playground Examples", () => {
   tutorials.forEach((tutorial) => {
     it(`should compile and run example: ${tutorial.title}`, () => {
@@ -31,13 +36,18 @@ describe("Playground Examples", () => {
         timeout: 5000,
       });
 
-      if (result.status !== 0) {
+      const expectedCode = EXPECTED_EXIT_CODES[tutorial.title] ?? 0;
+
+      if (result.status !== expectedCode) {
         console.error(`Example '${tutorial.title}' failed:`);
         console.error("STDOUT:", result.stdout);
         console.error("STDERR:", result.stderr);
+        console.error(
+          `Expected exit code ${expectedCode}, got ${result.status}`,
+        );
       }
 
-      expect(result.status).toBe(0);
+      expect(result.status).toBe(expectedCode);
     });
   });
 });

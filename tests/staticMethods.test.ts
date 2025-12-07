@@ -91,7 +91,9 @@ describe("Static Methods", () => {
     `;
     const ir = generateIR(input);
     // Check for monomorphized name
-    expect(ir).toContain("define i32 @__bplm__Utils__identity____i32(i32 %val)");
+    expect(ir).toContain(
+      "define i32 @__bplm__Utils__identity____i32(i32 %val)",
+    );
   });
 
   test("should fail when calling static method on instance", () => {
@@ -104,7 +106,9 @@ describe("Static Methods", () => {
         call m.add(1, 2);
       }
     `;
-    expect(() => generateIR(input)).toThrow("Cannot call static method 'add' on an instance of 'Math'");
+    expect(() => generateIR(input)).toThrow(
+      "Cannot call static method 'add' on an instance of 'Math'",
+    );
   });
 
   test("should fail when calling instance method on type", () => {
@@ -117,7 +121,9 @@ describe("Static Methods", () => {
         call Counter.inc();
       }
     `;
-    expect(() => generateIR(input)).toThrow("Cannot call instance method 'inc' on type 'Counter'");
+    expect(() => generateIR(input)).toThrow(
+      "Cannot call instance method 'inc' on type 'Counter'",
+    );
   });
 
   test("should allow instance method to call static method", () => {

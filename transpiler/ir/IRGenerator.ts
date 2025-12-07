@@ -32,9 +32,149 @@ export class IRGenerator {
   private tempCount: number = 0;
   private labelCount: number = 0;
   private stringConstants: Map<string, string> = new Map();
+  public enableStackTrace: boolean = false;
 
-  constructor() {
+  constructor(enableStackTrace: boolean = false) {
     this.module = new IRModule();
+    this.enableStackTrace = enableStackTrace;
+  }
+
+  // --- Stack Trace Helpers ---
+
+  pushStackFrame(funcName: string, fileName: string, line: number) {
+    if (!this.enableStackTrace) return;
+
+    // 1. Allocate StackFrame on stack
+    const frame = this.emitAlloca({ type: "struct", name: "StackFrame" });
+
+    // 2. Store function name
+    const funcNameStr = this.addStringConstant(funcName);
+    const funcNameCast = this.emitCast(
+      IROpcode.BITCAST,
+      funcNameStr,
+      { type: "pointer", base: { type: "i8" } },
+      {
+        type: "pointer",
+        base: {
+          type: "array",
+          size: funcName.length + 1,
+          base: { type: "i8" },
+        },
+      },
+    );
+    const funcNameGEP = this.emitGEP(
+      { type: "struct", name: "StackFrame" },
+      frame,
+      ["0", "1"],
+    );
+    this.emitStore(
+      { type: "pointer", base: { type: "i8" } },
+      funcNameCast,
+      funcNameGEP,
+    );
+
+    // 3. Store file name
+    const fileNameStr = this.addStringConstant(fileName);
+    const fileNameCast = this.emitCast(
+      IROpcode.BITCAST,
+      fileNameStr,
+      { type: "pointer", base: { type: "i8" } },
+      {
+        type: "pointer",
+        base: {
+          type: "array",
+          size: fileName.length + 1,
+          base: { type: "i8" },
+        },
+      },
+    );
+    const fileNameGEP = this.emitGEP(
+      { type: "struct", name: "StackFrame" },
+      frame,
+      ["0", "2"],
+    );
+    this.emitStore(
+      { type: "pointer", base: { type: "i8" } },
+      fileNameCast,
+      fileNameGEP,
+    );
+
+    // 4. Store line number
+    const lineGEP = this.emitGEP(
+      { type: "struct", name: "StackFrame" },
+      frame,
+      ["0", "3"],
+    );
+    this.emitStore({ type: "i32" }, `${line}`, lineGEP);
+
+    // 5. Link previous frame
+    const prev = this.emitLoad(
+      { type: "pointer", base: { type: "struct", name: "StackFrame" } },
+      "@__stack_top",
+    );
+    const prevGEP = this.emitGEP(
+      { type: "struct", name: "StackFrame" },
+      frame,
+      ["0", "0"],
+    );
+    this.emitStore(
+      { type: "pointer", base: { type: "struct", name: "StackFrame" } },
+      prev,
+      prevGEP,
+    );
+
+    // 6. Update top
+    this.emitStore(
+      { type: "pointer", base: { type: "struct", name: "StackFrame" } },
+      frame,
+      "@__stack_top",
+    );
+  }
+
+  popStackFrame() {
+    if (!this.enableStackTrace) return;
+
+    // 1. Load current frame
+    const current = this.emitLoad(
+      { type: "pointer", base: { type: "struct", name: "StackFrame" } },
+      "@__stack_top",
+    );
+
+    // 2. Load previous frame
+    const prevGEP = this.emitGEP(
+      { type: "struct", name: "StackFrame" },
+      current,
+      ["0", "0"],
+    );
+    const prev = this.emitLoad(
+      { type: "pointer", base: { type: "struct", name: "StackFrame" } },
+      prevGEP,
+    );
+
+    // 3. Restore top
+    this.emitStore(
+      { type: "pointer", base: { type: "struct", name: "StackFrame" } },
+      prev,
+      "@__stack_top",
+    );
+  }
+
+  updateStackLine(line: number) {
+    if (!this.enableStackTrace) return;
+
+    // 1. Load current frame
+    const current = this.emitLoad(
+      { type: "pointer", base: { type: "struct", name: "StackFrame" } },
+      "@__stack_top",
+    );
+
+    // 2. Update line
+    const lineGEP = this.emitGEP(
+      { type: "struct", name: "StackFrame" },
+      current,
+      ["0", "3"],
+    );
+    this.emitStore({ type: "i32" }, `${line}`, lineGEP);
   }
 
   // --- Module Level ---

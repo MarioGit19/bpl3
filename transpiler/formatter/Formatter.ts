@@ -270,7 +270,13 @@ export class Formatter {
   }
 
   private visitFunctionDeclaration(expr: FunctionDeclarationExpr): string {
-    let output = `frame ${expr.name}`;
+    let output = "";
+    if (expr.isStatic) {
+      output += "static ";
+    } else {
+      output += "frame ";
+    }
+    output += expr.name;
     if (expr.genericParams.length > 0) {
       output += `<${expr.genericParams.join(", ")}>`;
     }

@@ -200,6 +200,14 @@ export default class FunctionDeclarationExpr extends Expression {
     const entryBlock = gen.createBlock("entry");
     gen.setBlock(entryBlock);
 
+    // Stack Trace Instrumentation
+    if (gen.enableStackTrace) {
+      const fileName = this.startToken?.fileName || "unknown";
+      const line = this.startToken?.line || 0;
+      // Use original name for display
+      gen.pushStackFrame(this.name, fileName, line);
+    }
+
     resolvedArgs.forEach((arg, index) => {
       const irType = irArgs[index]!.type;
       const argVal = `%${arg.name}`;
@@ -321,6 +329,9 @@ export default class FunctionDeclarationExpr extends Expression {
     this.body.toIR(gen, funcScope);
 
     if (irReturnType.type === "void") {
+      if (gen.enableStackTrace) {
+        gen.popStackFrame();
+      }
       gen.emitReturn(null);
     }
 

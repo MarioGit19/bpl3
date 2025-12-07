@@ -24,6 +24,7 @@ export interface CompilerConfig {
   sourceFile: string | null;
   sourceCode: string | null;
   isEval: boolean;
+  enableStackTrace: boolean;
 }
 
 export const defaultConfig: CompilerConfig = {
@@ -42,6 +43,7 @@ export const defaultConfig: CompilerConfig = {
   sourceFile: null,
   sourceCode: null,
   isEval: false,
+  enableStackTrace: false,
 };
 
 export function parseCLI(): CompilerConfig {
@@ -138,6 +140,7 @@ export function parseCLI(): CompilerConfig {
     .option("-O, --optimization <level>", "Optimization level", parseInt)
     .option("--deps", "Show dependency graph")
     .option("--graph", "Show dependency graph (alias)")
+    .option("--stack-trace", "Enable runtime stack traces")
     .option("-e, --eval <code>", "Evaluate code")
     .argument("[file]", "Source file")
     .argument("[libs...]", "Extra object files to link")
@@ -173,6 +176,7 @@ export function parseCLI(): CompilerConfig {
     config.optimizationLevel = options.optimization;
   }
   if (options.deps || options.graph) config.showDeps = true;
+  if (options.stackTrace) config.enableStackTrace = true;
 
   if (options.eval) {
     config.isEval = true;

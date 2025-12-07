@@ -22,8 +22,48 @@ import { type IRType, irTypeToString } from "../ir/IRType";
 import { Logger } from "../../utils/Logger";
 
 export class LLVMTargetBuilder implements TargetBuilder {
+  constructor(private enableStackTrace: boolean = false) {}
+
   build(module: IRModule): string {
     let output = "";
+
+    if (this.enableStackTrace) {
+      output += `%StackFrame = type { ptr, ptr, ptr, i32 }\n`;
+      output += `@__stack_top = linkonce_odr global ptr null, align 8\n`;
+      output += `@__stack_trace_fmt = private unnamed_addr constant [16 x i8] c"\\09at %s (%s:%d)\\0A\\00", align 1\n\n`;
+
+      output += `define linkonce_odr ptr @__get_stack_top() {
+  %curr = load ptr, ptr @__stack_top
+  ret ptr %curr
+}\n\n`;
+
+      output += `define linkonce_odr void @__print_stack_trace() {
+entry:
+  %curr = load ptr, ptr @__stack_top
+  %cmp = icmp eq ptr %curr, null
+  br i1 %cmp, label %end, label %loop
+
+loop:
+  %frame = phi ptr [ %curr, %entry ], [ %prev, %loop ]
+  %funcNamePtr = getelementptr inbounds %StackFrame, ptr %frame, i32 0, i32 1
+  %funcName = load ptr, ptr %funcNamePtr
+  %fileNamePtr = getelementptr inbounds %StackFrame, ptr %frame, i32 0, i32 2
+  %fileName = load ptr, ptr %fileNamePtr
+  %linePtr = getelementptr inbounds %StackFrame, ptr %frame, i32 0, i32 3
+  %line = load i32, ptr %linePtr
+  
+  %fmt = getelementptr inbounds [16 x i8], ptr @__stack_trace_fmt, i64 0, i64 0
+  call i32 (ptr, ...) @printf(ptr %fmt, ptr %funcName, ptr %fileName, i32 %line)
+  
+  %prevPtr = getelementptr inbounds %StackFrame, ptr %frame, i32 0, i32 0
+  %prev = load ptr, ptr %prevPtr
+  %cmpLoop = icmp eq ptr %prev, null
+  br i1 %cmpLoop, label %end, label %loop
+
+end:
+  ret void
+}\n\n`;
+    }
 
     for (const s of module.structs) {
       const fields = s.fields.map((f) => this.typeToString(f)).join(", ");
@@ -52,6 +92,12 @@ export class LLVMTargetBuilder implements TargetBuilder {
     output += "\n";
 
     for (const func of module.functions) {
+      if (
+        this.enableStackTrace &&
+        (func.name === "__print_stack_trace" || func.name === "__get_stack_top")
+      ) {
+        continue;
+      }
       output += this.buildFunction(func) + "\n";
     }
 

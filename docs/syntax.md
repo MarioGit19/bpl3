@@ -377,7 +377,7 @@ struct Point {
         # Create and return a new instance
         return { x: x, y: y };
     }
-    
+
     frame move(dx: i32, dy: i32) {
         this.x = this.x + dx;
         this.y = this.y + dy;
@@ -387,7 +387,7 @@ struct Point {
 frame main() {
     # Use the static 'new' method to create an instance
     local p: Point = call Point.new(10, 20);
-    
+
     call p.move(5, 5);
 }
 ```

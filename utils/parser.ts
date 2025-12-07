@@ -8,14 +8,17 @@ import { readFile } from "./file";
 
 import type ExportExpr from "../parser/expression/exportExpr";
 import type Expression from "../parser/expression/expr";
-export function generateTokens(code: string): Token[] {
-  const lexer = new Lexer(code);
+export function generateTokens(
+  code: string,
+  fileName: string = "unknown",
+): Token[] {
+  const lexer = new Lexer(code, fileName);
   return lexer.tokenize();
 }
 
-export function getFileTokens(filePath: string): Token[] {
+export function getFileTokens(filePath: string, displayPath?: string): Token[] {
   const content = readFile(filePath);
-  return generateTokens(content);
+  return generateTokens(content, displayPath || filePath);
 }
 
 export function parseTokens(tokens: Token[]): ProgramExpr {
@@ -23,8 +26,8 @@ export function parseTokens(tokens: Token[]): ProgramExpr {
   return parser.parse();
 }
 
-export function parseFile(filePath: string): ProgramExpr {
-  const tokens = getFileTokens(filePath);
+export function parseFile(filePath: string, displayPath?: string): ProgramExpr {
+  const tokens = getFileTokens(filePath, displayPath);
   return parseTokens(tokens);
 }
 

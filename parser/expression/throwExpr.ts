@@ -32,6 +32,10 @@ export default class ThrowExpr extends Expression {
   }
 
   toIR(gen: IRGenerator, scope: Scope): string {
+    if (gen.enableStackTrace && this.startToken) {
+      gen.updateStackLine(this.startToken.line);
+    }
+
     const val = this.expression.toIR(gen, scope);
     const type = resolveExpressionType(this.expression, scope);
 
@@ -117,6 +121,18 @@ export default class ThrowExpr extends Expression {
       [{ value: msg, type: { type: "pointer", base: { type: "i8" } } }],
       { type: "i32" },
     );
+
+    // Print stack trace if enabled
+    if (gen.enableStackTrace) {
+      const traceMsg = gen.addStringConstant("Stack trace:\n");
+      gen.emitCall(
+        "printf",
+        [{ value: traceMsg, type: { type: "pointer", base: { type: "i8" } } }],
+        { type: "i32" },
+      );
+      gen.emitCall("__print_stack_trace", [], { type: "void" });
+    }
+
     gen.emitCall("exit", [{ value: "1", type: { type: "i32" } }], {
       type: "void",
     });

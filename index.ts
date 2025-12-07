@@ -1,6 +1,6 @@
 import { execSync, spawnSync } from "child_process";
 import { existsSync, unlinkSync } from "fs";
-import { isAbsolute } from "path";
+import { dirname, resolve, isAbsolute, relative, basename } from "path";
 
 import { parseCLI } from "./utils/CLI";
 import { CompilerError, ErrorReporter } from "./errors";
@@ -37,6 +37,7 @@ const {
   extraLibs,
   sourceFile,
   isEval,
+  enableStackTrace,
 } = config;
 
 Logger.setQuiet(quiet);
@@ -81,7 +82,10 @@ process.on("SIGINT", () => process.exit(1));
 process.on("SIGTERM", () => process.exit(1));
 
 try {
-  const tokens = getFileTokens(fileName);
+  const entryDir = dirname(resolve(fileName));
+  let displayPath = relative(entryDir, resolve(fileName));
+
+  const tokens = getFileTokens(fileName, displayPath);
   const ast = parseTokens(tokens);
 
   if (printAst) {
@@ -97,7 +101,14 @@ try {
   // Handle imports
   const imports = parseImportExpressions(extractImportStatements(ast));
   if (imports.length) {
-    const objectFiles = parseLibraryFile(fileName, scope);
+    const objectFiles = parseLibraryFile(
+      fileName,
+      scope,
+      enableStackTrace,
+      new Set(),
+      new Map(),
+      entryDir,
+    );
     objectFiles.forEach((obj) => objectsToLink.add(obj));
   }
 
@@ -108,9 +119,9 @@ try {
     ErrorReporter.warn(warning);
   }
 
-  const gen = new IRGenerator();
+  const gen = new IRGenerator(enableStackTrace);
   ast.toIR(gen, analyzedScope);
-  const builder = new LLVMTargetBuilder();
+  const builder = new LLVMTargetBuilder(enableStackTrace);
   asmContent = builder.build(gen.module);
   asmFilePath = getOutputFileName(fileName, ".ll");
   saveToFile(asmFilePath, asmContent);
@@ -187,6 +198,7 @@ if (shouldRun || shouldGdb) {
     } catch (e: any) {
       Logger.info("-----------------------------------");
       Logger.info(`Program exited with code: ${e.status}`);
+      process.exit(e.status || 1);
     }
   }
 }

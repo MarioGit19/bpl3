@@ -4,33 +4,36 @@ BPL is a high-performance, statically typed programming language designed for si
 
 ## 🚀 Features
 
-*   **High Performance**: Compiles to optimized native machine code using LLVM.
-*   **Modern Syntax**: Clean, readable syntax inspired by C, Go, and Python.
-*   **Memory Management**: Supports pointers, manual memory management, and raw memory access.
-*   **Type System**: Statically typed with support for integers, floats, strings, arrays, and user-defined structs.
-*   **Object-Oriented**: Supports structs with methods, static methods, and factory patterns.
-*   **Generics**: Powerful generic structs and functions for code reusability.
-*   **Interoperability**: Easy FFI with C libraries and inline assembly support.
-*   **Modularity**: Built-in module system with `import` and `export`.
-*   **Tooling**: Includes a language server, VS Code extension, and dependency visualizer.
+- **High Performance**: Compiles to optimized native machine code using LLVM.
+- **Modern Syntax**: Clean, readable syntax inspired by C, Go, and Python.
+- **Memory Management**: Supports pointers, manual memory management, and raw memory access.
+- **Type System**: Statically typed with support for integers, floats, strings, arrays, and user-defined structs.
+- **Object-Oriented**: Supports structs with methods, static methods, and factory patterns.
+- **Generics**: Powerful generic structs and functions for code reusability.
+- **Interoperability**: Easy FFI with C libraries and inline assembly support.
+- **Modularity**: Built-in module system with `import` and `export`.
+- **Tooling**: Includes a language server, VS Code extension, and dependency visualizer.
 
 ## 📦 Installation
 
 ### Prerequisites
 
 Ensure you have the following installed on your system:
-*   [Bun](https://bun.sh/) (JavaScript runtime)
-*   `clang` and `gcc` (for linking)
+
+- [Bun](https://bun.sh/) (JavaScript runtime)
+- `clang` and `gcc` (for linking)
 
 ### Setup
 
 1.  **Clone the repository:**
+
     ```bash
     git clone https://github.com/pr0h0/bpl3.git
     cd bpl3
     ```
 
 2.  **Install dependencies:**
+
     ```bash
     bun install
     ```
@@ -50,20 +53,20 @@ bun index.ts [options] <source_file>
 
 ### Common Options
 
-| Option | Description |
-| :--- | :--- |
-| `-r`, `--run` | Run the executable. |
-| `-q`, `--quiet` | Suppress output. |
-| `-p`, `--print-asm` | Print assembly. |
-| `--print-ast` | Print AST. |
-| `-s`, `--static` | Static linking. |
-| `-d`, `--dynamic` | Dynamic linking. |
-| `-g`, `--gdb` | Run with GDB. |
-| `-l`, `--lib` | Compile as library (don't link). |
-| `--no-cleanup` | Don't cleanup temporary files. |
-| `-O<level>`, `--optimization <level>` | Optimization level. |
-| `--deps`, `--graph` | Show dependency graph. |
-| `-e`, `--eval <code>` | Evaluate code. |
+| Option                                | Description                      |
+| :------------------------------------ | :------------------------------- |
+| `-r`, `--run`                         | Run the executable.              |
+| `-q`, `--quiet`                       | Suppress output.                 |
+| `-p`, `--print-asm`                   | Print assembly.                  |
+| `--print-ast`                         | Print AST.                       |
+| `-s`, `--static`                      | Static linking.                  |
+| `-d`, `--dynamic`                     | Dynamic linking.                 |
+| `-g`, `--gdb`                         | Run with GDB.                    |
+| `-l`, `--lib`                         | Compile as library (don't link). |
+| `--no-cleanup`                        | Don't cleanup temporary files.   |
+| `-O<level>`, `--optimization <level>` | Optimization level.              |
+| `--deps`, `--graph`                   | Show dependency graph.           |
+| `-e`, `--eval <code>`                 | Evaluate code.                   |
 
 ### Quick Start
 
@@ -106,6 +109,7 @@ BPL comes with a dedicated VS Code extension for syntax highlighting, code compl
 ## 📖 Language Overview
 
 ### Variables
+
 ```bpl
 global count: u64 = 0;
 
@@ -117,6 +121,7 @@ frame main() {
 ```
 
 ### Structs & Generics
+
 ```bpl
 struct Pair<T> {
     first: T,
@@ -130,6 +135,7 @@ frame main() {
 ```
 
 ### Control Flow
+
 ```bpl
 if x > 10 {
     call print("Big\n");
@@ -145,6 +151,7 @@ loop {
 ```
 
 ### Inline Assembly
+
 ```bpl
 local val: u64 = 10;
 asm {

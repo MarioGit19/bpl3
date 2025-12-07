@@ -101,7 +101,7 @@
         },
         {
           "name": "keyword.other.bpl",
-          "match": "\\b(frame|global|local|const|struct|asm|call|ret)\\b"
+          "match": "\\b(frame|static|global|local|const|struct|asm|call|ret)\\b"
         },
         {
           "name": "variable.language.this.bpl",

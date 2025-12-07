@@ -79,12 +79,19 @@ export default class ReturnExpr extends Expression {
         type = gen.getIRType(context.returnType);
       }
 
+      if (gen.enableStackTrace) {
+        gen.popStackFrame();
+      }
+
       if (type.type === "pointer" && val === "0") {
         gen.emitReturn("null", type);
       } else {
         gen.emitReturn(val, type);
       }
     } else {
+      if (gen.enableStackTrace) {
+        gen.popStackFrame();
+      }
       gen.emitReturn(null);
     }
     return "";

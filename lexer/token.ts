@@ -8,6 +8,7 @@ export default class Token {
     column: number,
     start: number = 0,
     raw: string = "",
+    fileName: string = "",
   ) {
     this.type = type;
     this.value = value;
@@ -15,6 +16,7 @@ export default class Token {
     this.column = column;
     this.start = start;
     this.raw = raw || value;
+    this.fileName = fileName;
   }
   type: TokenType;
   value: string;
@@ -22,6 +24,7 @@ export default class Token {
   column: number;
   start: number;
   raw: string;
+  fileName: string;
 
   toString(): string {
     return `Token([${this.type}], "${this.value}" @${this.line}:${this.column})`;

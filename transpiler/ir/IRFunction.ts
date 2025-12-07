@@ -4,6 +4,7 @@ import type { IRType } from "./IRType";
 
 export class IRFunction {
   public blocks: IRBlock[] = [];
+  public stackFramePtr: string | null = null;
 
   constructor(
     public name: string,

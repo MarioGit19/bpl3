@@ -49,6 +49,15 @@ export default class TryExpr extends Expression {
   }
 
   toIR(gen: IRGenerator, scope: Scope): string {
+    // 0. Save current stack top (for stack traces)
+    let savedStackTop: string | null = null;
+    if (gen.enableStackTrace) {
+      savedStackTop = gen.emitLoad(
+        { type: "pointer", base: { type: "struct", name: "StackFrame" } },
+        "@__stack_top",
+      );
+    }
+
     // 1. Allocate ExceptionNode on stack
     const node = gen.emitAlloca({ type: "struct", name: "ExceptionNode" });
 
@@ -119,6 +128,15 @@ export default class TryExpr extends Expression {
 
     // Catch Dispatch
     gen.setBlock(catchDispatch);
+
+    // Restore stack trace top
+    if (gen.enableStackTrace && savedStackTop) {
+      gen.emitStore(
+        { type: "pointer", base: { type: "struct", name: "StackFrame" } },
+        savedStackTop,
+        "@__stack_top",
+      );
+    }
 
     // Restore stack (pop the handler that caught this)
     gen.emitStore(

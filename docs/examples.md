@@ -400,11 +400,11 @@ struct Rectangle {
 frame main() {
     # Create instance using static 'new' method
     local rect: Rectangle = call Rectangle.new(10, 20);
-    
+
     # Call instance method
     local a: i32 = call rect.area();
     call printf("Area: %d\n", a); # Output: 200
-    
+
     # Modify state via method
     call rect.resize(2);
     call printf("New Area: %d\n", call rect.area()); # Output: 800

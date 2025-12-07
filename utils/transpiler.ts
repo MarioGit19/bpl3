@@ -1,4 +1,4 @@
-import { dirname, resolve } from "path";
+import { dirname, resolve, relative, basename } from "path";
 import { existsSync } from "fs";
 
 import { ErrorReporter, CompilerError } from "../errors";
@@ -18,7 +18,11 @@ import {
 
 import type ProgramExpr from "../parser/expression/programExpr";
 import type ExportExpr from "../parser/expression/exportExpr";
-export function transpileProgram(program: ProgramExpr, scope?: Scope): string {
+export function transpileProgram(
+  program: ProgramExpr,
+  scope?: Scope,
+  enableStackTrace: boolean = false,
+): string {
   if (!scope) {
     scope = new Scope();
   }
@@ -55,24 +59,30 @@ export function transpileProgram(program: ProgramExpr, scope?: Scope): string {
 
   program.optimize();
 
-  const gen = new IRGenerator();
+  const gen = new IRGenerator(enableStackTrace);
   program.toIR(gen, scope);
 
-  const builder = new LLVMTargetBuilder();
+  const builder = new LLVMTargetBuilder(enableStackTrace);
   return builder.build(gen.module);
 }
 
 export function parseLibraryFile(
   libFilePath: string,
   scope: Scope,
+  enableStackTrace: boolean = false,
   visited: Set<string> = new Set(),
   moduleCache: Map<string, Scope> = new Map(),
+  entryDir?: string,
 ): string[] {
   const absoluteLibPath = resolve(libFilePath);
   if (visited.has(absoluteLibPath)) {
     return [];
   }
   visited.add(absoluteLibPath);
+
+  if (!entryDir) {
+    entryDir = dirname(absoluteLibPath);
+  }
 
   const program = parseFile(libFilePath) as ProgramExpr;
   const imports = extractImportStatements(program);
@@ -124,14 +134,25 @@ export function parseLibraryFile(
           const nestedLibs = parseLibraryFile(
             absolutePath,
             importedScope,
+            enableStackTrace,
             visited,
             moduleCache,
+            entryDir,
           );
           objectFiles.push(...nestedLibs);
 
-          const importedProgram = parseFile(absolutePath);
+          let displayPath = relative(entryDir!, absolutePath);
+          if (!displayPath.startsWith(".") && !displayPath.startsWith("/")) {
+            displayPath = "./" + displayPath;
+          }
 
-          const asmContent = transpileProgram(importedProgram, importedScope);
+          const importedProgram = parseFile(absolutePath, displayPath);
+
+          const asmContent = transpileProgram(
+            importedProgram,
+            importedScope,
+            enableStackTrace,
+          );
 
           const asmFile = absolutePath.replace(/\.x$/, ".ll");
           saveToFile(asmFile, asmContent);
