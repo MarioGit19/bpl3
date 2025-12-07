@@ -4,199 +4,103 @@
       "id": "hello-world",
       "title": "1. Hello World",
       "description": "Our first program will print the classic \"Hello World\" message. This is the entry point of any BPL program.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    call printf(\"Hello, World!\\n\");\n}\n"
+      "code": "import [Console] from \"std/io.x\";\n\nframe main() {\n    call Console.log(\"Hello, World!\");\n}\n"
     },
     {
       "id": "values",
       "title": "2. Values",
       "description": "BPL has various value types including strings, integers, floats, and booleans. Strings are pointers to characters (`*u8`). Integers can be signed (`i64`) or unsigned (`u64`). Floats are `f64` or `f32`.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    call printf(\"String: %s\\n\", \"BPL Rocks\");\n    call printf(\"Integer: %d\\n\", 1 + 1);\n    call printf(\"Float: %f\\n\", 7.0 / 3.0);\n    \n    if 1 {\n        call printf(\"Boolean true\\n\");\n    }\n}\n"
+      "code": "import [Console] from \"std/io.x\";\n\nframe main() {\n    call Console.log(\"String: \", \"BPL Rocks\");\n    call Console.log(\"Integer: \", 1 + 1);\n    call Console.log(\"Float: \", 7.0 / 3.0);\n    \n    if 1 {\n        call Console.log(\"Boolean true\");\n    }\n}\n"
     },
     {
       "id": "variables",
       "title": "3. Variables",
       "description": "Variables are declared using `local` (or `global`) followed by the name, type, and optional initialization.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    local a: *u8 = \"initial\";\n    call printf(\"%s\\n\", a);\n\n    local b: u64 = 1;\n    local c: u64 = 2;\n    call printf(\"%d\\n\", b + c);\n\n    local d: u64 = 0;\n    call printf(\"%d\\n\", d);\n}\n"
+      "code": "import [Console] from \"std/io.x\";\n\nframe main() {\n    local a: *u8 = \"initial\";\n    call Console.log(a);\n\n    local b: u64 = 1;\n    local c: u64 = 2;\n    call Console.log(b + c);\n\n    local d: u64 = 0;\n    call Console.log(d);\n}\n"
     },
     {
       "id": "constants",
       "title": "4. Constants",
       "description": "BPL supports constants using the `const` keyword. Constants must be initialized and cannot be changed.",
-      "code": "import printf, sin from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern sin(x: f64) ret f64;\n\nglobal const s: *u8 = \"constant\";\n\nframe main() {\n    call printf(\"%s\\n\", s);\n\n    local const n: u64 = 500000000;\n    local d: f64 = 3e20 / n;\n    call printf(\"%f\\n\", d);\n\n    call printf(\"%f\\n\", call sin(n));\n}\n"
+      "code": "import [Console] from \"std/io.x\";\nimport sin from \"libc\";\n\nextern sin(x: f64) ret f64;\n\nglobal const s: *u8 = \"constant\";\n\nframe main() {\n    call Console.log(s);\n\n    local const n: u64 = 500000000;\n    local d: f64 = 3e20 / n;\n    call Console.log(d);\n\n    call Console.log(call sin(n));\n}\n"
     },
     {
       "id": "for",
       "title": "5. For (Loops)",
       "description": "BPL has only one looping construct, `loop`, which creates an infinite loop. You can simulate `while` and `for` loops using `break` and `continue`.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    local i: u64 = 1;\n    # Basic loop (while i <= 3)\n    loop {\n        if i > 3 { break; }\n        call printf(\"%d\\n\", i);\n        i = i + 1;\n    }\n\n    # Loop with continue\n    local j: u64 = 7;\n    loop {\n        if j > 9 { break; }\n        if j % 2 == 0 {\n            j = j + 1;\n            continue;\n        }\n        call printf(\"%d\\n\", j);\n        j = j + 1;\n    }\n\n    # Infinite loop\n    loop {\n        call printf(\"loop\\n\");\n        break;\n    }\n}\n"
+      "code": "import [Console] from \"std/io.x\";\n\nframe main() {\n    local i: u64 = 1;\n    # Basic loop (while i <= 3)\n    loop {\n        if i > 3 { break; }\n        call Console.log(i);\n        i = i + 1;\n    }\n\n    # Loop with continue\n    local j: u64 = 7;\n    loop {\n        if j > 9 { break; }\n        if j % 2 == 0 {\n            j = j + 1;\n            continue;\n        }\n        call Console.log(j);\n        j = j + 1;\n    }\n\n    # Infinite loop\n    loop {\n        call Console.log(\"loop\");\n        break;\n    }\n}\n"
     },
     {
       "id": "if-else",
       "title": "6. If/Else",
       "description": "Branching with `if` and `else` is straightforward. Braces `{}` are required.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    if 7 % 2 == 0 {\n        call printf(\"7 is even\\n\");\n    } else {\n        call printf(\"7 is odd\\n\");\n    }\n\n    if 8 % 4 == 0 {\n        call printf(\"8 is divisible by 4\\n\");\n    }\n\n    local num: u64 = 9;\n    if num < 0 {\n        call printf(\"%d is negative\\n\", num);\n    } else if num < 10 {\n        call printf(\"%d has 1 digit\\n\", num);\n    } else {\n        call printf(\"%d has multiple digits\\n\", num);\n    }\n}\n"
+      "code": "import [Console] from \"std/io.x\";\n\nframe main() {\n    if 7 % 2 == 0 {\n        call Console.log(\"7 is even\");\n    } else {\n        call Console.log(\"7 is odd\");\n    }\n\n    if 8 % 4 == 0 {\n        call Console.log(\"8 is divisible by 4\");\n    }\n\n    local num: u64 = 9;\n    if num < 0 {\n        call Console.log(num, \" is negative\");\n    } else if num < 10 {\n        call Console.log(num, \" has 1 digit\");\n    } else {\n        call Console.log(num, \" has multiple digits\");\n    }\n}\n"
     },
     {
       "id": "switch",
       "title": "7. Switch",
       "description": "Switch statements express conditionals across many branches.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    local i: u64 = 2;\n    call printf(\"Write %d as \", i);\n    switch i {\n        case 1: { call printf(\"one\\n\"); }\n        case 2: { call printf(\"two\\n\"); }\n        case 3: { call printf(\"three\\n\"); }\n        default: { call printf(\"unknown\\n\"); }\n    }\n}\n"
+      "code": "import [Console] from \"std/io.x\";\n\nframe main() {\n    local i: u64 = 2;\n    call Console.print(\"Write \", i, \" as \");\n    switch i {\n        case 1: { call Console.log(\"one\"); }\n        case 2: { call Console.log(\"two\"); }\n        case 3: { call Console.log(\"three\"); }\n        default: { call Console.log(\"unknown\"); }\n    }\n}\n"
     },
     {
       "id": "arrays",
       "title": "8. Arrays",
       "description": "Arrays are fixed-size sequences of elements of a specific type.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    local a: u64[5];\n    call printf(\"emp: %d %d\\n\", a[0], a[4]);\n\n    a[4] = 100;\n    call printf(\"set: %d\\n\", a[4]);\n    call printf(\"len: 5\\n\");\n\n    local b: u64[5] = [1, 2, 3, 4, 5];\n    call printf(\"dcl: %d %d %d %d %d\\n\", b[0], b[1], b[2], b[3], b[4]);\n}\n"
+      "code": "import [Console] from \"std/io.x\";\n\nframe main() {\n    local a: u64[5];\n    call Console.log(\"emp: \", a[0], \" \", a[4]);\n\n    a[4] = 100;\n    call Console.log(\"set: \", a[4]);\n    call Console.log(\"len: 5\");\n\n    local b: u64[5] = [1, 2, 3, 4, 5];\n    call Console.log(\"dcl: \", b[0], \" \", b[1], \" \", b[2], \" \", b[3], \" \", b[4]);\n}\n"
     },
     {
-      "id": "functions",
-      "title": "9. Functions",
-      "description": "Functions are central in BPL. Use `frame` to declare them and `call` to invoke them.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe plus(a: u64, b: u64) ret u64 {\n    return a + b;\n}\n\nframe plusPlus(a: u64, b: u64, c: u64) ret u64 {\n    return call plus(a, call plus(b, c));\n}\n\nframe main() {\n    local res: u64 = call plus(1, 2);\n    call printf(\"1+2 = %d\\n\", res);\n\n    res = call plusPlus(1, 2, 3);\n    call printf(\"1+2+3 = %d\\n\", res);\n}\n"
+      "id": "structs-methods",
+      "title": "9. Structs & Methods",
+      "description": "Structs can have methods defined within them. Methods can access the struct instance using `this`.",
+      "code": "import [Console] from \"std/io.x\";\n\nstruct User {\n    name: *u8,\n    age: i32,\n\n    frame sayHello() {\n        call Console.log(\"Hello, my name is \", this.name, \" and I am \", this.age, \" years old\");\n    }\n\n    frame setAge(newAge: i32) {\n        this.age = newAge;\n    }\n}\n\nframe main() {\n    local user: User;\n    user.name = \"Alice\";\n    user.age = 25;\n\n    call user.sayHello();\n\n    call user.setAge(30);\n    call Console.print(\"After setAge: \");\n    call user.sayHello();\n}\n"
     },
     {
-      "id": "recursion",
-      "title": "10. Recursion",
-      "description": "BPL supports recursive functions.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe fact(n: u64) ret u64 {\n    if n == 0 {\n        return 1;\n    }\n    return n * call fact(n - 1);\n}\n\nframe main() {\n    call printf(\"7! = %d\\n\", call fact(7));\n}\n"
+      "id": "static-methods",
+      "title": "10. Static Methods",
+      "description": "Structs can also have static methods which are called on the type itself, not an instance. Useful for factory methods or utility functions.",
+      "code": "import [Console] from \"std/io.x\";\n\nstruct Math {\n    static add(a: i32, b: i32) ret i32 {\n        return a + b;\n    }\n}\n\nstruct Counter {\n    count: i32,\n\n    static new(start: i32) ret Counter {\n        return cast<Counter>({count: start});\n    }\n\n    frame increment() {\n        this.count = this.count + 1;\n    }\n}\n\nframe main() {\n    local sum: i32 = call Math.add(10, 20);\n    call Console.log(\"Sum: \", sum);\n\n    local c: Counter = call Counter.new(5);\n    call Console.log(\"Counter start: \", c.count);\n\n    call c.increment();\n    call Console.log(\"Counter after inc: \", c.count);\n}\n"
     },
     {
-      "id": "pointers",
-      "title": "11. Pointers",
-      "description": "BPL supports pointers, allowing you to pass references to values.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe zeroval(ival: u64) {\n    ival = 0;\n}\n\nframe zeroptr(iptr: *u64) {\n    *iptr = 0;\n}\n\nframe main() {\n    local i: u64 = 1;\n    call printf(\"initial: %d\\n\", i);\n\n    call zeroval(i);\n    call printf(\"zeroval: %d\\n\", i);\n\n    call zeroptr(&i);\n    call printf(\"zeroptr: %d\\n\", i);\n\n    call printf(\"pointer: %p\\n\", &i);\n}\n"
-    },
-    {
-      "id": "strings",
-      "title": "12. Strings",
-      "description": "Strings are pointers to null-terminated byte arrays (`*u8`).",
-      "code": "import printf, strlen from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern strlen(s: *u8) ret u64;\n\nframe main() {\n    local s: *u8 = \"hello\";\n    call printf(\"%s\\n\", s);\n    call printf(\"len: %d\\n\", call strlen(s));\n    call printf(\"char: %c\\n\", s[1]);\n}\n"
-    },
-    {
-      "id": "structs",
-      "title": "13. Structs",
-      "description": "Structs are typed collections of fields.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nstruct Person {\n    name: *u8,\n    age: u64,\n}\n\nframe newPerson(name: *u8) ret Person {\n    local p: Person;\n    p.name = name;\n    p.age = 42;\n    return p;\n}\n\nframe main() {\n    local bob: Person;\n    bob.name = \"Bob\";\n    bob.age = 20;\n    call printf(\"%s %d\\n\", bob.name, bob.age);\n\n    local alice: Person = call newPerson(\"Alice\");\n    call printf(\"%s %d\\n\", alice.name, alice.age);\n}\n"
-    },
-    {
-      "id": "methods",
-      "title": "14. Struct Methods",
-      "description": "Structs can have methods defined inside them using the 'frame' keyword. Use 'this' to access the struct instance.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nstruct Rect {\n    width: u64,\n    height: u64,\n\n    frame area() ret u64 {\n        return this.width * this.height;\n    }\n\n    frame perim() ret u64 {\n        return 2 * this.width + 2 * this.height;\n    }\n\n    frame scale(factor: u64) {\n        this.width = this.width * factor;\n        this.height = this.height * factor;\n    }\n}\n\nframe main() {\n    local r: Rect;\n    r.width = 10;\n    r.height = 5;\n\n    call printf(\"area: %d\\n\", call r.area());\n    call printf(\"perim: %d\\n\", call r.perim());\n\n    call r.scale(2);\n    call printf(\"after scale - area: %d\\n\", call r.area());\n}\n"
-    },
-    {
-      "id": "generics",
-      "title": "15. Generic Structs",
-      "description": "BPL supports generic structs with type parameters. Methods on generic structs can use the type parameters.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nstruct Box<T> {\n    val: T,\n\n    frame get() ret T {\n        return this.val;\n    }\n\n    frame set(value: T) {\n        this.val = value;\n    }\n}\n\nstruct Pair<A, B> {\n    first: A,\n    second: B,\n\n    frame getFirst() ret A {\n        return this.first;\n    }\n\n    frame getSecond() ret B {\n        return this.second;\n    }\n}\n\nframe main() {\n    local intBox: Box<u64>;\n    call intBox.set(123);\n    call printf(\"Box<u64>: %d\\n\", call intBox.get());\n\n    local p: Pair<u64, u64>;\n    p.first = 42;\n    p.second = 100;\n    call printf(\"Pair: %d, %d\\n\", call p.getFirst(), call p.getSecond());\n}\n"
-    },
-    {
-      "id": "errors",
-      "title": "16. Errors",
-      "description": "It's idiomatic to return errors as a separate return value (e.g. via a struct) or status code.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nstruct Result {\n    val: u64,\n    err: u64, # 0 = ok, 1 = error\n}\n\nframe f(arg: u64) ret Result {\n    local res: Result;\n    if arg == 42 {\n        res.err = 1;\n        return res;\n    }\n    res.val = arg + 3;\n    res.err = 0;\n    return res;\n}\n\nframe main() {\n    local r: Result = call f(42);\n    if r.err != 0 {\n        call printf(\"f failed\\n\");\n    } else {\n        call printf(\"f worked: %d\\n\", r.val);\n    }\n\n    r = call f(7);\n    if r.err != 0 {\n        call printf(\"f failed\\n\");\n    } else {\n        call printf(\"f worked: %d\\n\", r.val);\n    }\n}\n"
-    },
-    {
-      "id": "variadic",
-      "title": "17. Variadic Functions",
-      "description": "Variadic functions can be called with any number of trailing arguments.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe sum(count: u64, ...:u64) ret u64 {\n    local total: u64 = 0;\n    local i: u64 = 0;\n    loop {\n        if i >= count { break; }\n        total = total + args[i];\n        i = i + 1;\n    }\n    return total;\n}\n\nframe main() {\n    call printf(\"%d\\n\", call sum(2, 1, 2));\n    call printf(\"%d\\n\", call sum(3, 1, 2, 3));\n    local nums: u64[4] = [1, 2, 3, 4];\n    call printf(\"%d\\n\", call sum(4, nums[0], nums[1], nums[2], nums[3]));\n}\n"
-    },
-    {
-      "id": "sorting",
-      "title": "18. Sorting",
-      "description": "Implementing a simple sort algorithm.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    local arr: u64[5] = [4, 2, 5, 1, 3];\n    local i: u64 = 0;\n    local j: u64 = 0;\n    local temp: u64 = 0;\n\n    # Bubble sort\n    loop {\n        if i >= 5 { break; }\n        j = 0;\n        loop {\n            if j >= 4 - i { break; }\n            if arr[j] > arr[j+1] {\n                temp = arr[j];\n                arr[j] = arr[j+1];\n                arr[j+1] = temp;\n            }\n            j = j + 1;\n        }\n        i = i + 1;\n    }\n\n    call printf(\"Sorted: %d %d %d %d %d\\n\", arr[0], arr[1], arr[2], arr[3], arr[4]);\n}\n"
-    },
-    {
-      "id": "panic",
-      "title": "19. Panic",
-      "description": "Use `exit` to immediately terminate the program with an error code.",
-      "code": "import printf, exit from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern exit(code: i32);\n\nframe main() {\n    call printf(\"Before panic\\n\");\n    call exit(1);\n    call printf(\"After panic (unreachable)\\n\");\n}\n"
-    },
-    {
-      "id": "string-functions",
-      "title": "20. String Functions",
-      "description": "Standard library string functions.",
-      "code": "import printf, strlen, strcmp, strcpy, malloc from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern strlen(s: *u8) ret u64;\nextern strcmp(s1: *u8, s2: *u8) ret i32;\nextern strcpy(dest: *u8, src: *u8) ret *u8;\nextern malloc(size: u64) ret *u8;\n\nframe main() {\n    local s: *u8 = \"test\";\n    call printf(\"Contains: %d\\n\", call strcmp(s, \"test\") == 0);\n    call printf(\"Len: %d\\n\", call strlen(s));\n    \n    local buf: *u8 = call malloc(10);\n    call strcpy(buf, s);\n    call printf(\"Copy: %s\\n\", buf);\n}\n"
-    },
-    {
-      "id": "string-formatting",
-      "title": "21. String Formatting",
-      "description": "String formatting via `printf`.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nstruct Point {\n    x: u64,\n    y: u64,\n}\n\nframe main() {\n    local p: Point;\n    p.x = 1;\n    p.y = 2;\n    call printf(\"struct: {x:%d y:%d}\\n\", p.x, p.y);\n    call printf(\"int: %d\\n\", 123);\n    call printf(\"bin: %b\\n\", 0b1100101);\n    call printf(\"char: %c\\n\", 33);\n    call printf(\"hex: %x\\n\", 0x456);\n    call printf(\"float: %.2f\\n\", 7.891234e3);\n    call printf(\"str: %s\\n\", \"string\");\n    call printf(\"ptr: %p\\n\", &p);\n}\n"
-    },
-    {
-      "id": "time",
-      "title": "22. Time",
-      "description": "Using `time` from libc.",
-      "code": "import printf, time from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern time(t: *u64) ret u64;\n\nframe main() {\n    local now: u64 = call time(NULL);\n    call printf(\"Current timestamp: %d\\n\", now);\n}\n"
-    },
-    {
-      "id": "random-numbers",
-      "title": "23. Random Numbers",
-      "description": "Using `rand` and `srand`.",
-      "code": "import printf, rand, srand, time from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern rand() ret i32;\nextern srand(seed: u32);\nextern time(t: *u64) ret u64;\n\nframe main() {\n    call srand(call time(NULL));\n    call printf(\"%d\\n\", call rand() % 100);\n    call printf(\"%d\\n\", call rand() % 100);\n}\n"
-    },
-    {
-      "id": "number-parsing",
-      "title": "24. Number Parsing",
-      "description": "Parsing numbers from strings using `atoi` and `strtod`.",
-      "code": "import printf, atoi, strtod from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern atoi(s: *u8) ret i32;\nextern strtod(s: *u8, endptr: **u8) ret f64;\n\nframe main() {\n    local f: f64 = call strtod(\"1.234\", NULL);\n    call printf(\"%f\\n\", f);\n\n    local i: i32 = call atoi(\"123\");\n    call printf(\"%d\\n\", i);\n\n    local k: i32 = call atoi(\"bad\");\n    call printf(\"%d\\n\", k);\n}\n"
-    },
-    {
-      "id": "writing-files",
-      "title": "25. Writing Files",
-      "description": "Writing files using C standard library functions.",
-      "code": "import printf, fopen, fwrite, fclose from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern fopen(filename: *u8, mode: *u8) ret *u8;\nextern fwrite(ptr: *u8, size: u64, nmemb: u64, stream: *u8) ret u64;\nextern fclose(stream: *u8) ret i32;\n\nframe main() ret u8 {\n    local f: *u8 = call fopen(\"/tmp/output.txt\", \"w\");\n    if f == NULL {\n        call printf(\"Failed to open file\\n\");\n        return 1;\n    }\n\n    local s: *u8 = \"hello\\n\";\n    call fwrite(s, 1, 6, f);\n    call printf(\"Wrote to /tmp/output.txt\\n\");\n\n    call fclose(f);\n    return 0;\n}\n"
-    },
-    {
-      "id": "reading-files",
-      "title": "26. Reading Files",
-      "description": "Reading files using C standard library functions.",
-      "code": "import printf, fopen, fread, fclose from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern fopen(filename: *u8, mode: *u8) ret *u8;\nextern fread(ptr: *u8, size: u64, nmemb: u64, stream: *u8) ret u64;\nextern fclose(stream: *u8) ret i32;\n\nframe main() ret u8 {\n    local f: *u8 = call fopen(\"/tmp/output.txt\", \"r\");\n    if f == NULL {\n        call printf(\"Failed to open file (make sure /tmp/output.txt exists)\\n\");\n        return 1;\n    }\n\n    local buf: u8[100];\n    local n: u64 = call fread(buf, 1, 99, f);\n    buf[n] = 0;\n    call printf(\"Read %d bytes: %s\\n\", n, buf);\n\n    call fclose(f);\n    return 0;\n}\n"
-    },
-    {
-      "id": "command-line-arguments",
-      "title": "27. Command-Line Arguments",
-      "description": "Accessing command-line arguments via `argc` and `argv`.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main(argc: i32, argv: **u8) {\n    local i: i32 = 0;\n    loop {\n        if i >= argc { break; }\n        call printf(\"Arg %d: %s\\n\", i, argv[i]);\n        i = i + 1;\n    }\n}\n"
-    },
-    {
-      "id": "environment-variables",
-      "title": "28. Environment Variables",
-      "description": "Accessing environment variables using `getenv`.",
-      "code": "import printf, getenv from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern getenv(name: *u8) ret *u8;\n\nframe main() {\n    local path: *u8 = call getenv(\"PATH\");\n    call printf(\"PATH: %s\\n\", path);\n}\n"
-    },
-    {
-      "id": "spawning-processes",
-      "title": "29. Spawning Processes",
-      "description": "Running external commands using `system`.",
-      "code": "import printf, system from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern system(cmd: *u8) ret i32;\n\nframe main() {\n    call printf(\"Running 'ls -l'\\n\");\n    call system(\"ls -l\");\n}\n"
-    },
-    {
-      "id": "exit",
-      "title": "30. Exit",
-      "description": "Exiting the program with a status code.",
-      "code": "import printf, exit from \"libc\";\n\nextern printf(fmt: *u8, ...);\nextern exit(code: i32);\n\nframe main() {\n    call printf(\"Exiting with code 3\\n\");\n    call exit(3);\n}\n"
-    },
-    {
-      "id": "inline-assembly",
-      "title": "31. Inline Assembly",
-      "description": "Embed raw assembly code using the `asm` block. You can interpolate BPL variables using `(varName)`. Note: BPL uses Intel syntax for inline assembly, and variables are passed as pointers (addresses).",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    local a: u64 = 10;\n    local b: u64 = 20;\n    local result: u64;\n\n    # Inline assembly to add a and b\n    # Variables are passed as pointers, so we dereference them with []\n    asm {\n        mov rax, [(a)]\n        add rax, [(b)]\n        mov [(result)], rax\n    }\n\n    call printf(\"Result from asm: %d\\n\", result);\n}\n"
-    },
-    {
-      "id": "division",
-      "title": "32. Division Types",
-      "description": "BPL distinguishes between float division `/` and integer division `//`.",
-      "code": "import printf from \"libc\";\n\nextern printf(fmt: *u8, ...);\n\nframe main() {\n    local a: u64 = 7;\n    local b: u64 = 2;\n\n    # Integer division (truncates)\n    call printf(\"7 // 2 = %d\\n\", a // b);\n\n    # Float division (returns float)\n    call printf(\"7 / 2 = %f\\n\", a / b);\n    \n    # Float literals\n    call printf(\"7.0 / 2.0 = %f\\n\", 7.0 / 2.0);\n}\n"
+      "id": "inheritance",
+      "title": "11. Inheritance",
+      "description": "Structs can inherit from other structs using the `:` syntax. Derived structs inherit fields and methods from the base struct.",
+      "code": "import [Console] from \"std/io.x\";\n\nstruct Point {\n    x: i32,\n    y: i32,\n\n    frame init(x: i32, y: i32) {\n        this.x = x;\n        this.y = y;\n    }\n\n    frame print() {\n        call Console.log(\"Point(\", this.x, \", \", this.y, \")\");\n    }\n}\n\nstruct Point3D: Point {\n    z: i32,\n\n    frame init3D(x: i32, y: i32, z: i32) {\n        this.x = x;\n        this.y = y;\n        this.z = z;\n    }\n\n    frame print3D() {\n        call Console.log(\"Point3D(\", this.x, \", \", this.y, \", \", this.z, \")\");\n    }\n}\n\nframe main() {\n    local p: Point3D;\n    call p.init3D(10, 20, 30);\n\n    call Console.log(\"Accessing inherited fields: x=\", p.x, \", y=\", p.y);\n    call Console.log(\"Accessing own field: z=\", p.z);\n\n    call Console.log(\"Calling inherited method: \");\n    call p.print();\n\n    call Console.log(\"Calling own method: \");\n    call p.print3D();\n}\n"
     },
     {
       "id": "tuples",
-      "title": "33. Tuples",
-      "description": "Tuples allow grouping multiple values of different types. They are useful for returning multiple values from functions.",
-      "code": "import printf from 'libc';\n\n# Example: Safe division with error handling using tuples\nframe safe_divide(a: i64, b: i64) ret (i64, u8) {\n    if (b == 0) {\n        return (0, cast<u8>(1));  # Return error\n    }\n    local quotient: i64 = a // b;\n    return (quotient, cast<u8>(0));  # Return success\n}\n\n# Example: Min/Max in one function\nframe min_max(a: i64, b: i64) ret (i64, i64) {\n    if (a < b) {\n        return (a, b);\n    }\n    return (b, a);\n}\n\n# Example: Swap two values using tuples\nframe swap_demo() ret u8 {\n    local x: i64 = 10;\n    local y: i64 = 20;\n    call printf(\"Before: x=%lld, y=%lld\\n\", x, y);\n    \n    local (a: i64, b: i64) = (y, x);\n    x = a;\n    y = b;\n    \n    call printf(\"After: x=%lld, y=%lld\\n\", x, y);\n    return cast<u8>(0);\n}\n\nframe main() ret u8 {\n    call printf(\"=== Tuple Examples ===\\n\\n\");\n    \n    # Basic tuple\n    call printf(\"1. Basic Tuple:\\n\");\n    local point: (i64, i64) = (100, 200);\n    call printf(\"   Point: (%lld, %lld)\\n\\n\", point.0, point.1);\n    \n    # Tuple destructuring\n    call printf(\"2. Destructuring:\\n\");\n    local (x: i64, y: i64) = point;\n    call printf(\"   x=%lld, y=%lld\\n\\n\", x, y);\n    \n    # Safe division with error handling\n    call printf(\"3. Safe Division (20 / 4):\\n\");\n    local result1: (i64, u8) = call safe_divide(20, 4);\n    local (quot1: i64, err1: u8) = result1;\n    if (err1 == cast<u8>(0)) {\n        call printf(\"   Result: %lld\\n\\n\", quot1);\n    } else {\n        call printf(\"   Error!\\n\\n\");\n    }\n    \n    # Division by zero\n    call printf(\"4. Safe Division (10 / 0):\\n\");\n    local result2: (i64, u8) = call safe_divide(10, 0);\n    local (quot2: i64, err2: u8) = result2;\n    if (err2 == cast<u8>(0)) {\n        call printf(\"   Result: %lld\\n\\n\", quot2);\n    } else {\n        call printf(\"   Error: Division by zero!\\n\\n\");\n    }\n    \n    # Min/Max\n    call printf(\"5. Min/Max(15, 8):\\n\");\n    local mm: (i64, i64) = call min_max(15, 8);\n    local (min_val: i64, max_val: i64) = mm;\n    call printf(\"   Min: %lld, Max: %lld\\n\\n\", min_val, max_val);\n    \n    # Swap\n    call printf(\"6. Swap Demo:\\n   \");\n    call swap_demo();\n    \n    return cast<u8>(0);\n}\n"
+      "title": "12. Tuples",
+      "description": "Tuples allow grouping multiple values of different types. They support destructuring and multiple return values.",
+      "code": "import [Console] from \"std/io.x\";\n\nframe divide_with_remainder(a: i64, b: i64) ret (i64, i64) {\n    local quotient: i64 = a / b;\n    local remainder: i64 = a % b;\n    return (quotient, remainder);\n}\n\nframe main() {\n    # Basic tuple\n    local coords: (i64, i64) = (10, 20);\n    call Console.log(\"Coordinates: (\", coords.0, \", \", coords.1, \")\");\n\n    # Tuple return\n    local result: (i64, i64) = call divide_with_remainder(17, 5);\n    call Console.log(\"17 / 5 = \", result.0, \" remainder \", result.1);\n\n    # Destructuring\n    local (q: i64, r: i64) = result;\n    call Console.log(\"Destructured: q=\", q, \", r=\", r);\n}\n"
+    },
+    {
+      "id": "generics",
+      "title": "13. Generics",
+      "description": "Generics allow writing code that works with multiple types. You can define generic structs and functions.",
+      "code": "import [Console] from \"std/io.x\";\n\n# Generic Struct\nstruct Box<T> {\n    value: T,\n}\n\n# Generic Function\nframe identity<T>(val: T) ret T {\n    return val;\n}\n\nframe main() {\n    # Using generic struct\n    local b: Box<u64>;\n    b.value = 123;\n    call Console.log(\"Box value: \", b.value);\n\n    # Using generic function\n    local x: u64 = call identity<u64>(42);\n    call Console.log(\"Identity: \", x);\n\n    # Generic with different type\n    local b2: Box<*u8>;\n    b2.value = \"Hello Generic\";\n    call Console.log(\"Box string: \", b2.value);\n}\n"
+    },
+    {
+      "id": "casting",
+      "title": "14. Type Casting",
+      "description": "Use the `cast<Type>(value)` syntax to convert between compatible types, such as integers, floats, and pointers.",
+      "code": "import [Console] from \"std/io.x\";\n\nframe main() {\n    # Integer cast\n    local x: u64 = 1000;\n    local y: u8 = cast<u8>(x);\n    call Console.log(\"u64 \", x, \" cast to u8: \", y);\n\n    # Float cast\n    local f: f64 = 3.14159;\n    local i: u64 = cast<u64>(f);\n    call Console.log(\"f64 \", f, \" cast to u64: \", i);\n\n    # Pointer cast\n    local a: u8 = 42;\n    local ptr: *u8 = &a;\n    local addr: u64 = cast<u64>(ptr);\n    call Console.print(\"Pointer address: 0x\",);\n    call Console.print_hex(addr);\n}\n"
+    },
+    {
+      "id": "variadic",
+      "title": "15. Variadic Functions",
+      "description": "Functions can accept a variable number of arguments using the `...` syntax. Arguments are accessed via the `args` array.",
+      "code": "import [Console] from \"std/io.x\";\n\nframe sum(count: u64, ...:u64) ret u64 {\n    local total: u64 = 0;\n    local i: u64 = 0;\n\n    loop {\n        if i >= count {\n            break;\n        }\n        total = total + args[i];\n        i = i + 1;\n    }\n    return total;\n}\n\nframe main() {\n    local s: u64 = call sum(5, 10, 20, 30, 40, 50);\n    call Console.log(\"Sum of 5 numbers: \", s);\n}\n"
+    },
+    {
+      "id": "error-handling",
+      "title": "16. Error Handling",
+      "description": "BPL supports structured error handling with `try`, `catch`, and `throw`. You can throw any struct as an exception.",
+      "code": "import [Console] from \"std/io.x\";\n\nstruct MyError {\n    code: i32,\n}\n\nframe thrower(val: i32) {\n    if val < 0 {\n        call Console.log(\"Throwing error...\");\n        throw cast<MyError>({code: val});\n    }\n    call Console.log(\"Value is good: \", val);\n}\n\nframe main() {\n    try {\n        call thrower(-1);\n    } catch (e: MyError) {\n        call Console.log(\"Caught error with code: \", e.code);\n    }\n\n    try {\n        call thrower(10);\n    } catch (e: MyError) {\n        call Console.log(\"Should not be here\");\n    }\n}\n"
+    },
+    {
+      "id": "pointers",
+      "title": "17. Pointers & Memory",
+      "description": "Direct memory management is possible using pointers (`*T`) and `std_malloc`/`std_free` from std/memory.x.",
+      "code": "import [Console] from \"std/io.x\";\nimport std_malloc, std_free from \"std/memory.x\";\n\nframe main() {\n    # Allocate memory for 5 bytes\n    local ptr: *u8 = call std_malloc(5);\n    \n    # Write to memory\n    *ptr = 'H';\n    *(ptr + 1) = 'i';\n    *(ptr + 2) = '!';\n    *(ptr + 3) = 0; # Null terminator\n\n    call Console.log(\"From heap: \", ptr);\n\n    # Free memory\n    call std_free(ptr);\n}\n"
     }
   ]
 }

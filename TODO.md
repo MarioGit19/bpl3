@@ -44,3 +44,4 @@
 [ ] - Add Optional Garbage Collection support
 [ ] - Implement Reflection API for runtime type inspection
 [ ] - Add Regular Expressions (Regex) support to standard library
+[ ] - Make generic inheritance work - struct A<T, E>: B<T> {}
