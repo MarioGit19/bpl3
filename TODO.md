@@ -16,13 +16,14 @@
 [x] - Add support for constructors (via static factory convention)
 [x] - Implement stack traces for errors and function calls
 [x] - Add support for tuple types and destructuring
+[x] - Implement a Language Server Protocol (LSP) server
+[x] - Implement Result<T, E> pattern for error handling
 [ ] - Add support for custom calling conventions
 [ ] - Support incremental recompilation caching
 [ ] - Add target architecture abstraction layer
 [ ] - Implement plugin architecture for extensibility
 [ ] - Implement Enum types and Pattern Matching
 [ ] - Add support for Interfaces/Traits
-[ ] - Implement a Language Server Protocol (LSP) server
 [ ] - Add WebAssembly (WASM) compilation target
 [ ] - Implement 'defer' statement for resource management
 [ ] - Create a package manager for dependency resolution
@@ -43,4 +44,3 @@
 [ ] - Add Optional Garbage Collection support
 [ ] - Implement Reflection API for runtime type inspection
 [ ] - Add Regular Expressions (Regex) support to standard library
-[ ] - Implement Result<T, E> pattern for error handling
