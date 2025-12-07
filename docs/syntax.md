@@ -345,6 +345,53 @@ frame main() ret i32 {
 }
 ```
 
+### Static Methods
+
+Structs can also define static methods using the `static` keyword. Static methods belong to the type itself rather than an instance and do not have access to `this`.
+
+Static methods are called using the type name: `Type.method(...)`.
+
+```bpl
+struct Math {
+    static add(a: i32, b: i32) ret i32 {
+        return a + b;
+    }
+}
+
+frame main() {
+    local sum: i32 = call Math.add(10, 20);
+}
+```
+
+#### Constructors (Convention)
+
+BPL does not have a built-in constructor keyword. The convention is to use a static method named `new` to create and initialize instances.
+
+```bpl
+struct Point {
+    x: i32,
+    y: i32,
+
+    # Static factory method (Constructor)
+    static new(x: i32, y: i32) ret Point {
+        # Create and return a new instance
+        return { x: x, y: y };
+    }
+    
+    frame move(dx: i32, dy: i32) {
+        this.x = this.x + dx;
+        this.y = this.y + dy;
+    }
+}
+
+frame main() {
+    # Use the static 'new' method to create an instance
+    local p: Point = call Point.new(10, 20);
+    
+    call p.move(5, 5);
+}
+```
+
 #### Nested Method Calls
 
 You can call methods on nested struct fields:

@@ -26,7 +26,11 @@ export class ParserBase {
     return this.tokens[this.current + offset] ?? null;
   }
 
-  public consume(type: TokenType, errorMessage: string = ""): Token {
+  public consume(
+    type: TokenType,
+    errorMessage: string = "",
+    hint?: string,
+  ): Token {
     const token = this.peek();
     if (token && token.type === type) {
       this.current++;
@@ -38,6 +42,7 @@ export class ParserBase {
         ? errorMessage
         : `Expected token of type ${type}, but got ${token?.type}`,
       token ? token.line : 0,
+      hint,
     );
   }
 

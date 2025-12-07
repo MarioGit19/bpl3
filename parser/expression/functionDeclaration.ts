@@ -24,6 +24,7 @@ export default class FunctionDeclarationExpr extends Expression {
   }
 
   public isMethod?: boolean;
+  public isStatic: boolean = false;
   public receiverStruct?: string;
   public thisType?: VariableType;
 
@@ -99,7 +100,7 @@ export default class FunctionDeclarationExpr extends Expression {
 
     // Prepare receiver type if method
     let allArgs = this.args;
-    if (isMethod && receiverStruct) {
+    if (isMethod && receiverStruct && !this.isStatic) {
       const thisType = this.thisType || {
         name: receiverStruct,
         isPointer: 1,

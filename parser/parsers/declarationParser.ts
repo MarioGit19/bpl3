@@ -247,8 +247,11 @@ export class DeclarationParser {
         this.parser.peek() &&
         this.parser.peek()!.type !== TokenType.CLOSE_BRACE
       ) {
-        // Check if this is a method declaration (starts with 'frame')
-        if (this.parser.peek()?.value === "frame") {
+        // Check if this is a method declaration (starts with 'frame' or 'static')
+        if (
+          this.parser.peek()?.value === "frame" ||
+          this.parser.peek()?.value === "static"
+        ) {
           break; // Exit field parsing, start method parsing
         }
 
@@ -273,10 +276,16 @@ export class DeclarationParser {
 
       // Parse methods
       const methods: FunctionDeclarationExpr[] = [];
-      while (this.parser.peek() && this.parser.peek()?.value === "frame") {
+      while (
+        this.parser.peek() &&
+        (this.parser.peek()?.value === "frame" ||
+          this.parser.peek()?.value === "static")
+      ) {
+        const isStatic = this.parser.peek()?.value === "static";
         const method = this.parseFunctionDeclaration();
         // Tag this as a method with metadata
         method.isMethod = true;
+        method.isStatic = isStatic;
         method.receiverStruct = structNameToken.value;
         methods.push(method);
       }

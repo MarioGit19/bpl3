@@ -5,6 +5,7 @@ import { mangleMethod } from "../../utils/methodMangler";
 import { resolveExpressionType } from "../../utils/typeResolver";
 import ExpressionType from "../expressionType";
 import Expression from "./expr";
+import IdentifierExpr from "./identifierExpr";
 
 import type Scope from "../../transpiler/Scope";
 import type { VariableType } from "./variableDeclarationExpr";
@@ -40,7 +41,21 @@ export default class MethodCallExpr extends Expression {
 
   toIR(gen: IRGenerator, scope: Scope): string {
     // Resolve receiver type
-    const receiverType = resolveExpressionType(this.receiver, scope);
+    let receiverType = resolveExpressionType(this.receiver, scope);
+    let isStaticCall = false;
+
+    if (!receiverType) {
+      // Check if receiver is a Type (for static method call)
+      if (this.receiver.type === ExpressionType.IdentifierExpr) {
+        const ident = this.receiver as IdentifierExpr;
+        const typeInfo = scope.resolveType(ident.name);
+        if (typeInfo) {
+          receiverType = { name: ident.name, isPointer: 0, isArray: [] };
+          isStaticCall = true;
+        }
+      }
+    }
+
     if (!receiverType) {
       throw new CompilerError(
         `Cannot resolve receiver type for method call '${this.methodName}'`,
@@ -110,40 +125,46 @@ export default class MethodCallExpr extends Expression {
       );
     }
 
-    // Get receiver address
-    let receiverPtr: string;
-    if (receiverType.isPointer > 0) {
-      // Already a pointer, use directly
-      receiverPtr = this.receiver.toIR(gen, scope);
-    } else {
-      // Need to get address
-      if (this.receiver.getAddress) {
-        receiverPtr = this.receiver.getAddress(gen, scope);
+    // Get receiver address (only if not static)
+    let receiverPtr: string | null = null;
+    if (!isStaticCall) {
+      if (receiverType.isPointer > 0) {
+        // Already a pointer, use directly
+        receiverPtr = this.receiver.toIR(gen, scope);
       } else {
-        // Fallback: evaluate to temp and get address
-        const receiverVal = this.receiver.toIR(gen, scope);
-        const tempPtr = gen.emitAlloca(gen.getIRType(receiverType), "receiver");
-        gen.emitStore(gen.getIRType(receiverType), receiverVal, tempPtr);
-        receiverPtr = tempPtr;
+        // Need to get address
+        if (this.receiver.getAddress) {
+          receiverPtr = this.receiver.getAddress(gen, scope);
+        } else {
+          // Fallback: evaluate to temp and get address
+          const receiverVal = this.receiver.toIR(gen, scope);
+          const tempPtr = gen.emitAlloca(
+            gen.getIRType(receiverType),
+            "receiver",
+          );
+          gen.emitStore(gen.getIRType(receiverType), receiverVal, tempPtr);
+          receiverPtr = tempPtr;
+        }
       }
     }
 
-    // Prepare arguments (receiver is first)
-    const argValues: { value: string; type: any }[] = [
-      {
+    // Prepare arguments (receiver is first if not static)
+    const argValues: { value: string; type: any }[] = [];
+    if (!isStaticCall && receiverPtr) {
+      argValues.push({
         value: receiverPtr,
         type: gen.getIRType({
           name: structName,
           isPointer: 1,
           isArray: [],
         }),
-      },
-    ];
+      });
+    }
 
     // Process remaining arguments (same logic as FunctionCallExpr)
     this.args.forEach((arg, index) => {
       let val = arg.toIR(gen, scope);
-      const paramIndex = index + 1; // Offset by 1 for receiver
+      const paramIndex = index + (isStaticCall ? 0 : 1); // Offset by 1 for receiver if not static
 
       let type: any;
       if (func.args && func.args[paramIndex]) {

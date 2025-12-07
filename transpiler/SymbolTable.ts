@@ -30,6 +30,7 @@ export type FunctionInfo = {
   llvmName?: string;
   irName?: string;
   isMethod?: boolean;
+  isStatic?: boolean;
   receiverStruct?: string;
   originalName?: string;
   genericParams?: string[];

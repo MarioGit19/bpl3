@@ -370,3 +370,49 @@ frame main() {
 
 - **Throwing**: Using `throw` to signal an error condition.
 - **Catching**: Using `try-catch` blocks to handle errors gracefully without crashing.
+
+## 12. Object-Oriented Patterns
+
+Demonstrates how to use structs with static and instance methods to implement Object-Oriented Programming (OOP) patterns.
+
+```bpl
+struct Rectangle {
+    width: i32,
+    height: i32,
+
+    # Static Factory Method (Constructor Convention)
+    static new(w: i32, h: i32) ret Rectangle {
+        return { width: w, height: h };
+    }
+
+    # Instance Method
+    frame area() ret i32 {
+        return this.width * this.height;
+    }
+
+    # Instance Method modifying state
+    frame resize(scale: i32) {
+        this.width = this.width * scale;
+        this.height = this.height * scale;
+    }
+}
+
+frame main() {
+    # Create instance using static 'new' method
+    local rect: Rectangle = call Rectangle.new(10, 20);
+    
+    # Call instance method
+    local a: i32 = call rect.area();
+    call printf("Area: %d\n", a); # Output: 200
+    
+    # Modify state via method
+    call rect.resize(2);
+    call printf("New Area: %d\n", call rect.area()); # Output: 800
+}
+```
+
+**Key Concepts:**
+
+- **Static Methods**: `Rectangle.new(...)` belongs to the type and is used as a constructor.
+- **Instance Methods**: `rect.area()` operates on a specific instance (`this`).
+- **Encapsulation**: Grouping data and behavior within a `struct`.

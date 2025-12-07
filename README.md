@@ -1,575 +1,169 @@
-# BPL 3
+# BPL (Best Programming Language) v3
 
-## The Best Programming Language v3
+BPL is a high-performance, statically typed programming language designed for simplicity and efficiency. It compiles directly to x86-64 assembly via LLVM, offering a balance between low-level control and high-level abstractions.
 
-BPL is a simple programming language that compiles to x86-64 assembly. It is designed to be easy to learn and use, while still being powerful enough to write complex programs.
+## 🚀 Features
 
-## Installation
+*   **High Performance**: Compiles to optimized native machine code using LLVM.
+*   **Modern Syntax**: Clean, readable syntax inspired by C, Go, and Python.
+*   **Memory Management**: Supports pointers, manual memory management, and raw memory access.
+*   **Type System**: Statically typed with support for integers, floats, strings, arrays, and user-defined structs.
+*   **Object-Oriented**: Supports structs with methods, static methods, and factory patterns.
+*   **Generics**: Powerful generic structs and functions for code reusability.
+*   **Interoperability**: Easy FFI with C libraries and inline assembly support.
+*   **Modularity**: Built-in module system with `import` and `export`.
+*   **Tooling**: Includes a language server, VS Code extension, and dependency visualizer.
 
-To install BPL, you need to have `bun`, `clang` and `gcc` installed on your system.
+## 📦 Installation
 
-- Clone the repository
-- Install the dependencies
-- Check if everything is working
+### Prerequisites
 
-```bash
-git clone https://github.com/pr0h0/bpl3.git
-cd bpl3
-bun install
-bun index.ts example/hello-world/hello-world.x
-./example/hello-world/hello-world
-```
+Ensure you have the following installed on your system:
+*   [Bun](https://bun.sh/) (JavaScript runtime)
+*   `clang` and `gcc` (for linking)
 
-You should see "Hello, World!" printed to the console.
-More examples can be found in the `example` directory.
+### Setup
 
-## CLI Usage
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/pr0h0/bpl3.git
+    cd bpl3
+    ```
 
-The BPL compiler (`index.ts`) supports several command-line arguments:
+2.  **Install dependencies:**
+    ```bash
+    bun install
+    ```
 
-- `-e`, `--eval <code>`: Compile and run the provided code string directly.
-- `-r`, `--run`: Run the compiled executable immediately after compilation.
-- `-s`, `--static`: Link statically (default is dynamic).
-- `-d`, `--dynamic`: Link dynamically.
-- `-q`, `--quiet`: Suppress output messages.
-- `-p`, `--print-asm`: Print the generated LLVM IR to the console.
-- `--print-ast`: Print the generated AST (JSON) to the console.
-- `-g`, `--gdb`: Run the executable with GDB for debugging.
-- `-l`, `--lib`: Compile as a library (object file only, no linking).
-- `-O0`, `-O1`, `-O2`, `-O3`: Set optimization level (default is -O3).
-- `--deps`, `--graph`: Generate and print a dependency graph (DOT format).
+3.  **Verify installation:**
+    ```bash
+    bun index.ts --help
+    ```
 
-Example:
+## 💻 Usage
 
-```bash
-bun index.ts -r -e 'import printf from "libc"; frame main() { call printf("Hello from CLI!\n"); }'
-```
-
-## VS Code Extension
-
-BPL includes a full-featured VS Code extension providing syntax highlighting, code completion, go-to-definition, and hover information.
-
-To install it:
-
-1. Navigate to `vs-code-ext`.
-2. Run the build script: `./build_extension.sh`.
-3. Install the generated `.vsix` file located in `vs-code-ext/client/` (e.g., `code --install-extension vs-code-ext/client/bpl-vscode-0.1.0.vsix`).
-
-## Language Features
-
-- **Variables and Data Types**: Supports integers (`u8`-`u64`, `i8`-`i64`), strings, pointers, and arrays.
-- **Control Flow**: Includes `if`, `else`, `else if`, `loop`, `break`, `continue`.
-- **Functions**: Allows defining and calling functions with parameters and return values.
-- **Import/Export**: Supports modular programming through import and export statements with automatic dependency compilation.
-- **Inline Assembly**: Allows embedding raw assembly code within BPL code for low-level operations with interpolation of BPL variables.
-- **Structures and Arrays**: Supports user-defined structures and arrays for complex data management.
-- **Generic Structs**: Supports generic type parameters for reusable data structures (e.g., `Box<T>`, `Pair<A, B>`).
-- **Struct Methods**: Structs can have methods with `this` keyword for object-oriented programming.
-- **Nested Method Calls**: Supports method calls on nested struct fields (e.g., `call obj.field.method()`).
-- **Array Literals**: Supports initializing arrays with literals `[1, 2, 3]`.
-- **Struct Literals**: Supports initializing structs with literals using both named and positional syntax.
-- **Standard Library**: Provides built-in functions for `print`, `exit`, `exec`, `str_len`.
-- **Optimization**: Built-in peephole optimizer to generate efficient assembly code.
-- **Simple Syntax**: Designed to be easy to read and write, with a syntax similar to C, Go, and Python.
-
-## Example
-
-Here is a simple example of a BPL program that prints "Hello, World!" to the
-console:
-
-```bpl
-frame main() ret u8 {
-    # This is a comment
-    call print("Hello, World!\n");
-    return 0;
-}
-```
-
-## Compilation
-
-To compile a BPL program, use `bun index.ts`:
+To compile and run a BPL program (`.x` file), use the compiler entry point:
 
 ```bash
-bun index.ts [options] path/to/your/file.x [lib1.o ...]
+bun index.ts [options] <source_file>
 ```
 
-This will generate an executable file in the same directory as the source file.
+### Common Options
 
-### CLI Options
+| Option | Description |
+| :--- | :--- |
+| `-r`, `--run` | Run the executable. |
+| `-q`, `--quiet` | Suppress output. |
+| `-p`, `--print-asm` | Print assembly. |
+| `--print-ast` | Print AST. |
+| `-s`, `--static` | Static linking. |
+| `-d`, `--dynamic` | Dynamic linking. |
+| `-g`, `--gdb` | Run with GDB. |
+| `-l`, `--lib` | Compile as library (don't link). |
+| `--no-cleanup` | Don't cleanup temporary files. |
+| `-O<level>`, `--optimization <level>` | Optimization level. |
+| `--deps`, `--graph` | Show dependency graph. |
+| `-e`, `--eval <code>` | Evaluate code. |
 
-- `-q | --quiet`: Suppress all output except for errors.
-- `-p | --print-asm`: Print the generated LLVM IR to the console and preserve the `.ll` file.
-- `-r | --run`: Automatically run the compiled program after successful compilation.
-- `-g | --gdb`: Run the compiled program inside GDB for debugging.
-- `-l | --lib`: Compile as a shared library instead of an executable, preserve `.o` file.
-- `-d | --dynamic`: Compile as a dynamically linked executable (default).
-- `-s | --static`: Compile as a static executable (no dynamic linking).
+### Quick Start
 
-### Import/Export
-
-BPL supports modular programming through import and export statements. You can split your code into multiple files and import functions and types between them. The compiler automatically handles the compilation of imported files.
-
-**Exporting:**
-To make a function or type available to other files, use the `export` keyword.
-
-```bpl
-struct Point {
-    x: u64,
-    y: u64
-}
-export [Point]; # export type using square brackets
-
-frame add(a: u64, b: u64) ret u64 {
-    return a + b;
-}
-export add; # export function
-```
-
-**Importing:**
-You can import functions and types from other BPL files using relative paths.
+Create a file named `hello.x`:
 
 ```bpl
-import [Point] from "./types.x";
-import add from "./math.x";
+import print_str from "std/io.x";
 
-frame main() ret u8 {
-    local p: Point;
-    call add(1, 2);
-    return 0;
-}
-```
-
-**Syntax:**
-
-- `import [Type1, Type2] from "./path/to/file.x";` - Import types.
-- `import func1, func2 from "./path/to/file.x";` - Import functions.
-- `import func1, func2 from "./path/to/file.o"; ` - Import functions from compiled object files.
-- `import printf;` - Import external functions (like libc functions).
-
-The compiler recursively resolves imports, compiles the dependencies, and links them into the final executable.
-
-#### Valid syntax for import/export
-
-- `export functionName;` - Export a function.
-- `export [TypeName];` - Export a type (struct).
-- `import functionName1, functionName2, ...;` - Import external functions.
-- `import functionName1, functionName2 from "./path/to/file.x";` - Import functions from a local file.
-- `import [Type1], [Type2] from "./path/to/file.x";` - Import types from a local file.
-
-### External Functions (`extern`)
-
-When importing functions from external libraries (like `libc`) or compiled object files (`.o`), the BPL compiler doesn't have access to the function signatures (argument types and return types). By default, it assumes they take no arguments or generic arguments.
-
-To specify the signature of an imported function, use the `extern` keyword. This allows the compiler to perform type checking and correctly handle return values.
-
-```bpl
-import printf from "libc";
-
-# Redeclare printf with specific signature
-extern printf(fmt: *u8, ...);
-
-frame main() ret u64 {
-    call printf("Value: %d\n", 42);
-    return 0;
-}
-```
-
-**Recommendation:** Use `extern` primarily when importing from `libc` or `*.o` files. When importing from other `.x` (BPL source) files, the compiler can automatically infer signatures, so `extern` is usually not necessary unless you need to override them.
-
-### Functions/Frames
-
-Functions in BPL are defined using the `frame` keyword. Frame keyword is used because functions in BPL create stack frames and variable scopes are tied to stack frames.
-They can have parameters and return values. Here is an example of a function that adds two numbers:
-
-```bpl
-frame add(a: u8, b: u8) ret u8 {
-    return a + b;
-}
-```
-
-or
-
-```bpl
-frame noop() {
-  call print("No operation performed.\n");
-}
-```
-
-Functions must specify return type using `ret` keyword. If no return type is specified, function is considered to have `void` return type and ret keyword is omitted.
-Functions can be called using the `call` keyword:
-
-```bpl
-local result: u8 = call add(5, 10);
-call print("Result: %d\n", call add(5, 10));
-```
-
-#### Function declaration syntax:
-
-```bpl
-frame function_name(param1: type1, param2: type2, ...) ret return_type {}
-frame function_name(param1: type1, param2: type2, ...) {} // for void return type
-frame function_name() ret return_type {}
-frame function_name() {} // for void return type
-```
-
-### Variadic Functions
-
-BPL supports defining and calling variadic functions (functions that accept a variable number of arguments).
-
-**Defining a Variadic Function:**
-
-Use `...:type` as the last parameter to define a variadic function. The arguments are accessible via the `args` array-like keyword.
-
-```bpl
-frame sum(count: u64, ...:u64) ret u64 {
-    local total: u64 = 0;
-    local i: u64 = 0;
-    loop {
-        if i >= count { break; }
-        total = total + args[i];
-        i = i + 1;
-    }
-    return total;
-}
-```
-
-**External Variadic Functions:**
-
-For external functions like `printf`, use `...` in the `extern` declaration.
-
-```bpl
-extern printf(fmt: string, ...);
-```
-
-### Command Line Arguments and Environment Variables
-
-The `main` function can optionally accept command line arguments and environment variables. It supports `argc` (argument count), `argv` (argument vector), and `envp` (environment pointer). This is supported in both the default assembly backend and the LLVM backend.
-
-```bpl
-import getenv;
-frame main(argc: i32, argv: **u8, envp: **u8) ret u8 {
-    # Print arguments
-    local i: i32 = 0;
-    loop {
-        if i >= argc {
-            break;
-        }
-        call printf("Arg %d: %s\n", i, argv[i]);
-        i = i + 1;
-    }
-
-    # Get specific environment variable
-    local path: *u8 = call getenv("PATH");
-    if path != null {
-        call printf("PATH: %s\n", path);
-    }
-    return 0;
-}
-```
-
-### Exception Handling (Try-Catch-Throw)
-
-BPL supports structured exception handling using `try`, `catch`, and `throw`. This mechanism is implemented using `setjmp` and `longjmp` under the hood.
-
-```bpl
 frame main() {
-    try {
-        call risky_function();
-    } catch (e: u64) {
-        call printf("Caught exception: %d\n", e);
-    }
+    call print_str("Hello, World!\n");
 }
 
-frame risky_function() {
-    if some_condition {
-        throw 404; # Throws an exception with value 404
-    }
-}
 ```
 
-### Sizeof Operator
+Compile and run it:
 
-The `sizeof` operator returns the size of a type in bytes. It is evaluated at compile time.
-
-```bpl
-local size_u64: u64 = sizeof(u64); # 8
-local size_point: u64 = sizeof(Point); # Size of struct Point
+```bash
+bun index.ts -r hello.x
 ```
 
-### Explicit Casting
+## 🛠️ VS Code Extension
 
-BPL supports explicit type casting using the `cast<TargetType>(value)` syntax.
+BPL comes with a dedicated VS Code extension for syntax highlighting, code completion, and more.
 
-```bpl
-local f: f64 = 3.14;
-local i: i32 = cast<i32>(f); # 3
-local ptr: *u8 = cast<*u8>(i); # Cast integer to pointer
-```
+**Installation Steps:**
+
+1.  Navigate to the extension directory:
+    ```bash
+    cd vs-code-ext
+    ```
+2.  Build the extension:
+    ```bash
+    ./build_extension.sh
+    ```
+3.  Install the generated `.vsix` file:
+    ```bash
+    code --install-extension client/bpl-vscode-0.1.0.vsix
+    ```
+
+## 📖 Language Overview
 
 ### Variables
-
-Variables in BPL are declared using the `global` and `local` keyword. Here is an example of declaring local and global variables:
-
 ```bpl
-global global_var: u8 = 10;
-frame main() ret u8 {
-    local local_var: u8 = 5;
-    call print("Global: %d, Local: %d\n", global_var, local_var);
-    return 0;
+global count: u64 = 0;
+
+frame main() {
+    local x: i32 = 42;
+    local pi: f64 = 3.14159;
+    local message: *u8 = "BPL is cool";
 }
 ```
 
-Local variables are scoped to the function they are declared in, while global variables are accessible from any function. Global variables are initialized at program startup and can be also constants while local variables are initialized when the function is called and can't be constants.
-
-#### Variable declaration syntax:
-
+### Structs & Generics
 ```bpl
-global const var_name: type = initial_value;
-global var_name: type = initial_value;
-local var_name: type = initial_value;
-global var_name: type; // uninitialized global variable
-local var_name: type; // uninitialized local variable
-```
+struct Pair<T> {
+    first: T,
+    second: T
+}
 
-### Loops and Control Flow
-
-BPL supports standard control flow constructs such as `if`, `else`, `else if`, `loop`, `break`, and `continue`. Loops by default are infinite and can be exited using `break` statement. if-else statements allow conditional execution of code blocks. if statement can be optionally followed by else block. Condition in if statements are not required to be in parentheses, and should evaluate to a boolean value but not explicitly required.
-Here is an example of a loop that prints numbers from 0 to 9:
-
-```bpl
-frame main() ret u8 {
-    local i: u8 = 0;
-    loop {
-        if i >= 10 {
-            break;
-        }
-        call printf("%d\n", i);
-        i = i + 1;
-    }
-    return 0;
+frame main() {
+    local p: Pair<i32> = {10, 20};
+    call print("First: %d\n", p.first);
 }
 ```
 
-#### Control flow syntax:
-
+### Control Flow
 ```bpl
-if condition {
-    // code to execute if condition is true
-} else if condition2 {
-    // code to execute if condition2 is true
-} else { # else block is optional
-    // code to execute if condition is false
+if x > 10 {
+    call print("Big\n");
+} else {
+    call print("Small\n");
 }
+
+local i: u64 = 0;
 loop {
-    // code to execute in the loop
-    break; // to exit the loop
-    continue; // to skip to the next iteration, default behavior
+    if i >= 5 { break; }
+    i = i + 1;
 }
 ```
 
 ### Inline Assembly
-
-BPL allows embedding raw assembly code within BPL code using the `asm` block. This is useful for low-level operations that are not directly supported by BPL. You can also interpolate BPL variables into the assembly code using `(varName)`.
-The assembly code is passed to LLVM's inline assembly mechanism. By default, this uses AT&T syntax.
-Variables interpolated with `(varName)` are replaced with operands (e.g., `$0`, `$1`) and passed as input/output constraints.
-
-Here is an example of using inline assembly to add two numbers:
-
 ```bpl
-frame main() ret u8 {
-    local a: u8 = 5;
-    local b: u8 = 10;
-    local result: u8;
-    asm {
-        mov (a), %rax
-        add (b), %rax
-        mov %rax, (result)
-    }
-    call printf("Result: %d\n", result);
-    return 0;
+local val: u64 = 10;
+asm {
+    mov (val), %rax
+    inc %rax
+    mov %rax, (val)
 }
 ```
 
-### Structures and Arrays
+## 🤝 Contributing
 
-BPL supports user-defined structures and arrays for complex data management. Structures can be defined using the `struct` keyword, and arrays can be declared using square brackets `[]`.
+Contributions are welcome! Whether it's fixing bugs, adding features, or improving documentation.
 
-#### Struct Declaration and Initialization
+1.  Fork the repository.
+2.  Create your feature branch (`git checkout -b feature/amazing-feature`).
+3.  Commit your changes (`git commit -m 'Add some amazing feature'`).
+4.  Push to the branch (`git push origin feature/amazing-feature`).
+5.  Open a Pull Request.
 
-Structs can be initialized using struct literals with either positional or named field syntax:
+## 📄 License
 
-```bpl
-struct Point {
-    x: u8,
-    y: u8,
-}
-
-frame main() ret u8 {
-    # Positional initialization (fields in order)
-    local p1: Point = {10, 20};
-
-    # Named initialization (any order)
-    local p2: Point = {y: 30, x: 40};
-
-    # Nested struct initialization
-    struct Color {
-        r: u8,
-        g: u8,
-        b: u8,
-    }
-
-    struct Pixel {
-        pos: Point,
-        color: Color,
-    }
-
-    local pixel: Pixel = {
-        pos: {0, 0},
-        color: {r: 255, g: 128, b: 64}
-    };
-
-    return 0;
-}
-```
-
-**Important**: You cannot mix named and positional initialization in the same struct literal. Use either all named fields or all positional fields.
-
-#### Arrays of Structs
-
-```bpl
-global points: Point[10];
-
-frame main() ret u8 {
-    local i: u8 = 0;
-    loop {
-        if i >= 10 {
-            break;
-        }
-        points[i].x = i * 2;
-        points[i].y = i * 3;
-        call printf("Point %d: (%d, %d)\n", i, points[i].x, points[i].y);
-        i = i + 1;
-    }
-    return 0;
-}
-```
-
-### Strings
-
-BPL supports string literals and string manipulation. Strings are null-terminated byte arrays (`*u8` or `u8[]`).
-
-```bpl
-# Read-only string literal (stored in .rodata)
-local str_ro: *u8 = "Hello, World!";
-
-# Mutable stack string (initialized from literal)
-local str_stack: u8[64] = "Hello, Stack!";
-str_stack[0] = 'h'; # Modify character
-
-# Heap string (dynamic)
-local str_heap: *u8 = call malloc(128);
-call strcpy(str_heap, "Hello, Heap!");
-```
-
-### Arithmetic and Logical Operations
-
-BPL supports standard arithmetic operations such as addition arithemetic, comparison, logical, assignment, and bitwise operations. Here are some examples:
-
-```bpl
-local a: u8 = 10;
-local b: u8 = 5;
-# Arithmetic Operations --------------------------------
-local sum: u8 = a + b; // Addition
-local sub: u8 = a - b; // Subtraction
-local prod: u8 = a * b; // Multiplication
-local quot: u8 = a / b; // Float Division (returns float)
-local intQuot: u8 = a // b; // Integer Division (truncating for int, floor for float)
-local rem: u8 = a % b; // Modulus
-# Comparison Operations --------------------------------
-local isEq: u8 = (a == b); // Equality Comparison
-local isGt: u8 = (a > b); // Greater Than Comparison
-local isLt: u8 = (a < b); // Less Than Comparison
-local isGte: u8 = (a >= b); // Greater Than or Equal
-local isLte: u8 = (a <= b); // Less Than or Equal
-# Bitwise Operations -----------------------------------
-local andRes: u8 = (a && b); // Logical AND
-local orRes: u8 = (a || b); // Logical OR
-local notRes: u8 = !a; // Logical NOT
-local bitAnd: u8 = a & b; // Bitwise AND
-local bitOr: u8 = a | b; // Bitwise OR
-local bitXor: u8 = a ^ b; // Bitwise XOR
-local tildeRes: u8 = ~a; // Bitwise NOT
-local leftShift: u8 = a << 1; // Left Shift
-local rightShift: u8 = a >> 1; // Right Shift
-# Assignment Operations --------------------------------
-local assignValue: u8;
-assignValue = 20; // Assignment
-assignValue += 5; // Addition Assignment
-assignValue -= 3; // Subtraction Assignment
-assignValue *= 2; // Multiplication Assignment
-assignValue /= 4; // Division Assignment
-assignValue %= 6; // Modulus Assignment
-assignValue ^= 0x0F; // Bitwise XOR Assignment
-assignValue &= 0xF0; // Bitwise AND Assignment
-assignValue |= 0x0F; // Bitwise OR Assignment
-assignValue ~= 0xFF; // Bitwise NOT Assignment
-# Dereference and Address-of Operations ----------------
-local ptr: u64 = &a; // Address-of Operation
-local derefValue: u8 = *(ptr); // Dereference Operation
-# Ternary Operator -------------------------------------
-local max: u8 = a > b ? a : b;
-```
-
-### Optimization
-
-BPL leverages the powerful optimization capabilities of LLVM. By default, the compiler uses `-O3` optimization level, which applies aggressive optimizations to generate highly efficient machine code.
-
-**Optimizations include:**
-
-- **Dead Code Elimination**: Removes code that does not affect the program output.
-- **Constant Folding**: Evaluates constant expressions at compile time.
-- **Loop Unrolling**: Unrolls loops to reduce overhead.
-- **Function Inlining**: Inlines small functions to reduce call overhead.
-- **Vectorization**: Uses SIMD instructions for parallel processing.
-- **Instruction Combination**: Combines multiple instructions into fewer, more efficient ones.
-
-### Standard Library
-
-BPL provides a simple standard library with built-in functions for common tasks. Currently, the standard library includes:
-
-- `print(string)`: Prints a string to the console.
-- `exit(code: u8)`: Exits the program with the given exit code.
-- `exec(command: *u8)`: Executes a shell command and returns the output as a string.
-- `str_len(str: *u8)`: Returns the length of a null-terminated string.
-
-## More Examples
-
-The `example` directory contains several programs demonstrating various features of BPL:
-
-- `hello-world.x`: Basic "Hello, World!" program.
-- `collatz.x`: Calculates Collatz conjecture sequences, demonstrating loops and arithmetic.
-- `fib.x`: Generates Fibonacci sequence, demonstrating loops and variables.
-- `malloc.x`: Demonstrates manual memory management using `malloc` and `free`.
-- `structs_arrays.x`: Shows how to use arrays of structures.
-- `struct_literal_demo/`: Demonstrates struct literal initialization (positional, named, and nested).
-- `struct_methods/`: Comprehensive examples of struct methods, generic structs, and nested method calls.
-- `linked_list.x`: Implements a linked list using structs and dynamic memory allocation.
-- `asm_demo.x`: Demonstrates inline assembly and variable interpolation.
-- `operators.x`: Comprehensive test of arithmetic, bitwise, and logical operators.
-- `library.x`: A complex example using structs, pointers, and global variables.
-- `enterprise_app.x`: A comprehensive example demonstrating almost all language features.
-- `sort_input.x`: Reads numbers from stdin and sorts them.
-- `exec_demo.x`: Demonstrates executing shell commands.
-- `strings_demo.x`: Demonstrates string manipulation capabilities.
-- `else_if_demo.x`: Demonstrates `else if` control flow.
-- `args_demo.x`: Demonstrates command line arguments handling.
-- `env_demo.x`: Demonstrates environment variables handling.
-- `division_demo.x`: Demonstrates the difference between float (`/`) and integer (`//`) division.
-
-## Contributing
-
-Contributions to BPL are welcome! If you find a bug or want to add a new feature, please open an issue or submit a pull request on GitHub.
-
-## License
-
-BPL is licensed under the Apache 2.0 License. See the LICENSE file for more information.
+This project is licensed under the **Apache 2.0 License**. See the [LICENSE](LICENSE) file for details.

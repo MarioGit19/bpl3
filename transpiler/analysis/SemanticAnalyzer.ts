@@ -434,6 +434,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
           throw new CompilerError(
             `Cannot index into non-array/non-pointer type '${this.typeChecker.printType(objectType)}'`,
             memberExpr.startToken?.line || 0,
+            "Ensure the variable is an array or pointer.",
           );
         } else {
           // Resolve the type, handling generics if present
@@ -461,6 +462,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
             throw new CompilerError(
               `Type '${typeInfo.name}' has no member '${propertyName}'`,
               memberExpr.startToken?.line || 0,
+              `Check the struct definition for available members. Available members: ${Array.from(typeInfo.members.keys()).join(", ")}`,
             );
           }
 
@@ -561,6 +563,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
             new CompilerWarning(
               `Identifier '${targetName}' is not defined`,
               expr.left.startToken?.line || 0,
+              "Check for typos or declare the variable before use.",
             ),
           );
         }
@@ -730,6 +733,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
         throw new CompilerError(
           `Type mismatch in binary expression: '${this.typeChecker.printType(leftType)}' and '${this.typeChecker.printType(rightType)}' are not compatible`,
           expr.operator.line,
+          "Cast one of the operands to match the other.",
         );
       }
     }
@@ -762,6 +766,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
       throw new CompilerError(
         `Type mismatch: expected '${this.typeChecker.printType(expected)}', got '${this.typeChecker.printType(actual)}'`,
         line,
+        "Ensure the types match or use an explicit cast.",
       );
     }
 
@@ -786,6 +791,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
       throw new CompilerError(
         `Variable '${expr.name}' is already defined in this scope.`,
         expr.startToken?.line || 0,
+        "Rename the variable or remove the duplicate declaration.",
       );
     }
 
@@ -793,6 +799,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
       throw new CompilerError(
         "Global variable declaration should be in the global scope",
         expr.startToken?.line || 0,
+        "Move the declaration to the top level of the file.",
       );
     }
 
@@ -800,6 +807,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
       throw new CompilerError(
         "Const variable must be initialized",
         expr.startToken?.line || 0,
+        "Assign a value to the constant variable.",
       );
     }
 
@@ -892,6 +900,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
         throw new CompilerError(
           `Function '${expr.name}' is already defined.`,
           expr.startToken?.line || 0,
+          "Rename the function or remove the duplicate declaration.",
         );
       }
     }
@@ -927,7 +936,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
     this.currentFunction = expr.name;
 
     // If method, define 'this' parameter first
-    if (isMethod && receiverStruct) {
+    if (isMethod && receiverStruct && !expr.isStatic) {
       // Use the thisType stored on the declaration if available (for instantiated methods)
       const thisType = expr.thisType || {
         name: receiverStruct,
@@ -990,6 +999,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
             new CompilerWarning(
               `Identifier '${expr.name}' is not defined`,
               expr.startToken?.line || 0,
+              "Check for typos or declare the variable before use.",
             ),
           );
         }
@@ -1067,6 +1077,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
       throw new CompilerError(
         `Generic function '${expr.functionName}' requires explicit type arguments: call ${expr.functionName}<...>(...)`,
         expr.startToken?.line || 0,
+        `Provide type arguments, e.g., ${expr.functionName}<${func.genericParams.join(", ")}>(...)`,
       );
     }
 
@@ -1086,6 +1097,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
           throw new CompilerError(
             `Function '${expr.functionName}' expects at least ${func.args.length} arguments, but got ${expr.args.length}`,
             expr.startToken?.line || 0,
+            "Check the function definition and supply the missing arguments.",
           );
         }
       } else {
@@ -1094,6 +1106,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
           throw new CompilerError(
             `Function '${expr.functionName}' expects ${func.args.length} arguments, but got ${expr.args.length}`,
             expr.startToken?.line || 0,
+            "Check the function definition and ensure the correct number of arguments are passed.",
           );
         }
       }
@@ -1104,12 +1117,14 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
           throw new CompilerError(
             `Function '${expr.functionName}' expects at least ${func.args.length} arguments, but got ${expr.args.length}`,
             expr.startToken?.line || 0,
+            "Check the function definition and supply the missing arguments.",
           );
         }
       } else if (func.args.length !== expr.args.length) {
         throw new CompilerError(
           `Function '${expr.functionName}' expects ${func.args.length} arguments, but got ${expr.args.length}`,
           expr.startToken?.line || 0,
+          "Check the function definition and ensure the correct number of arguments are passed.",
         );
       }
     }
@@ -1277,6 +1292,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
         throw new CompilerError(
           "Void function cannot return a value",
           expr.startToken?.line || 0,
+          "Remove the return value or change the function return type.",
         );
       }
     } else {
@@ -1286,6 +1302,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
         throw new CompilerError(
           `Function expects return type '${this.typeChecker.printType(this.currentReturnType)}', but got void`,
           expr.startToken?.line || 0,
+          "Return a value of the expected type.",
         );
       }
     }
@@ -1299,6 +1316,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
       throw new CompilerError(
         `Type '${expr.name}' is already defined.`,
         expr.startToken?.line || 0,
+        "Rename the type or remove the duplicate declaration.",
       );
     }
 
@@ -1508,17 +1526,19 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
         }
       }
 
-      // Prepend 'this' parameter
-      const thisParam = {
-        name: "this",
-        type: {
-          name: expr.name,
-          isPointer: 1,
-          isArray: [],
-        } as VariableType,
-      };
-
-      const allArgs = [thisParam, ...method.args];
+      // Prepend 'this' parameter only if not static
+      let allArgs = method.args;
+      if (!method.isStatic) {
+        const thisParam = {
+          name: "this",
+          type: {
+            name: expr.name,
+            isPointer: 1,
+            isArray: [],
+          } as VariableType,
+        };
+        allArgs = [thisParam, ...method.args];
+      }
 
       // Define as global function with mangled name
       scope.defineFunction(mangledName, {
@@ -1530,6 +1550,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
         returnType: method.returnType,
         declaration: method.startToken,
         isMethod: true,
+        isStatic: method.isStatic,
         receiverStruct: expr.name,
         originalName: method.name,
         isVariadic: method.isVariadic,
@@ -1564,7 +1585,20 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
     this.analyzeExpression(expr.receiver, scope);
 
     // Resolve receiver type
-    const receiverType = this.inferType(expr.receiver, scope);
+    let receiverType = this.inferType(expr.receiver, scope);
+    let isStaticCall = false;
+
+    if (!receiverType) {
+      // Check if receiver is a Type (for static method call)
+      if (expr.receiver.type === ExpressionType.IdentifierExpr) {
+        const ident = expr.receiver as IdentifierExpr;
+        const typeInfo = scope.resolveType(ident.name);
+        if (typeInfo) {
+          receiverType = { name: ident.name, isPointer: 0, isArray: [] };
+          isStaticCall = true;
+        }
+      }
+    }
 
     if (!receiverType) {
       throw new CompilerError(
@@ -1659,6 +1693,23 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
       );
     }
 
+    // Validate static vs instance call
+    if (func.isStatic) {
+      if (!isStaticCall) {
+        throw new CompilerError(
+          `Cannot call static method '${expr.methodName}' on an instance of '${structName}'. Use '${structName}.${expr.methodName}(...)' instead.`,
+          expr.startToken?.line || 0,
+        );
+      }
+    } else {
+      if (isStaticCall) {
+        throw new CompilerError(
+          `Cannot call instance method '${expr.methodName}' on type '${structName}'. Use an instance of '${structName}' instead.`,
+          expr.startToken?.line || 0,
+        );
+      }
+    }
+
     // Handle generic method calls - monomorphize if needed
     if (expr.genericArgs && expr.genericArgs.length > 0) {
       if (!func.genericParams || func.genericParams.length === 0) {
@@ -1688,8 +1739,11 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
       expr.monomorphizedName = func.name;
     }
 
-    // Type-check arguments (skip first arg which is 'this')
-    const methodArgs = func.args.slice(1);
+    // Type-check arguments (skip first arg which is 'this' only for instance methods)
+    let methodArgs = func.args;
+    if (!func.isStatic) {
+      methodArgs = func.args.slice(1);
+    }
     if (func.isVariadic) {
       if (expr.args.length < methodArgs.length) {
         throw new CompilerError(

@@ -104,6 +104,7 @@ export class GenericsAnalyzer {
       genericParams: [],
       astDeclaration: clonedDecl,
       isMethod: func.isMethod,
+      isStatic: func.isStatic,
       receiverStruct: func.receiverStruct,
       originalName: func.originalName,
     });
@@ -367,7 +368,7 @@ export class GenericsAnalyzer {
       : decl.body;
 
     // Deep clone is handled by creating a new instance with cloned properties
-    return new FunctionDeclarationExpr(
+    const cloned = new FunctionDeclarationExpr(
       decl.name,
       decl.args.map((a) => ({
         name: a.name,
@@ -394,6 +395,13 @@ export class GenericsAnalyzer {
       decl.genericParams ? [...decl.genericParams] : undefined,
       decl.scope,
     );
+
+    cloned.isMethod = decl.isMethod;
+    cloned.isStatic = decl.isStatic;
+    cloned.receiverStruct = decl.receiverStruct;
+    cloned.thisType = decl.thisType;
+
+    return cloned;
   }
 
   private substituteTypesInFunction(

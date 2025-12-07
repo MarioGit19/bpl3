@@ -354,6 +354,7 @@ export class ExpressionParser {
           this.parser.consume(
             TokenType.CLOSE_BRACKET,
             "Expected ']' after index expression.",
+            "Add a closing bracket.",
           );
 
           expr = new MemberAccessExpr(expr, indexExpr, true);
@@ -381,6 +382,7 @@ export class ExpressionParser {
         this.parser.consume(
           TokenType.CLOSE_PAREN,
           "Expected ')' after expression.",
+          "Add a closing parenthesis.",
         );
 
         return expr;
@@ -423,7 +425,11 @@ export class ExpressionParser {
           return new EOFExpr();
       }
 
-      throw new CompilerError(`Unexpected token: ${token.type}`, token.line);
+      throw new CompilerError(
+        `Unexpected token: ${token.type}`,
+        token.line,
+        "Check for syntax errors or missing delimiters.",
+      );
     });
   }
 
@@ -650,6 +656,7 @@ export class ExpressionParser {
           this.parser.consume(
             TokenType.CLOSE_BRACKET,
             "Expected ']' after index expression.",
+            "Add a closing bracket.",
           );
 
           expr = new MemberAccessExpr(expr, indexExpr, true);
