@@ -1990,8 +1990,6 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
     if (func.returnType) {
       expr.resolvedReturnType = func.returnType;
       expr.resolvedType = func.returnType;
-    } else {
-      Logger.warn(`No return type for ${expr.methodName}`);
     }
 
     // Analyze each argument

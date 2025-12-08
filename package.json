@@ -1,6 +1,6 @@
 {
   "name": "the-best-programming-language-v3",
-  "version": "0.1.19",
+  "version": "0.1.21",
   "description": "A transpiler for the BPL programming language targeting LLVM IR.",
   "main": "index.ts",
   "bin": {

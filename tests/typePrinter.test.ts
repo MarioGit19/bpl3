@@ -32,7 +32,7 @@ frame main() ret i32 {
 
   it("should print type information for a simple program", () => {
     const printer = new TypePrinter();
-    
+
     // Mock console.log to capture output
     const originalLog = console.log;
     const logs: string[] = [];
@@ -46,24 +46,24 @@ frame main() ret i32 {
 
     // Verify output contains expected types
     const output = logs.join("\n").replace(/\u001b\[\d+m/g, "");
-    
+
     // Check for function return type
     expect(output).toContain("FunctionDeclaration -> (no type)");
     expect(output).toContain("frame add(a: i32, b: i32) ret i32");
-    
+
     // Check for binary expression type
     expect(output).toContain("BinaryExpression -> i32");
-    
+
     // Check for variable declaration type
     expect(output).toContain("VariableDeclaration -> (no type)");
     expect(output).toContain("local x: i32 = 10;");
-    
+
     // Check for literal type
     expect(output).toContain("NumberLiteralExpr -> u64"); // 10 is parsed as u64 by default
-    
+
     // Check for function call type
     expect(output).toContain("FunctionCall -> i32");
-    
+
     // Check for identifier type
     expect(output).toContain("IdentifierExpr -> i32");
   });
@@ -98,7 +98,9 @@ frame main() ret i32 {
       printer.printTypeTree(structTestFile);
     } finally {
       console.log = originalLog;
-      try { unlinkSync(structTestFile); } catch {}
+      try {
+        unlinkSync(structTestFile);
+      } catch {}
     }
 
     const output = logs.join("\n").replace(/\u001b\[\d+m/g, "");
@@ -106,7 +108,7 @@ frame main() ret i32 {
     // Check for struct declaration
     expect(output).toContain("StructureDeclaration -> (no type)");
     expect(output).toContain("x: i32");
-    
+
     // Check for IfExpression
     expect(output).toContain("IfExpression -> (no type)");
     expect(output).toContain("Condition:");
@@ -141,7 +143,9 @@ frame main() {
       printer.printTypeTree(arrayTestFile);
     } finally {
       console.log = originalLog;
-      try { unlinkSync(arrayTestFile); } catch {}
+      try {
+        unlinkSync(arrayTestFile);
+      } catch {}
     }
 
     const output = logs.join("\n").replace(/\u001b\[\d+m/g, "");
@@ -149,15 +153,15 @@ frame main() {
     // Check for array declaration
     expect(output).toContain("VariableDeclaration -> (no type)");
     expect(output).toContain("local arr: i32[5];");
-    
+
     // Check for loop
     expect(output).toContain("LoopExpression -> (no type)");
     expect(output).toContain("Body:");
-    
+
     // Check for array access
     expect(output).toContain("MemberAccessExpression -> i32"); // arr[i]
     expect(output).toContain("Index:");
-    
+
     // Check for break
     expect(output).toContain("BreakExpression -> (no type)");
   });

@@ -319,7 +319,7 @@ export class TypePrinter {
         const struct = expr as StructDeclarationExpr;
         // Check for fields (StructDeclarationExpr uses 'fields')
         const members = struct.fields;
-        
+
         if (members && members.length > 0) {
           console.log(`${this.getIndent()} Members:`);
           this.indentLevel++;
