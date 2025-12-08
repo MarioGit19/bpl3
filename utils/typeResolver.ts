@@ -15,10 +15,20 @@ import TernaryExpr from "../parser/expression/ternaryExpr";
 import CastExpr from "../parser/expression/castExpr";
 import TupleLiteralExpr from "../parser/expression/tupleLiteralExpr";
 
+/**
+ * Resolves the type of an expression.
+ * First checks if the type is cached on the expression.
+ * Then falls back to computing the type based on expression kind.
+ */
 export function resolveExpressionType(
   expr: Expression,
   scope: Scope,
 ): VariableType | null {
+  // Check if type is already cached from semantic analysis
+  if (expr.resolvedType) {
+    return expr.resolvedType;
+  }
+
   if (expr.type === ExpressionType.NumberLiteralExpr) {
     const val = (expr as NumberLiteralExpr).value;
     const isHexBinOct =

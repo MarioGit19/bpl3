@@ -18,7 +18,7 @@ frame exit(code: u64) {
 }
 
 frame exec(cmd: *u8) ret *u8 {
-    local fp: *u8 = cast<*u8>(call popen(cmd, "r"));
+    local fp: *u8 = call popen(cmd, "r");
     if fp == NULL {
         return NULL;
     }

@@ -18,6 +18,11 @@ export default class Expression {
   public contextScope?: Scope;
   public _analyzed?: boolean;
   public monomorphizedName?: string;
+  /**
+   * Cached resolved type for this expression.
+   * Set during semantic analysis to enable type resolution for chained calls.
+   */
+  public resolvedType?: VariableType;
 
   toString(depth: number = 0): string {
     throw new CompilerError(

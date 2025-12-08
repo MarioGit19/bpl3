@@ -1,4 +1,4 @@
-import malloc, realloc, free, cast from "libc";
+import malloc, realloc, free from "libc";
 import [Console] from "std/io.x";
 
 extern malloc(size: u64) ret *u8;

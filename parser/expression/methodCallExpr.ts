@@ -413,4 +413,31 @@ export default class MethodCallExpr extends Expression {
 
     return val;
   }
+
+  /**
+   * Get the address of a method call result.
+   * Since method calls return values (not pointers), we need to allocate
+   * a temporary variable and store the result there.
+   */
+  getAddress(gen: IRGenerator, scope: Scope): string {
+    const returnType = this.resolvedReturnType || this.resolvedType;
+    if (!returnType) {
+      throw new CompilerError(
+        `Cannot determine return type of method call '${this.methodName}'`,
+        this.startToken?.line || 0,
+      );
+    }
+
+    // Generate the IR for this method call
+    const resultVal = this.toIR(gen, scope);
+
+    // Allocate a temporary variable for the result
+    const irType = gen.getIRType(returnType);
+    const tempPtr = gen.emitAlloca(irType, "_mcall_temp");
+
+    // Store the result
+    gen.emitStore(irType, resultVal, tempPtr);
+
+    return tempPtr;
+  }
 }

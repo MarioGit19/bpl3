@@ -271,6 +271,11 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
   }
 
   public inferType(expr: Expression, scope: Scope): VariableType | null {
+    // Check if type is already cached from semantic analysis
+    if (expr.resolvedType) {
+      return expr.resolvedType;
+    }
+
     switch (expr.type) {
       case ExpressionType.NumberLiteralExpr: {
         const numExpr = expr as NumberLiteralExpr;
@@ -1260,6 +1265,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
       // Store monomorphized function name and resolved return type
       expr.monomorphizedName = func.name;
       expr.resolvedReturnType = func.returnType || undefined;
+      expr.resolvedType = func.returnType || undefined;
     } else if (func.genericParams && func.genericParams.length > 0) {
       throw new CompilerError(
         `Generic function '${expr.functionName}' requires explicit type arguments: call ${expr.functionName}<...>(...)`,
@@ -1342,6 +1348,11 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
           );
         }
       }
+    }
+
+    // Cache resolved type on the expression
+    if (func.returnType) {
+      expr.resolvedType = func.returnType;
     }
   }
 
@@ -1771,6 +1782,21 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
     // Analyze receiver
     this.analyzeExpression(expr.receiver, scope);
 
+    // Check if receiver is a function/method call returning void (cannot be chained)
+    if (
+      expr.receiver.type === ExpressionType.MethodCallExpr ||
+      expr.receiver.type === ExpressionType.FunctionCall
+    ) {
+      const receiverReturnType = this.inferType(expr.receiver, scope);
+      if (this.isVoidType(receiverReturnType)) {
+        throw new CompilerError(
+          `Cannot chain method call on void return. The expression '${expr.receiver.type === ExpressionType.MethodCallExpr ? (expr.receiver as MethodCallExpr).methodName : (expr.receiver as FunctionCallExpr).functionName}' returns void and cannot be used as a receiver.`,
+          expr.startToken?.line || 0,
+          "Remove the method call on the void result, or assign the non-void result to a variable first.",
+        );
+      }
+    }
+
     // Resolve receiver type
     let receiverType = this.inferType(expr.receiver, scope);
     let isStaticCall = false;
@@ -1963,6 +1989,7 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
 
     if (func.returnType) {
       expr.resolvedReturnType = func.returnType;
+      expr.resolvedType = func.returnType;
     } else {
       Logger.warn(`No return type for ${expr.methodName}`);
     }
@@ -2085,5 +2112,12 @@ export class SemanticAnalyzer implements ISemanticAnalyzer {
 
   private analyzeThrowExpr(expr: ThrowExpr, scope: Scope): void {
     this.analyzeExpression(expr.expression, scope);
+  }
+
+  /**
+   * Check if a type is void (i.e., not a returnable value)
+   */
+  private isVoidType(type: VariableType | null): boolean {
+    return !!(type && type.name === "void" && type.isPointer === 0);
   }
 }

@@ -109,7 +109,10 @@ export function parseLibraryFile(
       absolutePath = resolve(libDir, moduleName);
     } else {
       // Try to resolve from lib directory
-      const libPath = resolve(__dirname, "../lib", moduleName);
+      let libPath = resolve(__dirname, "../lib", moduleName);
+      if (!libPath.endsWith(".x")) {
+        libPath += ".x";
+      }
       if (existsSync(libPath)) {
         absolutePath = libPath;
       } else {

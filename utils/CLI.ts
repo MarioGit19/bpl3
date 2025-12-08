@@ -13,6 +13,7 @@ export interface CompilerConfig {
   quiet: boolean;
   printAsm: boolean;
   printAst: boolean;
+  printTypes: boolean;
   shouldRun: boolean;
   shouldGdb: boolean;
   compileLib: boolean;
@@ -32,6 +33,7 @@ export const defaultConfig: CompilerConfig = {
   quiet: false,
   printAsm: false,
   printAst: false,
+  printTypes: false,
   shouldRun: false,
   shouldGdb: false,
   compileLib: false,
@@ -132,6 +134,7 @@ export function parseCLI(): CompilerConfig {
     .option("-q, --quiet", "Suppress output")
     .option("-p, --print-asm", "Print assembly")
     .option("--print-ast", "Print AST")
+    .option("--print-types", "Print type information for each expression")
     .option("-s, --static", "Static linking")
     .option("-d, --dynamic", "Dynamic linking")
     .option("-g, --gdb", "Run with GDB")
@@ -161,6 +164,7 @@ export function parseCLI(): CompilerConfig {
     config.cleanupAsm = false;
   }
   if (options.printAst) config.printAst = true;
+  if (options.printTypes) config.printTypes = true;
   if (options.static) config.linkMode = "static";
   if (options.dynamic) config.linkMode = "dynamic";
   if (options.gdb) config.shouldGdb = true;

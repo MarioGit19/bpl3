@@ -19,6 +19,7 @@ import {
 } from "./utils/parser";
 import { parseLibraryFile } from "./utils/transpiler";
 import { Logger } from "./utils/Logger";
+import { TypePrinter } from "./utils/typePrinter";
 
 // --- Parse Command Line Arguments ---
 const config = parseCLI();
@@ -27,6 +28,7 @@ const {
   quiet,
   printAsm,
   printAst,
+  printTypes,
   shouldRun,
   shouldGdb,
   compileLib,
@@ -48,6 +50,12 @@ const outputExe = getOutputFileName(fileName, "");
 if (showDeps) {
   const dot = generateDependencyGraph(fileName);
   Logger.log(dot);
+  process.exit(0);
+}
+
+if (printTypes) {
+  const printer = new TypePrinter();
+  printer.printTypeTree(fileName);
   process.exit(0);
 }
 
