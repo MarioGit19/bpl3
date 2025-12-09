@@ -1,6 +1,7 @@
 # BPL3 Compiler Progress
 
 ## Completed Features
+
 - [x] Strict Type Compatibility Checking
 - [x] Inheritance Support (Structs)
 - [x] Generics Parsing Fix (`>>` operator)
@@ -13,6 +14,7 @@
 - [x] Generic Instantiation in Expressions
 
 ## Pending Features
+
 - [ ] Const Correctness (Skipped by request)
 - [ ] Code Generation (LLVM IR or similar)
 - [ ] Advanced Generics (Constraints, Inference)

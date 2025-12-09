@@ -5,17 +5,20 @@ This document outlines the syntax, types, and constructs available in the BPL3 l
 ## 1. Types
 
 ### Primitive Types
-*Note: The grammar uses `Identifier` for types, implying these are defined in the standard library or built-in.*
+
+_Note: The grammar uses `Identifier` for types, implying these are defined in the standard library or built-in._
+
 - `int` - signed integers 64 bit
 - `uint` - unsigned integers 64 bit
 - `float` - floats 64 bit
 - `bool` (Boolean: `true`, `false`) - u1 if exists 0/1
-- `char` (Character literals: `'c'`) - unsigned 8 bit 
+- `char` (Character literals: `'c'`) - unsigned 8 bit
 - `void` (Empty type)
 - `null` (Null type)
 - `nullptr` - null but compatible with pointers
 
 ### Composite Types
+
 - **Pointers**: `*T` (e.g., `*int`, `**int`)
 - **Arrays**: `T[]` or `T[N]` (e.g., `int[]`, `float[4]`)
 - **Tuples**: `(T1, T2, ...)` (e.g., `(int, bool)`)
@@ -25,7 +28,9 @@ This document outlines the syntax, types, and constructs available in the BPL3 l
 ## 2. Declarations
 
 ### Variables
+
 Variables must be declared as `local` or `global`.
+
 ```bpl
 local x: int;
 local y: int = 10;
@@ -34,7 +39,9 @@ local (a:int, b:uint) = tuple
 ```
 
 ### Type Aliases
+
 Create new names for existing types.
+
 ```bpl
 type ID = int;
 type Point2D = (int, int);
@@ -44,7 +51,9 @@ type IntArr = int[];
 ```
 
 ### Destructuring
+
 Tuple destructuring is supported.
+
 ```bpl
 local (a: int, b: bool) = getTuple();
 (a,b)=tuple # a and b must be already declared at this point
@@ -52,12 +61,15 @@ local (a: int, b: bool) = getTuple();
 ```
 
 ### Constants
-*Currently, there is no `const` keyword. Use `global` or `local`.*
+
+_Currently, there is no `const` keyword. Use `global` or `local`._
 
 ## 3. Functions
 
 ### Declaration
+
 Functions can be `frame` (stack frame based) or `static` but only inside structs.
+
 ```bpl
 frame main() ret int {
     return 0;
@@ -73,6 +85,7 @@ frame print(a:*char) {...}
 ```
 
 ### Generics
+
 ```bpl
 frame identity<T>(val: T) ret T {
     local temp: T = val;
@@ -83,11 +96,12 @@ frame identity<T>(val: T) ret T {
 ## 4. Structs
 
 Structs can contain fields and methods.
+
 ```bpl
 struct Point {
     x: int,
     y: int,
-    
+
     static new(x: int, y: int) ret Point { ... }
 }
 
@@ -107,6 +121,7 @@ struct Generic<T>{
 ## 5. Control Flow
 
 ### Conditionals
+
 ```bpl
 if x > 0 {
     # ...
@@ -118,7 +133,9 @@ if x > 0 {
 ```
 
 ### Loops
+
 The only loop construct is `loop`. It functions as a `while` loop.
+
 ```bpl
 loop i < 10 {
     # ...
@@ -131,6 +148,7 @@ loop {
 ```
 
 ### Switch
+
 ```bpl
 switch val {
     case 1: { ... }
@@ -139,6 +157,7 @@ switch val {
 ```
 
 ### Error Handling
+
 ```bpl
 try {
     throw 1;
@@ -154,6 +173,7 @@ try {
 ## 6. Expressions & Operators
 
 ### Operators
+
 - **Arithmetic**: `+`, `-`, `*`, `/`, `%`
 - **Logical**: `&&`, `||`, `!`
 - **Bitwise**: `&`, `|`, `^`, `~`, `<<`, `>>`
@@ -162,6 +182,7 @@ try {
 - **Ternary**: `cond ? trueVal : falseVal`
 
 ### Special Expressions
+
 - **Cast**: `cast<int>(3.5)`
 - **Sizeof**: `sizeof(int)` or `sizeof(var)`
 - **Match**: `match<Type>(Expression | Type)` - Checks if the generic type matches the provided type or the type of the expression.
