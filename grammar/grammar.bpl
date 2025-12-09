@@ -16,27 +16,31 @@ SingleLineComment = '#' [^\n\r]* ('\n' | '\r\n')?;
 MultiLineComment = '###' ( .* | '\n' )*? '###';
 
 // Types
-Type = '*'* Identifier GenericArgs? ArraySuffix*;
+Type = FunctionType | TupleType | BasicType;
+BasicType = '*'* Identifier GenericArgs? ArraySuffix*;
+FunctionType = 'Func' '<' Type '>' '(' (Type (',' Type)*)? ')';
+TupleType = '(' Type (',' Type)* ','? ')';
+
 GenericArgs = '<' Type (',' Type)* '>';
 ArraySuffix = '[' NumberLiteral? ']';
-TupleType = '(' Type (',' Type)* ','? ')';
 
 // Declarations
 DestructTarget = Identifier (':' Type)?;
 DestructTargetList = DestructTarget (',' DestructTarget)* ','?;
 DestructuringDeclaration = ('global' | 'local') '(' DestructTargetList ')' '=' Expression ';';
+TypeAlias = 'type' Identifier GenericArgs? '=' Type ';';
 
-VariableDeclaration = ('global' | 'local') Identifier ':' (Type | TupleType) ('=' Expression)? ';' | DestructuringDeclaration;
+VariableDeclaration = ('global' | 'local') Identifier ':' Type ('=' Expression)? ';' | DestructuringDeclaration;
 
 // Functions
 FunctionDeclaration = ('frame' | 'static') Identifier GenericArgs? '(' ParameterList? ')' ReturnType? Block;
 ParameterList = Parameter (',' Parameter)*;
 Parameter = Identifier ':' Type;
-ReturnType = 'ret' (Type | TupleType);
+ReturnType = 'ret' Type;
 
 // Structs
 StructDeclaration = 'struct' Identifier GenericArgs? '{' StructMember* '}';
-StructMember = (Identifier ':' (Type | TupleType) ',') | FunctionDeclaration;
+StructMember = (Identifier ':' Type ',') | FunctionDeclaration;
 
 // Imports/Exports
 ImportStatement = 'import' ImportList 'from' StringLiteral ';';
@@ -50,7 +54,7 @@ ExternParameterList = (Parameter (',' Parameter)* (',' '...')?) | '...';
 AsmBlock = 'asm' '{' ( .* | '\n' )*? '}';
 
 // Statements
-Statement = VariableDeclaration | FunctionDeclaration | StructDeclaration | ImportStatement | ExportStatement | ExternDeclaration | AsmBlock | LoopStatement | IfStatement | TryStatement | ReturnStatement | ThrowStatement | SwitchStatement | BreakStatement | ContinueStatement | ExpressionStatement;
+Statement = VariableDeclaration | TypeAlias | FunctionDeclaration | StructDeclaration | ImportStatement | ExportStatement | ExternDeclaration | AsmBlock | LoopStatement | IfStatement | TryStatement | ReturnStatement | ThrowStatement | SwitchStatement | BreakStatement | ContinueStatement | ExpressionStatement;
 Block = '{' (Statement | SingleLineComment | MultiLineComment)* '}';
 ExpressionStatement = Expression ';';
 
@@ -70,7 +74,7 @@ SwitchCase = 'case' Expression ':' Block;
 DefaultCase = 'default' ':' Block;
 
 // Expressions
-Expression = Assignment | Literal | Identifier | ArrayLiteral | StructLiteral | CastExpression | SizeofExpression;
+Expression = Assignment | Literal | Identifier | ArrayLiteral | StructLiteral | CastExpression | SizeofExpression | MatchExpression;
 
 Assignment = Ternary (('=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^=') Ternary)*;
 Ternary = LogicalOr ('?' Ternary ':' Ternary)?;
@@ -89,13 +93,14 @@ Postfix = Primary ( '[' Expression ']' | '.' Identifier | GenericFunctionCall | 
 GenericFunctionCall = GenericArgs '(' (Expression (',' Expression)*)? ')';
 TupleLiteral = '(' Expression (',' Expression)+ ','? ')';
 
-Primary = Literal | TupleLiteral | Identifier | ArrayLiteral | StructLiteral | CastExpression | SizeofExpression | '(' Expression ')';
+Primary = Literal | TupleLiteral | Identifier | ArrayLiteral | StructLiteral | CastExpression | SizeofExpression | MatchExpression | '(' Expression ')';
 
 Literal = StringLiteral | CharLiteral | NumberLiteral | BoolLiteral | NullLiteral | NullptrLiteral;
 ArrayLiteral = '[' (Expression (',' Expression)* ','?)? ']';
 StructLiteral = '{' (Identifier ':' Expression (',' Identifier ':' Expression)* ','?)? '}';
 CastExpression = 'cast' '<' Type '>' '(' Expression ')';
 SizeofExpression = 'sizeof' ( '(' Expression ')' | '<' Type '>' '(' ')' );
+MatchExpression = 'match' '<' Type '>' '(' (Expression | Type) ')';
 
 // Program entry
 Program = (Statement | SingleLineComment | MultiLineComment)* EOF;
