@@ -82,7 +82,7 @@ export class CodeGenerator {
         break;
       // TODO: Global variables
       default:
-        // console.warn(`Unhandled top-level node kind: ${node.kind}`);
+        console.warn(`Unhandled top-level node kind: ${node.kind}`);
         break;
     }
   }

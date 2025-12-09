@@ -1,5 +1,7 @@
 # BPL3 Compiler Progress
 
+* Number inside brackets indicates priority (lower number = higher priority), x indicates completed features.
+
 ## Completed Features
 
 - [x] Strict Type Compatibility Checking
@@ -13,8 +15,163 @@
 - [x] Nested Generics & Static Methods
 - [x] Generic Instantiation in Expressions
 
-## Pending Features
+## Pending Features (expanded)
+- [0] Make `this` explicit in struct methods
+  - Description: Change method definitions to require explicit `this` parameter (e.g., `func method(this: StructType, ...)`) for clarity and consistency with free functions.
+  - Implementation notes: Update parser to require `this` in method signatures. Modify TypeChecker to treat `this` as an implicit first argument during method calls. Adjust codegen to pass the instance pointer correctly.
+  - Acceptance criteria: All struct methods must declare `this`; existing code without explicit `this` produces errors; method calls continue to work transparently.
+  - Struct methods without `this` are treated as static functions. Remove static keyword for methods.
+- [9] Const Correctness
+	- Description: Enforce `const` (or equivalent) declarations and immutability rules across the language: constant variables, read-only fields, `const` parameters, and compile-time constants. Ensure the compiler prevents mutation of `const` values and accepts usage patterns that are safe.
+	- Implementation notes: Add `isConst` flag to symbol/type entries. Propagate const through assignments, parameter passing, and returns. Treat `const` references to mutable objects as shallowly const unless a deeper const model is chosen. Decide whether `const` applies to variables, fields, and/or function returns.
+	- Acceptance criteria: Examples declaring `const` variables produce errors on mutation; `const` parameters cannot be assigned inside functions; `const` globals evaluate as compile-time constants where used.
 
-- [ ] Const Correctness (Skipped by request)
-- [ ] Code Generation (LLVM IR or similar)
-- [ ] Advanced Generics (Constraints, Inference)
+- [0] Code Generation (LLVM IR or similar)
+	- Description: Emit a backend representation (preferably LLVM IR) from the compiler's IR/AST so programs can be compiled to native code. This includes mapping language types to target types, generating function prologues/epilogues, and lowering runtime features.
+	- Implementation notes: Design a clear IR->target lowering step. Start with a minimal codegen: functions, control flow, arithmetic, locals, and basic memory layout. Integrate with LLVM via textual IR output or use an LLVM binding. Provide runtime support stubs (alloc, free, I/O) in `lib/`.
+	- Acceptance criteria: A 'hello world' program compiles to valid LLVM IR that `llc`/`clang` can compile and run; basic language constructs are translated and produce correct behavior.
+
+- [4] Advanced Generics (Constraints, Inference)
+	- Description: Add generic constraints (e.g., `T: Comparable`) and local inference so generic functions can deduce type parameters from call-sites where possible.
+	- Implementation notes: Extend type parameter structures to include bounds; implement constraint checking during type inference/resolution. Add unification and constraint propagation algorithm to TypeChecker.
+	- Acceptance criteria: Constrained generics accept only types satisfying bounds; generic functions without explicit type args can be called with types that infer correctly.
+
+- [1] Canonical primitive integer types mapping
+	- Description: Add named primitive types that correspond to target integer sizes: `bool` (i1), `char` (i8), `short` (i16), `int` (i32), `long` (i64), and unsigned variants `uchar`, `ushort`, `uint`, `ulong`.
+	- Implementation notes: Add these types in the type registry and map them to underlying LLVM types during codegen. Ensure lexer/parser/type system recognizes these names and that arithmetic and conversions honor signedness.
+	- Acceptance criteria: Source-level types listed above parse, type-check, and generate the correct LLVM integer types; unsigned ops behave appropriately.
+
+- [2] Type casting (implicit & explicit)
+	- Description: Implement a casting system supporting implicit safe promotions and explicit casts via `cast<type>(value)`. Support numeric promotions/demotions, casts across compatible structs (inheritance), and array casts where element types are compatible.
+	- Implementation notes: Define a cast matrix with implicit/explicit rules; implement `cast` AST node lowering in TypeChecker; add runtime checks where needed (e.g., downcast with RTTI). Consider adding `try_cast` vs `cast` for safe failure handling.
+	- Acceptance criteria: Implicit promotions occur in expressions (e.g., `int + float -> float`); explicit `cast<type>(value)` compiles; invalid casts produce compile-time or documented runtime errors (depending on static/dynamic safety model).
+
+- [4] Function overloading by parameter types
+	- Description: Allow multiple functions with the same name but different parameter type lists. Overload resolution must pick the best match based on argument types and implicit conversions.
+	- Implementation notes: Extend symbol table to store overload sets; implement overload resolution algorithm considering exact matches, promotions, and user-defined conversions. Detect ambiguities and report errors.
+	- Acceptance criteria: Multiple functions with same name but different signatures compile and calls resolve to correct overload; ambiguous calls produce clear diagnostics.
+
+- [4] Operator overloading for user types
+	- Description: Let user-defined types implement special methods (dunder-style like `__add__`, `__eq__`) that override built-in operator behavior for instances.
+	- Implementation notes: Define mapping between operators and method names; during type-checking, if an operand type has the corresponding method, resolve to that method; otherwise fall back to builtin semantics. Disallow assignment operators overloading. Ensure overload resolution supports left/right operand dispatch and coercions.
+	- Acceptance criteria: Defining `__add__` on a struct causes `a + b` to call that method; operator resolution respects type conversions and produces helpful errors when ambiguous.
+
+- [3] Constructors and destructors for structs
+	- Description: Support `StructName.new(...)` constructors (default, parameterized, copy) and `variable.destroy()` destructors. Constructors can be overloaded by parameter types; destructors run manually in the current model.
+	- Implementation notes: Add named constructor resolution on struct types and special destructor method. Wire constructor to allocate and initialize memory; implement destructor chaining across inheritance. Consider automatic destructor invocation for stack-local variables later.
+	- Acceptance criteria: `S.new()` constructs objects correctly; `obj.destroy()` triggers destructor logic; inheritance constructors/destructors chain appropriately. after destroy mark object as invalid unless re-initialized.
+
+- [5] Root global `Type` struct
+	- Description: Define a root `Type` struct that every user-defined struct implicitly inherits from, providing methods like `getTypeName()`, `getSize()`, `toString()`, and basic equality.
+	- Implementation notes: Add injection of implicit base for every struct during parsing/semantic analysis. Implement common methods as part of the runtime/stdlib. Ensure virtual dispatch works (method overriding) if language supports it.
+	- Acceptance criteria: Any struct can call `getTypeName()`; common operations are available without explicit inheritance in source.
+
+- [5] Primitive types as structs inheriting `Primitive`
+	- Description: Model primitive types (int, float, bool, char) as structs inheriting from a `Primitive` base, exposing operations as methods to unify the type system.
+	- Implementation notes: Represent primitives specially in the type system but provide method dispatch wrappers so code like `int_val.toString()` is valid. Balance performance (inlined primitives) with uniformity (object-like methods).
+	- Acceptance criteria: Primitive methods are callable and interoperate with language operators; performance-sensitive paths remain efficient.
+
+- [7] Allow structs to inherit primitives
+	- Description: Permit `struct MyInt : int { ... }` so a struct can behave as a primitive type with additional methods/fields.
+	- Implementation notes: Carefully design memory layout and type compatibility: instances of `MyInt` must be usable where `int` is expected. Implement implicit conversion rules and method overriding semantics. Consider specialization in codegen for performance.
+	- Acceptance criteria: `MyInt` instances can be passed to APIs expecting `int`; overrides of primitive methods are callable.
+
+- [3] Standard library module
+	- Description: Build a comprehensive standard library as an importable module providing data structures (lists, maps, sets), algorithms, string utilities, and math helpers.
+	- Implementation notes: Start with small, critical modules (strings, arrays, io). Provide both high-level BPL implementations and low-level runtime helpers backed by `lib/` for performance-critical functions.
+	- Acceptance criteria: Example programs can `import std` and use library features; library code compiles and links with generated code.
+
+- [3] Error handling and diagnostics
+	- Description: Improve compiler error reporting across lexer, parser, type checker, and the code generator with clear source locations, hint messages, and suggested fixes.
+	- Implementation notes: Standardize error types and formatting. Enrich `CompilerError` with categories, severity, and potential quick-fixes. Add tests for common error scenarios.
+	- Acceptance criteria: Errors include file/line/column, a concise message, and at least one suggestion when applicable.
+
+- [6] Documentation generation tool
+	- Description: Tool to parse source comments and generate API docs (HTML/Markdown) for language, libraries, and runtime.
+	- Implementation notes: Reuse the parser/AST to extract doc comments and signatures. Provide templates and command-line options for output formats. Consider output used by IDE tooltips. Similar to JSDoc/Doxygen.
+	- Acceptance criteria: Running the doc tool outputs a readable API doc set for the std lib and sample modules.
+
+- [4] VS Code extension (syntax, completion)
+	- Description: Create a lightweight VS Code extension for syntax highlighting, completion, and basic diagnostics using the compiler or language server.
+	- Implementation notes: Start with TextMate grammar for highlighting and a simple language server protocol (LSP) stub that calls the compiler for diagnostics. Package and test in `vs-code-ext/`.
+	- Acceptance criteria: Extension highlights syntax and shows compile-time errors in the editor. Basic completion for keywords and std lib symbols. Go to definition for symbols in same or imported files.
+
+- [3] Code formatter
+	- Description: Implement an opinionated code formatter to enforce a consistent style for BPL3 source files.
+	- Implementation notes: Implement AST-driven pretty-printer to avoid ambiguous formatting. Provide `format` CLI and editor integration.
+	- Acceptance criteria: Running formatter produces stable, idempotent formatting for sample files.
+
+- [1] CLI compiler tool
+	- Description: Build a command-line entrypoint that compiles BPL3 source (`.bpl`/`.x`) with flags for output, optimization, and debug info. Support a JSON config file that sets default flags.
+	- Implementation notes: Provide `bin/` script or Node entry in `package.json`. Implement argument parsing and config file precedence rules. Expose verbose and diagnostic flags.
+	- Acceptance criteria: `bplc input.bpl -oAst out.bplast -oLL out.ll -oO out.o -o out` produces output; config file is respected when present.
+
+- [4] Unit & integration tests
+	- Description: Add automated tests (unit for components, integration for end-to-end) using the existing test harness or `bun` tests.
+	- Implementation notes: Add test cases for parsing, type checking, and sample programs. Integrate tests into CI later. Aim for deterministic tests without requiring external network.
+	- Acceptance criteria: Test suite runs and covers core compiler features with CI-ready output.
+
+- [5] AST/IR printing flags
+	- Description: Add compiler flags to dump AST or IR to console or file (e.g., `-ast`, `-ir -oLL file.ll`) for debugging.
+	- Implementation notes: Implement pretty printers for AST and any intermediate IR. Add CLI options for selecting output format and file path.
+	- Acceptance criteria: Flags print human-readable AST/IR; `-o` writes to files when specified.
+
+- [4] Try/catch error handling
+	- Description: Implement `try`/`catch` with typed catch clauses and re-throw semantics, integrating with the runtime and stack-unwinding model.
+	- Implementation notes: Decide on exception representation (objects or error codes). Add SSA/IR constructs for exception flow and runtime support for throwing and catching.
+	- Acceptance criteria: `try { } catch (E: Type) { }` compiles and the runtime routes thrown exceptions to correct handlers.
+
+- [5] `match<Type>(value)` narrowing
+	- Description: Implement syntax and semantics for narrowing variable types based on runtime checks (useful inside `catch` blocks or generic contexts).
+	- Implementation notes: Add a `match<T>(expr)` AST construct and TypeChecker rules to narrow variable types inside block scope. Ensure RTTI support for runtime checks.
+	- Acceptance criteria: Within a `match<T>(v)` block, `v` has type `T` and member accesses/overloads resolve accordingly.
+
+- [9] Async/await
+	- Description: Add `async` functions and `await` operator with promise-like semantics to simplify asynchronous programming.
+	- Implementation notes: Decide whether to transpile async into callback-based state machines or use runtime coroutines. Provide runtime for futures/promises and event loop integration.
+	- Acceptance criteria: `async` functions return a `Future`/`Promise` type and `await` suspends/resumes correctly in examples.
+
+- [9] Threading support
+	- Description: Provide language primitives to create and manage threads, synchronization primitives, and safe concurrency patterns.
+	- Implementation notes: Integrate with target threading primitives (pthreads on POSIX). Define memory model and synchronization primitives (mutex, atomic ops).
+	- Acceptance criteria: Spawn, join threads, and synchronized access examples behave correctly.
+
+- [3] Robust import/export & linking
+	- Description: Improve module resolution for relative/absolute imports, support compiled-object linking and extern declarations for FFI, allow importing from 'std' and resolution from like file 'package.json', eg 'web-server' maps to ~/.bpl/lib/web-server.
+	- Implementation notes: Implement full import resolution phase, module cache, and link-time symbol verification. Add `extern` declarations for linking with C/LLVM objects.
+	- Acceptance criteria: Multi-file projects import and link correctly; extern functions can be declared and linked.
+
+- [6] Linting tool
+	- Description: Provide static analysis tooling to detect style and potential bugs (unused vars, suspicious casts, missing returns.)
+	- Implementation notes: Reuse AST and TypeChecker. Make rules configurable and add autofix for simple cases.
+	- Acceptance criteria: Linter runs and reports actionable warnings; some autofixes available.
+
+- [0] Project structure & LLVM upgrade
+	- Description: Reorganize project for maintainability and upgrade to a modern LLVM (textual or API) for codegen improvements.
+	- Implementation notes: Create directories for frontend/middleend/backend, specify LLVM version, and document build steps for the target toolchain.
+	- Acceptance criteria: Project layout is clear and LLVM integration works with documented steps.
+
+- [5] Multi-target support
+	- Description: Add support for targeting multiple platforms and architectures (x86/x64/ARM) and provide conditional std lib methods for platform differences.
+	- Implementation notes: Abstract target-specific codegen paths and provide a target triple input. Maintain a small set of runtime abstractions for syscalls/ABI.
+	- Acceptance criteria: Codegen can emit different target outputs and small example programs run on at least two targets.
+
+- [6] Inline assembly blocks
+	- Description: Allow embedding inline assembly with explicit register lists and integration with calling conventions.
+	- Implementation notes: Add parser support and a safe lowered representation. During codegen, inject asm inline properly and validate register usage.
+	- Acceptance criteria: `asm [rax, rbx] { rdrand rax\n mov rbx, rax\n mov (variable), rbx }` compiles and emits inline assembly; constraints are documented.
+
+- [1] Packaging system for libraries/apps
+	- Description: Define a packaging format and CLI tools to package, version, and publish BPL3 libraries or apps (not a package manager server).
+	- Implementation notes: Implement a manifest format, build and pack commands, and local installation rules. Include metadata and dependency lockfile support.
+	- Acceptance criteria: `bplc pack` creates a distributable package and `bplc install` or project `package.json` equivalent can consume it.
+
+- [0] Full import resolution before compilation
+	- Description: Resolve all imports and types across modules prior to compiling any single module to allow cross-module type checking and optimizations.
+	- Implementation notes: Implement two-phase compilation: dependency graph resolution and ordering, then per-module analysis with resolved type info.
+	- Acceptance criteria: Cross-module generic/type references and inlining are resolved and do not rely on source file order.
+
+- [0] Per-module compilation and linking with cache
+	- Description: Compile modules separately to object files and link them; implement module caching and incremental recompilation.
+	- Implementation notes: Add module hashing, a cache directory, and a link step. Produce a lockfile describing resolved module versions and caches.
+	- Acceptance criteria: Changing a single module triggers recompilation of that module and relinking, without rebuilding unaffected modules.

@@ -1,7 +1,7 @@
-import print from "std";
+extern printf(format: string, ... ) ret int;
 
-frame main() ret u8 {
+frame main() ret int {
     # 'print' is a built-in function in BPL standard library
-    call print("Hello, World!\n");
+    printf("Hello, World!\n");
     return 0;
 }
