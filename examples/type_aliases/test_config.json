@@ -1,0 +1,6 @@
+{
+  "expectedOutput": "Main: 42 (10.50, 20.50, 30.50)\nProcessing Point 42: (10, 20, 30)\nUser ID: 100\n",
+  "args": [],
+  "env": {},
+  "input": ""
+}

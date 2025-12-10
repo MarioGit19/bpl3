@@ -7,18 +7,18 @@ declare void @exit(i32)
 
 declare void @printf(i8*, ...)
 
-define i64 @main() {
+define i32 @main() {
 entry:
-  %x_ptr = alloca i64
-  store i64 42, i64* %x_ptr
-  %ptr_ptr = alloca i64*
-  store i64* %x_ptr, i64** %ptr_ptr
-  %0 = load i64*, i64** %ptr_ptr
-  %1 = load i64, i64* %0
-  call void @printf(i8* getelementptr inbounds ([11 x i8], [11 x i8]* @.str.0, i64 0, i64 0), i64 %1)
-  %2 = load i64*, i64** %ptr_ptr
-  store i64 100, i64* %2
-  %3 = load i64, i64* %x_ptr
-  call void @printf(i8* getelementptr inbounds ([15 x i8], [15 x i8]* @.str.1, i64 0, i64 0), i64 %3)
-  ret i64 0
+  %x_ptr = alloca i32
+  store i32 42, i32* %x_ptr
+  %ptr_ptr = alloca i32*
+  store i32* %x_ptr, i32** %ptr_ptr
+  %3 = load i32*, i32** %ptr_ptr
+  %4 = load i32, i32* %3
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([11 x i8], [11 x i8]* @.str.0, i64 0, i64 0), i32 %4)
+  %5 = load i32*, i32** %ptr_ptr
+  store i32 100, i32* %5
+  %8 = load i32, i32* %x_ptr
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([15 x i8], [15 x i8]* @.str.1, i64 0, i64 0), i32 %8)
+  ret i32 0
 }

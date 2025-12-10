@@ -6,8 +6,8 @@ declare void @exit(i32)
 
 declare void @printf(i8*, ...)
 
-define i64 @main() {
+define i32 @main() {
 entry:
-  call void @printf(i8* getelementptr inbounds ([15 x i8], [15 x i8]* @.str.0, i64 0, i64 0))
-  ret i64 0
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([15 x i8], [15 x i8]* @.str.0, i64 0, i64 0))
+  ret i32 0
 }

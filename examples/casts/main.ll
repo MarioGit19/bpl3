@@ -7,25 +7,25 @@ declare void @exit(i32)
 
 declare void @printf(i8*, ...)
 
-define i64 @main() {
+define i32 @main() {
 entry:
-  %i_ptr = alloca i64
-  store i64 65, i64* %i_ptr
+  %i_ptr = alloca i32
+  store i32 65, i32* %i_ptr
   %c_ptr = alloca i8
-  %0 = load i64, i64* %i_ptr
-  %1 = trunc i64 %0 to i8
-  store i8 %1, i8* %c_ptr
-  %2 = load i64, i64* %i_ptr
-  %3 = load i8, i8* %c_ptr
-  call void @printf(i8* getelementptr inbounds ([19 x i8], [19 x i8]* @.str.0, i64 0, i64 0), i64 %2, i8 %3)
+  %1 = load i32, i32* %i_ptr
+  %2 = trunc i32 %1 to i8
+  store i8 %2, i8* %c_ptr
+  %5 = load i32, i32* %i_ptr
+  %6 = load i8, i8* %c_ptr
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([19 x i8], [19 x i8]* @.str.0, i64 0, i64 0), i32 %5, i8 %6)
   %f_ptr = alloca double
   store double 3.14, double* %f_ptr
-  %fi_ptr = alloca i64
-  %4 = load double, double* %f_ptr
-  %5 = fptosi double %4 to i64
-  store i64 %5, i64* %fi_ptr
-  %6 = load double, double* %f_ptr
-  %7 = load i64, i64* %fi_ptr
-  call void @printf(i8* getelementptr inbounds ([20 x i8], [20 x i8]* @.str.1, i64 0, i64 0), double %6, i64 %7)
-  ret i64 0
+  %fi_ptr = alloca i32
+  %8 = load double, double* %f_ptr
+  %9 = fptosi double %8 to i32
+  store i32 %9, i32* %fi_ptr
+  %12 = load double, double* %f_ptr
+  %13 = load i32, i32* %fi_ptr
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([20 x i8], [20 x i8]* @.str.1, i64 0, i64 0), double %12, i32 %13)
+  ret i32 0
 }

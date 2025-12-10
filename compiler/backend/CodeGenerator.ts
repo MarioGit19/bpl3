@@ -1,6 +1,6 @@
-import * as AST from "./AST";
-import { Token } from "./Token";
-import { TokenType } from "./TokenType";
+import * as AST from "../common/AST";
+import { Token } from "../frontend/Token";
+import { TokenType } from "../frontend/TokenType";
 
 export class CodeGenerator {
   private output: string[] = [];
@@ -80,6 +80,15 @@ export class CodeGenerator {
       case "VariableDecl":
         this.generateGlobalVariable(node as AST.VariableDecl);
         break;
+      case "TypeAlias":
+        // Type aliases are handled by the TypeChecker and don't generate code directly
+        break;
+      case "Import":
+        // Imports are resolved by ModuleResolver and don't generate code directly
+        break;
+      case "Export":
+        // Exports are metadata for module resolution and don't generate code directly
+        break;
       // TODO: Global variables
       default:
         console.warn(`Unhandled top-level node kind: ${node.kind}`);
@@ -92,11 +101,10 @@ export class CodeGenerator {
     if (this.declaredFunctions.has(name)) return;
     this.declaredFunctions.add(name);
 
-    const retType = decl.returnType
-      ? this.resolveType(decl.returnType)
-      : "void";
+    const funcType = decl.resolvedType as AST.FunctionTypeNode;
+    const retType = this.resolveType(funcType.returnType);
 
-    const params = decl.params.map((p) => this.resolveType(p.type));
+    const params = funcType.paramTypes.map((p) => this.resolveType(p));
     if (decl.isVariadic) {
       params.push("...");
     }
@@ -111,7 +119,7 @@ export class CodeGenerator {
     const fields = decl.members.filter(
       (m) => m.kind === "StructField",
     ) as AST.StructField[];
-    const fieldTypes = fields.map((f) => this.resolveType(f.type)).join(", ");
+    const fieldTypes = fields.map((f) => this.resolveType(f.resolvedType || f.type)).join(", ");
     this.emit(`%struct.${decl.name} = type { ${fieldTypes} }`);
     this.emit("");
 
@@ -135,11 +143,12 @@ export class CodeGenerator {
     this.locals.clear();
 
     const name = decl.name;
-    const retType = this.resolveType(decl.returnType);
+    const funcType = decl.resolvedType as AST.FunctionTypeNode;
+    const retType = this.resolveType(funcType.returnType);
 
     const params = decl.params
-      .map((p) => {
-        const type = this.resolveType(p.type);
+      .map((p, i) => {
+        const type = this.resolveType(funcType.paramTypes[i]!);
         const name = `%${p.name}`;
         return `${type} ${name}`;
       })
@@ -149,9 +158,10 @@ export class CodeGenerator {
     this.emit("entry:");
 
     // Allocate stack space for parameters to make them mutable
-    for (const param of decl.params) {
+    for (let i = 0; i < decl.params.length; i++) {
+      const param = decl.params[i]!;
       this.locals.add(param.name);
-      const type = this.resolveType(param.type);
+      const type = this.resolveType(funcType.paramTypes[i]!);
       const paramReg = `%${param.name}`;
       const stackAddr = this.allocateStack(param.name, type);
       this.emit(`  store ${type} ${paramReg}, ${type}* ${stackAddr}`);
@@ -244,14 +254,25 @@ export class CodeGenerator {
       // Let's assume typeAnnotation is present or we can get it from initializer.
     }
 
-    const type = decl.typeAnnotation
-      ? this.resolveType(decl.typeAnnotation)
-      : this.resolveType(decl.initializer!.resolvedType!);
-    const addr = this.allocateStack(decl.name, type);
+    const type = decl.resolvedType
+      ? this.resolveType(decl.resolvedType)
+      : decl.typeAnnotation
+        ? this.resolveType(decl.typeAnnotation)
+        : this.resolveType(decl.initializer!.resolvedType!);
+    const addr = this.allocateStack(decl.name as string, type);
 
     if (decl.initializer) {
       const val = this.generateExpression(decl.initializer);
-      this.emit(`  store ${type} ${val}, ${type}* ${addr}`);
+      const srcType = this.resolveType(decl.initializer.resolvedType!);
+      const destType = type;
+      const castVal = this.emitCast(
+        val,
+        srcType,
+        destType,
+        decl.initializer.resolvedType!,
+        decl.resolvedType || decl.typeAnnotation || decl.initializer.resolvedType!,
+      );
+      this.emit(`  store ${type} ${castVal}, ${type}* ${addr}`);
     }
   }
 
@@ -396,18 +417,29 @@ export class CodeGenerator {
   }
 
   private generateBinary(expr: AST.BinaryExpr): string {
-    const left = this.generateExpression(expr.left);
-    const right = this.generateExpression(expr.right);
+    const leftRaw = this.generateExpression(expr.left);
+    const rightRaw = this.generateExpression(expr.right);
     const leftType = this.resolveType(expr.left.resolvedType!);
     const rightType = this.resolveType(expr.right.resolvedType!);
     const reg = this.newRegister();
 
     // Pointer arithmetic
-    if (leftType.endsWith("*") && rightType === "i64") {
+    if (leftType.endsWith("*") && this.isIntegerType(rightType)) {
       // ptr + int
+      let right = rightRaw;
+      if (rightType !== "i64") {
+        const castReg = this.newRegister();
+        if (this.isSigned(expr.right.resolvedType!)) {
+            this.emit(`  ${castReg} = sext ${rightType} ${rightRaw} to i64`);
+        } else {
+            this.emit(`  ${castReg} = zext ${rightType} ${rightRaw} to i64`);
+        }
+        right = castReg;
+      }
+
       if (expr.operator.type === TokenType.Plus) {
         this.emit(
-          `  ${reg} = getelementptr inbounds ${leftType.slice(0, -1)}, ${leftType} ${left}, i64 ${right}`,
+          `  ${reg} = getelementptr inbounds ${leftType.slice(0, -1)}, ${leftType} ${leftRaw}, i64 ${right}`,
         );
         return reg;
       } else if (expr.operator.type === TokenType.Minus) {
@@ -415,7 +447,7 @@ export class CodeGenerator {
         const negRight = this.newRegister();
         this.emit(`  ${negRight} = sub i64 0, ${right}`);
         this.emit(
-          `  ${reg} = getelementptr inbounds ${leftType.slice(0, -1)}, ${leftType} ${left}, i64 ${negRight}`,
+          `  ${reg} = getelementptr inbounds ${leftType.slice(0, -1)}, ${leftType} ${leftRaw}, i64 ${negRight}`,
         );
         return reg;
       }
@@ -423,15 +455,29 @@ export class CodeGenerator {
 
     // int + ptr (commutative)
     if (
-      leftType === "i64" &&
+      this.isIntegerType(leftType) &&
       rightType.endsWith("*") &&
       expr.operator.type === TokenType.Plus
     ) {
+      let left = leftRaw;
+      if (leftType !== "i64") {
+        const castReg = this.newRegister();
+        if (this.isSigned(expr.left.resolvedType!)) {
+            this.emit(`  ${castReg} = sext ${leftType} ${leftRaw} to i64`);
+        } else {
+            this.emit(`  ${castReg} = zext ${leftType} ${leftRaw} to i64`);
+        }
+        left = castReg;
+      }
+
       this.emit(
-        `  ${reg} = getelementptr inbounds ${rightType.slice(0, -1)}, ${rightType} ${right}, i64 ${left}`,
+        `  ${reg} = getelementptr inbounds ${rightType.slice(0, -1)}, ${rightType} ${rightRaw}, i64 ${left}`,
       );
       return reg;
     }
+
+    const left = leftRaw;
+    const right = rightRaw;
 
     let op = "";
     switch (expr.operator.type) {
@@ -480,6 +526,7 @@ export class CodeGenerator {
   private generateCall(expr: AST.CallExpr): string {
     let funcName = "";
     let argsToGenerate = expr.args;
+    let isInstanceCall = false;
 
     if (expr.callee.kind === "Identifier") {
       funcName = (expr.callee as AST.IdentifierExpr).name;
@@ -494,6 +541,7 @@ export class CodeGenerator {
         structName = objType.name;
         // Instance call: pass object as first argument
         argsToGenerate = [memberExpr.object, ...expr.args];
+        isInstanceCall = true;
       } else if (objType.kind === "MetaType") {
         const inner = (objType as any).type;
         if (inner.kind === "BasicType") {
@@ -511,22 +559,60 @@ export class CodeGenerator {
       throw new Error("Only direct function calls supported for now");
     }
 
+    const funcType = expr.callee.resolvedType as AST.FunctionTypeNode;
+
     const args = argsToGenerate
-      .map((arg) => {
+      .map((arg, i) => {
         const val = this.generateExpression(arg);
-        const type = this.resolveType(arg.resolvedType!);
-        return `${type} ${val}`;
+        const srcType = this.resolveType(arg.resolvedType!);
+
+        let targetTypeNode: AST.TypeNode | undefined;
+        if (isInstanceCall) {
+          if (i === 0) {
+            targetTypeNode = arg.resolvedType;
+          } else {
+            targetTypeNode = funcType.paramTypes[i - 1];
+          }
+        } else {
+          targetTypeNode = funcType.paramTypes[i];
+        }
+
+        if (targetTypeNode) {
+          const destType = this.resolveType(targetTypeNode);
+          const castVal = this.emitCast(
+            val,
+            srcType,
+            destType,
+            arg.resolvedType!,
+            targetTypeNode,
+          );
+          return `${destType} ${castVal}`;
+        }
+        return `${srcType} ${val}`;
       })
       .join(", ");
 
     const retType = this.resolveType(expr.resolvedType!);
+    const isVariadic = funcType.isVariadic === true;
 
     if (retType === "void") {
-      this.emit(`  call void @${funcName}(${args})`);
+      if (isVariadic) {
+        // Build the full signature for variadic functions
+        const paramTypesStr = funcType.paramTypes.map(t => this.resolveType(t)).join(", ");
+        this.emit(`  call void (${paramTypesStr}, ...) @${funcName}(${args})`);
+      } else {
+        this.emit(`  call void @${funcName}(${args})`);
+      }
       return "";
     } else {
       const reg = this.newRegister();
-      this.emit(`  ${reg} = call ${retType} @${funcName}(${args})`);
+      if (isVariadic) {
+        // Build the full signature for variadic functions
+        const paramTypesStr = funcType.paramTypes.map(t => this.resolveType(t)).join(", ");
+        this.emit(`  ${reg} = call ${retType} (${paramTypesStr}, ...) @${funcName}(${args})`);
+      } else {
+        this.emit(`  ${reg} = call ${retType} @${funcName}(${args})`);
+      }
       return reg;
     }
   }
@@ -582,7 +668,20 @@ export class CodeGenerator {
     } else if (expr.kind === "Index") {
       const indexExpr = expr as AST.IndexExpr;
       const objectAddr = this.generateAddress(indexExpr.object);
-      const indexVal = this.generateExpression(indexExpr.index);
+      const indexValRaw = this.generateExpression(indexExpr.index);
+      
+      // Cast index to i64 if needed
+      const indexType = this.resolveType(indexExpr.index.resolvedType!);
+      let indexVal = indexValRaw;
+      if (indexType !== "i64") {
+        const castReg = this.newRegister();
+        if (this.isSigned(indexExpr.index.resolvedType!)) {
+            this.emit(`  ${castReg} = sext ${indexType} ${indexValRaw} to i64`);
+        } else {
+            this.emit(`  ${castReg} = zext ${indexType} ${indexValRaw} to i64`);
+        }
+        indexVal = castReg;
+      }
 
       const objType = indexExpr.object.resolvedType;
       if (!objType || objType.kind !== "BasicType") {
@@ -600,7 +699,7 @@ export class CodeGenerator {
         // But my resolveType for arrays isn't fully implemented yet.
 
         // Let's assume for now arrays are pointers or [N x T]
-        // If resolveType returns [N x T], then we need 0, index.
+        // If resolveType returns [N x T], we need 0, index.
         // If resolveType returns T*, we need index.
 
         const llvmType = this.resolveType(objType);
@@ -655,300 +754,13 @@ export class CodeGenerator {
     throw new Error(`Expression is not an lvalue: ${expr.kind}`);
   }
 
-  private generateAssignment(expr: AST.AssignmentExpr): string {
-    const addr = this.generateAddress(expr.assignee);
-    const val = this.generateExpression(expr.value);
-    const type = this.resolveType(expr.assignee.resolvedType!);
-
-    this.emit(`  store ${type} ${val}, ${type}* ${addr}`);
-    return val;
-  }
-
-  private generateMember(expr: AST.MemberExpr): string {
-    const addr = this.generateAddress(expr);
-    const type = this.resolveType(expr.resolvedType!);
-    const reg = this.newRegister();
-    this.emit(`  ${reg} = load ${type}, ${type}* ${addr}`);
-    return reg;
-  }
-
-  private generateIndex(expr: AST.IndexExpr): string {
-    const addr = this.generateAddress(expr);
-    const type = this.resolveType(expr.resolvedType!);
-    const reg = this.newRegister();
-    this.emit(`  ${reg} = load ${type}, ${type}* ${addr}`);
-    return reg;
-  }
-
-  private generateStructLiteral(expr: AST.StructLiteralExpr): string {
-    // We need to know the struct type name.
-    // The parser/typechecker should have resolved the type.
-    // But StructLiteralExpr doesn't have the type name explicitly in AST unless resolvedType is set.
-    // TypeChecker checkStructLiteral should set resolvedType.
-
-    const type = expr.resolvedType;
-    if (!type || type.kind !== "BasicType") {
-      throw new Error("Struct literal has no resolved struct type");
-    }
-
-    const structName = type.name;
-    const llvmType = `%struct.${structName}`;
-    const layout = this.structLayouts.get(structName);
-    if (!layout) {
-      throw new Error(`Unknown struct layout for ${structName}`);
-    }
-
-    let val = "undef"; // Start with undefined struct value
-
-    // We need to insert fields in order? Or by name?
-    // insertvalue takes index.
-    // We iterate over expr.fields.
-
-    // But we need to handle fields that are NOT in expr.fields (if partial init is allowed? No, usually all required).
-    // Assuming all fields are provided or we default init?
-    // Let's assume expr.fields contains what we need.
-
-    // We need to update 'val' sequentially.
-    // Since we are in SSA, we need new registers for each step.
-
-    let currentReg = "undef";
-
-    // We need to sort fields by index to be safe? Or just insert by index.
-    // insertvalue works on the value from previous step.
-    for (const field of expr.fields) {
-      const fieldIndex = layout.get(field.name);
-      if (fieldIndex === undefined) {
-        throw new Error(`Unknown field ${field.name} in struct ${structName}`);
-      }
-
-      const fieldValue = this.generateExpression(field.value);
-      const fieldType = this.resolveType(field.value.resolvedType!);
-
-      const nextReg = this.newRegister();
-      if (currentReg === "undef") {
-        this.emit(
-          `  ${nextReg} = insertvalue ${llvmType} undef, ${fieldType} ${fieldValue}, ${fieldIndex}`,
-        );
-      } else {
-        this.emit(
-          `  ${nextReg} = insertvalue ${llvmType} ${currentReg}, ${fieldType} ${fieldValue}, ${fieldIndex}`,
-        );
-      }
-      currentReg = nextReg;
-    }
-
-    return currentReg;
-  }
-
-  // --- Helpers ---
-
-  private resolveType(type: AST.TypeNode): string {
-    if (!type) {
-      return "void";
-    }
-    if (type.kind === "BasicType") {
-      let llvmType = "";
-      switch (type.name) {
-        case "int":
-          llvmType = "i64";
-          break;
-        case "float":
-          llvmType = "double";
-          break;
-        case "bool":
-          llvmType = "i1";
-          break;
-        case "char":
-          llvmType = "i8";
-          break;
-        case "void":
-          llvmType = "void";
-          break;
-        case "string":
-          llvmType = "i8*";
-          break;
-        default:
-          llvmType = `%struct.${type.name}`;
-          break;
-      }
-
-      // Handle pointers
-      for (let i = 0; i < type.pointerDepth; i++) {
-        llvmType += "*";
-      }
-
-      // Handle arrays (from inside out)
-      // int[2][3] -> [2 x [3 x i64]]
-      // My AST stores [2, 3]
-      for (let i = type.arrayDimensions.length - 1; i >= 0; i--) {
-        const dim = type.arrayDimensions[i];
-        if (dim === null) {
-          // Unsized array? Usually decays to pointer or not allowed as value type
-          llvmType += "*";
-        } else {
-          llvmType = `[${dim} x ${llvmType}]`;
-        }
-      }
-
-      return llvmType;
-    }
-    return "void";
-  }
-
-  private allocateStack(name: string, type: string): string {
-    const addr = `%${name}_ptr`;
-    this.emit(`  ${addr} = alloca ${type}`);
-    return addr;
-  }
-
-  private newRegister(): string {
-    return `%${this.registerCount++}`;
-  }
-
-  private newLabel(prefix: string): string {
-    return `${prefix}.${this.labelCount++}`;
-  }
-
-  private isTerminator(line: string): boolean {
-    if (!line) return false;
-    const trimmed = line.trim();
-    return (
-      trimmed.startsWith("ret") ||
-      trimmed.startsWith("br") ||
-      trimmed.startsWith("unreachable")
-    );
-  }
-
-  private escapeString(str: string): string {
-    return str
-      .replace(/\\/g, "\\5C")
-      .replace(/"/g, "\\22")
-      .replace(/\n/g, "\\0A")
-      .replace(/\t/g, "\\09");
-  }
-
-  private generateUnary(expr: AST.UnaryExpr): string {
-    const op = expr.operator.type;
-    if (op === TokenType.Ampersand) {
-      // Address of: &x
-      return this.generateAddress(expr.operand);
-    } else if (op === TokenType.Star) {
-      // Dereference: *x
-      // To get the value, we load from the address
-      const addr = this.generateAddress(expr);
-      const type = this.resolveType(expr.resolvedType!);
-      const reg = this.newRegister();
-      this.emit(`  ${reg} = load ${type}, ${type}* ${addr}`);
-      return reg;
-    } else if (op === TokenType.Minus) {
-      // Negation: -x
-      const val = this.generateExpression(expr.operand);
-      const type = this.resolveType(expr.resolvedType!);
-      const reg = this.newRegister();
-      if (type === "double") {
-        this.emit(`  ${reg} = fneg ${type} ${val}`);
-      } else {
-        this.emit(`  ${reg} = sub ${type} 0, ${val}`);
-      }
-      return reg;
-    } else if (op === TokenType.Bang) {
-      // Logical Not: !x
-      const val = this.generateExpression(expr.operand);
-      const reg = this.newRegister();
-      this.emit(`  ${reg} = icmp eq i1 ${val}, 0`); // Assuming bool is i1
-      return reg;
-    }
-    // TODO: Tilde (Bitwise Not)
-    return "0";
-  }
-
-  private generateCast(expr: AST.CastExpr): string {
-    const val = this.generateExpression(expr.expression);
-    const srcType = this.resolveType(expr.expression.resolvedType!);
-    const destType = this.resolveType(expr.targetType);
-    const reg = this.newRegister();
-
-    if (srcType === destType) return val;
-
-    // Pointer to Pointer (bitcast)
-    if (srcType.endsWith("*") && destType.endsWith("*")) {
-      this.emit(`  ${reg} = bitcast ${srcType} ${val} to ${destType}`);
-      return reg;
-    }
-
-    // Int to Pointer (inttoptr)
-    if (srcType === "i64" && destType.endsWith("*")) {
-      this.emit(`  ${reg} = inttoptr i64 ${val} to ${destType}`);
-      return reg;
-    }
-
-    // Pointer to Int (ptrtoint)
-    if (srcType.endsWith("*") && destType === "i64") {
-      this.emit(`  ${reg} = ptrtoint ${srcType} ${val} to i64`);
-      return reg;
-    }
-
-    // Int to Float (sitofp)
-    if (srcType === "i64" && destType === "double") {
-      this.emit(`  ${reg} = sitofp i64 ${val} to double`);
-      return reg;
-    }
-
-    // Float to Int (fptosi)
-    if (srcType === "double" && destType === "i64") {
-      this.emit(`  ${reg} = fptosi double ${val} to i64`);
-      return reg;
-    }
-
-    // Bool to Int (zext)
-    if (srcType === "i1" && destType === "i64") {
-      this.emit(`  ${reg} = zext i1 ${val} to i64`);
-      return reg;
-    }
-
-    // Int to Bool (icmp ne 0)
-    if (srcType === "i64" && destType === "i1") {
-      this.emit(`  ${reg} = icmp ne i64 ${val}, 0`);
-      return reg;
-    }
-
-    // Int Truncation (i64 -> i8/i32)
-    if (srcType === "i64" && (destType === "i8" || destType === "i32")) {
-      this.emit(`  ${reg} = trunc i64 ${val} to ${destType}`);
-      return reg;
-    }
-
-    // Int Extension (i8/i32 -> i64)
-    if ((srcType === "i8" || srcType === "i32") && destType === "i64") {
-      // Assuming unsigned char, so zext. For i32 it depends on signedness, but let's assume sext for int?
-      // Spec says int is signed 64 bit. char is unsigned 8 bit.
-      // If we have i32, it's not in spec yet (only int=i64).
-      // But if we had i32, we'd need to know if it's signed.
-      // For i8 (char), it's unsigned.
-      if (srcType === "i8") {
-        this.emit(`  ${reg} = zext ${srcType} ${val} to ${destType}`);
-      } else {
-        this.emit(`  ${reg} = sext ${srcType} ${val} to ${destType}`);
-      }
-      return reg;
-    }
-
-    // Default bitcast (unsafe)
-    this.emit(`  ${reg} = bitcast ${srcType} ${val} to ${destType}`);
-    return reg;
-  }
-
   private generateGlobalVariable(decl: AST.VariableDecl) {
     if (typeof decl.name !== "string") {
-      throw new Error("Destructuring not supported for global variables");
+        throw new Error("Destructuring not supported for global variables");
     }
-
     this.globals.add(decl.name);
 
-    const type = this.resolveType(
-      decl.typeAnnotation || decl.initializer!.resolvedType!,
-    );
-
+    const type = this.resolveType(decl.typeAnnotation!);
     let init = "zeroinitializer";
     if (decl.initializer) {
       if (decl.initializer.kind === "Literal") {
@@ -957,40 +769,19 @@ export class CodeGenerator {
         throw new Error("Global variables must be initialized with literals");
       }
     } else {
-      // Default initialization
-      if (type === "i64" || type === "i32" || type === "i8" || type === "i1")
+      if (
+        type === "i64" ||
+        type === "i32" ||
+        type === "i16" ||
+        type === "i8" ||
+        type === "i1"
+      )
         init = "0";
       else if (type === "double") init = "0.0";
       else if (type.endsWith("*")) init = "null";
-      else init = "zeroinitializer";
     }
-
     this.emit(`@${decl.name} = global ${type} ${init}`);
     this.emit("");
-  }
-
-  private generateSizeof(expr: AST.SizeofExpr): string {
-    let type: AST.TypeNode;
-    if ("kind" in expr.target && (expr.target.kind as string) !== "BasicType") {
-      // It's an expression
-      type = (expr.target as AST.Expression).resolvedType!;
-    } else {
-      // It's a type
-      type = expr.target as AST.TypeNode;
-    }
-
-    if (type.kind === "MetaType") {
-      type = (type as any).type;
-    }
-
-    const llvmType = this.resolveType(type);
-    const ptrReg = this.newRegister();
-    this.emit(
-      `  ${ptrReg} = getelementptr ${llvmType}, ${llvmType}* null, i32 1`,
-    );
-    const intReg = this.newRegister();
-    this.emit(`  ${intReg} = ptrtoint ${llvmType}* ${ptrReg} to i64`);
-    return intReg;
   }
 
   private generateSwitch(stmt: AST.SwitchStmt) {
@@ -1011,9 +802,11 @@ export class CodeGenerator {
       caseLabels.push({ value: val, label, body: caseStmt.body });
     }
 
-    this.emit(`  switch i64 ${cond}, label %${defaultLabel} [`);
+    const condType = this.resolveType(stmt.expression.resolvedType!);
+
+    this.emit(`  switch ${condType} ${cond}, label %${defaultLabel} [`);
     for (const c of caseLabels) {
-      this.emit(`    i64 ${c.value}, label %${c.label}`);
+      this.emit(`    ${condType} ${c.value}, label %${c.label}`);
     }
     this.emit(`  ]`);
 
@@ -1034,6 +827,70 @@ export class CodeGenerator {
     }
 
     this.emit(`${endLabel}:`);
+  }
+
+  private emitCast(
+    val: string,
+    srcType: string,
+    destType: string,
+    srcTypeNode: AST.TypeNode,
+    destTypeNode: AST.TypeNode,
+  ): string {
+    const reg = this.newRegister();
+
+    if (srcType === destType) return val;
+
+    // Pointer casts
+    if (srcType.endsWith("*") && destType.endsWith("*")) {
+      this.emit(`  ${reg} = bitcast ${srcType} ${val} to ${destType}`);
+      return reg;
+    }
+    if (srcType.startsWith("i") && destType.endsWith("*")) {
+      this.emit(`  ${reg} = inttoptr ${srcType} ${val} to ${destType}`);
+      return reg;
+    }
+    if (srcType.endsWith("*") && destType.startsWith("i")) {
+      this.emit(`  ${reg} = ptrtoint ${srcType} ${val} to ${destType}`);
+      return reg;
+    }
+
+    // Float casts
+    if (srcType === "double" && destType.startsWith("i")) {
+      const op = this.isSigned(destTypeNode) ? "fptosi" : "fptoui";
+      this.emit(`  ${reg} = ${op} double ${val} to ${destType}`);
+      return reg;
+    }
+    if (srcType.startsWith("i") && destType === "double") {
+      const op = this.isSigned(srcTypeNode) ? "sitofp" : "uitofp";
+      this.emit(`  ${reg} = ${op} ${srcType} ${val} to double`);
+      return reg;
+    }
+
+    // Integer casts
+    if (srcType.startsWith("i") && destType.startsWith("i")) {
+      const srcWidth = this.getBitWidth(srcType);
+      const destWidth = this.getBitWidth(destType);
+
+      if (srcWidth > destWidth) {
+        this.emit(`  ${reg} = trunc ${srcType} ${val} to ${destType}`);
+        return reg;
+      } else if (srcWidth < destWidth) {
+        // For implicit conversions (like literal to variable), we might not have explicit cast.
+        // But here we are generating code.
+        // If we are extending, we need to know if source is signed.
+        // If source is a literal (e.g. -10), it might be typed as 'int' (i32) but we want to assign to 'i8'.
+        // Wait, if we assign -10 (i32) to i8, that's truncation, not extension.
+        // If we assign 10 (i32) to i64, that's extension.
+
+        const op = this.isSigned(srcTypeNode) ? "sext" : "zext";
+        this.emit(`  ${reg} = ${op} ${srcType} ${val} to ${destType}`);
+        return reg;
+      } else {
+        return val;
+      }
+    }
+
+    throw new Error(`Unsupported cast from ${srcType} to ${destType}`);
   }
 
   private generateLogicalAnd(expr: AST.BinaryExpr): string {
@@ -1086,5 +943,241 @@ export class CodeGenerator {
     const reg = this.newRegister();
     this.emit(`  ${reg} = load i1, i1* ${resPtr}`);
     return reg;
+  }
+
+  private generateSizeof(expr: AST.SizeofExpr): string {
+    let type: AST.TypeNode;
+    if ("kind" in expr.target && (expr.target.kind as string) !== "BasicType") {
+      type = (expr.target as AST.Expression).resolvedType!;
+    } else {
+      type = expr.target as AST.TypeNode;
+    }
+
+    if (type.kind === "MetaType") {
+      type = (type as any).type;
+    }
+
+    const llvmType = this.resolveType(type);
+    const ptrReg = this.newRegister();
+    this.emit(
+      `  ${ptrReg} = getelementptr ${llvmType}, ${llvmType}* null, i32 1`,
+    );
+    const intReg = this.newRegister();
+    this.emit(`  ${intReg} = ptrtoint ${llvmType}* ${ptrReg} to i64`);
+    return intReg;
+  }
+
+  private resolveType(type: AST.TypeNode): string {
+    if (type.kind === "BasicType") {
+      const basicType = type as AST.BasicTypeNode;
+      let llvmType = "";
+      switch (basicType.name) {
+        case "int":
+        case "i32":
+        case "u32":
+        case "uint":
+          llvmType = "i32";
+          break;
+        case "i8":
+        case "u8":
+        case "char":
+        case "uchar":
+          llvmType = "i8";
+          break;
+        case "i16":
+        case "u16":
+        case "short":
+        case "ushort":
+          llvmType = "i16";
+          break;
+        case "i64":
+        case "u64":
+        case "long":
+        case "ulong":
+          llvmType = "i64";
+          break;
+        case "float":
+        case "double":
+          llvmType = "double";
+          break;
+        case "bool":
+        case "i1":
+          llvmType = "i1";
+          break;
+        case "void":
+          llvmType = "void";
+          break;
+        case "string":
+          llvmType = "i8*";
+          break;
+        default:
+          llvmType = `%struct.${basicType.name}`;
+          break;
+      }
+
+      for (let i = 0; i < basicType.pointerDepth; i++) {
+        llvmType += "*";
+      }
+      
+      for (let i = basicType.arrayDimensions.length - 1; i >= 0; i--) {
+        llvmType = `[${basicType.arrayDimensions[i]} x ${llvmType}]`;
+      }
+      
+      return llvmType;
+    } else if (type.kind === "FunctionType") {
+        const funcType = type as AST.FunctionTypeNode;
+        const ret = this.resolveType(funcType.returnType);
+        const params = funcType.paramTypes.map(p => this.resolveType(p)).join(", ");
+        return `${ret} (${params})*`;
+    }
+    return "void";
+  }
+
+  private newRegister(): string {
+    return `%${this.registerCount++}`;
+  }
+
+  private newLabel(name: string): string {
+    return `${name}.${this.labelCount++}`;
+  }
+
+  private isTerminator(line: string): boolean {
+    line = line.trim();
+    return (
+      line.startsWith("ret ") ||
+      line.startsWith("br ") ||
+      line.startsWith("switch ") ||
+      line.startsWith("unreachable")
+    );
+  }
+
+  private allocateStack(name: string, type: string): string {
+    const ptr = `%${name}_ptr`;
+    this.emit(`  ${ptr} = alloca ${type}`);
+    this.locals.add(name);
+    return ptr;
+  }
+
+  private generateAssignment(expr: AST.AssignmentExpr): string {
+    const val = this.generateExpression(expr.value);
+    const addr = this.generateAddress(expr.assignee);
+    
+    const destType = this.resolveType(expr.assignee.resolvedType!);
+    const srcType = this.resolveType(expr.value.resolvedType!);
+    
+    const castVal = this.emitCast(val, srcType, destType, expr.value.resolvedType!, expr.assignee.resolvedType!);
+    
+    this.emit(`  store ${destType} ${castVal}, ${destType}* ${addr}`);
+    return castVal;
+  }
+
+  private generateMember(expr: AST.MemberExpr): string {
+    const addr = this.generateAddress(expr);
+    const type = this.resolveType(expr.resolvedType!);
+    const reg = this.newRegister();
+    this.emit(`  ${reg} = load ${type}, ${type}* ${addr}`);
+    return reg;
+  }
+
+  private generateIndex(expr: AST.IndexExpr): string {
+    const addr = this.generateAddress(expr);
+    const type = this.resolveType(expr.resolvedType!);
+    const reg = this.newRegister();
+    this.emit(`  ${reg} = load ${type}, ${type}* ${addr}`);
+    return reg;
+  }
+
+  private generateUnary(expr: AST.UnaryExpr): string {
+    if (expr.operator.type === TokenType.Ampersand) {
+      return this.generateAddress(expr.operand);
+    } else if (expr.operator.type === TokenType.Star) {
+      const ptr = this.generateExpression(expr.operand);
+      const type = this.resolveType(expr.resolvedType!);
+      const reg = this.newRegister();
+      this.emit(`  ${reg} = load ${type}, ${type}* ${ptr}`);
+      return reg;
+    } else if (expr.operator.type === TokenType.Minus) {
+      const val = this.generateExpression(expr.operand);
+      const type = this.resolveType(expr.resolvedType!);
+      const reg = this.newRegister();
+      if (type === "double") {
+        this.emit(`  ${reg} = fsub double 0.0, ${val}`);
+      } else {
+        this.emit(`  ${reg} = sub ${type} 0, ${val}`);
+      }
+      return reg;
+    } else if (expr.operator.type === TokenType.Bang) {
+      const val = this.generateExpression(expr.operand);
+      const reg = this.newRegister();
+      this.emit(`  ${reg} = xor i1 ${val}, true`);
+      return reg;
+    }
+    return "0";
+  }
+
+  private generateCast(expr: AST.CastExpr): string {
+    const val = this.generateExpression(expr.expression);
+    const srcType = this.resolveType(expr.expression.resolvedType!);
+    const destType = this.resolveType(expr.targetType);
+    return this.emitCast(val, srcType, destType, expr.expression.resolvedType!, expr.targetType);
+  }
+
+  private generateStructLiteral(expr: AST.StructLiteralExpr): string {
+    const type = this.resolveType(expr.resolvedType!);
+    let structVal = "undef";
+    
+    const structName = (expr.resolvedType as AST.BasicTypeNode).name;
+    const layout = this.structLayouts.get(structName)!;
+    
+    const fieldValues = new Map<string, AST.Expression>();
+    for (const field of expr.fields) {
+      fieldValues.set(field.name, field.value);
+    }
+    
+    const sortedFields = Array.from(layout.entries()).sort((a, b) => a[1] - b[1]);
+    
+    for (const [fieldName, fieldIndex] of sortedFields) {
+      const valExpr = fieldValues.get(fieldName);
+      if (valExpr) {
+        const val = this.generateExpression(valExpr);
+        const fieldType = this.resolveType(valExpr.resolvedType!);
+        const nextVal = this.newRegister();
+        this.emit(`  ${nextVal} = insertvalue ${type} ${structVal}, ${fieldType} ${val}, ${fieldIndex}`);
+        structVal = nextVal;
+      }
+    }
+    
+    return structVal;
+  }
+
+  private escapeString(str: string): string {
+    return str
+      .replace(/\\/g, "\\5C")
+      .replace(/"/g, "\\22")
+      .replace(/\n/g, "\\0A")
+      .replace(/\t/g, "\\09")
+      .replace(/\r/g, "\\0D");
+  }
+
+  private getBitWidth(type: string): number {
+    if (type === "i1") return 1;
+    if (type === "i8") return 8;
+    if (type === "i16") return 16;
+    if (type === "i32") return 32;
+    if (type === "i64") return 64;
+    return 0;
+  }
+
+  private isSigned(type: AST.TypeNode): boolean {
+    if (type.kind === "BasicType") {
+      return ["int", "i8", "i16", "i32", "i64", "char", "short", "long"].includes(
+        (type as AST.BasicTypeNode).name,
+      );
+    }
+    return false;
+  }
+
+  private isIntegerType(type: string): boolean {
+    return ["i1", "i8", "i16", "i32", "i64"].includes(type);
   }
 }

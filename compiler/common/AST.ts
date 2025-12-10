@@ -1,4 +1,4 @@
-import { Token } from "./Token";
+import { Token } from "../frontend/Token";
 import type { SourceLocation } from "./CompilerError";
 
 export interface ASTNode {
@@ -32,6 +32,7 @@ export interface FunctionTypeNode extends ASTNode {
   kind: "FunctionType";
   returnType: TypeNode;
   paramTypes: TypeNode[];
+  isVariadic?: boolean;
   declaration?: FunctionDecl; // Optional reference to declaration for generics
 }
 
@@ -253,13 +254,14 @@ export interface ExpressionStmt extends ASTNode {
 
 export interface ImportStmt extends ASTNode {
   kind: "Import";
-  items: { name: string; alias?: string }[];
+  items: { name: string; alias?: string; isType: boolean }[];
   source: string;
 }
 
 export interface ExportStmt extends ASTNode {
   kind: "Export";
   item: string;
+  isType: boolean;
 }
 
 export interface ExternDecl extends ASTNode {

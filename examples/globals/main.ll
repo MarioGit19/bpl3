@@ -7,14 +7,14 @@ declare void @exit(i32)
 
 declare void @printf(i8*, ...)
 
-@G = global i64 100
+@G = global i32 100
 
-define i64 @main() {
+define i32 @main() {
 entry:
-  %0 = load i64, i64* @G
-  call void @printf(i8* getelementptr inbounds ([12 x i8], [12 x i8]* @.str.0, i64 0, i64 0), i64 %0)
-  store i64 200, i64* @G
-  %1 = load i64, i64* @G
-  call void @printf(i8* getelementptr inbounds ([21 x i8], [21 x i8]* @.str.1, i64 0, i64 0), i64 %1)
-  ret i64 0
+  %1 = load i32, i32* @G
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([12 x i8], [12 x i8]* @.str.0, i64 0, i64 0), i32 %1)
+  store i32 200, i32* @G
+  %4 = load i32, i32* @G
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([21 x i8], [21 x i8]* @.str.1, i64 0, i64 0), i32 %4)
+  ret i32 0
 }

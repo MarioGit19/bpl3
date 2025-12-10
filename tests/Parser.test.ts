@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
-import { Lexer } from "../src/Lexer";
-import { Parser } from "../src/Parser";
-import { TokenType } from "../src/TokenType";
+import { Lexer } from "../compiler/frontend/Lexer";
+import { Parser } from "../compiler/frontend/Parser";
+import { TokenType } from "../compiler/frontend/TokenType";
 
 describe("Parser", () => {
   it("should parse a simple function declaration", () => {

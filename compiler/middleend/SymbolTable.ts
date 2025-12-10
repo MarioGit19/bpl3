@@ -1,4 +1,4 @@
-import * as AST from "./AST";
+import * as AST from "../common/AST";
 
 export type SymbolKind =
   | "Variable"

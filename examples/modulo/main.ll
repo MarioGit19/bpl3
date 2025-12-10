@@ -6,9 +6,9 @@ declare void @exit(i32)
 
 declare void @printf(i8*, ...)
 
-define i64 @main() {
+define i32 @main() {
 entry:
-  %0 = srem i64 10, 3
-  call void @printf(i8* getelementptr inbounds ([14 x i8], [14 x i8]* @.str.0, i64 0, i64 0), i64 %0)
-  ret i64 0
+  %1 = srem i32 10, 3
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([14 x i8], [14 x i8]* @.str.0, i64 0, i64 0), i32 %1)
+  ret i32 0
 }

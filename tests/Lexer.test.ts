@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
-import { Lexer } from "../src/Lexer";
-import { TokenType } from "../src/TokenType";
+import { Lexer } from "../compiler/frontend/Lexer";
+import { TokenType } from "../compiler/frontend/TokenType";
 
 describe("Lexer", () => {
   it("should tokenize basic symbols", () => {

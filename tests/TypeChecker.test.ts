@@ -1,8 +1,8 @@
 import { describe, it, expect } from "bun:test";
-import { Lexer } from "../src/Lexer";
-import { Parser } from "../src/Parser";
-import { TypeChecker } from "../src/TypeChecker";
-import { CompilerError } from "../src/CompilerError";
+import { Lexer } from "../compiler/frontend/Lexer";
+import { Parser } from "../compiler/frontend/Parser";
+import { TypeChecker } from "../compiler/middleend/TypeChecker";
+import { CompilerError } from "../compiler/common/CompilerError";
 
 function check(source: string) {
     const lexer = new Lexer(source, "test.bpl");

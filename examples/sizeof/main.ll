@@ -7,15 +7,15 @@ declare void @exit(i32)
 
 declare void @printf(i8*, ...)
 
-%struct.Point = type { i64, i64 }
+%struct.Point = type { i32, i32 }
 
-define i64 @main() {
+define i32 @main() {
 entry:
-  %0 = getelementptr i64, i64* null, i32 1
-  %1 = ptrtoint i64* %0 to i64
-  call void @printf(i8* getelementptr inbounds ([16 x i8], [16 x i8]* @.str.0, i64 0, i64 0), i64 %1)
-  %2 = getelementptr %struct.Point, %struct.Point* null, i32 1
-  %3 = ptrtoint %struct.Point* %2 to i64
-  call void @printf(i8* getelementptr inbounds ([18 x i8], [18 x i8]* @.str.1, i64 0, i64 0), i64 %3)
-  ret i64 0
+  %1 = getelementptr i32, i32* null, i32 1
+  %2 = ptrtoint i32* %1 to i64
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([16 x i8], [16 x i8]* @.str.0, i64 0, i64 0), i64 %2)
+  %4 = getelementptr %struct.Point, %struct.Point* null, i32 1
+  %5 = ptrtoint %struct.Point* %4 to i64
+  call void (i8*, ...) @printf(i8* getelementptr inbounds ([18 x i8], [18 x i8]* @.str.1, i64 0, i64 0), i64 %5)
+  ret i32 0
 }

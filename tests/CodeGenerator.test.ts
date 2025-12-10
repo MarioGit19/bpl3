@@ -1,8 +1,8 @@
 import { describe, it, expect } from "bun:test";
-import { Lexer } from "../src/Lexer";
-import { Parser } from "../src/Parser";
-import { TypeChecker } from "../src/TypeChecker";
-import { CodeGenerator } from "../src/CodeGenerator";
+import { Lexer } from "../compiler/frontend/Lexer";
+import { Parser } from "../compiler/frontend/Parser";
+import { TypeChecker } from "../compiler/middleend/TypeChecker";
+import { CodeGenerator } from "../compiler/backend/CodeGenerator";
 
 function compile(source: string): string {
     const lexer = new Lexer(source, "test.bpl");
@@ -30,9 +30,9 @@ describe("CodeGenerator", () => {
       }
     `;
     const ir = compile(source);
-    expect(ir).toContain("define i64 @add(i64 %a, i64 %b)");
-    expect(ir).toContain("add i64");
-    expect(ir).toContain("ret i64");
+    expect(ir).toContain("define i32 @add(i32 %a, i32 %b)");
+    expect(ir).toContain("add i32");
+    expect(ir).toContain("ret i32");
   });
 
   it("should generate code for struct methods", () => {
@@ -46,8 +46,8 @@ describe("CodeGenerator", () => {
       }
     `;
     const ir = compile(source);
-    expect(ir).toContain("%struct.Point = type { i64, i64 }");
+    expect(ir).toContain("%struct.Point = type { i32, i32 }");
     // Check for mangled name
-    expect(ir).toContain("define i64 @Point_sum(%struct.Point %this)");
+    expect(ir).toContain("define i32 @Point_sum(%struct.Point %this)");
   });
 });

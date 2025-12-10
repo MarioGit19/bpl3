@@ -1,4 +1,4 @@
-import { Token } from "./Token";
+import { Token } from "../frontend/Token";
 
 export interface SourceLocation {
   file: string;

@@ -1,7 +1,7 @@
 import { Token } from "./Token";
 import { TokenType } from "./TokenType";
-import * as AST from "./AST";
-import { CompilerError, type SourceLocation } from "./CompilerError";
+import * as AST from "../common/AST";
+import { CompilerError, type SourceLocation } from "../common/CompilerError";
 
 export class Parser {
   private tokens: Token[];
@@ -284,31 +284,42 @@ export class Parser {
 
   private importStatement(): AST.ImportStmt {
     const startToken = this.previous();
-    const items: { name: string; alias?: string }[] = [];
+    const items: { name: string; alias?: string; isType: boolean }[] = [];
 
-    if (this.match(TokenType.LeftBracket)) {
-      do {
+    // Parse import items: supports mixed functions and types
+    // Examples:
+    //   import func1, [Type1], [Type2], func2 from "./module.bpl";
+    //   import [Type] from "./module.bpl";
+    //   import func from "./module.bpl";
+    
+    do {
+      // Check if this is a type import (wrapped in brackets)
+      if (this.check(TokenType.LeftBracket)) {
+        this.advance(); // consume '['
+        const name = this.consume(
+          TokenType.Identifier,
+          "Expected type name in brackets.",
+        ).lexeme;
+        this.consume(
+          TokenType.RightBracket,
+          "Expected ']' after type name. Only one type allowed per [].",
+        );
+        items.push({ name, isType: true });
+      } else {
+        // Function import (no brackets)
         const name = this.consume(
           TokenType.Identifier,
           "Expected import name.",
         ).lexeme;
-        items.push({ name });
-      } while (this.match(TokenType.Comma));
-      this.consume(TokenType.RightBracket, "Expected ']' after import list.");
-    } else {
-      const name = this.consume(
-        TokenType.Identifier,
-        "Expected import name.",
-      ).lexeme;
-      items.push({ name });
-    }
+        items.push({ name, isType: false });
+      }
+    } while (this.match(TokenType.Comma));
 
     this.consume(TokenType.From, "Expected 'from' after import list.");
     const source = this.consume(
       TokenType.StringLiteral,
       "Expected import source string.",
-    ).lexeme; // Lexeme includes quotes? Lexer stores value in literal usually, but lexeme has quotes.
-    // Assuming lexer stores raw string in lexeme including quotes.
+    ).lexeme;
     this.consume(TokenType.Semicolon, "Expected ';' after import.");
 
     return {
@@ -321,14 +332,35 @@ export class Parser {
 
   private exportStatement(): AST.ExportStmt {
     const startToken = this.previous();
-    const item = this.consume(
-      TokenType.Identifier,
-      "Expected exported identifier.",
-    ).lexeme;
-    this.consume(TokenType.Semicolon, "Expected ';' after export.");
+    
+    // Check if this is a type export (wrapped in brackets)
+    let isType = false;
+    let item: string;
+    
+    if (this.match(TokenType.LeftBracket)) {
+      isType = true;
+      item = this.consume(
+        TokenType.Identifier,
+        "Expected type name in brackets.",
+      ).lexeme;
+      this.consume(
+        TokenType.RightBracket,
+        "Expected ']' after type name. Only one type allowed per export statement.",
+      );
+    } else {
+      // Function/value export (no brackets)
+      item = this.consume(
+        TokenType.Identifier,
+        "Expected exported identifier.",
+      ).lexeme;
+    }
+    
+    this.consume(TokenType.Semicolon, "Expected ';' after export. Only one item allowed per export statement.");
+    
     return {
       kind: "Export",
       item,
+      isType,
       location: this.loc(startToken, this.previous()),
     };
   }

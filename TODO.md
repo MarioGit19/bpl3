@@ -15,6 +15,15 @@
 - [x] Nested Generics & Static Methods
 - [x] Generic Instantiation in Expressions
 - [x] Make `this` explicit in struct methods
+- [x] Code Generation (LLVM IR or similar)
+- [x] Canonical primitive integer types mapping
+- [x] Type casting (implicit & explicit)
+- [x] CLI compiler tool
+- [x] Unit & integration tests (basic coverage exists)
+- [x] Try/catch error handling (already implemented)
+- [x] Type Aliasing (user-defined type aliases)
+- [x] Project structure & LLVM upgrade
+- [x] Full import resolution before compilation (in progress - basic infrastructure implemented)
 
 ## Pending Features (expanded)
 - [9] Const Correctness
@@ -22,25 +31,10 @@
 	- Implementation notes: Add `isConst` flag to symbol/type entries. Propagate const through assignments, parameter passing, and returns. Treat `const` references to mutable objects as shallowly const unless a deeper const model is chosen. Decide whether `const` applies to variables, fields, and/or function returns.
 	- Acceptance criteria: Examples declaring `const` variables produce errors on mutation; `const` parameters cannot be assigned inside functions; `const` globals evaluate as compile-time constants where used.
 
-- [0] Code Generation (LLVM IR or similar)
-	- Description: Emit a backend representation (preferably LLVM IR) from the compiler's IR/AST so programs can be compiled to native code. This includes mapping language types to target types, generating function prologues/epilogues, and lowering runtime features.
-	- Implementation notes: Design a clear IR->target lowering step. Start with a minimal codegen: functions, control flow, arithmetic, locals, and basic memory layout. Integrate with LLVM via textual IR output or use an LLVM binding. Provide runtime support stubs (alloc, free, I/O) in `lib/`.
-	- Acceptance criteria: A 'hello world' program compiles to valid LLVM IR that `llc`/`clang` can compile and run; basic language constructs are translated and produce correct behavior.
-
 - [4] Advanced Generics (Constraints, Inference)
 	- Description: Add generic constraints (e.g., `T: Comparable`) and local inference so generic functions can deduce type parameters from call-sites where possible.
 	- Implementation notes: Extend type parameter structures to include bounds; implement constraint checking during type inference/resolution. Add unification and constraint propagation algorithm to TypeChecker.
 	- Acceptance criteria: Constrained generics accept only types satisfying bounds; generic functions without explicit type args can be called with types that infer correctly.
-
-- [1] Canonical primitive integer types mapping
-	- Description: Add named primitive types that correspond to target integer sizes: `bool` (i1), `char` (i8), `short` (i16), `int` (i32), `long` (i64), and unsigned variants `uchar`, `ushort`, `uint`, `ulong`.
-	- Implementation notes: Add these types in the type registry and map them to underlying LLVM types during codegen. Ensure lexer/parser/type system recognizes these names and that arithmetic and conversions honor signedness.
-	- Acceptance criteria: Source-level types listed above parse, type-check, and generate the correct LLVM integer types; unsigned ops behave appropriately.
-
-- [2] Type casting (implicit & explicit)
-	- Description: Implement a casting system supporting implicit safe promotions and explicit casts via `cast<type>(value)`. Support numeric promotions/demotions, casts across compatible structs (inheritance), and array casts where element types are compatible.
-	- Implementation notes: Define a cast matrix with implicit/explicit rules; implement `cast` AST node lowering in TypeChecker; add runtime checks where needed (e.g., downcast with RTTI). Consider adding `try_cast` vs `cast` for safe failure handling.
-	- Acceptance criteria: Implicit promotions occur in expressions (e.g., `int + float -> float`); explicit `cast<type>(value)` compiles; invalid casts produce compile-time or documented runtime errors (depending on static/dynamic safety model).
 
 - [4] Function overloading by parameter types
 	- Description: Allow multiple functions with the same name but different parameter type lists. Overload resolution must pick the best match based on argument types and implicit conversions.
@@ -82,6 +76,11 @@
 	- Implementation notes: Standardize error types and formatting. Enrich `CompilerError` with categories, severity, and potential quick-fixes. Add tests for common error scenarios.
 	- Acceptance criteria: Errors include file/line/column, a concise message, and at least one suggestion when applicable.
 
+- [5] AST/IR printing flags
+	- Description: Add compiler flags to dump AST or IR to console or file (e.g., `-ast`, `-ir -oLL file.ll`) for debugging.
+	- Implementation notes: Implement pretty printers for AST and any intermediate IR. Add CLI options for selecting output format and file path.
+	- Acceptance criteria: Flags print human-readable AST/IR; `-o` writes to files when specified.
+
 - [6] Documentation generation tool
 	- Description: Tool to parse source comments and generate API docs (HTML/Markdown) for language, libraries, and runtime.
 	- Implementation notes: Reuse the parser/AST to extract doc comments and signatures. Provide templates and command-line options for output formats. Consider output used by IDE tooltips. Similar to JSDoc/Doxygen.
@@ -97,27 +96,12 @@
 	- Implementation notes: Implement AST-driven pretty-printer to avoid ambiguous formatting. Provide `format` CLI and editor integration.
 	- Acceptance criteria: Running formatter produces stable, idempotent formatting for sample files.
 
-- [1] CLI compiler tool
-	- Description: Build a command-line entrypoint that compiles BPL3 source (`.bpl`/`.x`) with flags for output, optimization, and debug info. Support a JSON config file that sets default flags.
-	- Implementation notes: Provide `bin/` script or Node entry in `package.json`. Implement argument parsing and config file precedence rules. Expose verbose and diagnostic flags.
-	- Acceptance criteria: `bplc input.bpl -oAst out.bplast -oLL out.ll -oO out.o -o out` produces output; config file is respected when present.
-
-- [4] Unit & integration tests
-	- Description: Add automated tests (unit for components, integration for end-to-end) using the existing test harness or `bun` tests.
-	- Implementation notes: Add test cases for parsing, type checking, and sample programs. Integrate tests into CI later. Aim for deterministic tests without requiring external network.
-	- Acceptance criteria: Test suite runs and covers core compiler features with CI-ready output.
-
-- [5] AST/IR printing flags
+- [3] Error handling and diagnostics
 	- Description: Add compiler flags to dump AST or IR to console or file (e.g., `-ast`, `-ir -oLL file.ll`) for debugging.
 	- Implementation notes: Implement pretty printers for AST and any intermediate IR. Add CLI options for selecting output format and file path.
 	- Acceptance criteria: Flags print human-readable AST/IR; `-o` writes to files when specified.
 
-- [4] Try/catch error handling
-	- Description: Implement `try`/`catch` with typed catch clauses and re-throw semantics, integrating with the runtime and stack-unwinding model.
-	- Implementation notes: Decide on exception representation (objects or error codes). Add SSA/IR constructs for exception flow and runtime support for throwing and catching.
-	- Acceptance criteria: `try { } catch (E: Type) { }` compiles and the runtime routes thrown exceptions to correct handlers.
-
-- [5] `match<Type>(value)` narrowing
+- [6] Documentation generation tool
 	- Description: Implement syntax and semantics for narrowing variable types based on runtime checks (useful inside `catch` blocks or generic contexts).
 	- Implementation notes: Add a `match<T>(expr)` AST construct and TypeChecker rules to narrow variable types inside block scope. Ensure RTTI support for runtime checks.
 	- Acceptance criteria: Within a `match<T>(v)` block, `v` has type `T` and member accesses/overloads resolve accordingly.
@@ -141,11 +125,6 @@
 	- Description: Provide static analysis tooling to detect style and potential bugs (unused vars, suspicious casts, missing returns.)
 	- Implementation notes: Reuse AST and TypeChecker. Make rules configurable and add autofix for simple cases.
 	- Acceptance criteria: Linter runs and reports actionable warnings; some autofixes available.
-
-- [0] Project structure & LLVM upgrade
-	- Description: Reorganize project for maintainability and upgrade to a modern LLVM (textual or API) for codegen improvements.
-	- Implementation notes: Create directories for frontend/middleend/backend, specify LLVM version, and document build steps for the target toolchain.
-	- Acceptance criteria: Project layout is clear and LLVM integration works with documented steps.
 
 - [5] Multi-target support
 	- Description: Add support for targeting multiple platforms and architectures (x86/x64/ARM) and provide conditional std lib methods for platform differences.
