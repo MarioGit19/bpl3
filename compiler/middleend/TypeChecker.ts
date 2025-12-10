@@ -43,7 +43,13 @@ export class TypeChecker {
       "nullptr",
     ];
 
-    const internalLoc = { file: "internal", startLine: 0, startColumn: 0, endLine: 0, endColumn: 0 };
+    const internalLoc = {
+      file: "internal",
+      startLine: 0,
+      startColumn: 0,
+      endLine: 0,
+      endColumn: 0,
+    };
 
     for (const name of baseTypes) {
       scope.define({
@@ -152,7 +158,12 @@ export class TypeChecker {
         stmt.resolvedType = functionType;
         break;
       case "TypeAlias":
-        this.defineSymbol(stmt.name, "TypeAlias", this.resolveType(stmt.type), stmt);
+        this.defineSymbol(
+          stmt.name,
+          "TypeAlias",
+          this.resolveType(stmt.type),
+          stmt,
+        );
         break;
       case "Extern":
         const externType: AST.FunctionTypeNode = {
@@ -378,21 +389,24 @@ export class TypeChecker {
             // Try resolving types and checking again
             const resolvedDeclType = this.resolveType(decl.typeAnnotation);
             const resolvedInitType = this.resolveType(initType);
-            compatible = this.areTypesCompatible(resolvedDeclType, resolvedInitType);
-            
+            compatible = this.areTypesCompatible(
+              resolvedDeclType,
+              resolvedInitType,
+            );
+
             if (!compatible) {
-               const val = this.getIntegerConstantValue(decl.initializer);
-                if (val !== undefined) {
-                  compatible = this.isIntegerTypeCompatible(
-                    val,
-                    resolvedDeclType,
-                  );
-                } else {
-                  compatible = this.isImplicitWideningAllowed(
-                    resolvedInitType,
-                    resolvedDeclType,
-                  );
-                }
+              const val = this.getIntegerConstantValue(decl.initializer);
+              if (val !== undefined) {
+                compatible = this.isIntegerTypeCompatible(
+                  val,
+                  resolvedDeclType,
+                );
+              } else {
+                compatible = this.isImplicitWideningAllowed(
+                  resolvedInitType,
+                  resolvedDeclType,
+                );
+              }
             }
           }
 
@@ -412,7 +426,9 @@ export class TypeChecker {
         decl,
       );
       // console.log(`Defined variable ${decl.name} with type ${this.typeToString(decl.typeAnnotation)}`);
-      decl.resolvedType = decl.typeAnnotation ? this.resolveType(decl.typeAnnotation) : undefined;
+      decl.resolvedType = decl.typeAnnotation
+        ? this.resolveType(decl.typeAnnotation)
+        : undefined;
     }
   }
 
@@ -1111,8 +1127,7 @@ export class TypeChecker {
 
     if (
       !indexType ||
-      (indexType.kind === "BasicType" &&
-        !integerTypes.includes(indexType.name))
+      (indexType.kind === "BasicType" && !integerTypes.includes(indexType.name))
     ) {
       throw new CompilerError(
         `Array index must be an integer, got ${this.typeToString(indexType)}`,
@@ -1267,7 +1282,7 @@ export class TypeChecker {
       if (valueType) {
         const resolvedMemberType = this.resolveType(member.type);
         const resolvedValueType = this.resolveType(valueType);
-        
+
         if (!this.areTypesCompatible(resolvedMemberType, resolvedValueType)) {
           throw new CompilerError(
             `Type mismatch for field '${field.name}': expected ${this.typeToString(member.type)}, got ${this.typeToString(valueType)}`,
@@ -1471,7 +1486,8 @@ export class TypeChecker {
       if (rt1.pointerDepth !== rt2.pointerDepth) return false;
 
       // Array dimensions match
-      if (rt1.arrayDimensions.length !== rt2.arrayDimensions.length) return false;
+      if (rt1.arrayDimensions.length !== rt2.arrayDimensions.length)
+        return false;
       for (let i = 0; i < rt1.arrayDimensions.length; i++) {
         if (rt1.arrayDimensions[i] !== rt2.arrayDimensions[i]) return false;
       }
@@ -1485,7 +1501,8 @@ export class TypeChecker {
 
       return true;
     } else if (rt1.kind === "FunctionType" && rt2.kind === "FunctionType") {
-      if (!this.areTypesCompatible(rt1.returnType, rt2.returnType)) return false;
+      if (!this.areTypesCompatible(rt1.returnType, rt2.returnType))
+        return false;
       if (rt1.paramTypes.length !== rt2.paramTypes.length) return false;
       for (let i = 0; i < rt1.paramTypes.length; i++) {
         if (!this.areTypesCompatible(rt1.paramTypes[i]!, rt2.paramTypes[i]!))
@@ -1495,7 +1512,8 @@ export class TypeChecker {
     } else if (rt1.kind === "TupleType" && rt2.kind === "TupleType") {
       if (rt1.types.length !== rt2.types.length) return false;
       for (let i = 0; i < rt1.types.length; i++) {
-        if (!this.areTypesCompatible(rt1.types[i]!, rt2.types[i]!)) return false;
+        if (!this.areTypesCompatible(rt1.types[i]!, rt2.types[i]!))
+          return false;
       }
       return true;
     }
@@ -1509,7 +1527,10 @@ export class TypeChecker {
 
     if (this.areTypesCompatible(resolvedSource, resolvedTarget)) return true;
 
-    if (resolvedSource.kind === "BasicType" && resolvedTarget.kind === "BasicType") {
+    if (
+      resolvedSource.kind === "BasicType" &&
+      resolvedTarget.kind === "BasicType"
+    ) {
       // Numeric casts
       const numeric = [
         "int",
@@ -1560,23 +1581,48 @@ export class TypeChecker {
     return false;
   }
 
-  private isImplicitWideningAllowed(source: AST.TypeNode, target: AST.TypeNode): boolean {
+  private isImplicitWideningAllowed(
+    source: AST.TypeNode,
+    target: AST.TypeNode,
+  ): boolean {
     const resolvedSource = this.resolveType(source);
     const resolvedTarget = this.resolveType(target);
 
-    if (resolvedSource.kind !== "BasicType" || resolvedTarget.kind !== "BasicType") return false;
-    if (resolvedSource.pointerDepth > 0 || resolvedTarget.pointerDepth > 0) return false;
-    if (resolvedSource.arrayDimensions.length > 0 || resolvedTarget.arrayDimensions.length > 0) return false;
+    if (
+      resolvedSource.kind !== "BasicType" ||
+      resolvedTarget.kind !== "BasicType"
+    )
+      return false;
+    if (resolvedSource.pointerDepth > 0 || resolvedTarget.pointerDepth > 0)
+      return false;
+    if (
+      resolvedSource.arrayDimensions.length > 0 ||
+      resolvedTarget.arrayDimensions.length > 0
+    )
+      return false;
 
     const sName = (resolvedSource as AST.BasicTypeNode).name;
     const tName = (resolvedTarget as AST.BasicTypeNode).name;
 
     const rank: { [key: string]: number } = {
-      "i1": 1, "bool": 1,
-      "i8": 8, "u8": 8, "char": 8, "uchar": 8,
-      "i16": 16, "u16": 16, "short": 16, "ushort": 16,
-      "i32": 32, "u32": 32, "int": 32, "uint": 32,
-      "i64": 64, "u64": 64, "long": 64, "ulong": 64,
+      i1: 1,
+      bool: 1,
+      i8: 8,
+      u8: 8,
+      char: 8,
+      uchar: 8,
+      i16: 16,
+      u16: 16,
+      short: 16,
+      ushort: 16,
+      i32: 32,
+      u32: 32,
+      int: 32,
+      uint: 32,
+      i64: 64,
+      u64: 64,
+      long: 64,
+      ulong: 64,
     };
 
     const sRank = rank[sName];
@@ -1646,7 +1692,10 @@ export class TypeChecker {
       const symbol = this.currentScope.resolve(type.name);
       if (symbol && symbol.kind === "TypeAlias" && symbol.type) {
         // If the alias points to itself (base type definition), return it
-        if (symbol.type.kind === "BasicType" && symbol.type.name === type.name) {
+        if (
+          symbol.type.kind === "BasicType" &&
+          symbol.type.name === type.name
+        ) {
           return type;
         }
 
@@ -1656,7 +1705,10 @@ export class TypeChecker {
           return {
             ...resolvedBase,
             pointerDepth: resolvedBase.pointerDepth + type.pointerDepth,
-            arrayDimensions: [...resolvedBase.arrayDimensions, ...type.arrayDimensions],
+            arrayDimensions: [
+              ...resolvedBase.arrayDimensions,
+              ...type.arrayDimensions,
+            ],
             location: type.location,
           };
         }

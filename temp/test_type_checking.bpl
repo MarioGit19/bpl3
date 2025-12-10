@@ -20,7 +20,7 @@ frame test_valid_types() ret void {
 }
 
 frame test_pointer_arithmetic() ret void {
-    local ptr: *int = null;
+    local ptr: *int = cast<*int>(nullptr);
     local offset: int = 5;
     # Valid: pointer + int
     local newPtr: *int = ptr + offset;

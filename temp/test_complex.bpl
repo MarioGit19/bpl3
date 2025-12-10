@@ -21,7 +21,7 @@ struct Obj {
 }
 
 struct Vec<T> {
-    static new(elements: T[]) ret Vec<T> {
+    frame new(elements: T[]) ret Vec<T> {
         local v: Vec<T>;
         return v;
     }

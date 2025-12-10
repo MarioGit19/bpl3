@@ -1,99 +1,99 @@
 export enum TokenType {
   // Literals
-  Identifier,
-  StringLiteral,
-  CharLiteral,
-  NumberLiteral,
+  Identifier = "Identifier",
+  StringLiteral = "StringLiteral",
+  CharLiteral = "CharLiteral",
+  NumberLiteral = "NumberLiteral",
 
   // Keywords
-  Global,
-  Local,
-  Const,
-  Type,
-  Frame,
-  Static,
-  Ret,
-  Struct,
-  Import,
-  From,
-  Export,
-  Extern,
-  Asm,
-  Loop,
-  If,
-  Else,
-  Break,
-  Continue,
-  Try,
-  Catch,
-  CatchOther,
-  Return,
-  Throw,
-  Switch,
-  Case,
-  Default,
-  Cast,
-  Sizeof,
-  Match,
-  Func,
-  Null,
-  Nullptr,
-  True,
-  False,
+  Global = "Global",
+  Local = "Local",
+  Const = "Const",
+  Type = "Type",
+  Frame = "Frame",
+  Static = "Static",
+  Ret = "Ret",
+  Struct = "Struct",
+  Import = "Import",
+  From = "From",
+  Export = "Export",
+  Extern = "Extern",
+  Asm = "Asm",
+  Loop = "Loop",
+  If = "If",
+  Else = "Else",
+  Break = "Break",
+  Continue = "Continue",
+  Try = "Try",
+  Catch = "Catch",
+  CatchOther = "CatchOther",
+  Return = "Return",
+  Throw = "Throw",
+  Switch = "Switch",
+  Case = "Case",
+  Default = "Default",
+  Cast = "Cast",
+  Sizeof = "Sizeof",
+  Match = "Match",
+  Func = "Func",
+  Null = "Null",
+  Nullptr = "Nullptr",
+  True = "True",
+  False = "False",
 
   // Symbols
-  LeftBrace, // {
-  RightBrace, // }
-  LeftParen, // (
-  RightParen, // )
-  LeftBracket, // [
-  RightBracket, // ]
-  Comma, // ,
-  Colon, // :
-  Semicolon, // ;
-  Dot, // .
-  Ellipsis, // ...
-  Question, // ?
+  LeftBrace = "LeftBrace", // {
+  RightBrace = "RightBrace", // }
+  LeftParen = "LeftParen", // (
+  RightParen = "RightParen", // )
+  LeftBracket = "LeftBracket", // [
+  RightBracket = "RightBracket", // ]
+  Comma = "Comma", // ,
+  Colon = "Colon", // :
+  Semicolon = "Semicolon", // ;
+  Dot = "Dot", // .
+  Ellipsis = "Ellipsis", // ...
+  Question = "Question", // ?
 
   // Operators
-  Equal, // =
-  PlusEqual, // +=
-  MinusEqual, // -=
-  StarEqual, // *=
-  SlashEqual, // /=
-  PercentEqual, // %=
-  AmpersandEqual, // &=
-  PipeEqual, // |=
-  CaretEqual, // ^=
+  Equal = "Equal", // =
+  PlusEqual = "PlusEqual", // +=
+  MinusEqual = "MinusEqual", // -=
+  StarEqual = "StarEqual", // *=
+  SlashEqual = "SlashEqual", // /=
+  PercentEqual = "PercentEqual", // %=
+  AmpersandEqual = "AmpersandEqual", // &=
+  PipeEqual = "PipeEqual", // |=
+  CaretEqual = "CaretEqual", // ^=
 
-  OrOr, // ||
-  AndAnd, // &&
-  Pipe, // |
-  Caret, // ^
-  Ampersand, // &
+  OrOr = "OrOr", // ||
+  AndAnd = "AndAnd", // &&
+  Pipe = "Pipe", // |
+  Caret = "Caret", // ^
+  Ampersand = "Ampersand", // &
 
-  EqualEqual, // ==
-  BangEqual, // !=
-  Less, // <
-  LessEqual, // <=
-  Greater, // >
-  GreaterEqual, // >=
+  EqualEqual = "EqualEqual", // ==
+  BangEqual = "BangEqual", // !=
+  Less = "Less", // <
+  LessEqual = "LessEqual", // <=
+  Greater = "Greater", // >
+  GreaterEqual = "GreaterEqual", // >=
 
-  LessLess, // <<
-  GreaterGreater, // >>
+  LessLess = "LessLess", // <<
+  GreaterGreater = "GreaterGreater", // >>
 
-  Plus, // +
-  Minus, // -
-  Star, // *
-  Slash, // /
-  Percent, // %
+  Plus = "Plus", // +
+  Minus = "Minus", // -
+  Star = "Star", // *
+  Slash = "Slash", // /
+  Percent = "Percent", // %
 
-  Bang, // !
-  Tilde, // ~
-  PlusPlus, // ++
-  MinusMinus, // --
+  Bang = "Bang", // !
+  Tilde = "Tilde", // ~
+  PlusPlus = "PlusPlus", // ++
+  MinusMinus = "MinusMinus", // --
 
   // Special
-  EOF,
-  Unknown,
+  EOF = "EOF",
+  Unknown = "Unknown",
 }

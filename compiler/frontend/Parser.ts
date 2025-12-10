@@ -291,7 +291,7 @@ export class Parser {
     //   import func1, [Type1], [Type2], func2 from "./module.bpl";
     //   import [Type] from "./module.bpl";
     //   import func from "./module.bpl";
-    
+
     do {
       // Check if this is a type import (wrapped in brackets)
       if (this.check(TokenType.LeftBracket)) {
@@ -332,11 +332,11 @@ export class Parser {
 
   private exportStatement(): AST.ExportStmt {
     const startToken = this.previous();
-    
+
     // Check if this is a type export (wrapped in brackets)
     let isType = false;
     let item: string;
-    
+
     if (this.match(TokenType.LeftBracket)) {
       isType = true;
       item = this.consume(
@@ -354,9 +354,12 @@ export class Parser {
         "Expected exported identifier.",
       ).lexeme;
     }
-    
-    this.consume(TokenType.Semicolon, "Expected ';' after export. Only one item allowed per export statement.");
-    
+
+    this.consume(
+      TokenType.Semicolon,
+      "Expected ';' after export. Only one item allowed per export statement.",
+    );
+
     return {
       kind: "Export",
       item,
@@ -961,7 +964,10 @@ export class Parser {
           property: name,
           location: this.loc(expr.location, this.previous()),
         };
-      } else if (this.check(TokenType.LeftBrace) && expr.kind === "Identifier") {
+      } else if (
+        this.check(TokenType.LeftBrace) &&
+        expr.kind === "Identifier"
+      ) {
         this.advance(); // Consume '{'
         // Struct Literal: Point { x: 1 }
         const structName = (expr as AST.IdentifierExpr).name;

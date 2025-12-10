@@ -1,5 +1,5 @@
 {
-  "expectedOutput": "Fibonacci of 10 is: 55",
+  "expectedOutput": ["Fibonacci of 10 is: 55"],
   "args": [],
   "env": {},
   "input": ""

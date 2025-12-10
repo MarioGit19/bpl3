@@ -119,7 +119,9 @@ export class CodeGenerator {
     const fields = decl.members.filter(
       (m) => m.kind === "StructField",
     ) as AST.StructField[];
-    const fieldTypes = fields.map((f) => this.resolveType(f.resolvedType || f.type)).join(", ");
+    const fieldTypes = fields
+      .map((f) => this.resolveType(f.resolvedType || f.type))
+      .join(", ");
     this.emit(`%struct.${decl.name} = type { ${fieldTypes} }`);
     this.emit("");
 
@@ -270,7 +272,9 @@ export class CodeGenerator {
         srcType,
         destType,
         decl.initializer.resolvedType!,
-        decl.resolvedType || decl.typeAnnotation || decl.initializer.resolvedType!,
+        decl.resolvedType ||
+          decl.typeAnnotation ||
+          decl.initializer.resolvedType!,
       );
       this.emit(`  store ${type} ${castVal}, ${type}* ${addr}`);
     }
@@ -430,9 +434,9 @@ export class CodeGenerator {
       if (rightType !== "i64") {
         const castReg = this.newRegister();
         if (this.isSigned(expr.right.resolvedType!)) {
-            this.emit(`  ${castReg} = sext ${rightType} ${rightRaw} to i64`);
+          this.emit(`  ${castReg} = sext ${rightType} ${rightRaw} to i64`);
         } else {
-            this.emit(`  ${castReg} = zext ${rightType} ${rightRaw} to i64`);
+          this.emit(`  ${castReg} = zext ${rightType} ${rightRaw} to i64`);
         }
         right = castReg;
       }
@@ -463,9 +467,9 @@ export class CodeGenerator {
       if (leftType !== "i64") {
         const castReg = this.newRegister();
         if (this.isSigned(expr.left.resolvedType!)) {
-            this.emit(`  ${castReg} = sext ${leftType} ${leftRaw} to i64`);
+          this.emit(`  ${castReg} = sext ${leftType} ${leftRaw} to i64`);
         } else {
-            this.emit(`  ${castReg} = zext ${leftType} ${leftRaw} to i64`);
+          this.emit(`  ${castReg} = zext ${leftType} ${leftRaw} to i64`);
         }
         left = castReg;
       }
@@ -598,7 +602,9 @@ export class CodeGenerator {
     if (retType === "void") {
       if (isVariadic) {
         // Build the full signature for variadic functions
-        const paramTypesStr = funcType.paramTypes.map(t => this.resolveType(t)).join(", ");
+        const paramTypesStr = funcType.paramTypes
+          .map((t) => this.resolveType(t))
+          .join(", ");
         this.emit(`  call void (${paramTypesStr}, ...) @${funcName}(${args})`);
       } else {
         this.emit(`  call void @${funcName}(${args})`);
@@ -608,8 +614,12 @@ export class CodeGenerator {
       const reg = this.newRegister();
       if (isVariadic) {
         // Build the full signature for variadic functions
-        const paramTypesStr = funcType.paramTypes.map(t => this.resolveType(t)).join(", ");
-        this.emit(`  ${reg} = call ${retType} (${paramTypesStr}, ...) @${funcName}(${args})`);
+        const paramTypesStr = funcType.paramTypes
+          .map((t) => this.resolveType(t))
+          .join(", ");
+        this.emit(
+          `  ${reg} = call ${retType} (${paramTypesStr}, ...) @${funcName}(${args})`,
+        );
       } else {
         this.emit(`  ${reg} = call ${retType} @${funcName}(${args})`);
       }
@@ -669,16 +679,16 @@ export class CodeGenerator {
       const indexExpr = expr as AST.IndexExpr;
       const objectAddr = this.generateAddress(indexExpr.object);
       const indexValRaw = this.generateExpression(indexExpr.index);
-      
+
       // Cast index to i64 if needed
       const indexType = this.resolveType(indexExpr.index.resolvedType!);
       let indexVal = indexValRaw;
       if (indexType !== "i64") {
         const castReg = this.newRegister();
         if (this.isSigned(indexExpr.index.resolvedType!)) {
-            this.emit(`  ${castReg} = sext ${indexType} ${indexValRaw} to i64`);
+          this.emit(`  ${castReg} = sext ${indexType} ${indexValRaw} to i64`);
         } else {
-            this.emit(`  ${castReg} = zext ${indexType} ${indexValRaw} to i64`);
+          this.emit(`  ${castReg} = zext ${indexType} ${indexValRaw} to i64`);
         }
         indexVal = castReg;
       }
@@ -756,7 +766,7 @@ export class CodeGenerator {
 
   private generateGlobalVariable(decl: AST.VariableDecl) {
     if (typeof decl.name !== "string") {
-        throw new Error("Destructuring not supported for global variables");
+      throw new Error("Destructuring not supported for global variables");
     }
     this.globals.add(decl.name);
 
@@ -900,9 +910,7 @@ export class CodeGenerator {
     const trueLabel = this.newLabel("and.true");
     const endLabel = this.newLabel("and.end");
 
-    this.emit(
-      `  br i1 ${leftVal}, label %${trueLabel}, label %${falseLabel}`,
-    );
+    this.emit(`  br i1 ${leftVal}, label %${trueLabel}, label %${falseLabel}`);
 
     this.emit(`${falseLabel}:`);
     this.emit(`  store i1 0, i1* ${resPtr}`);
@@ -926,9 +934,7 @@ export class CodeGenerator {
     const falseLabel = this.newLabel("or.false");
     const endLabel = this.newLabel("or.end");
 
-    this.emit(
-      `  br i1 ${leftVal}, label %${trueLabel}, label %${falseLabel}`,
-    );
+    this.emit(`  br i1 ${leftVal}, label %${trueLabel}, label %${falseLabel}`);
 
     this.emit(`${trueLabel}:`);
     this.emit(`  store i1 1, i1* ${resPtr}`);
@@ -1018,17 +1024,19 @@ export class CodeGenerator {
       for (let i = 0; i < basicType.pointerDepth; i++) {
         llvmType += "*";
       }
-      
+
       for (let i = basicType.arrayDimensions.length - 1; i >= 0; i--) {
         llvmType = `[${basicType.arrayDimensions[i]} x ${llvmType}]`;
       }
-      
+
       return llvmType;
     } else if (type.kind === "FunctionType") {
-        const funcType = type as AST.FunctionTypeNode;
-        const ret = this.resolveType(funcType.returnType);
-        const params = funcType.paramTypes.map(p => this.resolveType(p)).join(", ");
-        return `${ret} (${params})*`;
+      const funcType = type as AST.FunctionTypeNode;
+      const ret = this.resolveType(funcType.returnType);
+      const params = funcType.paramTypes
+        .map((p) => this.resolveType(p))
+        .join(", ");
+      return `${ret} (${params})*`;
     }
     return "void";
   }
@@ -1061,12 +1069,18 @@ export class CodeGenerator {
   private generateAssignment(expr: AST.AssignmentExpr): string {
     const val = this.generateExpression(expr.value);
     const addr = this.generateAddress(expr.assignee);
-    
+
     const destType = this.resolveType(expr.assignee.resolvedType!);
     const srcType = this.resolveType(expr.value.resolvedType!);
-    
-    const castVal = this.emitCast(val, srcType, destType, expr.value.resolvedType!, expr.assignee.resolvedType!);
-    
+
+    const castVal = this.emitCast(
+      val,
+      srcType,
+      destType,
+      expr.value.resolvedType!,
+      expr.assignee.resolvedType!,
+    );
+
     this.emit(`  store ${destType} ${castVal}, ${destType}* ${addr}`);
     return castVal;
   }
@@ -1119,34 +1133,44 @@ export class CodeGenerator {
     const val = this.generateExpression(expr.expression);
     const srcType = this.resolveType(expr.expression.resolvedType!);
     const destType = this.resolveType(expr.targetType);
-    return this.emitCast(val, srcType, destType, expr.expression.resolvedType!, expr.targetType);
+    return this.emitCast(
+      val,
+      srcType,
+      destType,
+      expr.expression.resolvedType!,
+      expr.targetType,
+    );
   }
 
   private generateStructLiteral(expr: AST.StructLiteralExpr): string {
     const type = this.resolveType(expr.resolvedType!);
     let structVal = "undef";
-    
+
     const structName = (expr.resolvedType as AST.BasicTypeNode).name;
     const layout = this.structLayouts.get(structName)!;
-    
+
     const fieldValues = new Map<string, AST.Expression>();
     for (const field of expr.fields) {
       fieldValues.set(field.name, field.value);
     }
-    
-    const sortedFields = Array.from(layout.entries()).sort((a, b) => a[1] - b[1]);
-    
+
+    const sortedFields = Array.from(layout.entries()).sort(
+      (a, b) => a[1] - b[1],
+    );
+
     for (const [fieldName, fieldIndex] of sortedFields) {
       const valExpr = fieldValues.get(fieldName);
       if (valExpr) {
         const val = this.generateExpression(valExpr);
         const fieldType = this.resolveType(valExpr.resolvedType!);
         const nextVal = this.newRegister();
-        this.emit(`  ${nextVal} = insertvalue ${type} ${structVal}, ${fieldType} ${val}, ${fieldIndex}`);
+        this.emit(
+          `  ${nextVal} = insertvalue ${type} ${structVal}, ${fieldType} ${val}, ${fieldIndex}`,
+        );
         structVal = nextVal;
       }
     }
-    
+
     return structVal;
   }
 
@@ -1170,9 +1194,16 @@ export class CodeGenerator {
 
   private isSigned(type: AST.TypeNode): boolean {
     if (type.kind === "BasicType") {
-      return ["int", "i8", "i16", "i32", "i64", "char", "short", "long"].includes(
-        (type as AST.BasicTypeNode).name,
-      );
+      return [
+        "int",
+        "i8",
+        "i16",
+        "i32",
+        "i64",
+        "char",
+        "short",
+        "long",
+      ].includes((type as AST.BasicTypeNode).name);
     }
     return false;
   }

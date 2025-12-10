@@ -1,6 +1,6 @@
 /**
  * BPL3 Compiler Main Entry Point
- * 
+ *
  * This file orchestrates the compilation pipeline:
  * 1. Frontend: Lexing and Parsing
  * 2. Middleend: Type Checking and Semantic Analysis
@@ -132,7 +132,7 @@ export class Compiler {
       if (this.options.verbose) {
         console.log("[Middleend] Type checking modules...");
       }
-      
+
       const typeChecker = new TypeChecker();
       for (const module of modules) {
         if (this.options.verbose) {
@@ -145,7 +145,7 @@ export class Compiler {
       // 3. Merge all module ASTs into a single program for code generation
       // We need all struct declarations, function declarations, etc. from all modules
       const entryModule = modules[modules.length - 1]; // Last in topo order is entry point
-      
+
       if (!entryModule) {
         throw new Error("No entry module found");
       }
@@ -189,11 +189,11 @@ export class Compiler {
         statements: combinedStatements,
         location: entryModule.ast.location, // Use entry module's location
       };
-      
+
       if (this.options.verbose) {
         console.log("[Backend] Generating code...");
       }
-      
+
       const codeGenerator = new CodeGenerator();
       const llvmIR = codeGenerator.generate(combinedAST);
 

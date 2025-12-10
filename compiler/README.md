@@ -32,11 +32,13 @@ compiler/
 ### 1. Frontend Phase
 
 **Lexical Analysis (Lexer)**
+
 - Converts source code into a stream of tokens
 - Handles keywords, identifiers, literals, operators
 - Reports lexical errors (invalid characters, unterminated strings)
 
 **Syntax Analysis (Parser)**
+
 - Constructs an Abstract Syntax Tree (AST) from tokens
 - Validates program structure against grammar rules
 - Reports syntax errors with location information
@@ -44,6 +46,7 @@ compiler/
 ### 2. Middleend Phase
 
 **Semantic Analysis (TypeChecker)**
+
 - Validates type correctness throughout the program
 - Resolves type aliases and generic instantiations
 - Checks function signatures, variable declarations
@@ -54,6 +57,7 @@ compiler/
 ### 3. Backend Phase
 
 **Code Generation (CodeGenerator)**
+
 - Translates AST to LLVM IR (Intermediate Representation)
 - Manages memory layout for structs and arrays
 - Handles function calls and parameter passing
@@ -63,19 +67,23 @@ compiler/
 ## LLVM Integration
 
 ### LLVM Version
+
 - **Target LLVM Version**: LLVM 10.0+ (compatible with most modern systems)
 - **IR Format**: LLVM IR text format (.ll files)
 - **Execution**: Uses `lli` (LLVM interpreter) for immediate execution
 - **Compilation**: Can be compiled to native code using `llc` or `clang`
 
 ### LLVM IR Generation
+
 The compiler generates textual LLVM IR that can be:
+
 1. Interpreted directly with `lli`
 2. Compiled to object files with `llc`
 3. Linked and compiled with `clang`
 4. Optimized with `opt`
 
 Example workflow:
+
 ```bash
 # Compile BPL to LLVM IR
 bun index.ts program.bpl
@@ -92,6 +100,7 @@ clang program.s -o program
 ## Type System
 
 ### Canonical Types
+
 - **Integers**: `i1` (bool), `i8`, `i16`, `i32`, `i64` (signed)
 - **Unsigned**: `u8`, `u16`, `u32`, `u64`
 - **Floating Point**: `double` (64-bit IEEE 754)
@@ -99,7 +108,9 @@ clang program.s -o program
 - **Arrays**: Type + dimensions (e.g., `i32[10]`, `double[5][3]`)
 
 ### Type Aliases
+
 Built-in aliases for convenience:
+
 - `int` → `i32`
 - `uint` → `u32`
 - `long` → `i64`
@@ -112,6 +123,7 @@ Built-in aliases for convenience:
 - `float` → `double`
 
 Custom type aliases can be defined:
+
 ```bpl
 type UserID = int;
 type Point3D = Point;
@@ -120,6 +132,7 @@ type Point3D = Point;
 ## Features
 
 ### Completed
+
 - ✅ Full type system with generics
 - ✅ Struct types with inheritance
 - ✅ Methods (instance and static)
@@ -132,6 +145,7 @@ type Point3D = Point;
 - ✅ LLVM IR code generation
 
 ### In Progress
+
 - 🚧 Advanced generics (constraints, inference)
 - 🚧 Function overloading
 - 🚧 Operator overloading
@@ -140,16 +154,19 @@ type Point3D = Point;
 ## Development
 
 ### Building
+
 ```bash
 bun install
 ```
 
 ### Running Tests
+
 ```bash
 bun test
 ```
 
 ### Compiling a Program
+
 ```bash
 # Using the wrapper script
 ./cmp.sh examples/hello-world/main.bpl
@@ -160,6 +177,7 @@ lli examples/hello-world/main.ll
 ```
 
 ### Debugging
+
 ```bash
 # Emit tokens
 bun index.ts program.bpl --emit tokens
@@ -177,6 +195,7 @@ bun index.ts program.bpl -v
 ## Contributing
 
 When adding new features:
+
 1. **Frontend changes**: Add to `compiler/frontend/` (Lexer/Parser)
 2. **Type system changes**: Modify `compiler/middleend/TypeChecker.ts`
 3. **Code generation**: Update `compiler/backend/CodeGenerator.ts`

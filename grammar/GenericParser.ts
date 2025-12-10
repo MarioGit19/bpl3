@@ -1,5 +1,5 @@
-import { Grammar } from "./types";
-import ProgramExpr from "../parser/expression/programExpr";
+import type { Grammar } from "./types";
+import type { Program } from "../compiler/common/AST";
 
 export class GenericParser {
   private grammar: Grammar;
@@ -10,7 +10,7 @@ export class GenericParser {
     this.input = input;
   }
 
-  public parse(): ProgramExpr {
+  public parse(): Program {
     // Placeholder for generic parsing logic
     throw new Error("Not implemented");
   }

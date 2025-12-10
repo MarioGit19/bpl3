@@ -5,13 +5,13 @@ import { TypeChecker } from "../compiler/middleend/TypeChecker";
 import { CompilerError } from "../compiler/common/CompilerError";
 
 function check(source: string) {
-    const lexer = new Lexer(source, "test.bpl");
-    const tokens = lexer.scanTokens();
-    const parser = new Parser(tokens);
-    const program = parser.parse();
-    const typeChecker = new TypeChecker();
-    typeChecker.checkProgram(program);
-    return program;
+  const lexer = new Lexer(source, "test.bpl");
+  const tokens = lexer.scanTokens();
+  const parser = new Parser(tokens);
+  const program = parser.parse();
+  const typeChecker = new TypeChecker();
+  typeChecker.checkProgram(program);
+  return program;
 }
 
 describe("TypeChecker", () => {
@@ -72,7 +72,7 @@ describe("TypeChecker", () => {
     // But `this` parameter implies it expects `A`.
     // If I call `b.method()`, `b` is `B`. `this` expects `A`.
     // If `B` is not compatible with `A`, it should fail.
-    
+
     const source2 = `
         struct A {}
         struct B {

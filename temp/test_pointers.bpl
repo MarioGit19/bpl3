@@ -1,6 +1,6 @@
 extern printf(fmt: string, ...) ret int;
-extern malloc(size: int) ret string;
-extern free(ptr: string) ret void;
+extern malloc(size: int) ret *char;
+extern free(ptr: *char) ret void;
 
 frame main() ret int {
     local x: int = 10;

@@ -15,16 +15,20 @@ export class ASTPrinter {
 
     // Determine label
     let label = node.kind;
-    if ("name" in node && typeof (node as any).name === "string") {
-      label += ` (${(node as any).name})`;
+    if ("name" in node && typeof node.name === "string") {
+      label += ` (${node.name})`;
     } else if ("value" in node) {
       if (node.kind === "Return") {
         // Don't print value for Return if it's an object (expression)
+      } else if (typeof node.value === "string") {
+        label += ` (${node.value.replaceAll("\n", "\\n")})`;
+      } else if (typeof node.value === "object" && node.value !== null) {
+        label += ` (${(node.value as AST.AssignmentExpr).kind})`;
       } else {
-        label += ` (${(node as any).value})`;
+        label += ` (${node.value})`;
       }
     } else if ("operator" in node) {
-      label += ` (${(node as any).operator.lexeme})`;
+      label += ` (${(node as AST.BinaryExpr).operator.lexeme})`;
     }
 
     // Determine type

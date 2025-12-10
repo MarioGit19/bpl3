@@ -1,5 +1,5 @@
 ---
-applyTo: '**/*.x, **/*.sh'
+applyTo: '**/*.x, **/*.sh, **/*.bpl'
 ---
 
 # BPL (Basic Programming Language) Coding Assistant Instructions

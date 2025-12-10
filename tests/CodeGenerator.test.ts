@@ -5,14 +5,14 @@ import { TypeChecker } from "../compiler/middleend/TypeChecker";
 import { CodeGenerator } from "../compiler/backend/CodeGenerator";
 
 function compile(source: string): string {
-    const lexer = new Lexer(source, "test.bpl");
-    const tokens = lexer.scanTokens();
-    const parser = new Parser(tokens);
-    const program = parser.parse();
-    const typeChecker = new TypeChecker();
-    typeChecker.checkProgram(program);
-    const generator = new CodeGenerator();
-    return generator.generate(program);
+  const lexer = new Lexer(source, "test.bpl");
+  const tokens = lexer.scanTokens();
+  const parser = new Parser(tokens);
+  const program = parser.parse();
+  const typeChecker = new TypeChecker();
+  typeChecker.checkProgram(program);
+  const generator = new CodeGenerator();
+  return generator.generate(program);
 }
 
 describe("CodeGenerator", () => {

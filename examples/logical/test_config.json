@@ -1,5 +1,5 @@
 {
-  "expectedOutput": "t && !f is true\nf || t is true\nf && t is false",
+  "expectedOutput": ["t && !f is true","f || t is true","f && t is false"],
   "args": [],
   "env": {},
   "input": ""

@@ -19,23 +19,33 @@ describe("Integration Tests", () => {
 
   for (const example of examples) {
     const exampleDir = path.join(EXAMPLES_DIR, example);
-    const relativeMainFile = path.relative(process.cwd(), path.join(exampleDir, "main.bpl"));
+    const relativeMainFile = path.relative(
+      process.cwd(),
+      path.join(exampleDir, "main.bpl"),
+    );
     const configFile = path.join(exampleDir, "test_config.json");
 
-    if (fs.existsSync(path.join(exampleDir, "main.bpl")) && fs.existsSync(configFile)) {
+    if (
+      fs.existsSync(path.join(exampleDir, "main.bpl")) &&
+      fs.existsSync(configFile)
+    ) {
       it(`should run example: ${example}`, () => {
         const config = JSON.parse(fs.readFileSync(configFile, "utf-8"));
-        
+
         // Prepare command
         // We use cmp.sh which runs bun index.ts then lli
-        const result = spawnSync(CMP_SCRIPT, [relativeMainFile, ...(config.args || [])], {
-          env: { ...process.env, ...(config.env || {}) },
-          input: config.input || "",
-          encoding: "utf-8",
-        });
+        const result = spawnSync(
+          CMP_SCRIPT,
+          [relativeMainFile, ...(config.args || [])],
+          {
+            env: { ...process.env, ...(config.env || {}) },
+            input: config.input || "",
+            encoding: "utf-8",
+          },
+        );
 
         if (result.error) {
-            throw new Error(`Failed to run cmp.sh: ${result.error.message}`);
+          throw new Error(`Failed to run cmp.sh: ${result.error.message}`);
         }
 
         // Check exit code
@@ -50,9 +60,11 @@ describe("Integration Tests", () => {
         // We should filter that out or check if output contains expected output.
         // The user's hello world prints "Hello, World!\n"
         // cmp.sh prints "Program exited with code 0\n"
-        
+
         const output = result.stdout;
-        expect(output).toContain(config.expectedOutput);
+        config.expectedOutput.forEach((expectedLine: string) => {
+          expect(output).toContain(expectedLine);
+        });
       });
     }
   }
