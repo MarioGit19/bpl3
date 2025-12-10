@@ -418,7 +418,9 @@ export class Parser {
 
   private ifStatement(): AST.IfStmt {
     const startToken = this.previous();
+    this.consume(TokenType.LeftParen, "Expected '(' after 'if'.");
     const condition = this.expression();
+    this.consume(TokenType.RightParen, "Expected ')' after if condition.");
     const thenBranch = this.block();
     let elseBranch: AST.Statement | undefined;
 
@@ -559,7 +561,9 @@ export class Parser {
 
   private switchStatement(): AST.SwitchStmt {
     const startToken = this.previous();
+    this.consume(TokenType.LeftParen, "Expected '(' after 'switch'.");
     const expression = this.expression();
+    this.consume(TokenType.RightParen, "Expected ')' after switch expression.");
     this.consume(TokenType.LeftBrace, "Expected '{' after switch expression.");
 
     const cases: AST.SwitchCase[] = [];
@@ -925,11 +929,9 @@ export class Parser {
           property: name,
           location: this.loc(expr.location, this.previous()),
         };
-      } else if (this.match(TokenType.LeftBrace)) {
+      } else if (this.check(TokenType.LeftBrace) && expr.kind === "Identifier") {
+        this.advance(); // Consume '{'
         // Struct Literal: Point { x: 1 }
-        if (expr.kind !== "Identifier") {
-          throw this.error(this.previous(), "Expected struct name before '{'.");
-        }
         const structName = (expr as AST.IdentifierExpr).name;
         const fields: { name: string; value: AST.Expression }[] = [];
 

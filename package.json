@@ -9,7 +9,7 @@
   "scripts": {
     "start": "bun index.ts",
     "build": "./build.sh",
-    "test": "./tests.sh",
+    "test": "bun test tests/",
     "format": "bun index.ts format"
   },
   "repository": {

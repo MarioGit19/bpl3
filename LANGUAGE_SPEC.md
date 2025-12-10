@@ -68,7 +68,7 @@ _Currently, there is no `const` keyword. Use `global` or `local`._
 
 ### Declaration
 
-Functions can be `frame` (stack frame based) or `static` but only inside structs.
+Functions can be `frame` (stack frame based).
 
 ```bpl
 frame main() ret int {
@@ -76,7 +76,10 @@ frame main() ret int {
 }
 
 struct X {
-    static add(a: int, b: int) ret int {
+    frame sum(this:X){ # member method
+        return 5;
+    }
+    frame add(a: int, b: int) ret int { # static method
         return a + b;
     }
 }
@@ -102,7 +105,7 @@ struct Point {
     x: int,
     y: int,
 
-    static new(x: int, y: int) ret Point { ... }
+    frame new(x: int, y: int) ret Point { ... }
 }
 
 struct Generic<T>{
@@ -110,7 +113,7 @@ struct Generic<T>{
     frame add<X>(a:T,b:X) ret (T,X){
         return (a,b);
     }
-    static print<X>(obj:T, xx:X){
+    frame print<X>(obj:T, xx:X){
         printn(xx);
         print(obj.val);
         print(xx);

@@ -279,7 +279,7 @@ export class Lexer {
       while (this.isHexDigit(this.peek())) this.advance();
       this.addToken(
         TokenType.NumberLiteral,
-        this.source.substring(this.start, this.current),
+        Number(this.source.substring(this.start, this.current)),
       );
       return;
     }
@@ -289,7 +289,7 @@ export class Lexer {
       while (this.isBinaryDigit(this.peek())) this.advance();
       this.addToken(
         TokenType.NumberLiteral,
-        this.source.substring(this.start, this.current),
+        Number(this.source.substring(this.start, this.current)),
       );
       return;
     }
@@ -299,7 +299,7 @@ export class Lexer {
       while (this.isOctalDigit(this.peek())) this.advance();
       this.addToken(
         TokenType.NumberLiteral,
-        this.source.substring(this.start, this.current),
+        Number(this.source.substring(this.start, this.current)),
       );
       return;
     }

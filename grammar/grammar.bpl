@@ -33,7 +33,7 @@ TypeAlias = 'type' Identifier GenericArgs? '=' Type ';';
 VariableDeclaration = ('global' | 'local') Identifier ':' Type ('=' Expression)? ';' | DestructuringDeclaration;
 
 // Functions
-FunctionDeclaration = ('frame' | 'static') Identifier GenericArgs? '(' ParameterList? ')' ReturnType? Block;
+FunctionDeclaration = 'frame' Identifier GenericArgs? '(' ParameterList? ')' ReturnType? Block;
 ParameterList = Parameter (',' Parameter)*;
 Parameter = Identifier ':' Type;
 ReturnType = 'ret' Type;

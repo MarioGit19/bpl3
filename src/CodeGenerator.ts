@@ -206,6 +206,9 @@ export class CodeGenerator {
       case "Continue":
         this.generateContinue(stmt as AST.ContinueStmt);
         break;
+      case "Switch":
+        this.generateSwitch(stmt as AST.SwitchStmt);
+        break;
       default:
         // console.warn(`Unhandled statement kind: ${stmt.kind}`);
         break;
@@ -332,7 +335,13 @@ export class CodeGenerator {
       case "Identifier":
         return this.generateIdentifier(expr as AST.IdentifierExpr);
       case "Binary":
-        return this.generateBinary(expr as AST.BinaryExpr);
+        const binExpr = expr as AST.BinaryExpr;
+        if (binExpr.operator.type === TokenType.AndAnd) {
+          return this.generateLogicalAnd(binExpr);
+        } else if (binExpr.operator.type === TokenType.OrOr) {
+          return this.generateLogicalOr(binExpr);
+        }
+        return this.generateBinary(binExpr);
       case "Call":
         return this.generateCall(expr as AST.CallExpr);
       case "Assignment":
@@ -455,6 +464,9 @@ export class CodeGenerator {
         break;
       case TokenType.GreaterEqual:
         op = "icmp sge";
+        break;
+      case TokenType.Percent:
+        op = "srem";
         break;
     }
 
@@ -900,6 +912,27 @@ export class CodeGenerator {
       return reg;
     }
 
+    // Int Truncation (i64 -> i8/i32)
+    if (srcType === "i64" && (destType === "i8" || destType === "i32")) {
+      this.emit(`  ${reg} = trunc i64 ${val} to ${destType}`);
+      return reg;
+    }
+
+    // Int Extension (i8/i32 -> i64)
+    if ((srcType === "i8" || srcType === "i32") && destType === "i64") {
+      // Assuming unsigned char, so zext. For i32 it depends on signedness, but let's assume sext for int?
+      // Spec says int is signed 64 bit. char is unsigned 8 bit.
+      // If we have i32, it's not in spec yet (only int=i64).
+      // But if we had i32, we'd need to know if it's signed.
+      // For i8 (char), it's unsigned.
+      if (srcType === "i8") {
+        this.emit(`  ${reg} = zext ${srcType} ${val} to ${destType}`);
+      } else {
+        this.emit(`  ${reg} = sext ${srcType} ${val} to ${destType}`);
+      }
+      return reg;
+    }
+
     // Default bitcast (unsafe)
     this.emit(`  ${reg} = bitcast ${srcType} ${val} to ${destType}`);
     return reg;
@@ -958,5 +991,100 @@ export class CodeGenerator {
     const intReg = this.newRegister();
     this.emit(`  ${intReg} = ptrtoint ${llvmType}* ${ptrReg} to i64`);
     return intReg;
+  }
+
+  private generateSwitch(stmt: AST.SwitchStmt) {
+    const cond = this.generateExpression(stmt.expression);
+    const endLabel = this.newLabel("switch.end");
+    const defaultLabel = stmt.defaultCase
+      ? this.newLabel("switch.default")
+      : endLabel;
+
+    const caseLabels: { value: string; label: string; body: AST.BlockStmt }[] =
+      [];
+    for (const caseStmt of stmt.cases) {
+      if (caseStmt.value.kind !== "Literal") {
+        throw new Error("Switch case values must be literals");
+      }
+      const val = this.generateLiteral(caseStmt.value as AST.LiteralExpr);
+      const label = this.newLabel("switch.case");
+      caseLabels.push({ value: val, label, body: caseStmt.body });
+    }
+
+    this.emit(`  switch i64 ${cond}, label %${defaultLabel} [`);
+    for (const c of caseLabels) {
+      this.emit(`    i64 ${c.value}, label %${c.label}`);
+    }
+    this.emit(`  ]`);
+
+    for (const c of caseLabels) {
+      this.emit(`${c.label}:`);
+      this.generateBlock(c.body);
+      if (!this.isTerminator(this.output[this.output.length - 1] || "")) {
+        this.emit(`  br label %${endLabel}`);
+      }
+    }
+
+    if (stmt.defaultCase) {
+      this.emit(`${defaultLabel}:`);
+      this.generateBlock(stmt.defaultCase);
+      if (!this.isTerminator(this.output[this.output.length - 1] || "")) {
+        this.emit(`  br label %${endLabel}`);
+      }
+    }
+
+    this.emit(`${endLabel}:`);
+  }
+
+  private generateLogicalAnd(expr: AST.BinaryExpr): string {
+    const leftVal = this.generateExpression(expr.left);
+    const resPtr = this.allocateStack(`and_res_${this.labelCount++}`, "i1");
+    const falseLabel = this.newLabel("and.false");
+    const trueLabel = this.newLabel("and.true");
+    const endLabel = this.newLabel("and.end");
+
+    this.emit(
+      `  br i1 ${leftVal}, label %${trueLabel}, label %${falseLabel}`,
+    );
+
+    this.emit(`${falseLabel}:`);
+    this.emit(`  store i1 0, i1* ${resPtr}`);
+    this.emit(`  br label %${endLabel}`);
+
+    this.emit(`${trueLabel}:`);
+    const rightVal = this.generateExpression(expr.right);
+    this.emit(`  store i1 ${rightVal}, i1* ${resPtr}`);
+    this.emit(`  br label %${endLabel}`);
+
+    this.emit(`${endLabel}:`);
+    const reg = this.newRegister();
+    this.emit(`  ${reg} = load i1, i1* ${resPtr}`);
+    return reg;
+  }
+
+  private generateLogicalOr(expr: AST.BinaryExpr): string {
+    const leftVal = this.generateExpression(expr.left);
+    const resPtr = this.allocateStack(`or_res_${this.labelCount++}`, "i1");
+    const trueLabel = this.newLabel("or.true");
+    const falseLabel = this.newLabel("or.false");
+    const endLabel = this.newLabel("or.end");
+
+    this.emit(
+      `  br i1 ${leftVal}, label %${trueLabel}, label %${falseLabel}`,
+    );
+
+    this.emit(`${trueLabel}:`);
+    this.emit(`  store i1 1, i1* ${resPtr}`);
+    this.emit(`  br label %${endLabel}`);
+
+    this.emit(`${falseLabel}:`);
+    const rightVal = this.generateExpression(expr.right);
+    this.emit(`  store i1 ${rightVal}, i1* ${resPtr}`);
+    this.emit(`  br label %${endLabel}`);
+
+    this.emit(`${endLabel}:`);
+    const reg = this.newRegister();
+    this.emit(`  ${reg} = load i1, i1* ${resPtr}`);
+    return reg;
   }
 }

@@ -1,0 +1,59 @@
+import { describe, it, expect } from "bun:test";
+import * as fs from "fs";
+import * as path from "path";
+import { spawnSync } from "child_process";
+
+const EXAMPLES_DIR = path.join(process.cwd(), "examples");
+const CMP_SCRIPT = path.join(process.cwd(), "cmp.sh");
+
+// Helper to find example directories
+function getExampleDirectories() {
+  if (!fs.existsSync(EXAMPLES_DIR)) return [];
+  return fs.readdirSync(EXAMPLES_DIR).filter((file) => {
+    return fs.statSync(path.join(EXAMPLES_DIR, file)).isDirectory();
+  });
+}
+
+describe("Integration Tests", () => {
+  const examples = getExampleDirectories();
+
+  for (const example of examples) {
+    const exampleDir = path.join(EXAMPLES_DIR, example);
+    const relativeMainFile = path.relative(process.cwd(), path.join(exampleDir, "main.bpl"));
+    const configFile = path.join(exampleDir, "test_config.json");
+
+    if (fs.existsSync(path.join(exampleDir, "main.bpl")) && fs.existsSync(configFile)) {
+      it(`should run example: ${example}`, () => {
+        const config = JSON.parse(fs.readFileSync(configFile, "utf-8"));
+        
+        // Prepare command
+        // We use cmp.sh which runs bun index.ts then lli
+        const result = spawnSync(CMP_SCRIPT, [relativeMainFile, ...(config.args || [])], {
+          env: { ...process.env, ...(config.env || {}) },
+          input: config.input || "",
+          encoding: "utf-8",
+        });
+
+        if (result.error) {
+            throw new Error(`Failed to run cmp.sh: ${result.error.message}`);
+        }
+
+        // Check exit code
+        // cmp.sh returns the exit code of the program
+        // But if compilation fails, it returns 1.
+        // We assume the example should compile and run successfully (exit code 0) unless specified otherwise?
+        // For now assume success.
+        expect(result.status).toBe(0);
+
+        // Check output
+        // cmp.sh appends "Program exited with code X"
+        // We should filter that out or check if output contains expected output.
+        // The user's hello world prints "Hello, World!\n"
+        // cmp.sh prints "Program exited with code 0\n"
+        
+        const output = result.stdout;
+        expect(output).toContain(config.expectedOutput);
+      });
+    }
+  }
+});
