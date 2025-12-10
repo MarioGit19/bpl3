@@ -14,13 +14,9 @@
 - [x] Module System (Imports)
 - [x] Nested Generics & Static Methods
 - [x] Generic Instantiation in Expressions
+- [x] Make `this` explicit in struct methods
 
 ## Pending Features (expanded)
-- [0] Make `this` explicit in struct methods
-  - Description: Change method definitions to require explicit `this` parameter (e.g., `func method(this: StructType, ...)`) for clarity and consistency with free functions.
-  - Implementation notes: Update parser to require `this` in method signatures. Modify TypeChecker to treat `this` as an implicit first argument during method calls. Adjust codegen to pass the instance pointer correctly.
-  - Acceptance criteria: All struct methods must declare `this`; existing code without explicit `this` produces errors; method calls continue to work transparently.
-  - Struct methods without `this` are treated as static functions. Remove static keyword for methods.
 - [9] Const Correctness
 	- Description: Enforce `const` (or equivalent) declarations and immutability rules across the language: constant variables, read-only fields, `const` parameters, and compile-time constants. Ensure the compiler prevents mutation of `const` values and accepts usage patterns that are safe.
 	- Implementation notes: Add `isConst` flag to symbol/type entries. Propagate const through assignments, parameter passing, and returns. Treat `const` references to mutable objects as shallowly const unless a deeper const model is chosen. Decide whether `const` applies to variables, fields, and/or function returns.

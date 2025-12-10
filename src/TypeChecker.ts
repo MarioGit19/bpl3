@@ -801,10 +801,31 @@ export class TypeChecker {
             return fieldType;
           } else if (member.kind === "FunctionDecl") {
             // Method access
+            if (member.isStatic) {
+              throw new CompilerError(
+                `Cannot access static member '${expr.property}' on instance of '${objectType.name}'`,
+                `Use '${objectType.name}.${expr.property}' instead.`,
+                expr.location,
+              );
+            }
+
+            let paramTypes = member.params.map((p) => p.type);
+            if (member.params.length > 0 && member.params[0]!.name === "this") {
+              const thisParamType = member.params[0]!.type;
+              if (!this.areTypesCompatible(thisParamType, objectType)) {
+                throw new CompilerError(
+                  `Instance type mismatch for 'this'. Expected '${this.typeToString(thisParamType)}', got '${this.typeToString(objectType)}'`,
+                  "Ensure the instance matches the 'this' parameter type.",
+                  expr.location,
+                );
+              }
+              paramTypes = paramTypes.slice(1);
+            }
+
             const memberType: AST.FunctionTypeNode = {
               kind: "FunctionType",
               returnType: member.returnType,
-              paramTypes: member.params.map((p) => p.type),
+              paramTypes: paramTypes,
               location: member.location,
               declaration: member,
             };

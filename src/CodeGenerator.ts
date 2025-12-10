@@ -114,6 +114,18 @@ export class CodeGenerator {
     const fieldTypes = fields.map((f) => this.resolveType(f.type)).join(", ");
     this.emit(`%struct.${decl.name} = type { ${fieldTypes} }`);
     this.emit("");
+
+    // Generate methods
+    const methods = decl.members.filter(
+      (m) => m.kind === "FunctionDecl",
+    ) as AST.FunctionDecl[];
+
+    for (const method of methods) {
+      const originalName = method.name;
+      method.name = `${decl.name}_${method.name}`;
+      this.generateFunction(method);
+      method.name = originalName;
+    }
   }
 
   private generateFunction(decl: AST.FunctionDecl) {
@@ -204,7 +216,7 @@ export class CodeGenerator {
     if (this.loopStack.length === 0) {
       throw new Error("Break statement outside of loop");
     }
-    const { breakLabel } = this.loopStack[this.loopStack.length - 1];
+    const { breakLabel } = this.loopStack[this.loopStack.length - 1]!;
     this.emit(`  br label %${breakLabel}`);
   }
 
@@ -212,7 +224,7 @@ export class CodeGenerator {
     if (this.loopStack.length === 0) {
       throw new Error("Continue statement outside of loop");
     }
-    const { continueLabel } = this.loopStack[this.loopStack.length - 1];
+    const { continueLabel } = this.loopStack[this.loopStack.length - 1]!;
     this.emit(`  br label %${continueLabel}`);
   }
 
@@ -454,11 +466,40 @@ export class CodeGenerator {
   }
 
   private generateCall(expr: AST.CallExpr): string {
-    if (expr.callee.kind !== "Identifier") {
+    let funcName = "";
+    let argsToGenerate = expr.args;
+
+    if (expr.callee.kind === "Identifier") {
+      funcName = (expr.callee as AST.IdentifierExpr).name;
+    } else if (expr.callee.kind === "Member") {
+      const memberExpr = expr.callee as AST.MemberExpr;
+      const objType = memberExpr.object.resolvedType;
+
+      if (!objType) throw new Error("Member access on unresolved type");
+
+      let structName = "";
+      if (objType.kind === "BasicType") {
+        structName = objType.name;
+        // Instance call: pass object as first argument
+        argsToGenerate = [memberExpr.object, ...expr.args];
+      } else if (objType.kind === "MetaType") {
+        const inner = (objType as any).type;
+        if (inner.kind === "BasicType") {
+          structName = inner.name;
+          // Static call: no extra argument
+        } else {
+          throw new Error("Static member access on non-struct type");
+        }
+      } else {
+        throw new Error("Member access on non-struct type");
+      }
+
+      funcName = `${structName}_${memberExpr.property}`;
+    } else {
       throw new Error("Only direct function calls supported for now");
     }
-    const funcName = (expr.callee as AST.IdentifierExpr).name;
-    const args = expr.args
+
+    const args = argsToGenerate
       .map((arg) => {
         const val = this.generateExpression(arg);
         const type = this.resolveType(arg.resolvedType!);

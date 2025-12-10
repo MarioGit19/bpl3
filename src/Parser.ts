@@ -49,8 +49,7 @@ export class Parser {
   private declaration(): AST.Statement | null {
     if (this.match(TokenType.Local, TokenType.Global))
       return this.variableDeclaration();
-    if (this.match(TokenType.Frame, TokenType.Static))
-      return this.functionDeclaration();
+    if (this.match(TokenType.Frame)) return this.functionDeclaration();
     if (this.match(TokenType.Struct)) return this.structDeclaration();
     if (this.match(TokenType.Type)) return this.typeAliasDeclaration();
     if (this.match(TokenType.Import)) return this.importStatement();
@@ -134,7 +133,6 @@ export class Parser {
   private functionDeclaration(): AST.FunctionDecl {
     const startToken = this.previous();
     const isFrame = startToken.type === TokenType.Frame;
-    const isStatic = startToken.type === TokenType.Static;
     const name = this.consume(
       TokenType.Identifier,
       "Expected function name.",
@@ -181,6 +179,8 @@ export class Parser {
 
     const body = this.block();
 
+    const isStatic = !(params.length > 0 && params[0]!.name === "this");
+
     return {
       kind: "FunctionDecl",
       isFrame,
@@ -221,7 +221,7 @@ export class Parser {
 
     const members: (AST.StructField | AST.FunctionDecl)[] = [];
     while (!this.check(TokenType.RightBrace) && !this.isAtEnd()) {
-      if (this.match(TokenType.Frame, TokenType.Static)) {
+      if (this.match(TokenType.Frame, TokenType.Static, TokenType.Func)) {
         members.push(this.functionDeclaration());
       } else {
         const fieldName = this.consume(
