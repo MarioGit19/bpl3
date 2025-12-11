@@ -70,20 +70,21 @@ program
           if (result.output) {
             console.log(result.output);
           }
-          
+
           if (options.run) {
-            const execPath = options.output || filePath.replace(/\.[^/.]+$/, "");
+            const execPath =
+              options.output || filePath.replace(/\.[^/.]+$/, "");
             const runResult = spawnSync(execPath, [], {
               stdio: "inherit",
             });
-            
+
             if (runResult.status !== 0) {
               process.exit(runResult.status ?? 1);
             }
           }
           return;
         }
-        
+
         if (result.output) {
           const outputPath =
             options.output || filePath.replace(/\.[^/.]+$/, "") + ".ll";
@@ -97,15 +98,19 @@ program
           if (options.run) {
             // Compile LLVM IR to executable using clang
             const execPath = outputPath.replace(/\.ll$/, "");
-            
+
             if (options.verbose) {
               console.log("Compiling LLVM IR to executable with clang...");
             }
-            
-            const compileResult = spawnSync("clang", ["-Wno-override-module", outputPath, "-o", execPath], {
-              stdio: options.verbose ? "inherit" : "pipe",
-            });
-            
+
+            const compileResult = spawnSync(
+              "clang",
+              ["-Wno-override-module", outputPath, "-o", execPath],
+              {
+                stdio: options.verbose ? "inherit" : "pipe",
+              },
+            );
+
             if (compileResult.status !== 0) {
               console.error("Failed to compile LLVM IR with clang");
               if (!options.verbose && compileResult.stderr) {
@@ -113,22 +118,22 @@ program
               }
               process.exit(compileResult.status ?? 1);
             }
-            
+
             if (options.verbose) {
               console.log(`Running executable: ${execPath}`);
             }
-            
+
             const runResult = spawnSync(execPath, [], {
               stdio: "inherit",
             });
-            
+
             // Clean up executable
             try {
               fs.unlinkSync(execPath);
             } catch (e) {
               // Ignore cleanup errors
             }
-            
+
             if (runResult.status !== 0) {
               process.exit(runResult.status ?? 1);
             }
@@ -189,17 +194,21 @@ program
       if (options.run) {
         // Compile LLVM IR to executable using clang
         const execPath = outputPath.replace(/\.ll$/, "");
-        
+
         if (options.verbose) {
           console.log("---------------------------------------------");
           console.log(`Compiling LLVM IR to executable with clang...`);
           console.log("---------------------------------------------");
         }
-        
-        const compileResult = spawnSync("clang", ["-Wno-override-module", outputPath, "-o", execPath], {
-          stdio: options.verbose ? "inherit" : "pipe",
-        });
-        
+
+        const compileResult = spawnSync(
+          "clang",
+          ["-Wno-override-module", outputPath, "-o", execPath],
+          {
+            stdio: options.verbose ? "inherit" : "pipe",
+          },
+        );
+
         if (compileResult.status !== 0) {
           console.error("Failed to compile LLVM IR with clang");
           if (!options.verbose && compileResult.stderr) {
@@ -207,22 +216,22 @@ program
           }
           process.exit(compileResult.status ?? 1);
         }
-        
+
         if (options.verbose) {
           console.log("---------------------------------------------");
           console.log(`Running executable: ${execPath}`);
           console.log("---------------------------------------------");
         }
-        
+
         const result = spawnSync(execPath, [], { stdio: "inherit" });
-        
+
         // Clean up executable
         try {
           fs.unlinkSync(execPath);
         } catch (e) {
           // Ignore cleanup errors
         }
-        
+
         if (result.status !== 0) {
           if (options.verbose) {
             console.log("---------------------------------------------");
@@ -273,22 +282,22 @@ program
   .action((pkg, options) => {
     try {
       const pm = new PackageManager();
-      
+
       if (!pkg) {
         // Install dependencies from bpl.json in current directory
         if (!fs.existsSync("bpl.json")) {
           console.error("No bpl.json found in current directory");
           process.exit(1);
         }
-        
+
         const manifest = pm.loadManifest(process.cwd());
         const deps = { ...manifest.dependencies, ...manifest.devDependencies };
-        
+
         if (Object.keys(deps).length === 0) {
           console.log("No dependencies to install");
           return;
         }
-        
+
         console.log(`Installing ${Object.keys(deps).length} dependencies...`);
         for (const [name, version] of Object.entries(deps)) {
           pm.install(`${name}-${version}.tgz`, options);
@@ -310,13 +319,15 @@ program
     try {
       const pm = new PackageManager();
       const packages = pm.list(options);
-      
+
       if (packages.length === 0) {
         console.log("No packages installed");
         return;
       }
-      
-      console.log(`\nInstalled packages (${options.global ? "global" : "local"}):\n`);
+
+      console.log(
+        `\nInstalled packages (${options.global ? "global" : "local"}):\n`,
+      );
       for (const pkg of packages) {
         console.log(`  ${pkg.manifest.name}@${pkg.manifest.version}`);
         if (pkg.manifest.description) {
@@ -351,15 +362,15 @@ program
   .action(() => {
     try {
       const manifestPath = "bpl.json";
-      
+
       if (fs.existsSync(manifestPath)) {
         console.error("bpl.json already exists");
         process.exit(1);
       }
-      
+
       const cwd = process.cwd();
       const name = require("path").basename(cwd);
-      
+
       const manifest = {
         name: name.toLowerCase().replace(/[^a-z0-9-]/g, "-"),
         version: "1.0.0",
@@ -367,7 +378,7 @@ program
         main: "index.bpl",
         license: "MIT",
       };
-      
+
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
       console.log("Created bpl.json");
     } catch (e) {

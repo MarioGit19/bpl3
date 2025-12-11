@@ -62,27 +62,27 @@ export class CodeGenerator {
     // If we have imported structs, they might not be in 'program.statements'.
     // However, if we use 'import * as std', the std module AST is not merged into current AST.
     // We need a way to access imported struct layouts.
-    
+
     // For now, let's iterate over all statements and if we find an Import, we might need to peek into it?
     // But ImportStmt doesn't hold the AST.
     // The TypeChecker has the info.
     // Maybe we should pass TypeChecker or SymbolTable to CodeGenerator?
     // Or we can rely on the fact that we might have 'StructDecl' nodes from imports if we merged them?
     // But we didn't merge them.
-    
+
     // Workaround: If we encounter a struct type during generation that we don't know,
     // we fail. We need to register layouts for imported structs.
     // Since we don't have easy access to other modules here, we might need to rely on
     // the fact that we are compiling one module at a time.
     // But if we use a struct from another module, we need its layout.
-    
+
     // Let's assume for now that we only compile single files or merged ASTs.
     // But 'import' suggests separate compilation or at least separate ASTs.
-    
+
     // If we are in a multi-module setup, we should probably have a 'ModuleContext' that holds layouts for all loaded modules.
     // For this simple compiler, maybe we can just try to find the struct decl in the TypeChecker's resolved symbols?
     // But CodeGenerator doesn't have access to TypeChecker.
-    
+
     // Let's just scan the current program.
     for (const stmt of program.statements) {
       if (stmt.kind === "StructDecl") {
@@ -99,7 +99,7 @@ export class CodeGenerator {
 
   // Add a method to register external layouts (to be called by the driver/compiler)
   public registerStructLayout(name: string, layout: Map<string, number>) {
-      this.structLayouts.set(name, layout);
+    this.structLayouts.set(name, layout);
   }
 
   private generateTopLevel(node: AST.ASTNode) {
@@ -174,7 +174,10 @@ export class CodeGenerator {
     }
   }
 
-  private generateFunction(decl: AST.FunctionDecl, parentStruct?: AST.StructDecl) {
+  private generateFunction(
+    decl: AST.FunctionDecl,
+    parentStruct?: AST.StructDecl,
+  ) {
     this.registerCount = 0;
     this.labelCount = 0;
     this.currentFunctionReturnType = decl.returnType;
@@ -182,18 +185,22 @@ export class CodeGenerator {
     this.locals.clear();
 
     // Setup destructor chaining
-    if (parentStruct && decl.name === `${parentStruct.name}_destroy` && parentStruct.parentType) {
-        this.onReturn = () => {
-            this.emitParentDestroy(parentStruct, decl);
-        };
+    if (
+      parentStruct &&
+      decl.name === `${parentStruct.name}_destroy` &&
+      parentStruct.parentType
+    ) {
+      this.onReturn = () => {
+        this.emitParentDestroy(parentStruct, decl);
+      };
     } else {
-        this.onReturn = undefined;
+      this.onReturn = undefined;
     }
 
     const name = decl.name;
     const funcType = decl.resolvedType as AST.FunctionTypeNode;
     let retType = this.resolveType(funcType.returnType);
-    
+
     // Special case: if this is main with void return, change to i32 for exit code
     this.isMainWithVoidReturn = name === "main" && retType === "void";
     if (this.isMainWithVoidReturn) {
@@ -226,11 +233,11 @@ export class CodeGenerator {
     // Add implicit return for void functions if missing
     const lastLine =
       this.output.length > 0 ? this.output[this.output.length - 1]! : "";
-    
+
     // Handle implicit returns based on function type
     if (!lastLine.trim().startsWith("ret")) {
       if (this.onReturn) this.onReturn();
-      
+
       if (this.isMainWithVoidReturn) {
         // Main was declared void but we changed it to i32, return 0
         this.emit("  ret i32 0");
@@ -637,12 +644,12 @@ export class CodeGenerator {
 
     const funcType = expr.callee.resolvedType as AST.FunctionTypeNode;
     if (!funcType) {
-        // If we are calling a module function, the resolvedType might be on the property access?
-        // In checkMember, we return symbol.type.
-        // If symbol is Function, symbol.type is FunctionType.
-        // So expr.callee.resolvedType SHOULD be FunctionType.
-        // But if it's undefined, we have a problem.
-        throw new Error(`Function call '${funcName}' has no resolved type`);
+      // If we are calling a module function, the resolvedType might be on the property access?
+      // In checkMember, we return symbol.type.
+      // If symbol is Function, symbol.type is FunctionType.
+      // So expr.callee.resolvedType SHOULD be FunctionType.
+      // But if it's undefined, we have a problem.
+      throw new Error(`Function call '${funcName}' has no resolved type`);
     }
 
     const args = argsToGenerate
@@ -727,11 +734,11 @@ export class CodeGenerator {
       }
     } else if (expr.kind === "Member") {
       const memberExpr = expr as AST.MemberExpr;
-      
+
       // Check for module access
       const objType = memberExpr.object.resolvedType;
       if (objType && (objType as any).kind === "ModuleType") {
-          return `@${memberExpr.property}`;
+        return `@${memberExpr.property}`;
       }
 
       const objectAddr = this.generateAddress(memberExpr.object);
@@ -751,13 +758,13 @@ export class CodeGenerator {
       // But the struct definition in LLVM IR will be '%struct.Point' or '%struct.std.Point'?
       // Currently we don't namespace LLVM struct names.
       // So we should strip the namespace for lookup if it's not found.
-      
+
       let layout = this.structLayouts.get(structName);
       if (!layout && structName.includes(".")) {
-          const shortName = structName.split(".").pop()!;
-          layout = this.structLayouts.get(shortName);
+        const shortName = structName.split(".").pop()!;
+        layout = this.structLayouts.get(shortName);
       }
-      
+
       if (!layout) {
         throw new Error(`Unknown struct type: ${structName}`);
       }
@@ -950,11 +957,11 @@ export class CodeGenerator {
     if (srcType === destType) return val;
 
     // Implicit address-of (T -> *T)
-    if (destType === "*"+srcType) {
-       const ptr = this.newRegister();
-       this.emit(`  ${ptr} = alloca ${srcType}`);
-       this.emit(`  store ${srcType} ${val}, ${srcType}* ${ptr}`);
-       return ptr;
+    if (destType === "*" + srcType) {
+      const ptr = this.newRegister();
+      this.emit(`  ${ptr} = alloca ${srcType}`);
+      this.emit(`  store ${srcType} ${val}, ${srcType}* ${ptr}`);
+      return ptr;
     }
 
     // Pointer casts
@@ -1082,8 +1089,8 @@ export class CodeGenerator {
 
   private resolveType(type: AST.TypeNode): string {
     if (!type) {
-        // Should not happen if TypeChecker did its job
-        throw new Error("Cannot resolve undefined type");
+      // Should not happen if TypeChecker did its job
+      throw new Error("Cannot resolve undefined type");
     }
     if (type.kind === "BasicType") {
       const basicType = type as AST.BasicTypeNode;
@@ -1323,33 +1330,38 @@ export class CodeGenerator {
     return ["i1", "i8", "i16", "i32", "i64"].includes(type);
   }
 
-  private emitParentDestroy(structDecl: AST.StructDecl, funcDecl: AST.FunctionDecl) {
+  private emitParentDestroy(
+    structDecl: AST.StructDecl,
+    funcDecl: AST.FunctionDecl,
+  ) {
     if (!structDecl.parentType) return;
-    
+
     let parentName = "";
     if (structDecl.parentType.kind === "BasicType") {
-        parentName = structDecl.parentType.name;
+      parentName = structDecl.parentType.name;
     } else {
-        return;
+      return;
     }
-    
+
     const parentDestroy = `${parentName}_destroy`;
-    
-    const thisParam = funcDecl.params.find(p => p.name === "this");
+
+    const thisParam = funcDecl.params.find((p) => p.name === "this");
     if (!thisParam) return;
-    
-    const thisPtr = `%${thisParam.name}_ptr`; 
-    const thisType = this.resolveType(thisParam.type); 
-    
+
+    const thisPtr = `%${thisParam.name}_ptr`;
+    const thisType = this.resolveType(thisParam.type);
+
     const thisVal = this.newRegister();
     this.emit(`  ${thisVal} = load ${thisType}, ${thisType}* ${thisPtr}`);
-    
+
     const parentTypeStr = this.resolveType(structDecl.parentType);
     const parentPtrType = `${parentTypeStr}*`;
-    
+
     const parentPtr = this.newRegister();
-    this.emit(`  ${parentPtr} = bitcast ${thisType} ${thisVal} to ${parentPtrType}`);
-    
+    this.emit(
+      `  ${parentPtr} = bitcast ${thisType} ${thisVal} to ${parentPtrType}`,
+    );
+
     this.emit(`  call void @${parentDestroy}(${parentPtrType} ${parentPtr})`);
   }
 }

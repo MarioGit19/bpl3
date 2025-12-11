@@ -557,11 +557,11 @@ export class TypeChecker {
 
   private checkImport(stmt: AST.ImportStmt): void {
     const currentFile = stmt.location.file;
-    
+
     // Try to resolve the import path
     let importPath: string | undefined;
     let ast: AST.Program | undefined;
-    
+
     // Check if we have a pre-loaded module that matches
     // This happens when using ModuleResolver
     if (this.skipImportResolution) {
@@ -569,13 +569,16 @@ export class TypeChecker {
       // For now, we'll use a simple name match
       for (const [modulePath, moduleAst] of this.preLoadedModules) {
         // Simple heuristic: if the module path contains the import source
-        if (modulePath.includes(stmt.source) || modulePath.includes(stmt.source.replace(/^[./]+/, ''))) {
+        if (
+          modulePath.includes(stmt.source) ||
+          modulePath.includes(stmt.source.replace(/^[./]+/, ""))
+        ) {
           importPath = modulePath;
           ast = moduleAst;
           break;
         }
       }
-      
+
       if (!importPath) {
         // This shouldn't happen if ModuleResolver did its job
         throw new CompilerError(
@@ -633,129 +636,145 @@ export class TypeChecker {
 
     // Import items
     if (stmt.namespace) {
-        // Import as namespace
-        // We need to create a restricted scope that only contains exported items
-        const exportedScope = new SymbolTable(undefined); // No parent, isolated
-        
-        if (ast) {
-             for (const s of ast.statements) {
-                 if (s.kind === "Export") {
-                     const exportStmt = s as AST.ExportStmt;
-                     const symbol = moduleScope.resolve(exportStmt.item);
-                     if (symbol) {
-                         exportedScope.define({
-                             name: symbol.name,
-                             kind: symbol.kind,
-                             type: symbol.type,
-                             declaration: symbol.declaration,
-                             moduleScope: symbol.moduleScope
-                         });
-                     }
-                 }
-             }
-        } else if (this.skipImportResolution) {
-             // Try to find AST from preLoadedModules
-             let moduleAst: AST.Program | undefined;
-             for (const [modulePath, mAst] of this.preLoadedModules) {
-                if (modulePath === importPath) {
-                    moduleAst = mAst;
-                    break;
-                }
-             }
-             
-             if (moduleAst) {
-                 for (const s of moduleAst.statements) {
-                     if (s.kind === "Export") {
-                         const exportStmt = s as AST.ExportStmt;
-                         const symbol = moduleScope.resolve(exportStmt.item);
-                         if (symbol) {
-                             exportedScope.define({
-                                 name: symbol.name,
-                                 kind: symbol.kind,
-                                 type: symbol.type,
-                                 declaration: symbol.declaration,
-                                 moduleScope: symbol.moduleScope
-                             });
-                         }
-                     }
-                 }
-             }
+      // Import as namespace
+      // We need to create a restricted scope that only contains exported items
+      const exportedScope = new SymbolTable(undefined); // No parent, isolated
+
+      if (ast) {
+        for (const s of ast.statements) {
+          if (s.kind === "Export") {
+            const exportStmt = s as AST.ExportStmt;
+            const symbol = moduleScope.resolve(exportStmt.item);
+            if (symbol) {
+              exportedScope.define({
+                name: symbol.name,
+                kind: symbol.kind,
+                type: symbol.type,
+                declaration: symbol.declaration,
+                moduleScope: symbol.moduleScope,
+              });
+            }
+          }
+        }
+      } else if (this.skipImportResolution) {
+        // Try to find AST from preLoadedModules
+        let moduleAst: AST.Program | undefined;
+        for (const [modulePath, mAst] of this.preLoadedModules) {
+          if (modulePath === importPath) {
+            moduleAst = mAst;
+            break;
+          }
         }
 
-        this.defineSymbol(stmt.namespace, "Module", undefined, stmt, exportedScope);
-    } else if (stmt.importAll) {
-        // Import all exported symbols
-        // We need to know which symbols are exported.
-        // Currently SymbolTable doesn't track exports explicitly, but we can iterate over all symbols?
-        // Or we should track exports in ModuleInfo/AST.
-        // AST has ExportStmt.
-        
-        // Let's iterate over AST statements to find exports
-        if (ast) {
-             for (const s of ast.statements) {
-                 if (s.kind === "Export") {
-                     const exportStmt = s as AST.ExportStmt;
-                     const symbol = moduleScope.resolve(exportStmt.item);
-                     if (symbol) {
-                         this.defineSymbol(symbol.name, symbol.kind, symbol.type, symbol.declaration);
-                     }
-                 }
-             }
-        } else {
-            // If AST is not available (pre-loaded but not passed here?), we might have a problem.
-            // But we set 'ast' above.
-            // Wait, if moduleScope was already loaded, 'ast' might be undefined here if we didn't reload it.
-            // We need to store AST in modules map or re-fetch it.
-            // Actually, we can just iterate moduleScope symbols? But that includes non-exported ones.
-            // We need to know what is exported.
-            
-            // For now, let's assume we can get AST.
-            // If moduleScope exists, we didn't parse AST.
-            // We should store exports in ModuleInfo or similar.
-            // But TypeChecker doesn't use ModuleInfo directly.
-            
-            // Let's try to find AST from preLoadedModules if available
-            if (!ast && this.skipImportResolution) {
-                 for (const [modulePath, moduleAst] of this.preLoadedModules) {
-                    if (modulePath === importPath) {
-                        ast = moduleAst;
-                        break;
-                    }
-                 }
+        if (moduleAst) {
+          for (const s of moduleAst.statements) {
+            if (s.kind === "Export") {
+              const exportStmt = s as AST.ExportStmt;
+              const symbol = moduleScope.resolve(exportStmt.item);
+              if (symbol) {
+                exportedScope.define({
+                  name: symbol.name,
+                  kind: symbol.kind,
+                  type: symbol.type,
+                  declaration: symbol.declaration,
+                  moduleScope: symbol.moduleScope,
+                });
+              }
             }
-            
-            if (ast) {
-                 for (const s of ast.statements) {
-                     if (s.kind === "Export") {
-                         const exportStmt = s as AST.ExportStmt;
-                         const symbol = moduleScope.resolve(exportStmt.item);
-                         if (symbol) {
-                             this.defineSymbol(symbol.name, symbol.kind, symbol.type, symbol.declaration);
-                         }
-                     }
-                 }
-            }
+          }
         }
+      }
+
+      this.defineSymbol(
+        stmt.namespace,
+        "Module",
+        undefined,
+        stmt,
+        exportedScope,
+      );
+    } else if (stmt.importAll) {
+      // Import all exported symbols
+      // We need to know which symbols are exported.
+      // Currently SymbolTable doesn't track exports explicitly, but we can iterate over all symbols?
+      // Or we should track exports in ModuleInfo/AST.
+      // AST has ExportStmt.
+
+      // Let's iterate over AST statements to find exports
+      if (ast) {
+        for (const s of ast.statements) {
+          if (s.kind === "Export") {
+            const exportStmt = s as AST.ExportStmt;
+            const symbol = moduleScope.resolve(exportStmt.item);
+            if (symbol) {
+              this.defineSymbol(
+                symbol.name,
+                symbol.kind,
+                symbol.type,
+                symbol.declaration,
+              );
+            }
+          }
+        }
+      } else {
+        // If AST is not available (pre-loaded but not passed here?), we might have a problem.
+        // But we set 'ast' above.
+        // Wait, if moduleScope was already loaded, 'ast' might be undefined here if we didn't reload it.
+        // We need to store AST in modules map or re-fetch it.
+        // Actually, we can just iterate moduleScope symbols? But that includes non-exported ones.
+        // We need to know what is exported.
+
+        // For now, let's assume we can get AST.
+        // If moduleScope exists, we didn't parse AST.
+        // We should store exports in ModuleInfo or similar.
+        // But TypeChecker doesn't use ModuleInfo directly.
+
+        // Let's try to find AST from preLoadedModules if available
+        if (!ast && this.skipImportResolution) {
+          for (const [modulePath, moduleAst] of this.preLoadedModules) {
+            if (modulePath === importPath) {
+              ast = moduleAst;
+              break;
+            }
+          }
+        }
+
+        if (ast) {
+          for (const s of ast.statements) {
+            if (s.kind === "Export") {
+              const exportStmt = s as AST.ExportStmt;
+              const symbol = moduleScope.resolve(exportStmt.item);
+              if (symbol) {
+                this.defineSymbol(
+                  symbol.name,
+                  symbol.kind,
+                  symbol.type,
+                  symbol.declaration,
+                );
+              }
+            }
+          }
+        }
+      }
     }
 
     for (const item of stmt.items) {
       // Check if the item is exported by looking at ExportStmt nodes in AST
       let isExported = false;
       let exportedSymbol: any = null;
-      
+
       if (ast) {
-          for (const s of ast.statements) {
-              if (s.kind === "Export") {
-                  const exportStmt = s as AST.ExportStmt;
-                  if (exportStmt.item === item.name) {
-                      isExported = true;
-                      exportedSymbol = moduleScope.resolve(item.name);
-                      break;
-                  }
-              }
+        for (const s of ast.statements) {
+          if (s.kind === "Export") {
+            const exportStmt = s as AST.ExportStmt;
+            if (exportStmt.item === item.name) {
+              isExported = true;
+              exportedSymbol = moduleScope.resolve(item.name);
+              break;
+            }
           }
+        }
       }
-      
+
       if (!isExported || !exportedSymbol) {
         throw new CompilerError(
           `Module '${stmt.source}' does not export '${item.name}'`,
@@ -763,7 +782,7 @@ export class TypeChecker {
           stmt.location,
         );
       }
-      
+
       const symbol = exportedSymbol;
 
       // Define in current scope
@@ -1148,7 +1167,7 @@ export class TypeChecker {
           expr.location,
         );
       }
-      
+
       // If it's a struct, return MetaType
       if (symbol.kind === "Struct") {
         return {
@@ -1167,9 +1186,9 @@ export class TypeChecker {
 
       // If it's a function, return FunctionType
       if (symbol.kind === "Function") {
-          // We need to return the function type, but also attach the declaration so CodeGen can find it?
-          // CodeGen uses resolvedType.
-          return symbol.type;
+        // We need to return the function type, but also attach the declaration so CodeGen can find it?
+        // CodeGen uses resolvedType.
+        return symbol.type;
       }
 
       return symbol.type;
@@ -1226,15 +1245,19 @@ export class TypeChecker {
       // Handle namespaced types: mod.Person
       let symbol = this.currentScope.resolve(objectType.name);
       if (!symbol && objectType.name.includes(".")) {
-          // Try to resolve as namespaced type
-          const parts = objectType.name.split(".");
-          const namespaceName = parts[0];
-          const typeName = parts.slice(1).join(".");
-          
-          const namespaceSymbol = this.currentScope.resolve(namespaceName!);
-          if (namespaceSymbol && namespaceSymbol.kind === "Module" && namespaceSymbol.moduleScope) {
-              symbol = namespaceSymbol.moduleScope.resolve(typeName);
-          }
+        // Try to resolve as namespaced type
+        const parts = objectType.name.split(".");
+        const namespaceName = parts[0];
+        const typeName = parts.slice(1).join(".");
+
+        const namespaceSymbol = this.currentScope.resolve(namespaceName!);
+        if (
+          namespaceSymbol &&
+          namespaceSymbol.kind === "Module" &&
+          namespaceSymbol.moduleScope
+        ) {
+          symbol = namespaceSymbol.moduleScope.resolve(typeName);
+        }
       }
       if (
         symbol &&
@@ -1274,16 +1297,21 @@ export class TypeChecker {
             let paramTypes = member.params.map((p) => p.type);
             if (member.params.length > 0 && member.params[0]!.name === "this") {
               const thisParamType = member.params[0]!.type;
-              
-              let compatible = this.areTypesCompatible(thisParamType, objectType);
-              
+
+              let compatible = this.areTypesCompatible(
+                thisParamType,
+                objectType,
+              );
+
               // Allow implicit address-of if 'this' expects a pointer to the object type
-              if (!compatible && 
-                  thisParamType.kind === "BasicType" && 
-                  objectType.kind === "BasicType" &&
-                  thisParamType.name === objectType.name &&
-                  thisParamType.pointerDepth === objectType.pointerDepth + 1) {
-                 compatible = true;
+              if (
+                !compatible &&
+                thisParamType.kind === "BasicType" &&
+                objectType.kind === "BasicType" &&
+                thisParamType.name === objectType.name &&
+                thisParamType.pointerDepth === objectType.pointerDepth + 1
+              ) {
+                compatible = true;
               }
 
               if (!compatible) {
@@ -1643,7 +1671,7 @@ export class TypeChecker {
     kind: SymbolKind,
     type: AST.TypeNode | undefined,
     node: AST.ASTNode,
-    moduleScope?: SymbolTable
+    moduleScope?: SymbolTable,
   ): void {
     if (
       this.currentScope.resolve(name) &&
@@ -1658,7 +1686,13 @@ export class TypeChecker {
     }
 
     // Check for redefinition in current scope manually if needed, or add method to SymbolTable
-    this.currentScope.define({ name, kind, type, declaration: node, moduleScope });
+    this.currentScope.define({
+      name,
+      kind,
+      type,
+      declaration: node,
+      moduleScope,
+    });
   }
 
   private typeToString(type: AST.TypeNode | undefined): string {
@@ -1974,7 +2008,9 @@ export class TypeChecker {
     if (member) return member;
 
     if (structDecl.parentType && structDecl.parentType.kind === "BasicType") {
-      const parentSymbol = this.currentScope.resolve(structDecl.parentType.name);
+      const parentSymbol = this.currentScope.resolve(
+        structDecl.parentType.name,
+      );
       if (
         parentSymbol &&
         parentSymbol.kind === "Struct" &&

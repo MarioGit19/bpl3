@@ -1,6 +1,6 @@
 /**
  * Module Cache Manager
- * 
+ *
  * Handles caching of compiled modules to enable incremental compilation.
  * Each module is hashed based on its content, and the compiled object file
  * is cached if unchanged.
@@ -34,7 +34,7 @@ export class ModuleCache {
     const root = projectRoot || process.cwd();
     this.cacheDir = path.join(root, ".bpl-cache");
     this.manifestPath = path.join(this.cacheDir, "manifest.json");
-    
+
     this.ensureCacheDir();
     this.manifest = this.loadManifest();
   }
@@ -94,21 +94,21 @@ export class ModuleCache {
   isCached(modulePath: string, content: string): boolean {
     const hash = this.calculateHash(content);
     const cached = this.manifest.modules.get(modulePath);
-    
+
     if (!cached) {
       return false;
     }
-    
+
     // Check if hash matches
     if (cached.hash !== hash) {
       return false;
     }
-    
+
     // Check if object file exists
     if (!fs.existsSync(cached.objectFile)) {
       return false;
     }
-    
+
     return true;
   }
 
@@ -130,12 +130,12 @@ export class ModuleCache {
     modulePath: string,
     content: string,
     llvmIR: string,
-    verbose: boolean = false
+    verbose: boolean = false,
   ): string {
     const hash = this.calculateHash(content);
     const objectFileName = `${hash}.o`;
     const objectFilePath = path.join(this.cacheDir, objectFileName);
-    
+
     // Check if already cached
     if (this.isCached(modulePath, content)) {
       if (verbose) {
@@ -143,38 +143,36 @@ export class ModuleCache {
       }
       return this.getCachedObjectFile(modulePath)!;
     }
-    
+
     if (verbose) {
       console.log(`  Compiling: ${path.basename(modulePath)}`);
     }
-    
+
     // Write LLVM IR to temporary file
     const llFilePath = path.join(this.cacheDir, `${hash}.ll`);
     fs.writeFileSync(llFilePath, llvmIR);
-    
+
     // Compile to object file using clang
-    const result = spawnSync("clang", [
-      "-c",
-      "-Wno-override-module",
-      llFilePath,
-      "-o",
-      objectFilePath,
-    ], {
-      stdio: verbose ? "inherit" : "pipe",
-    });
-    
+    const result = spawnSync(
+      "clang",
+      ["-c", "-Wno-override-module", llFilePath, "-o", objectFilePath],
+      {
+        stdio: verbose ? "inherit" : "pipe",
+      },
+    );
+
     if (result.status !== 0) {
       const error = result.stderr?.toString() || "Unknown compilation error";
       throw new Error(`Failed to compile ${modulePath}: ${error}`);
     }
-    
+
     // Clean up temporary LLVM IR file
     try {
       fs.unlinkSync(llFilePath);
     } catch (e) {
       // Ignore cleanup errors
     }
-    
+
     // Update manifest
     this.manifest.modules.set(modulePath, {
       path: modulePath,
@@ -183,7 +181,7 @@ export class ModuleCache {
       timestamp: Date.now(),
     });
     this.saveManifest();
-    
+
     return objectFilePath;
   }
 
@@ -193,20 +191,16 @@ export class ModuleCache {
   linkModules(
     objectFiles: string[],
     outputPath: string,
-    verbose: boolean = false
+    verbose: boolean = false,
   ): void {
     if (verbose) {
       console.log(`Linking ${objectFiles.length} modules...`);
     }
-    
-    const result = spawnSync("clang", [
-      ...objectFiles,
-      "-o",
-      outputPath,
-    ], {
+
+    const result = spawnSync("clang", [...objectFiles, "-o", outputPath], {
       stdio: verbose ? "inherit" : "pipe",
     });
-    
+
     if (result.status !== 0) {
       const error = result.stderr?.toString() || "Unknown linking error";
       throw new Error(`Failed to link modules: ${error}`);

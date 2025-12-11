@@ -291,65 +291,37 @@ export class Parser {
 
     // Check for 'import * as namespace from "source";'
     if (this.check(TokenType.Star)) {
-        this.advance(); // consume '*'
-        
-        if (this.check(TokenType.Identifier) && this.peek().lexeme === "as") {
-            this.advance(); // consume 'as'
-            namespace = this.consume(TokenType.Identifier, "Expected namespace identifier.").lexeme;
-        }
-        
-        this.consume(TokenType.From, "Expected 'from' after import list.");
-        
-        if (this.check(TokenType.StringLiteral)) {
-             source = this.consume(TokenType.StringLiteral, "Expected source.").lexeme.replace(/^"|"$/g, "");
-        } else if (this.check(TokenType.Identifier)) {
-             source = this.consume(TokenType.Identifier, "Expected source module.").lexeme;
-        } else {
-             throw this.error(this.peek(), "Expected module source.");
-        }
-        
-        importAll = true;
-        this.consume(TokenType.Semicolon, "Expected ';' after import.");
-        return {
-            kind: "Import",
-            items: [],
-            source,
-            importAll,
-            namespace,
-            location: this.loc(startToken, this.previous()),
-        };
-    }
+      this.advance(); // consume '*'
 
-    // Check for 'import "source";' or 'import std;'
-    if (this.check(TokenType.StringLiteral)) {
-        source = this.consume(TokenType.StringLiteral, "Expected source.").lexeme.replace(/^"|"$/g, "");
-        importAll = true;
-        this.consume(TokenType.Semicolon, "Expected ';' after import.");
-        return {
-            kind: "Import",
-            items: [],
-            source,
-            importAll,
-            location: this.loc(startToken, this.previous()),
-        };
-    } else if (this.check(TokenType.Identifier) && this.tokens[this.current + 1]?.type === TokenType.Semicolon) {
-        // import std;
-        source = this.consume(TokenType.Identifier, "Expected module name.").lexeme;
-        importAll = true;
-        // Default namespace to module name? Or import all into global?
-        // Let's say import std; imports everything into global for now, or maybe creates a namespace 'std'.
-        // If we want 'std.print', we need a namespace.
-        // But 'import std' usually implies 'std' is the namespace.
-        namespace = source; 
-        this.consume(TokenType.Semicolon, "Expected ';' after import.");
-        return {
-            kind: "Import",
-            items: [],
-            source,
-            importAll,
-            namespace,
-            location: this.loc(startToken, this.previous()),
-        };
+      if (this.check(TokenType.Identifier) && this.peek().lexeme === "as") {
+        this.advance(); // consume 'as'
+        namespace = this.consume(
+          TokenType.Identifier,
+          "Expected namespace identifier.",
+        ).lexeme;
+      }
+
+      this.consume(TokenType.From, "Expected 'from' after import list.");
+
+      if (this.check(TokenType.StringLiteral)) {
+        source = this.consume(
+          TokenType.StringLiteral,
+          "Expected source.",
+        ).lexeme.replace(/^"|"$/g, "");
+      } else {
+        throw this.error(this.peek(), "Expected module source.");
+      }
+
+      importAll = true;
+      this.consume(TokenType.Semicolon, "Expected ';' after import.");
+      return {
+        kind: "Import",
+        items: [],
+        source,
+        importAll,
+        namespace,
+        location: this.loc(startToken, this.previous()),
+      };
     }
 
     // Parse import items: supports mixed functions and types
@@ -1297,14 +1269,18 @@ export class Parser {
 
     const nameToken = this.consume(TokenType.Identifier, "Expected type name.");
     let name = nameToken.lexeme;
-    
+
     // Handle namespaced types: std.Point
     while (this.match(TokenType.Dot)) {
-        const part = this.consume(TokenType.Identifier, "Expected identifier after dot.").lexeme;
-        // We can represent namespaced types as "std.Point" string for now, 
-        // or we need a more complex TypeNode structure.
-        // BasicType has 'name: string'.
-        name += "." + part;
+      const part = this.consume(
+        TokenType.Identifier,
+        "Expected identifier after dot.",
+      ).lexeme;
+      // We can represent namespaced types as "std.Point" string for now,
+      // or we need a more complex TypeNode structure.
+      // BasicType has 'name: string'.
+      // TODO: Represent as basic type with namespace attribute if needed.
+      name += "." + part;
     }
 
     const genericArgs: AST.TypeNode[] = [];

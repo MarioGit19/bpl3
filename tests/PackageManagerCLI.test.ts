@@ -31,7 +31,7 @@ describe("Package Manager CLI", () => {
 
       expect(result.status).toBe(0);
       expect(fs.existsSync(path.join(tempDir, "bpl.json"))).toBe(true);
-      
+
       const manifest = JSON.parse(fs.readFileSync("bpl.json", "utf-8"));
       expect(manifest.name).toBeTruthy();
       expect(manifest.version).toBe("1.0.0");
@@ -85,13 +85,16 @@ describe("Package Manager CLI", () => {
       // Create a package
       const packageDir = path.join(tempDir, "package");
       fs.mkdirSync(packageDir);
-      
+
       const manifest = {
         name: "install-cli-test",
         version: "1.0.0",
       };
 
-      fs.writeFileSync(path.join(packageDir, "bpl.json"), JSON.stringify(manifest, null, 2));
+      fs.writeFileSync(
+        path.join(packageDir, "bpl.json"),
+        JSON.stringify(manifest, null, 2),
+      );
       fs.writeFileSync(path.join(packageDir, "index.bpl"), "export test;");
 
       // Pack it
@@ -102,18 +105,24 @@ describe("Package Manager CLI", () => {
       expect(packResult.status).toBe(0);
 
       const tarballPath = path.join(packageDir, "install-cli-test-1.0.0.tgz");
-      
+
       // Install it in a different directory
       const projectDir = path.join(tempDir, "project");
       fs.mkdirSync(projectDir);
 
-      const installResult = spawnSync("bun", [bplPath, "install", tarballPath], {
-        cwd: projectDir,
-        encoding: "utf-8",
-      });
+      const installResult = spawnSync(
+        "bun",
+        [bplPath, "install", tarballPath],
+        {
+          cwd: projectDir,
+          encoding: "utf-8",
+        },
+      );
 
       expect(installResult.status).toBe(0);
-      expect(fs.existsSync(path.join(projectDir, "bpl_modules", "install-cli-test"))).toBe(true);
+      expect(
+        fs.existsSync(path.join(projectDir, "bpl_modules", "install-cli-test")),
+      ).toBe(true);
     });
   });
 
@@ -135,10 +144,14 @@ describe("Package Manager CLI", () => {
       });
       expect(packResult.status).toBe(0);
 
-      const installResult = spawnSync("bun", [bplPath, "install", "list-cli-test-1.5.0.tgz"], {
-        cwd: tempDir,
-        encoding: "utf-8",
-      });
+      const installResult = spawnSync(
+        "bun",
+        [bplPath, "install", "list-cli-test-1.5.0.tgz"],
+        {
+          cwd: tempDir,
+          encoding: "utf-8",
+        },
+      );
       expect(installResult.status).toBe(0);
 
       // List packages
@@ -175,7 +188,9 @@ describe("Package Manager CLI", () => {
       fs.writeFileSync("index.bpl", "export test;");
 
       spawnSync("bun", [bplPath, "pack"], { cwd: tempDir });
-      spawnSync("bun", [bplPath, "install", "uninstall-cli-test-1.0.0.tgz"], { cwd: tempDir });
+      spawnSync("bun", [bplPath, "install", "uninstall-cli-test-1.0.0.tgz"], {
+        cwd: tempDir,
+      });
 
       // Verify it's installed
       let listResult = spawnSync("bun", [bplPath, "list"], {
@@ -185,13 +200,19 @@ describe("Package Manager CLI", () => {
       expect(listResult.stdout).toContain("uninstall-cli-test");
 
       // Uninstall it
-      const uninstallResult = spawnSync("bun", [bplPath, "uninstall", "uninstall-cli-test"], {
-        cwd: tempDir,
-        encoding: "utf-8",
-      });
+      const uninstallResult = spawnSync(
+        "bun",
+        [bplPath, "uninstall", "uninstall-cli-test"],
+        {
+          cwd: tempDir,
+          encoding: "utf-8",
+        },
+      );
 
       expect(uninstallResult.status).toBe(0);
-      expect(uninstallResult.stdout).toContain("Uninstalled uninstall-cli-test@1.0.0");
+      expect(uninstallResult.stdout).toContain(
+        "Uninstalled uninstall-cli-test@1.0.0",
+      );
 
       // Verify it's gone
       listResult = spawnSync("bun", [bplPath, "list"], {
@@ -212,23 +233,33 @@ describe("Package Manager CLI", () => {
       fs.writeFileSync("index.bpl", "export test;");
 
       spawnSync("bun", [bplPath, "pack"], { cwd: tempDir });
-      spawnSync("bun", [bplPath, "install", "remove-cli-test-1.0.0.tgz"], { cwd: tempDir });
+      spawnSync("bun", [bplPath, "install", "remove-cli-test-1.0.0.tgz"], {
+        cwd: tempDir,
+      });
 
       // Use remove alias
-      const removeResult = spawnSync("bun", [bplPath, "remove", "remove-cli-test"], {
-        cwd: tempDir,
-        encoding: "utf-8",
-      });
+      const removeResult = spawnSync(
+        "bun",
+        [bplPath, "remove", "remove-cli-test"],
+        {
+          cwd: tempDir,
+          encoding: "utf-8",
+        },
+      );
 
       expect(removeResult.status).toBe(0);
       expect(removeResult.stdout).toContain("Uninstalled");
     });
 
     test("should fail when uninstalling non-existent package", () => {
-      const result = spawnSync("bun", [bplPath, "uninstall", "non-existent-package"], {
-        cwd: tempDir,
-        encoding: "utf-8",
-      });
+      const result = spawnSync(
+        "bun",
+        [bplPath, "uninstall", "non-existent-package"],
+        {
+          cwd: tempDir,
+          encoding: "utf-8",
+        },
+      );
 
       expect(result.status).toBe(1);
       expect(result.stderr).toContain("not installed");
@@ -240,7 +271,7 @@ describe("Package Manager CLI", () => {
       // Create a package with a function
       const packageDir = path.join(tempDir, "math-lib");
       fs.mkdirSync(packageDir);
-      
+
       const manifest = {
         name: "math-lib",
         version: "1.0.0",
@@ -249,9 +280,9 @@ describe("Package Manager CLI", () => {
 
       fs.writeFileSync(
         path.join(packageDir, "bpl.json"),
-        JSON.stringify(manifest, null, 2)
+        JSON.stringify(manifest, null, 2),
       );
-      
+
       fs.writeFileSync(
         path.join(packageDir, "index.bpl"),
         `export add;
@@ -263,16 +294,16 @@ frame add(a: int, b: int) ret int {
 
 frame multiply(a: int, b: int) ret int {
   return a * b;
-}`
+}`,
       );
 
       // Pack and install
       spawnSync("bun", [bplPath, "pack"], { cwd: packageDir });
       const tarball = path.join(packageDir, "math-lib-1.0.0.tgz");
-      
+
       const projectDir = path.join(tempDir, "app");
       fs.mkdirSync(projectDir);
-      
+
       spawnSync("bun", [bplPath, "install", tarball], { cwd: projectDir });
 
       // Create a file that imports from the package
@@ -287,7 +318,7 @@ frame main() ret int {
     local product: int = multiply(4, 2);
     printf("Sum: %d, Product: %d\\n", sum, product);
     return 0;
-}`
+}`,
       );
 
       // Compile it

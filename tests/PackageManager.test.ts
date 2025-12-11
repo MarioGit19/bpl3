@@ -28,7 +28,7 @@ describe("PackageManager", () => {
   describe("Package Initialization", () => {
     test("should create a valid bpl.json manifest", () => {
       const manifestPath = path.join(tempDir, "bpl.json");
-      
+
       const manifest = {
         name: "test-package",
         version: "1.0.0",
@@ -38,7 +38,7 @@ describe("PackageManager", () => {
       };
 
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-      
+
       const loaded = packageManager.loadManifest(tempDir);
       expect(loaded.name).toBe("test-package");
       expect(loaded.version).toBe("1.0.0");
@@ -47,39 +47,45 @@ describe("PackageManager", () => {
 
     test("should throw error for missing name field", () => {
       const manifestPath = path.join(tempDir, "bpl.json");
-      
+
       const manifest = {
         version: "1.0.0",
       };
 
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-      
-      expect(() => packageManager.loadManifest(tempDir)).toThrow(/missing 'name'/);
+
+      expect(() => packageManager.loadManifest(tempDir)).toThrow(
+        /missing 'name'/,
+      );
     });
 
     test("should throw error for missing version field", () => {
       const manifestPath = path.join(tempDir, "bpl.json");
-      
+
       const manifest = {
         name: "test-package",
       };
 
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-      
-      expect(() => packageManager.loadManifest(tempDir)).toThrow(/missing 'version'/);
+
+      expect(() => packageManager.loadManifest(tempDir)).toThrow(
+        /missing 'version'/,
+      );
     });
 
     test("should validate semantic version format", () => {
       const manifestPath = path.join(tempDir, "bpl.json");
-      
+
       const manifest = {
         name: "test-package",
         version: "invalid-version",
       };
 
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-      
-      expect(() => packageManager.loadManifest(tempDir)).toThrow(/Invalid version format/);
+
+      expect(() => packageManager.loadManifest(tempDir)).toThrow(
+        /Invalid version format/,
+      );
     });
   });
 
@@ -96,7 +102,7 @@ describe("PackageManager", () => {
       fs.writeFileSync("index.bpl", "frame test() ret int { return 42; }");
 
       const tarballPath = packageManager.pack(tempDir);
-      
+
       expect(fs.existsSync(tarballPath)).toBe(true);
       expect(tarballPath).toContain("test-pkg-1.0.0.tgz");
     });
@@ -114,7 +120,7 @@ describe("PackageManager", () => {
       fs.writeFileSync("README.md", "# Test Package");
 
       const tarballPath = packageManager.pack(tempDir);
-      
+
       expect(fs.existsSync(tarballPath)).toBe(true);
     });
 
@@ -126,7 +132,7 @@ describe("PackageManager", () => {
 
       fs.writeFileSync("bpl.json", JSON.stringify(manifest, null, 2));
       fs.writeFileSync("index.bpl", "frame test() ret int { return 0; }");
-      
+
       // Create directories that should be excluded
       fs.mkdirSync("node_modules", { recursive: true });
       fs.mkdirSync("bpl_modules", { recursive: true });
@@ -134,7 +140,7 @@ describe("PackageManager", () => {
       fs.writeFileSync("bpl_modules/test.bpl", "frame test() {}");
 
       const tarballPath = packageManager.pack(tempDir);
-      
+
       expect(fs.existsSync(tarballPath)).toBe(true);
       // If the test passes, the package was created without errors
     });
@@ -153,7 +159,7 @@ describe("PackageManager", () => {
       fs.writeFileSync("index.bpl", "export test;");
 
       const tarballPath = packageManager.pack(tempDir);
-      
+
       // Create a new directory to install into
       const installDir = path.join(tempDir, "install-test");
       fs.mkdirSync(installDir);
@@ -163,7 +169,11 @@ describe("PackageManager", () => {
       const localPM = new PackageManager();
       localPM.install(tarballPath, { global: false });
 
-      const installedPath = path.join(installDir, "bpl_modules", "local-test-pkg");
+      const installedPath = path.join(
+        installDir,
+        "bpl_modules",
+        "local-test-pkg",
+      );
       expect(fs.existsSync(installedPath)).toBe(true);
       expect(fs.existsSync(path.join(installedPath, "bpl.json"))).toBe(true);
       expect(fs.existsSync(path.join(installedPath, "index.bpl"))).toBe(true);
@@ -181,7 +191,7 @@ describe("PackageManager", () => {
       fs.writeFileSync("index.bpl", "export test;");
 
       const tarballPath = packageManager.pack(tempDir);
-      
+
       const installDir = path.join(tempDir, "list-test");
       fs.mkdirSync(installDir);
       process.chdir(installDir);
@@ -189,7 +199,7 @@ describe("PackageManager", () => {
       packageManager.install(tarballPath, { global: false });
 
       const packages = packageManager.list({ global: false });
-      
+
       expect(packages.length).toBe(1);
       expect(packages[0]?.manifest.name).toBe("list-test-pkg");
       expect(packages[0]?.manifest.version).toBe("2.0.0");
@@ -213,7 +223,7 @@ describe("PackageManager", () => {
       fs.writeFileSync("index.bpl", "export test;");
 
       const tarballPath = packageManager.pack(tempDir);
-      
+
       const installDir = path.join(tempDir, "uninstall-test");
       fs.mkdirSync(installDir);
       process.chdir(installDir);
@@ -263,7 +273,7 @@ describe("PackageManager", () => {
       fs.writeFileSync("index.bpl", "export test;");
 
       const tarballPath = packageManager.pack(tempDir);
-      
+
       const projectDir = path.join(tempDir, "project");
       fs.mkdirSync(projectDir);
       process.chdir(projectDir);
@@ -273,7 +283,7 @@ describe("PackageManager", () => {
       localPM.install(tarballPath, { global: false });
 
       const resolved = localPM.resolvePackage("resolve-test-pkg", projectDir);
-      
+
       expect(resolved).toBeTruthy();
       expect(resolved).toContain("index.bpl");
       expect(fs.existsSync(resolved!)).toBe(true);
@@ -301,18 +311,13 @@ describe("PackageManager", () => {
         };
 
         fs.writeFileSync("bpl.json", JSON.stringify(manifest, null, 2));
-        
+
         expect(() => packageManager.loadManifest(tempDir)).not.toThrow();
       });
     });
 
     test("should accept valid semantic versions", () => {
-      const validVersions = [
-        "1.0.0",
-        "0.0.1",
-        "2.1.3",
-        "10.20.30",
-      ];
+      const validVersions = ["1.0.0", "0.0.1", "2.1.3", "10.20.30"];
 
       validVersions.forEach((version) => {
         const manifest = {
@@ -321,19 +326,13 @@ describe("PackageManager", () => {
         };
 
         fs.writeFileSync("bpl.json", JSON.stringify(manifest, null, 2));
-        
+
         expect(() => packageManager.loadManifest(tempDir)).not.toThrow();
       });
     });
 
     test("should reject invalid semantic versions", () => {
-      const invalidVersions = [
-        "1.0",
-        "1",
-        "v1.0.0",
-        "1.0.0-beta",
-        "latest",
-      ];
+      const invalidVersions = ["1.0", "1", "v1.0.0", "1.0.0-beta", "latest"];
 
       invalidVersions.forEach((version) => {
         const manifest = {
@@ -342,8 +341,10 @@ describe("PackageManager", () => {
         };
 
         fs.writeFileSync("bpl.json", JSON.stringify(manifest, null, 2));
-        
-        expect(() => packageManager.loadManifest(tempDir)).toThrow(/Invalid version format/);
+
+        expect(() => packageManager.loadManifest(tempDir)).toThrow(
+          /Invalid version format/,
+        );
       });
     });
   });

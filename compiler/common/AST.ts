@@ -257,7 +257,7 @@ export interface ImportStmt extends ASTNode {
   items: { name: string; alias?: string; isType: boolean }[];
   source: string;
   importAll?: boolean; // If true, import all exported symbols
-  namespace?: string;  // If set, import into this namespace
+  namespace?: string; // If set, import into this namespace
 }
 
 export interface ExportStmt extends ASTNode {

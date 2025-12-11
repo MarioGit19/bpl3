@@ -28,6 +28,7 @@
 - [x] Replace lli with clang for running LLVM IR
 - [x] Add default exit code for main if it's void
 - [x] Packaging system for libraries/apps (init, pack, install, list commands)
+- [x] Constructors and destructors for structs
 
 ## Pending Features (expanded)
 
@@ -54,12 +55,6 @@
   - Description: Let user-defined types implement special methods (dunder-style like `__add__`, `__eq__`) that override built-in operator behavior for instances.
   - Implementation notes: Define mapping between operators and method names; during type-checking, if an operand type has the corresponding method, resolve to that method; otherwise fall back to builtin semantics. Disallow assignment operators overloading. Ensure overload resolution supports left/right operand dispatch and coercions.
   - Acceptance criteria: Defining `__add__` on a struct causes `a + b` to call that method; operator resolution respects type conversions and produces helpful errors when ambiguous.
-
-- [x] Constructors and destructors for structs
-
-  - Description: Support `StructName.new(...)` constructors (default, parameterized, copy) and `variable.destroy()` destructors. Constructors can be overloaded by parameter types; destructors run manually in the current model.
-  - Implementation notes: Add named constructor resolution on struct types and special destructor method. Wire constructor to allocate and initialize memory; implement destructor chaining across inheritance. Consider automatic destructor invocation for stack-local variables later.
-  - Acceptance criteria: `S.new()` constructs objects correctly; `obj.destroy()` triggers destructor logic; inheritance constructors/destructors chain appropriately. after destroy mark object as invalid unless re-initialized.
 
 - [5] Root global `Type` struct
 
@@ -162,4 +157,3 @@
   - Description: Allow embedding inline assembly with explicit register lists and integration with calling conventions.
   - Implementation notes: Add parser support and a safe lowered representation. During codegen, inject asm inline properly and validate register usage.
   - Acceptance criteria: `asm [rax, rbx] { rdrand rax\n mov rbx, rax\n mov (variable), rbx }` compiles and emits inline assembly; constraints are documented.
-

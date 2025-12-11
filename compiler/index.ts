@@ -51,7 +51,7 @@ export class Compiler {
       if (this.options.useCache) {
         return this.compileWithCache();
       }
-      
+
       // Check if we should use full module resolution
       if (this.options.resolveImports) {
         return this.compileWithModuleResolution();
@@ -142,12 +142,12 @@ export class Compiler {
       }
 
       const typeChecker = new TypeChecker({ skipImportResolution: true });
-      
+
       // Pre-register all modules with TypeChecker
       for (const module of modules) {
         typeChecker.registerModule(module.path, module.ast);
       }
-      
+
       for (const module of modules) {
         if (this.options.verbose) {
           console.log(`  Checking: ${path.basename(module.path)}`);
@@ -175,12 +175,12 @@ export class Compiler {
           if (stmt.kind === "Import") {
             continue;
           }
-          
+
           // Skip exports, but keep the declaration inside if it's an inline export (which we removed support for, but just in case)
           // Actually, ExportStmt now references a declaration if it was inline, but we changed parser to not allow inline exports.
           // So ExportStmt just references a name. We can skip ExportStmt.
           if (stmt.kind === "Export") {
-              continue;
+            continue;
           }
 
           // Generate a unique key for declarations to avoid duplicates
@@ -216,7 +216,7 @@ export class Compiler {
       }
 
       const codeGenerator = new CodeGenerator();
-      
+
       // Register struct layouts from all modules explicitly
       // This is needed because CodeGenerator.collectStructLayouts only scans the AST it is given.
       // Since we are giving it a combined AST, it SHOULD find all structs.
@@ -228,7 +228,7 @@ export class Compiler {
       // This assumes no name collisions between modules for structs.
       // If 'std.Point' and 'other.Point' both exist, we have a problem in flat CodeGen.
       // But for now, let's assume unique names or that we don't support same-named structs in different modules yet.
-      
+
       const llvmIR = codeGenerator.generate(combinedAST);
 
       return {
@@ -254,7 +254,7 @@ export class Compiler {
     try {
       const projectRoot = path.dirname(this.options.filePath);
       const cache = new ModuleCache(projectRoot);
-      
+
       if (this.options.verbose) {
         console.log("[Module Cache] Resolving dependencies...");
       }
@@ -313,37 +313,42 @@ export class Compiler {
 
       // Hash the combined content for caching
       const entryModule = modules[modules.length - 1]!;
-      const allContent = modules.map(m => fs.readFileSync(m.path, "utf-8")).join("\n");
-      
+      const allContent = modules
+        .map((m) => fs.readFileSync(m.path, "utf-8"))
+        .join("\n");
+
       if (this.options.verbose) {
         console.log("[Module Cache] Compiling modules...");
       }
-      
+
       const codeGenerator = new CodeGenerator();
       const llvmIR = codeGenerator.generate(combinedAST);
-      
+
       const objectFile = cache.compileModule(
         entryModule.path,
         allContent,
         llvmIR,
-        this.options.verbose
+        this.options.verbose,
       );
-      
+
       const objectFiles = [objectFile];
 
       // 4. Link all object files
-      const outputPath = this.options.outputPath || 
+      const outputPath =
+        this.options.outputPath ||
         this.options.filePath.replace(/\.[^/.]+$/, "");
-      
+
       if (this.options.verbose) {
         console.log("[Module Cache] Linking modules...");
       }
-      
+
       cache.linkModules(objectFiles, outputPath, this.options.verbose);
 
       if (this.options.verbose) {
         const stats = cache.getStats();
-        console.log(`[Module Cache] Cache stats: ${stats.totalModules} modules, ${(stats.cacheSize / 1024).toFixed(2)} KB`);
+        console.log(
+          `[Module Cache] Cache stats: ${stats.totalModules} modules, ${(stats.cacheSize / 1024).toFixed(2)} KB`,
+        );
       }
 
       return {

@@ -91,13 +91,19 @@ export class ModuleResolver {
     const packageManager = new PackageManager();
     try {
       // First try from current working directory
-      let packagePath = packageManager.resolvePackage(importSource, process.cwd());
+      let packagePath = packageManager.resolvePackage(
+        importSource,
+        process.cwd(),
+      );
       if (packagePath) {
         return packagePath;
       }
-      
+
       // Then try from the file's directory
-      packagePath = packageManager.resolvePackage(importSource, path.dirname(fromFile));
+      packagePath = packageManager.resolvePackage(
+        importSource,
+        path.dirname(fromFile),
+      );
       if (packagePath) {
         return packagePath;
       }

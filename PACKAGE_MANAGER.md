@@ -50,6 +50,7 @@ bun index.ts pack [directory]
 Creates a `.tgz` archive of the package. If no directory is specified, uses the current directory.
 
 Example:
+
 ```bash
 cd my-package
 bun index.ts pack
@@ -59,27 +60,32 @@ bun index.ts pack
 ### Install a Package
 
 Install from a local tarball:
+
 ```bash
 bun index.ts install ./my-package-1.0.0.tgz
 ```
 
 Install to global location:
+
 ```bash
 bun index.ts install ./my-package-1.0.0.tgz --global
 ```
 
 Installation locations:
+
 - **Local**: `./bpl_modules/package-name/`
 - **Global**: `~/.bpl/packages/package-name/`
 
 ### List Installed Packages
 
 List local packages:
+
 ```bash
 bun index.ts list
 ```
 
 List global packages:
+
 ```bash
 bun index.ts list --global
 ```
@@ -87,6 +93,7 @@ bun index.ts list --global
 ### Uninstall a Package
 
 Uninstall a local package:
+
 ```bash
 bun index.ts uninstall <package-name>
 # or use the alias
@@ -94,6 +101,7 @@ bun index.ts remove <package-name>
 ```
 
 Uninstall a global package:
+
 ```bash
 bun index.ts uninstall <package-name> --global
 # or
@@ -101,6 +109,7 @@ bun index.ts remove <package-name> --global
 ```
 
 Example:
+
 ```bash
 bun index.ts uninstall math-utils --global
 ```
@@ -223,6 +232,7 @@ bun index.ts main.bpl --cache
 ### Module not found
 
 If you get a "Module not found" error:
+
 - Verify the package is installed (`bun index.ts list`)
 - Check the import name matches the package name exactly
 - Try reinstalling the package
@@ -230,11 +240,13 @@ If you get a "Module not found" error:
 ### Package name conflicts
 
 If you have both local and global packages with the same name:
+
 - Local packages take precedence
 - Remove one to avoid confusion
 
 ### Permission errors
 
 For global installations:
+
 - Ensure you have write permissions to `~/.bpl/packages/`
 - Or use local installation instead
