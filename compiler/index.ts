@@ -14,7 +14,9 @@ import { CodeGenerator } from "./backend/CodeGenerator";
 import { CompilerError } from "./common/CompilerError";
 import { ASTPrinter } from "./common/ASTPrinter";
 import { ModuleResolver } from "./middleend/ModuleResolver";
+import { ModuleCache } from "./middleend/ModuleCache";
 import * as path from "path";
+import * as fs from "fs";
 import type * as AST from "./common/AST";
 
 export interface CompilerOptions {
@@ -23,6 +25,7 @@ export interface CompilerOptions {
   emitType?: "llvm" | "ast" | "tokens";
   verbose?: boolean;
   resolveImports?: boolean; // New option for full module resolution
+  useCache?: boolean; // Enable incremental compilation with caching
 }
 
 export interface CompilationResult {
@@ -44,6 +47,11 @@ export class Compiler {
    */
   compile(sourceCode: string): CompilationResult {
     try {
+      // Check if we should use cached compilation
+      if (this.options.useCache) {
+        return this.compileWithCache();
+      }
+      
       // Check if we should use full module resolution
       if (this.options.resolveImports) {
         return this.compileWithModuleResolution();
@@ -133,7 +141,13 @@ export class Compiler {
         console.log("[Middleend] Type checking modules...");
       }
 
-      const typeChecker = new TypeChecker();
+      const typeChecker = new TypeChecker({ skipImportResolution: true });
+      
+      // Pre-register all modules with TypeChecker
+      for (const module of modules) {
+        typeChecker.registerModule(module.path, module.ast);
+      }
+      
       for (const module of modules) {
         if (this.options.verbose) {
           console.log(`  Checking: ${path.basename(module.path)}`);
@@ -201,6 +215,120 @@ export class Compiler {
         success: true,
         output: llvmIR,
         ast: combinedAST,
+      };
+    } catch (error) {
+      if (error instanceof CompilerError) {
+        return {
+          success: false,
+          errors: [error],
+        };
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Compile with module caching for incremental builds
+   */
+  private compileWithCache(): CompilationResult {
+    try {
+      const projectRoot = path.dirname(this.options.filePath);
+      const cache = new ModuleCache(projectRoot);
+      
+      if (this.options.verbose) {
+        console.log("[Module Cache] Resolving dependencies...");
+      }
+
+      // 1. Resolve all modules
+      const resolver = new ModuleResolver();
+      const modules = resolver.resolveModules(this.options.filePath);
+
+      if (this.options.verbose) {
+        console.log(`[Module Cache] Found ${modules.length} modules`);
+      }
+
+      // 2. Type check all modules in dependency order
+      const typeChecker = new TypeChecker();
+      for (const module of modules) {
+        typeChecker.checkProgram(module.ast);
+        module.checked = true;
+      }
+
+      // 3. Generate combined LLVM IR (for now, until we implement proper per-module compilation)
+      // Create a combined AST with all declarations from all modules
+      const combinedStatements: AST.Statement[] = [];
+      const seenDeclarations = new Set<string>();
+
+      for (const module of modules) {
+        for (const stmt of module.ast.statements) {
+          if (stmt.kind === "Import") {
+            continue;
+          }
+
+          let key: string | null = null;
+          if (stmt.kind === "StructDecl") {
+            key = `struct:${(stmt as AST.StructDecl).name}`;
+          } else if (stmt.kind === "FunctionDecl") {
+            key = `function:${(stmt as AST.FunctionDecl).name}`;
+          } else if (stmt.kind === "Extern") {
+            key = `extern:${(stmt as AST.ExternDecl).name}`;
+          } else if (stmt.kind === "TypeAlias") {
+            key = `type:${(stmt as AST.TypeAliasDecl).name}`;
+          } else if (stmt.kind === "VariableDecl") {
+            key = `global:${(stmt as AST.VariableDecl).name}`;
+          }
+
+          if (!key || !seenDeclarations.has(key)) {
+            if (key) seenDeclarations.add(key);
+            combinedStatements.push(stmt);
+          }
+        }
+      }
+
+      const combinedAST: AST.Program = {
+        kind: "Program",
+        statements: combinedStatements,
+        location: modules[modules.length - 1]!.ast.location,
+      };
+
+      // Hash the combined content for caching
+      const entryModule = modules[modules.length - 1]!;
+      const allContent = modules.map(m => fs.readFileSync(m.path, "utf-8")).join("\n");
+      
+      if (this.options.verbose) {
+        console.log("[Module Cache] Compiling modules...");
+      }
+      
+      const codeGenerator = new CodeGenerator();
+      const llvmIR = codeGenerator.generate(combinedAST);
+      
+      const objectFile = cache.compileModule(
+        entryModule.path,
+        allContent,
+        llvmIR,
+        this.options.verbose
+      );
+      
+      const objectFiles = [objectFile];
+
+      // 4. Link all object files
+      const outputPath = this.options.outputPath || 
+        this.options.filePath.replace(/\.[^/.]+$/, "");
+      
+      if (this.options.verbose) {
+        console.log("[Module Cache] Linking modules...");
+      }
+      
+      cache.linkModules(objectFiles, outputPath, this.options.verbose);
+
+      if (this.options.verbose) {
+        const stats = cache.getStats();
+        console.log(`[Module Cache] Cache stats: ${stats.totalModules} modules, ${(stats.cacheSize / 1024).toFixed(2)} KB`);
+      }
+
+      return {
+        success: true,
+        output: `Executable created: ${outputPath}`,
       };
     } catch (error) {
       if (error instanceof CompilerError) {

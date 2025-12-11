@@ -19,6 +19,7 @@ import { Parser } from "../frontend/Parser";
 import { TypeChecker } from "./TypeChecker";
 import { SymbolTable } from "./SymbolTable";
 import { CompilerError } from "../common/CompilerError";
+import { PackageManager } from "./PackageManager";
 import type * as AST from "../common/AST";
 
 export interface ModuleInfo {
@@ -84,6 +85,24 @@ export class ModuleResolver {
       if (fs.existsSync(stdPath)) {
         return stdPath;
       }
+    }
+
+    // Try to resolve as a package import
+    const packageManager = new PackageManager();
+    try {
+      // First try from current working directory
+      let packagePath = packageManager.resolvePackage(importSource, process.cwd());
+      if (packagePath) {
+        return packagePath;
+      }
+      
+      // Then try from the file's directory
+      packagePath = packageManager.resolvePackage(importSource, path.dirname(fromFile));
+      if (packagePath) {
+        return packagePath;
+      }
+    } catch (e) {
+      // Package not found, continue with other search paths
     }
 
     // Search in additional paths

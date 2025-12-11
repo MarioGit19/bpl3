@@ -8,6 +8,8 @@ export class CodeGenerator {
   private labelCount: number = 0;
   private stringLiterals: Map<string, string> = new Map(); // content -> global var name
   private currentFunctionReturnType: AST.TypeNode | null = null;
+  private currentFunctionName: string | null = null;
+  private isMainWithVoidReturn: boolean = false;
   private structLayouts: Map<string, Map<string, number>> = new Map();
   private loopStack: { continueLabel: string; breakLabel: string }[] = [];
   private declaredFunctions: Set<string> = new Set();
@@ -142,11 +144,18 @@ export class CodeGenerator {
     this.registerCount = 0;
     this.labelCount = 0;
     this.currentFunctionReturnType = decl.returnType;
+    this.currentFunctionName = decl.name;
     this.locals.clear();
 
     const name = decl.name;
     const funcType = decl.resolvedType as AST.FunctionTypeNode;
-    const retType = this.resolveType(funcType.returnType);
+    let retType = this.resolveType(funcType.returnType);
+    
+    // Special case: if this is main with void return, change to i32 for exit code
+    this.isMainWithVoidReturn = name === "main" && retType === "void";
+    if (this.isMainWithVoidReturn) {
+      retType = "i32";
+    }
 
     const params = decl.params
       .map((p, i) => {
@@ -174,12 +183,20 @@ export class CodeGenerator {
     // Add implicit return for void functions if missing
     const lastLine =
       this.output.length > 0 ? this.output[this.output.length - 1]! : "";
-    if (retType === "void" && !lastLine.trim().startsWith("ret")) {
-      this.emit("  ret void");
-    } else if (retType !== "void" && !lastLine.trim().startsWith("ret")) {
-      // If control flow reaches end of non-void function without return, it's UB, but let's emit unreachable or 0
-      if (retType === "i64") this.emit("  ret i64 0");
-      else this.emit("  unreachable");
+    
+    // Handle implicit returns based on function type
+    if (!lastLine.trim().startsWith("ret")) {
+      if (this.isMainWithVoidReturn) {
+        // Main was declared void but we changed it to i32, return 0
+        this.emit("  ret i32 0");
+      } else if (retType === "void") {
+        this.emit("  ret void");
+      } else if (retType === "i32" || retType === "i64") {
+        // Non-void function without explicit return, return 0 as default
+        this.emit(`  ret ${retType} 0`);
+      } else {
+        this.emit("  unreachable");
+      }
     }
 
     this.emit("}");
@@ -286,7 +303,12 @@ export class CodeGenerator {
       const type = this.resolveType(this.currentFunctionReturnType!);
       this.emit(`  ret ${type} ${val}`);
     } else {
-      this.emit("  ret void");
+      // For void returns, check if this is main with modified return type
+      if (this.isMainWithVoidReturn) {
+        this.emit("  ret i32 0");
+      } else {
+        this.emit("  ret void");
+      }
     }
   }
 

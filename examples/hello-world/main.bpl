@@ -1,6 +1,5 @@
 extern printf(fmt: string, ...);
 
-frame main() ret int {
+frame main() {
   printf("Hello, World!\n");
-  return 0;
 }

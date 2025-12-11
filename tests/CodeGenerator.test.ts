@@ -19,8 +19,9 @@ describe("CodeGenerator", () => {
   it("should generate code for a simple function", () => {
     const source = "frame main() { return; }";
     const ir = compile(source);
-    expect(ir).toContain("define void @main() {");
-    expect(ir).toContain("ret void");
+    // main() with no return type is treated as void but returns i32 0 for exit code
+    expect(ir).toContain("define i32 @main() {");
+    expect(ir).toContain("ret i32 0");
   });
 
   it("should generate code for arithmetic", () => {

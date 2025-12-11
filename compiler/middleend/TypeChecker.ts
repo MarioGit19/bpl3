@@ -12,13 +12,23 @@ export class TypeChecker {
   private currentScope: SymbolTable;
   private currentFunctionReturnType: AST.TypeNode | undefined;
   private modules: Map<string, SymbolTable> = new Map();
+  private skipImportResolution: boolean;
+  private preLoadedModules: Map<string, AST.Program> = new Map();
 
-  constructor() {
+  constructor(options: { skipImportResolution?: boolean } = {}) {
     this.globalScope = new SymbolTable();
     this.currentScope = this.globalScope;
+    this.skipImportResolution = options.skipImportResolution || false;
     this.initializeBuiltins();
     // Register the current "main" module if we knew its name, but we don't.
     // We'll handle imports relative to the file location.
+  }
+
+  /**
+   * Pre-register modules that have been resolved by ModuleResolver
+   */
+  registerModule(modulePath: string, ast: AST.Program): void {
+    this.preLoadedModules.set(modulePath, ast);
   }
 
   private initializeBuiltins() {
@@ -547,27 +557,58 @@ export class TypeChecker {
 
   private checkImport(stmt: AST.ImportStmt): void {
     const currentFile = stmt.location.file;
-    const currentDir = path.dirname(currentFile);
-    const importPath = path.resolve(currentDir, stmt.source);
+    
+    // Try to resolve the import path
+    let importPath: string | undefined;
+    let ast: AST.Program | undefined;
+    
+    // Check if we have a pre-loaded module that matches
+    // This happens when using ModuleResolver
+    if (this.skipImportResolution) {
+      // Find the module in pre-loaded modules
+      // For now, we'll use a simple name match
+      for (const [modulePath, moduleAst] of this.preLoadedModules) {
+        // Simple heuristic: if the module path contains the import source
+        if (modulePath.includes(stmt.source) || modulePath.includes(stmt.source.replace(/^[./]+/, ''))) {
+          importPath = modulePath;
+          ast = moduleAst;
+          break;
+        }
+      }
+      
+      if (!importPath) {
+        // This shouldn't happen if ModuleResolver did its job
+        throw new CompilerError(
+          `Module not found: ${stmt.source}`,
+          "Module resolution failed",
+          stmt.location,
+        );
+      }
+    } else {
+      const currentDir = path.dirname(currentFile);
+      importPath = path.resolve(currentDir, stmt.source);
+    }
 
     // Check if already loaded
     let moduleScope = this.modules.get(importPath);
 
     if (!moduleScope) {
-      // Load module
-      if (!fs.existsSync(importPath)) {
-        throw new CompilerError(
-          `Module not found: ${importPath}`,
-          "Ensure the file exists and the path is correct.",
-          stmt.location,
-        );
-      }
+      // Load module if not already available
+      if (!ast) {
+        if (!fs.existsSync(importPath)) {
+          throw new CompilerError(
+            `Module not found: ${importPath}`,
+            "Ensure the file exists and the path is correct.",
+            stmt.location,
+          );
+        }
 
-      const content = fs.readFileSync(importPath, "utf-8");
-      const lexer = new Lexer(content, importPath);
-      const tokens = lexer.scanTokens();
-      const parser = new Parser(tokens);
-      const ast = parser.parse();
+        const content = fs.readFileSync(importPath, "utf-8");
+        const lexer = new Lexer(content, importPath);
+        const tokens = lexer.scanTokens();
+        const parser = new Parser(tokens);
+        ast = parser.parse();
+      }
 
       moduleScope = new SymbolTable();
       this.modules.set(importPath, moduleScope);

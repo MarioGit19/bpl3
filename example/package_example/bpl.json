@@ -1,0 +1,9 @@
+{
+  "name": "math-utils",
+  "version": "1.0.0",
+  "description": "Mathematical utility functions for BPL",
+  "author": "BPL Team",
+  "license": "MIT",
+  "main": "index.bpl",
+  "exports": ["add", "subtract", "multiply", "divide", "square", "cube"]
+}

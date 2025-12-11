@@ -23,7 +23,11 @@
 - [x] Try/catch error handling (already implemented)
 - [x] Type Aliasing (user-defined type aliases)
 - [x] Project structure & LLVM upgrade
-- [x] Full import resolution before compilation (in progress - basic infrastructure implemented)
+- [x] Full import resolution before compilation
+- [x] Per-module compilation and linking with cache
+- [x] Replace lli with clang for running LLVM IR
+- [x] Add default exit code for main if it's void
+- [x] Packaging system for libraries/apps (init, pack, install, list commands)
 
 ## Pending Features (expanded)
 
@@ -159,31 +163,3 @@
   - Implementation notes: Add parser support and a safe lowered representation. During codegen, inject asm inline properly and validate register usage.
   - Acceptance criteria: `asm [rax, rbx] { rdrand rax\n mov rbx, rax\n mov (variable), rbx }` compiles and emits inline assembly; constraints are documented.
 
-- [1] Packaging system for libraries/apps
-
-  - Description: Define a packaging format and CLI tools to package, version, and publish BPL3 libraries or apps (not a package manager server).
-  - Implementation notes: Implement a manifest format, build and pack commands, and local installation rules. Include metadata and dependency lockfile support.
-  - Acceptance criteria: `bplc pack` creates a distributable package and `bplc install` or project `package.json` equivalent can consume it.
-
-- [0] Full import resolution before compilation
-
-  - Description: Resolve all imports and types across modules prior to compiling any single module to allow cross-module type checking and optimizations.
-  - Implementation notes: Implement two-phase compilation: dependency graph resolution and ordering, then per-module analysis with resolved type info.
-  - Acceptance criteria: Cross-module generic/type references and inlining are resolved and do not rely on source file order.
-
-- [0] Per-module compilation and linking with cache
-
-  - Description: Compile modules separately to object files and link them; implement module caching and incremental recompilation.
-  - Implementation notes: Add module hashing, a cache directory, and a link step. Produce a lockfile describing resolved module versions and caches.
-  - Acceptance criteria: Changing a single module triggers recompilation of that module and relinking, without rebuilding unaffected modules.
-
-- [0] Replace lli with clang for running LLVM IR
-
-  - Description: Instead of using `lli` to run generated LLVM IR, use `clang` to compile the IR to a native executable and run that.
-  - Implementation notes: After generating LLVM IR, invoke `clang` with appropriate flags to produce an executable binary. Handle any necessary linking with runtime libraries.
-  - Acceptance criteria: The compiler can generate an executable binary from LLVM IR and run it, producing the same output as before.
-
-- [0] Add default exit code for main if it's void
-  - Description: If the `main` function is declared with a `void` return type, automatically add a default exit code (e.g., `return 0;`) at the end of `main`.
-  - Implementation notes: During code generation for the `main` function, check its return type. If it's `void`, append instructions to return a default exit code before the function ends.
-  - Acceptance criteria: Programs with a `void` main compile and run successfully, returning a default exit code of 0.
