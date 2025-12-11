@@ -221,7 +221,7 @@ export class Parser {
 
     const members: (AST.StructField | AST.FunctionDecl)[] = [];
     while (!this.check(TokenType.RightBrace) && !this.isAtEnd()) {
-      if (this.match(TokenType.Frame, TokenType.Static, TokenType.Func)) {
+      if (this.match(TokenType.Frame)) {
         members.push(this.functionDeclaration());
       } else {
         const fieldName = this.consume(

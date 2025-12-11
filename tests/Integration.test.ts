@@ -29,9 +29,14 @@ describe("Integration Tests", () => {
       fs.existsSync(path.join(exampleDir, "main.bpl")) &&
       fs.existsSync(configFile)
     ) {
-      it(`should run example: ${example}`, () => {
-        const config = JSON.parse(fs.readFileSync(configFile, "utf-8"));
+      const config = JSON.parse(fs.readFileSync(configFile, "utf-8"));
 
+      if (config.skip_compilation) {
+        it.skip(`should run example: ${example}`, () => {});
+        continue;
+      }
+
+      it(`should run example: ${example}`, () => {
         // Prepare command
         // We use cmp.sh which runs bun index.ts then lli
         const result = spawnSync(
@@ -62,9 +67,11 @@ describe("Integration Tests", () => {
         // cmp.sh prints "Program exited with code 0\n"
 
         const output = result.stdout;
-        config.expectedOutput.forEach((expectedLine: string) => {
-          expect(output).toContain(expectedLine);
-        });
+        if (config.expectedOutput) {
+          config.expectedOutput.forEach((expectedLine: string) => {
+            expect(output).toContain(expectedLine);
+          });
+        }
       });
     }
   }

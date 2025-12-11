@@ -1,5 +1,0 @@
-{
-  "note": "Module resolution example - currently demonstrates dependency analysis only",
-  "resolution_demo": true,
-  "skip_compilation": true
-}

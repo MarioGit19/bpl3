@@ -15,6 +15,7 @@ export class CodeGenerator {
   private declaredFunctions: Set<string> = new Set();
   private globals: Set<string> = new Set();
   private locals: Set<string> = new Set();
+  private onReturn?: () => void;
 
   generate(program: AST.Program): string {
     this.output = [];
@@ -135,17 +136,26 @@ export class CodeGenerator {
     for (const method of methods) {
       const originalName = method.name;
       method.name = `${decl.name}_${method.name}`;
-      this.generateFunction(method);
+      this.generateFunction(method, decl);
       method.name = originalName;
     }
   }
 
-  private generateFunction(decl: AST.FunctionDecl) {
+  private generateFunction(decl: AST.FunctionDecl, parentStruct?: AST.StructDecl) {
     this.registerCount = 0;
     this.labelCount = 0;
     this.currentFunctionReturnType = decl.returnType;
     this.currentFunctionName = decl.name;
     this.locals.clear();
+
+    // Setup destructor chaining
+    if (parentStruct && decl.name === `${parentStruct.name}_destroy` && parentStruct.parentType) {
+        this.onReturn = () => {
+            this.emitParentDestroy(parentStruct, decl);
+        };
+    } else {
+        this.onReturn = undefined;
+    }
 
     const name = decl.name;
     const funcType = decl.resolvedType as AST.FunctionTypeNode;
@@ -186,6 +196,8 @@ export class CodeGenerator {
     
     // Handle implicit returns based on function type
     if (!lastLine.trim().startsWith("ret")) {
+      if (this.onReturn) this.onReturn();
+      
       if (this.isMainWithVoidReturn) {
         // Main was declared void but we changed it to i32, return 0
         this.emit("  ret i32 0");
@@ -298,6 +310,7 @@ export class CodeGenerator {
   }
 
   private generateReturn(stmt: AST.ReturnStmt) {
+    if (this.onReturn) this.onReturn();
     if (stmt.value) {
       const val = this.generateExpression(stmt.value);
       const type = this.resolveType(this.currentFunctionReturnType!);
@@ -757,7 +770,6 @@ export class CodeGenerator {
         // The element type is T (ptrType minus one *)
         // But GEP takes the pointer type.
         // Wait, GEP syntax: getelementptr <ty>, <ty>* <ptrval>, <indices>
-        // <ty> is the type of the element we are indexing into? No, it's the type of the base.
         // In LLVM < 8: getelementptr <ty>*, <ty>** ...
         // In modern LLVM: getelementptr <ty>, <ty>* ...
 
@@ -871,6 +883,14 @@ export class CodeGenerator {
     const reg = this.newRegister();
 
     if (srcType === destType) return val;
+
+    // Implicit address-of (T -> *T)
+    if (destType === "*"+srcType) {
+       const ptr = this.newRegister();
+       this.emit(`  ${ptr} = alloca ${srcType}`);
+       this.emit(`  store ${srcType} ${val}, ${srcType}* ${ptr}`);
+       return ptr;
+    }
 
     // Pointer casts
     if (srcType.endsWith("*") && destType.endsWith("*")) {
@@ -1232,5 +1252,35 @@ export class CodeGenerator {
 
   private isIntegerType(type: string): boolean {
     return ["i1", "i8", "i16", "i32", "i64"].includes(type);
+  }
+
+  private emitParentDestroy(structDecl: AST.StructDecl, funcDecl: AST.FunctionDecl) {
+    if (!structDecl.parentType) return;
+    
+    let parentName = "";
+    if (structDecl.parentType.kind === "BasicType") {
+        parentName = structDecl.parentType.name;
+    } else {
+        return;
+    }
+    
+    const parentDestroy = `${parentName}_destroy`;
+    
+    const thisParam = funcDecl.params.find(p => p.name === "this");
+    if (!thisParam) return;
+    
+    const thisPtr = `%${thisParam.name}_ptr`; 
+    const thisType = this.resolveType(thisParam.type); 
+    
+    const thisVal = this.newRegister();
+    this.emit(`  ${thisVal} = load ${thisType}, ${thisType}* ${thisPtr}`);
+    
+    const parentTypeStr = this.resolveType(structDecl.parentType);
+    const parentPtrType = `${parentTypeStr}*`;
+    
+    const parentPtr = this.newRegister();
+    this.emit(`  ${parentPtr} = bitcast ${thisType} ${thisVal} to ${parentPtrType}`);
+    
+    this.emit(`  call void @${parentDestroy}(${parentPtrType} ${parentPtr})`);
   }
 }

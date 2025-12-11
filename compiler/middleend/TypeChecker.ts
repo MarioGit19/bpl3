@@ -1093,7 +1093,19 @@ export class TypeChecker {
             let paramTypes = member.params.map((p) => p.type);
             if (member.params.length > 0 && member.params[0]!.name === "this") {
               const thisParamType = member.params[0]!.type;
-              if (!this.areTypesCompatible(thisParamType, objectType)) {
+              
+              let compatible = this.areTypesCompatible(thisParamType, objectType);
+              
+              // Allow implicit address-of if 'this' expects a pointer to the object type
+              if (!compatible && 
+                  thisParamType.kind === "BasicType" && 
+                  objectType.kind === "BasicType" &&
+                  thisParamType.name === objectType.name &&
+                  thisParamType.pointerDepth === objectType.pointerDepth + 1) {
+                 compatible = true;
+              }
+
+              if (!compatible) {
                 throw new CompilerError(
                   `Instance type mismatch for 'this'. Expected '${this.typeToString(thisParamType)}', got '${this.typeToString(objectType)}'`,
                   "Ensure the instance matches the 'this' parameter type.",
@@ -1310,8 +1322,8 @@ export class TypeChecker {
     const decl = symbol.declaration as AST.StructDecl;
 
     for (const field of expr.fields) {
-      const member = decl.members.find((m) => m.name === field.name);
-      if (!member || member.kind !== "StructField") {
+      const member = this.resolveStructField(decl, field.name);
+      if (!member) {
         throw new CompilerError(
           `Unknown field '${field.name}' in struct '${expr.structName}'`,
           "Check the struct definition for valid fields.",
@@ -1768,5 +1780,30 @@ export class TypeChecker {
       };
     }
     return type;
+  }
+
+  private resolveStructField(
+    structDecl: AST.StructDecl,
+    fieldName: string,
+  ): AST.StructField | undefined {
+    const member = structDecl.members.find(
+      (m) => m.name === fieldName && m.kind === "StructField",
+    ) as AST.StructField | undefined;
+    if (member) return member;
+
+    if (structDecl.parentType && structDecl.parentType.kind === "BasicType") {
+      const parentSymbol = this.currentScope.resolve(structDecl.parentType.name);
+      if (
+        parentSymbol &&
+        parentSymbol.kind === "Struct" &&
+        (parentSymbol.declaration as any).kind === "StructDecl"
+      ) {
+        return this.resolveStructField(
+          parentSymbol.declaration as AST.StructDecl,
+          fieldName,
+        );
+      }
+    }
+    return undefined;
   }
 }

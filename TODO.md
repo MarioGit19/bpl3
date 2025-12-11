@@ -55,7 +55,7 @@
   - Implementation notes: Define mapping between operators and method names; during type-checking, if an operand type has the corresponding method, resolve to that method; otherwise fall back to builtin semantics. Disallow assignment operators overloading. Ensure overload resolution supports left/right operand dispatch and coercions.
   - Acceptance criteria: Defining `__add__` on a struct causes `a + b` to call that method; operator resolution respects type conversions and produces helpful errors when ambiguous.
 
-- [3] Constructors and destructors for structs
+- [x] Constructors and destructors for structs
 
   - Description: Support `StructName.new(...)` constructors (default, parameterized, copy) and `variable.destroy()` destructors. Constructors can be overloaded by parameter types; destructors run manually in the current model.
   - Implementation notes: Add named constructor resolution on struct types and special destructor method. Wire constructor to allocate and initialize memory; implement destructor chaining across inheritance. Consider automatic destructor invocation for stack-local variables later.

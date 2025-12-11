@@ -1,7 +1,0 @@
-{
-  "name": "test-package",
-  "version": "1.0.0",
-  "description": "A BPL package",
-  "main": "index.bpl",
-  "license": "MIT"
-}
