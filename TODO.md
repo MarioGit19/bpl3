@@ -29,6 +29,7 @@
 - [x] Add default exit code for main if it's void
 - [x] Packaging system for libraries/apps (init, pack, install, list commands)
 - [x] Constructors and destructors for structs
+- [x] Monomorphization for Generic Structs (Basic Support)
 
 ## Pending Features (expanded)
 
@@ -109,12 +110,6 @@
   - Description: Implement an opinionated code formatter to enforce a consistent style for BPL3 source files.
   - Implementation notes: Implement AST-driven pretty-printer to avoid ambiguous formatting. Provide `format` CLI and editor integration.
   - Acceptance criteria: Running formatter produces stable, idempotent formatting for sample files.
-
-- [3] Error handling and diagnostics
-
-  - Description: Add compiler flags to dump AST or IR to console or file (e.g., `-ast`, `-ir -oLL file.ll`) for debugging.
-  - Implementation notes: Implement pretty printers for AST and any intermediate IR. Add CLI options for selecting output format and file path.
-  - Acceptance criteria: Flags print human-readable AST/IR; `-o` writes to files when specified.
 
 - [6] Documentation generation tool
 

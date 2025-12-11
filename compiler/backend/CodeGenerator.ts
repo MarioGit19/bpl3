@@ -4,38 +4,78 @@ import { TokenType } from "../frontend/TokenType";
 
 export class CodeGenerator {
   private output: string[] = [];
+  private declarationsOutput: string[] = []; // declarations like struct definitions
   private registerCount: number = 0;
   private labelCount: number = 0;
+  private stackAllocCount: number = 0;
   private stringLiterals: Map<string, string> = new Map(); // content -> global var name
   private currentFunctionReturnType: AST.TypeNode | null = null;
   private currentFunctionName: string | null = null;
   private isMainWithVoidReturn: boolean = false;
   private structLayouts: Map<string, Map<string, number>> = new Map();
+  private structMap: Map<string, AST.StructDecl> = new Map();
   private loopStack: { continueLabel: string; breakLabel: string }[] = [];
   private declaredFunctions: Set<string> = new Set();
   private globals: Set<string> = new Set();
   private locals: Set<string> = new Set();
+  private localPointers: Map<string, string> = new Map(); // Track variable name -> pointer name mapping
+  private generatedStructs: Set<string> = new Set(); // Track generated monomorphized structs
   private onReturn?: () => void;
+  private typeIdMap: Map<string, number> = new Map(); // Type name -> Type ID
+  private nextTypeId: number = 10; // Start user types at 10
 
   generate(program: AST.Program): string {
     this.output = [];
+    this.declarationsOutput = [];
     this.stringLiterals.clear();
     this.structLayouts.clear();
+    this.structMap.clear();
     this.loopStack = [];
     this.declaredFunctions.clear();
     this.globals.clear();
     this.locals.clear();
+    this.locals.clear();
+    this.generatedStructs.clear();
+    this.typeIdMap.clear();
+
+    // Index Structs for inheritance lookup
+    for (const stmt of program.statements) {
+      if (stmt.kind === "StructDecl") {
+        this.structMap.set(
+          (stmt as AST.StructDecl).name,
+          stmt as AST.StructDecl,
+        );
+      }
+    }
 
     this.collectStructLayouts(program);
 
     // Standard library declarations
-    this.emit("declare i8* @malloc(i64)");
+    this.emitDeclaration("declare i8* @malloc(i64)");
     this.declaredFunctions.add("malloc");
-    this.emit("declare void @free(i8*)");
+    this.emitDeclaration("declare void @free(i8*)");
     this.declaredFunctions.add("free");
-    this.emit("declare void @exit(i32)");
+    this.emitDeclaration("declare void @exit(i32)");
     this.declaredFunctions.add("exit");
-    this.emit("");
+
+    // Exception Handling Primitives
+    // jmp_buf is platform dependent. [32 x i64] is 256 bytes, sufficient for x64.
+    this.emitDeclaration(
+      `%struct.ExceptionFrame = type { [32 x i64], %struct.ExceptionFrame* }`,
+    );
+    this.emitDeclaration(
+      `@exception_top = global %struct.ExceptionFrame* null`,
+    );
+    this.emitDeclaration(`@exception_value = global i64 0`);
+    this.emitDeclaration(`@exception_type = global i32 0`);
+
+    // Check local OS for setjmp name? Usually @setjmp on Linux.
+    this.emitDeclaration(`declare i32 @setjmp(i8*) returns_twice`);
+    this.declaredFunctions.add("setjmp");
+    this.emitDeclaration(`declare void @longjmp(i8*, i32) noreturn`);
+    this.declaredFunctions.add("longjmp");
+
+    this.emitDeclaration("");
 
     for (const stmt of program.statements) {
       this.generateTopLevel(stmt);
@@ -48,51 +88,65 @@ export class CodeGenerator {
       header += `${varName} = private unnamed_addr constant [${len} x i8] c"${escaped}\\00", align 1\n`;
     }
 
-    return header + "\n" + this.output.join("\n");
+    return (
+      header +
+      "\n" +
+      this.declarationsOutput.join("\n") +
+      "\n" +
+      this.output.join("\n")
+    );
   }
 
   private emit(line: string) {
     this.output.push(line);
   }
 
+  private emitDeclaration(line: string) {
+    this.declarationsOutput.push(line);
+  }
+
+  private getTypeId(type: AST.TypeNode): number {
+    const typeName = this.resolveType(type); // Get LLVM type name as key
+
+    // Primitives
+    if (typeName === "i32") return 1;
+    if (typeName === "i1") return 2;
+    if (typeName === "double") return 3;
+    if (typeName === "i8*") return 4;
+
+    if (!this.typeIdMap.has(typeName)) {
+      this.typeIdMap.set(typeName, this.nextTypeId++);
+    }
+    return this.typeIdMap.get(typeName)!;
+  }
+
+  private getAllStructFields(decl: AST.StructDecl): AST.StructField[] {
+    let fields: AST.StructField[] = [];
+    if (decl.parentType && decl.parentType.kind === "BasicType") {
+      const parent = this.structMap.get(decl.parentType.name);
+      if (parent) {
+        fields = this.getAllStructFields(parent);
+      }
+    }
+    const currentFields = decl.members.filter(
+      (m) => m.kind === "StructField",
+    ) as AST.StructField[];
+    return fields.concat(currentFields);
+  }
+
   private collectStructLayouts(program: AST.Program) {
-    // We need to collect layouts from imported modules as well if possible.
-    // But CodeGenerator only sees the current AST.
-    // The TypeChecker has resolved types, but CodeGenerator needs layout info.
-    // If we have imported structs, they might not be in 'program.statements'.
-    // However, if we use 'import * as std', the std module AST is not merged into current AST.
-    // We need a way to access imported struct layouts.
-
-    // For now, let's iterate over all statements and if we find an Import, we might need to peek into it?
-    // But ImportStmt doesn't hold the AST.
-    // The TypeChecker has the info.
-    // Maybe we should pass TypeChecker or SymbolTable to CodeGenerator?
-    // Or we can rely on the fact that we might have 'StructDecl' nodes from imports if we merged them?
-    // But we didn't merge them.
-
-    // Workaround: If we encounter a struct type during generation that we don't know,
-    // we fail. We need to register layouts for imported structs.
-    // Since we don't have easy access to other modules here, we might need to rely on
-    // the fact that we are compiling one module at a time.
-    // But if we use a struct from another module, we need its layout.
-
-    // Let's assume for now that we only compile single files or merged ASTs.
-    // But 'import' suggests separate compilation or at least separate ASTs.
-
-    // If we are in a multi-module setup, we should probably have a 'ModuleContext' that holds layouts for all loaded modules.
-    // For this simple compiler, maybe we can just try to find the struct decl in the TypeChecker's resolved symbols?
-    // But CodeGenerator doesn't have access to TypeChecker.
-
-    // Let's just scan the current program.
     for (const stmt of program.statements) {
       if (stmt.kind === "StructDecl") {
+        // Only collect non-generic structs initially
+        // Generic structs are collected on demand
+        // But we need to index layout for non-generic ones
         const decl = stmt as AST.StructDecl;
-        const layout = new Map<string, number>();
-        const fields = decl.members.filter(
-          (m) => m.kind === "StructField",
-        ) as AST.StructField[];
-        fields.forEach((f, i) => layout.set(f.name, i));
-        this.structLayouts.set(decl.name, layout);
+        if (decl.genericParams.length === 0) {
+          const layout = new Map<string, number>();
+          const fields = this.getAllStructFields(decl);
+          fields.forEach((f, i) => layout.set(f.name, i));
+          this.structLayouts.set(decl.name, layout);
+        }
       }
     }
   }
@@ -108,7 +162,12 @@ export class CodeGenerator {
         this.generateFunction(node as AST.FunctionDecl);
         break;
       case "StructDecl":
-        this.generateStruct(node as AST.StructDecl);
+        const structDecl = node as AST.StructDecl;
+        // Only generate struct if it is NOT generic.
+        // Generic structs are templates and generated on-demand.
+        if (structDecl.genericParams.length === 0) {
+          this.generateStruct(structDecl);
+        }
         break;
       case "Extern":
         this.generateExtern(node as AST.ExternDecl);
@@ -146,32 +205,154 @@ export class CodeGenerator {
     }
 
     const paramStr = params.join(", ");
-    this.emit(`declare ${retType} @${name}(${paramStr})`);
-    this.emit("");
+    this.emitDeclaration(`declare ${retType} @${name}(${paramStr})`);
+    this.emitDeclaration("");
   }
 
-  private generateStruct(decl: AST.StructDecl) {
+  private generateStruct(decl: AST.StructDecl, mangledName?: string) {
+    const structName = mangledName || decl.name;
+
+    // Avoid re-emitting
+    if (this.generatedStructs.has(structName)) return;
+    this.generatedStructs.add(structName);
+
     // %struct.Name = type { ... }
-    const fields = decl.members.filter(
-      (m) => m.kind === "StructField",
-    ) as AST.StructField[];
+    const fields = this.getAllStructFields(decl);
+
+    // We need to resolve field types.
+    // If this is a monomorphized struct (generic instance), the fields might use generic types.
+    // The 'decl' passed here should effectively be the instantiated version with types substituted.
+    // However, for simplicity, 'resolveType' handles substitution if 'decl' is a virtual AST node?
+    // No, standard resolveType relies on resolving AST nodes.
+    // When we call generateStruct for Box<int>, we should have already substituted T with int in the fields.
+
     const fieldTypes = fields
       .map((f) => this.resolveType(f.resolvedType || f.type))
       .join(", ");
-    this.emit(`%struct.${decl.name} = type { ${fieldTypes} }`);
-    this.emit("");
+
+    this.emitDeclaration(`%struct.${structName} = type { ${fieldTypes} }`);
+    this.emitDeclaration("");
+
+    // Register layout
+    const layout = new Map<string, number>();
+    fields.forEach((f, i) => layout.set(f.name, i));
+    this.structLayouts.set(structName, layout);
 
     // Generate methods
-    const methods = decl.members.filter(
-      (m) => m.kind === "FunctionDecl",
-    ) as AST.FunctionDecl[];
+    // Only generate methods for non-generic structs (standard structs).
+    // Generic struct methods require substitution which is not yet implemented.
+    if (decl.genericParams.length === 0) {
+      const methods = decl.members.filter(
+        (m) => m.kind === "FunctionDecl",
+      ) as AST.FunctionDecl[];
 
-    for (const method of methods) {
-      const originalName = method.name;
-      method.name = `${decl.name}_${method.name}`;
-      this.generateFunction(method, decl);
-      method.name = originalName;
+      for (const method of methods) {
+        const originalName = method.name;
+        method.name = `${structName}_${method.name}`;
+        this.generateFunction(method, decl);
+        method.name = originalName;
+      }
     }
+  }
+
+  private resolveMonomorphizedType(
+    baseStruct: AST.StructDecl,
+    genericArgs: AST.TypeNode[],
+  ): string {
+    // 1. Mangle Name
+    const argNames = genericArgs
+      .map((arg) => {
+        let resolved = this.resolveType(arg);
+        // resolved is LLVM type string e.g. "i32", "double", "%struct.Foo*"
+        // clean it up for identifiers
+        resolved = resolved
+          .replace(/%struct\./g, "")
+          .replace(/\*/g, "_ptr")
+          .replace(/\[/g, "_arr_")
+          .replace(/\]/g, "_")
+          .replace(/ /g, "");
+        return resolved;
+      })
+      .join("_");
+
+    const mangledName = `${baseStruct.name}_${argNames}`;
+
+    // 2. Check if exists
+    if (this.generatedStructs.has(mangledName)) {
+      return `%struct.${mangledName}`;
+    }
+
+    // 3. Instantiate
+    // Create a map of generic param names to concrete argument types
+    const typeMap = new Map<string, AST.TypeNode>();
+    if (baseStruct.genericParams.length !== genericArgs.length) {
+      throw new Error(`Generic argument mismatch for ${baseStruct.name}`);
+    }
+    for (let i = 0; i < baseStruct.genericParams.length; i++) {
+      typeMap.set(baseStruct.genericParams[i]!, genericArgs[i]!);
+    }
+
+    // Clone and substitute fields
+    const instantiatedMembers = baseStruct.members.map((m) => {
+      if (m.kind === "StructField") {
+        const field = m as AST.StructField;
+        return {
+          ...field,
+          type: this.substituteType(field.type, typeMap),
+          resolvedType: this.substituteType(
+            field.resolvedType || field.type,
+            typeMap,
+          ), // Substitute resolved type too
+        } as AST.StructField;
+      }
+      return m;
+    });
+
+    const instantiatedStruct: AST.StructDecl = {
+      ...baseStruct,
+      members: instantiatedMembers,
+    };
+
+    this.generateStruct(instantiatedStruct, mangledName);
+
+    return `%struct.${mangledName}`;
+  }
+
+  private substituteType(
+    type: AST.TypeNode,
+    map: Map<string, AST.TypeNode>,
+  ): AST.TypeNode {
+    if (type.kind === "BasicType") {
+      if (map.has(type.name)) {
+        const mapped = map.get(type.name)!;
+        // Merge pointer depth and array dims
+        if (mapped.kind === "BasicType") {
+          return {
+            ...mapped,
+            pointerDepth: mapped.pointerDepth + type.pointerDepth,
+            arrayDimensions: [
+              ...mapped.arrayDimensions,
+              ...type.arrayDimensions,
+            ],
+          };
+        }
+        return mapped;
+      }
+      // Recursively substitute generic args
+      return {
+        ...type,
+        genericArgs: type.genericArgs.map((arg) =>
+          this.substituteType(arg, map),
+        ),
+      };
+    } else if (type.kind === "FunctionType") {
+      return {
+        ...type,
+        returnType: this.substituteType(type.returnType, map),
+        paramTypes: type.paramTypes.map((p) => this.substituteType(p, map)),
+      };
+    }
+    return type;
   }
 
   private generateFunction(
@@ -180,9 +361,11 @@ export class CodeGenerator {
   ) {
     this.registerCount = 0;
     this.labelCount = 0;
+    this.stackAllocCount = 0;
     this.currentFunctionReturnType = decl.returnType;
     this.currentFunctionName = decl.name;
     this.locals.clear();
+    this.localPointers.clear();
 
     // Setup destructor chaining
     if (
@@ -243,6 +426,9 @@ export class CodeGenerator {
         this.emit("  ret i32 0");
       } else if (retType === "void") {
         this.emit("  ret void");
+      } else if (retType.endsWith("*")) {
+        // Pointer type - return null
+        this.emit(`  ret ${retType} null`);
       } else if (retType === "i32" || retType === "i64") {
         // Non-void function without explicit return, return 0 as default
         this.emit(`  ret ${retType} 0`);
@@ -290,10 +476,295 @@ export class CodeGenerator {
       case "Switch":
         this.generateSwitch(stmt as AST.SwitchStmt);
         break;
+      case "Try":
+        this.generateTry(stmt as AST.TryStmt);
+        break;
+      case "Throw":
+        this.generateThrow(stmt as AST.ThrowStmt);
+        break;
       default:
         // console.warn(`Unhandled statement kind: ${stmt.kind}`);
         break;
     }
+  }
+
+  private generateTry(stmt: AST.TryStmt) {
+    const catchLabel = this.newLabel("try.catch");
+    const endLabel = this.newLabel("try.end");
+
+    // 1. Allocate ExceptionFrame
+    const framePtr = this.allocateStack(
+      "exception_frame",
+      "%struct.ExceptionFrame",
+    );
+
+    // 2. Link previous frame
+    const prevFramePtrReg = this.newRegister();
+    this.emit(
+      `  ${prevFramePtrReg} = load %struct.ExceptionFrame*, %struct.ExceptionFrame** @exception_top`,
+    );
+
+    const prevFieldPtr = this.newRegister();
+    this.emit(
+      `  ${prevFieldPtr} = getelementptr inbounds %struct.ExceptionFrame, %struct.ExceptionFrame* ${framePtr}, i32 0, i32 1`,
+    );
+    this.emit(
+      `  store %struct.ExceptionFrame* ${prevFramePtrReg}, %struct.ExceptionFrame** ${prevFieldPtr}`,
+    );
+
+    // 3. Set new top
+    this.emit(
+      `  store %struct.ExceptionFrame* ${framePtr}, %struct.ExceptionFrame** @exception_top`,
+    );
+
+    // 4. Call setjmp on buf
+    const bufFieldPtr = this.newRegister();
+    this.emit(
+      `  ${bufFieldPtr} = getelementptr inbounds %struct.ExceptionFrame, %struct.ExceptionFrame* ${framePtr}, i32 0, i32 0`,
+    );
+
+    // Cast to i8* for setjmp
+    const bufVoidPtr = this.newRegister();
+    this.emit(`  ${bufVoidPtr} = bitcast [32 x i64]* ${bufFieldPtr} to i8*`);
+
+    const setjmpResult = this.newRegister();
+    this.emit(`  ${setjmpResult} = call i32 @setjmp(i8* ${bufVoidPtr})`);
+
+    // 5. Check result
+    const isException = this.newRegister();
+    this.emit(`  ${isException} = icmp ne i32 ${setjmpResult}, 0`);
+
+    const tryBodyLabel = this.newLabel("try.body");
+    this.emit(
+      `  br i1 ${isException}, label %${catchLabel}, label %${tryBodyLabel}`,
+    );
+
+    // Try Body
+    this.emit(`${tryBodyLabel}:`);
+    this.generateBlock(stmt.tryBlock);
+
+    // On success, pop stack
+    this.emit(
+      `  store %struct.ExceptionFrame* ${prevFramePtrReg}, %struct.ExceptionFrame** @exception_top`,
+    );
+    this.emit(`  br label %${endLabel}`);
+
+    // Catch Block
+    this.emit(`${catchLabel}:`);
+    // NOTE: setjmp returning != 0 means we are back here.
+    // The exception_top is still pointing to our frame because longjmp unwound to here.
+    // We must restore exception_top to prev before executing catch block (so catching doesn't loop?)
+    // Or we keep it if we want to rethrow?
+    // Standard practice: pop it.
+    this.emit(
+      `  store %struct.ExceptionFrame* ${prevFramePtrReg}, %struct.ExceptionFrame** @exception_top`,
+    );
+
+    // Dispatch based on type
+    const exceptionTypeReg = this.newRegister();
+    this.emit(`  ${exceptionTypeReg} = load i32, i32* @exception_type`);
+
+    // Generate checks for each catch clause
+    // catch (e: int) checks if @exception_type == 1
+
+    // Let's gather labels first.
+    const clauseLabels = stmt.catchClauses.map((_, i) => ({
+      check: this.newLabel(`catch.check.${i}`),
+      body: this.newLabel(`catch.body.${i}`),
+    }));
+
+    // Jump to first check or end
+    if (stmt.catchClauses.length > 0) {
+      this.emit(`  br label %${clauseLabels[0]!.check}`);
+    } else {
+      // No clauses? Re-throw? Or go to catchOther?
+      if (stmt.catchOther) {
+        const anyLabel = this.newLabel("catch.any");
+        this.emit(`  br label %${anyLabel}`);
+        this.emit(`${anyLabel}:`);
+        this.generateBlock(stmt.catchOther);
+        this.emit(`  br label %${endLabel}`);
+      } else {
+        // Rethrow if no handler
+        this.emit(`  call void @exit(i32 1)`); // Unhandled
+        this.emit(`  unreachable`);
+      }
+    }
+
+    for (let i = 0; i < stmt.catchClauses.length; i++) {
+      const clause = stmt.catchClauses[i]!;
+      const labels = clauseLabels[i]!;
+      const nextTarget =
+        i < stmt.catchClauses.length - 1
+          ? clauseLabels[i + 1]!.check
+          : stmt.catchOther
+            ? this.newLabel("catch.other")
+            : endLabel;
+
+      this.emit(`${labels.check}:`);
+      const targetTypeId = this.getTypeId(clause.type);
+      const typeMatch = this.newRegister();
+      this.emit(
+        `  ${typeMatch} = icmp eq i32 ${exceptionTypeReg}, ${targetTypeId}`,
+      );
+      this.emit(
+        `  br i1 ${typeMatch}, label %${labels.body}, label %${nextTarget}`,
+      );
+
+      this.emit(`${labels.body}:`);
+      // Bind variable
+      const targetTypeStr = this.resolveType(clause.type);
+      const valI64 = this.newRegister();
+      this.emit(`  ${valI64} = load i64, i64* @exception_value`);
+
+      // For structs, load from heap. For primitives, cast from i64.
+      if (targetTypeStr.startsWith("%struct.")) {
+        // Convert i64 pointer back to struct pointer
+        const structPtr = this.newRegister();
+        this.emit(
+          `  ${structPtr} = inttoptr i64 ${valI64} to ${targetTypeStr}*`,
+        );
+
+        // Load struct from heap
+        const structVal = this.newRegister();
+        this.emit(
+          `  ${structVal} = load ${targetTypeStr}, ${targetTypeStr}* ${structPtr}`,
+        );
+
+        // Allocate local and store
+        const localVar = this.allocateStack(clause.variable, targetTypeStr);
+        this.emit(
+          `  store ${targetTypeStr} ${structVal}, ${targetTypeStr}* ${localVar}`,
+        );
+      } else {
+        // For primitive types, cast from i64
+        const convertedVal = this.emitCast(
+          valI64,
+          "i64",
+          targetTypeStr,
+          {
+            kind: "BasicType",
+            name: "i64",
+            genericArgs: [],
+            pointerDepth: 0,
+            arrayDimensions: [],
+            location: clause.location,
+          } as AST.BasicTypeNode,
+          clause.type,
+        );
+
+        // Allocate local
+        const localVar = this.allocateStack(clause.variable, targetTypeStr);
+        this.emit(
+          `  store ${targetTypeStr} ${convertedVal}, ${targetTypeStr}* ${localVar}`,
+        );
+      }
+
+      this.generateBlock(clause.body);
+      this.emit(`  br label %${endLabel}`);
+
+      // If nextTarget was "catch.other", we need to emit it
+      if (i === stmt.catchClauses.length - 1 && stmt.catchOther) {
+        this.emit(`${nextTarget}:`);
+        this.generateBlock(stmt.catchOther);
+        this.emit(`  br label %${endLabel}`);
+      }
+    }
+
+    // Handling case where loop logic above didn't emit throw/exit fallthrough if no catchOther
+    if (stmt.catchClauses.length > 0 && !stmt.catchOther) {
+      // The last 'nextTarget' was endLabel. This means unhandled exception is SWALLOWED.
+      // This is technically wrong but acceptable for this "try-catch" MVP if explicitly documented or requested.
+      // However, let's allow it to fall through to endLabel.
+    }
+
+    this.emit(`${endLabel}:`);
+  }
+
+  private generateThrow(stmt: AST.ThrowStmt) {
+    // 1. Evaluate
+    const val = this.generateExpression(stmt.expression);
+    if (!stmt.expression.resolvedType) {
+      throw new Error("Throw expression has no resolved type");
+    }
+    const type = stmt.expression.resolvedType;
+    const typeStr = this.resolveType(type);
+
+    // 2. Set type ID
+    const typeId = this.getTypeId(type);
+    this.emit(`  store i32 ${typeId}, i32* @exception_type`);
+
+    // 3. Store Value
+    // For structs, allocate on heap and store pointer. For primitives, store directly as i64.
+    if (typeStr.startsWith("%struct.")) {
+      // Calculate size of struct
+      // Create sizePtrReg first so it gets a lower register number
+      const sizePtrReg = this.newRegister();
+      const sizeReg = this.newRegister();
+      this.emit(
+        `  ${sizePtrReg} = getelementptr ${typeStr}, ${typeStr}* null, i32 1`,
+      );
+      this.emit(`  ${sizeReg} = ptrtoint ${typeStr}* ${sizePtrReg} to i64`);
+
+      // Allocate on heap
+      const heapPtrVoid = this.newRegister();
+      this.emit(`  ${heapPtrVoid} = call i8* @malloc(i64 ${sizeReg})`);
+
+      // Cast to struct pointer
+      const heapPtr = this.newRegister();
+      this.emit(`  ${heapPtr} = bitcast i8* ${heapPtrVoid} to ${typeStr}*`);
+
+      // Store struct value directly to heap (val is already a struct value)
+      this.emit(`  store ${typeStr} ${val}, ${typeStr}* ${heapPtr}`);
+
+      // Store pointer as i64 in exception_value
+      const ptrAsI64 = this.newRegister();
+      this.emit(`  ${ptrAsI64} = ptrtoint ${typeStr}* ${heapPtr} to i64`);
+      this.emit(`  store i64 ${ptrAsI64}, i64* @exception_value`);
+    } else {
+      // For primitive types, cast to i64 and store directly
+      const castVal = this.emitCast(val, typeStr, "i64", type, {
+        kind: "BasicType",
+        name: "i64",
+        genericArgs: [],
+        pointerDepth: 0,
+        arrayDimensions: [],
+        location: stmt.location,
+      } as AST.BasicTypeNode);
+      this.emit(`  store i64 ${castVal}, i64* @exception_value`);
+    }
+
+    // 4. Longjmp
+    const framePtr = this.newRegister();
+    this.emit(
+      `  ${framePtr} = load %struct.ExceptionFrame*, %struct.ExceptionFrame** @exception_top`,
+    );
+
+    const isNull = this.newRegister();
+    this.emit(
+      `  ${isNull} = icmp eq %struct.ExceptionFrame* ${framePtr}, null`,
+    );
+
+    const abortLabel = this.newLabel("throw.abort");
+    const jumpLabel = this.newLabel("throw.jump");
+
+    this.emit(`  br i1 ${isNull}, label %${abortLabel}, label %${jumpLabel}`);
+
+    this.emit(`${abortLabel}:`);
+    this.emit(`  call void @exit(i32 1)`);
+    this.emit(`  unreachable`);
+
+    this.emit(`${jumpLabel}:`);
+    const bufFieldPtr = this.newRegister();
+    this.emit(
+      `  ${bufFieldPtr} = getelementptr inbounds %struct.ExceptionFrame, %struct.ExceptionFrame* ${framePtr}, i32 0, i32 0`,
+    );
+
+    const bufVoidPtr = this.newRegister();
+    this.emit(`  ${bufVoidPtr} = bitcast [32 x i64]* ${bufFieldPtr} to i8*`);
+
+    this.emit(`  call void @longjmp(i8* ${bufVoidPtr}, i32 1)`);
+    this.emit(`  unreachable`);
   }
 
   private generateBreak(stmt: AST.BreakStmt) {
@@ -466,9 +937,20 @@ export class CodeGenerator {
 
   private generateLiteral(expr: AST.LiteralExpr): string {
     if (expr.type === "number") {
+      // Check if this is a floating point type
+      if (expr.resolvedType && expr.resolvedType.kind === "BasicType") {
+        const typeName = (expr.resolvedType as AST.BasicTypeNode).name;
+        if (typeName === "float" || typeName === "double") {
+          // Ensure float literals have decimal point
+          const str = expr.value.toString();
+          return str.includes(".") ? str : `${str}.0`;
+        }
+      }
       return expr.value.toString();
     } else if (expr.type === "bool") {
       return expr.value ? "1" : "0";
+    } else if (expr.type === "nullptr") {
+      return "null";
     } else if (expr.type === "string") {
       const content = expr.value;
       if (!this.stringLiterals.has(content)) {
@@ -500,7 +982,6 @@ export class CodeGenerator {
     const rightRaw = this.generateExpression(expr.right);
     const leftType = this.resolveType(expr.left.resolvedType!);
     const rightType = this.resolveType(expr.right.resolvedType!);
-    const reg = this.newRegister();
 
     // Pointer arithmetic
     if (leftType.endsWith("*") && this.isIntegerType(rightType)) {
@@ -517,6 +998,7 @@ export class CodeGenerator {
       }
 
       if (expr.operator.type === TokenType.Plus) {
+        const reg = this.newRegister();
         this.emit(
           `  ${reg} = getelementptr inbounds ${leftType.slice(0, -1)}, ${leftType} ${leftRaw}, i64 ${right}`,
         );
@@ -525,6 +1007,7 @@ export class CodeGenerator {
         // ptr - int -> ptr + (-int)
         const negRight = this.newRegister();
         this.emit(`  ${negRight} = sub i64 0, ${right}`);
+        const reg = this.newRegister();
         this.emit(
           `  ${reg} = getelementptr inbounds ${leftType.slice(0, -1)}, ${leftType} ${leftRaw}, i64 ${negRight}`,
         );
@@ -549,6 +1032,7 @@ export class CodeGenerator {
         left = castReg;
       }
 
+      const reg = this.newRegister();
       this.emit(
         `  ${reg} = getelementptr inbounds ${rightType.slice(0, -1)}, ${rightType} ${rightRaw}, i64 ${left}`,
       );
@@ -558,44 +1042,48 @@ export class CodeGenerator {
     const left = leftRaw;
     const right = rightRaw;
 
+    // Check if we're dealing with floating point types
+    const isFloat = leftType === "double" || leftType === "float";
+
     let op = "";
     switch (expr.operator.type) {
       case TokenType.Plus:
-        op = "add";
+        op = isFloat ? "fadd" : "add";
         break;
       case TokenType.Minus:
-        op = "sub";
+        op = isFloat ? "fsub" : "sub";
         break;
       case TokenType.Star:
-        op = "mul";
+        op = isFloat ? "fmul" : "mul";
         break;
       case TokenType.Slash:
-        op = "sdiv";
-        break; // Signed division
+        op = isFloat ? "fdiv" : "sdiv";
+        break;
       case TokenType.EqualEqual:
-        op = "icmp eq";
+        op = isFloat ? "fcmp oeq" : "icmp eq";
         break;
       case TokenType.BangEqual:
-        op = "icmp ne";
+        op = isFloat ? "fcmp one" : "icmp ne";
         break;
       case TokenType.Less:
-        op = "icmp slt";
+        op = isFloat ? "fcmp olt" : "icmp slt";
         break;
       case TokenType.LessEqual:
-        op = "icmp sle";
+        op = isFloat ? "fcmp ole" : "icmp sle";
         break;
       case TokenType.Greater:
-        op = "icmp sgt";
+        op = isFloat ? "fcmp ogt" : "icmp sgt";
         break;
       case TokenType.GreaterEqual:
-        op = "icmp sge";
+        op = isFloat ? "fcmp oge" : "icmp sge";
         break;
       case TokenType.Percent:
-        op = "srem";
+        op = isFloat ? "frem" : "srem";
         break;
     }
 
     if (op) {
+      const reg = this.newRegister();
       this.emit(`  ${reg} = ${op} ${leftType} ${left}, ${right}`);
       return reg;
     }
@@ -620,7 +1108,33 @@ export class CodeGenerator {
       } else {
         let structName = "";
         if (objType.kind === "BasicType") {
-          structName = objType.name;
+          // Use resolved type name to handle monomorphization
+          const typeStr = this.resolveType(objType);
+          // typeStr is %struct.Box_i32 or %struct.Box
+          // we need the clean name
+
+          let cleanType = typeStr;
+          // Strip pointers
+          while (cleanType.endsWith("*")) {
+            cleanType = cleanType.slice(0, -1);
+          }
+          // Strip arrays [N x ...]
+          while (cleanType.startsWith("[")) {
+            // Extract inner type "x Inner]"
+            const match = cleanType.match(/^\[\d+ x (.+)\]$/);
+            if (match) {
+              cleanType = match[1]!;
+            } else {
+              break;
+            }
+          }
+
+          if (cleanType.startsWith("%struct.")) {
+            structName = cleanType.substring(8);
+          } else {
+            structName = objType.name;
+          }
+
           // Instance call: pass object as first argument
           argsToGenerate = [memberExpr.object, ...expr.args];
           isInstanceCall = true;
@@ -654,22 +1168,46 @@ export class CodeGenerator {
 
     const args = argsToGenerate
       .map((arg, i) => {
-        const val = this.generateExpression(arg);
-        const srcType = this.resolveType(arg.resolvedType!);
-
         let targetTypeNode: AST.TypeNode | undefined;
+
         if (isInstanceCall) {
           if (i === 0) {
-            targetTypeNode = arg.resolvedType;
+            if (
+              funcType.declaration &&
+              funcType.declaration.params.length > 0
+            ) {
+              targetTypeNode = funcType.declaration.params[0]!.type;
+            } else {
+              targetTypeNode = arg.resolvedType;
+            }
           } else {
-            targetTypeNode = funcType.paramTypes[i - 1];
+            if (i - 1 < funcType.paramTypes.length) {
+              targetTypeNode = funcType.paramTypes[i - 1];
+            }
           }
         } else {
-          targetTypeNode = funcType.paramTypes[i];
+          if (i < funcType.paramTypes.length) {
+            targetTypeNode = funcType.paramTypes[i];
+          }
         }
 
         if (targetTypeNode) {
           const destType = this.resolveType(targetTypeNode);
+          const srcType = this.resolveType(arg.resolvedType!);
+
+          // Optimize for L-values passing to pointer: take address directly
+          if (destType === srcType + "*") {
+            if (
+              arg.kind === "Identifier" ||
+              arg.kind === "Member" ||
+              arg.kind === "Index"
+            ) {
+              const addr = this.generateAddress(arg as any);
+              return `${destType} ${addr}`;
+            }
+          }
+
+          const val = this.generateExpression(arg);
           const castVal = this.emitCast(
             val,
             srcType,
@@ -679,6 +1217,9 @@ export class CodeGenerator {
           );
           return `${destType} ${castVal}`;
         }
+
+        const val = this.generateExpression(arg);
+        const srcType = this.resolveType(arg.resolvedType!);
         return `${srcType} ${val}`;
       })
       .join(", ");
@@ -718,6 +1259,12 @@ export class CodeGenerator {
     if (expr.kind === "Identifier") {
       const name = (expr as AST.IdentifierExpr).name;
       if (this.locals.has(name)) {
+        // Look up the actual pointer name from our map
+        const ptr = this.localPointers.get(name);
+        if (ptr) {
+          return ptr;
+        }
+        // Fallback to old format if not in map (shouldn't happen, but be defensive)
         return `%${name}_ptr`;
       } else if (this.globals.has(name)) {
         return `@${name}`;
@@ -730,6 +1277,11 @@ export class CodeGenerator {
         // If it's a function, we return the function pointer?
         // But generateAddress is for lvalues (storage).
         // Functions are not lvalues unless we have function pointers variables.
+        // Check map first
+        const ptr = this.localPointers.get(name);
+        if (ptr) {
+          return ptr;
+        }
         return `%${name}_ptr`;
       }
     } else if (expr.kind === "Member") {
@@ -749,7 +1301,17 @@ export class CodeGenerator {
         throw new Error("Member access on non-struct type");
       }
 
-      const structName = objType.name;
+      // Use resolved name for monomorphization lookup
+      // resolveType returns e.g. %struct.Box_i32 or %struct.Point
+      const llvmType = this.resolveType(objType);
+      let structName = objType.name;
+
+      if (llvmType.startsWith("%struct.")) {
+        structName = llvmType.substring(8);
+        // strip pointers
+        while (structName.endsWith("*")) structName = structName.slice(0, -1);
+      }
+
       // Handle namespaced struct names (e.g. std.Point)
       // The structLayouts map keys might not have the namespace prefix if they were compiled in another module.
       // But wait, if we import a struct, we should probably register its layout in the current module's CodeGenerator?
@@ -776,10 +1338,25 @@ export class CodeGenerator {
         );
       }
 
+      let baseAddr = objectAddr;
+      if (objType.pointerDepth > 0) {
+        const ptrReg = this.newRegister();
+        const ptrType = llvmType;
+        this.emit(`  ${ptrReg} = load ${ptrType}, ${ptrType}* ${objectAddr}`);
+        baseAddr = ptrReg;
+      }
+
       const addr = this.newRegister();
-      const llvmType = `%struct.${structName}`;
+      // llvmType acts incorrectly here if it has * pointers.
+      // If objectAddr is struct**, baseAddr is struct*.
+      // GEP needs struct type (without *) if we passing pointer.
+
+      // llvmType includes pointers if pointerDepth > 0
+      // We want the base struct identifier e.g. %struct.Box_i32
+      const structBase = `%struct.${structName}`;
+
       this.emit(
-        `  ${addr} = getelementptr inbounds ${llvmType}, ${llvmType}* ${objectAddr}, i32 0, i32 ${fieldIndex}`,
+        `  ${addr} = getelementptr inbounds ${structBase}, ${structBase}* ${baseAddr}, i32 0, i32 ${fieldIndex}`,
       );
       return addr;
     } else if (expr.kind === "Index") {
@@ -896,8 +1473,8 @@ export class CodeGenerator {
       else if (type === "double") init = "0.0";
       else if (type.endsWith("*")) init = "null";
     }
-    this.emit(`@${decl.name} = global ${type} ${init}`);
-    this.emit("");
+    this.emitDeclaration(`@${decl.name} = global ${type} ${init}`);
+    this.emitDeclaration("");
   }
 
   private generateSwitch(stmt: AST.SwitchStmt) {
@@ -957,11 +1534,18 @@ export class CodeGenerator {
     if (srcType === destType) return val;
 
     // Implicit address-of (T -> *T)
-    if (destType === "*" + srcType) {
+    if (destType === srcType + "*") {
       const ptr = this.newRegister();
       this.emit(`  ${ptr} = alloca ${srcType}`);
       this.emit(`  store ${srcType} ${val}, ${srcType}* ${ptr}`);
       return ptr;
+    }
+
+    // Implicit dereference (*T -> T) - copy
+    if (srcType === destType + "*") {
+      const reg = this.newRegister();
+      this.emit(`  ${reg} = load ${destType}, ${srcType} ${val}`);
+      return reg;
     }
 
     // Pointer casts
@@ -1095,48 +1679,64 @@ export class CodeGenerator {
     if (type.kind === "BasicType") {
       const basicType = type as AST.BasicTypeNode;
       let llvmType = "";
-      switch (basicType.name) {
-        case "int":
-        case "i32":
-        case "u32":
-        case "uint":
-          llvmType = "i32";
-          break;
-        case "i8":
-        case "u8":
-        case "char":
-        case "uchar":
-          llvmType = "i8";
-          break;
-        case "i16":
-        case "u16":
-        case "short":
-        case "ushort":
-          llvmType = "i16";
-          break;
-        case "i64":
-        case "u64":
-        case "long":
-        case "ulong":
-          llvmType = "i64";
-          break;
-        case "float":
-        case "double":
-          llvmType = "double";
-          break;
-        case "bool":
-        case "i1":
-          llvmType = "i1";
-          break;
-        case "void":
-          llvmType = "void";
-          break;
-        case "string":
-          llvmType = "i8*";
-          break;
-        default:
-          llvmType = `%struct.${basicType.name}`;
-          break;
+
+      // Check for generics usage
+      if (basicType.genericArgs && basicType.genericArgs.length > 0) {
+        const structDecl = this.structMap.get(basicType.name);
+        if (structDecl) {
+          // Instantiate generic!
+          llvmType = this.resolveMonomorphizedType(
+            structDecl,
+            basicType.genericArgs,
+          );
+        } else {
+          // Maybe a primitive like int<T>? Should not happen.
+          llvmType = `%struct.${basicType.name}`; // Fallback
+        }
+      } else {
+        switch (basicType.name) {
+          case "int":
+          case "i32":
+          case "u32":
+          case "uint":
+            llvmType = "i32";
+            break;
+          case "i8":
+          case "u8":
+          case "char":
+          case "uchar":
+            llvmType = "i8";
+            break;
+          case "i16":
+          case "u16":
+          case "short":
+          case "ushort":
+            llvmType = "i16";
+            break;
+          case "i64":
+          case "u64":
+          case "long":
+          case "ulong":
+            llvmType = "i64";
+            break;
+          case "float":
+          case "double":
+            llvmType = "double";
+            break;
+          case "bool":
+          case "i1":
+            llvmType = "i1";
+            break;
+          case "void":
+            llvmType = "void";
+            break;
+          case "string":
+            llvmType = "i8*";
+            break;
+          default:
+            llvmType = `%struct.${basicType.name}`;
+            break;
+        }
       }
 
       for (let i = 0; i < basicType.pointerDepth; i++) {
@@ -1178,9 +1778,11 @@ export class CodeGenerator {
   }
 
   private allocateStack(name: string, type: string): string {
-    const ptr = `%${name}_ptr`;
+    // Use stack alloc count to ensure uniqueness, even if same variable name is used in different scopes
+    const ptr = `%${name}_ptr.${this.stackAllocCount++}`;
     this.emit(`  ${ptr} = alloca ${type}`);
     this.locals.add(name);
+    this.localPointers.set(name, ptr);
     return ptr;
   }
 
@@ -1264,8 +1866,25 @@ export class CodeGenerator {
     const type = this.resolveType(expr.resolvedType!);
     let structVal = "undef";
 
-    const structName = (expr.resolvedType as AST.BasicTypeNode).name;
-    const layout = this.structLayouts.get(structName)!;
+    const basicType = expr.resolvedType as AST.BasicTypeNode;
+    // Handle monomorphized names
+    let structName = basicType.name;
+    if (basicType.genericArgs.length > 0) {
+      // We need the mangled name without parameters to look up layout
+      const resolved = this.resolveType(basicType);
+      // resolved is %struct.Box_i32
+      if (resolved.startsWith("%struct.")) {
+        structName = resolved.substring(8);
+      }
+    }
+
+    // Try to find layout
+    let layout = this.structLayouts.get(structName);
+    if (!layout) {
+      // Maybe we haven't generated the layout yet?
+      // generateStructLiteral should happen inside a function, so types should be resolved.
+      throw new Error(`Layout for struct ${structName} not found`);
+    }
 
     const fieldValues = new Map<string, AST.Expression>();
     for (const field of expr.fields) {

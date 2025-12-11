@@ -1041,6 +1041,27 @@ export class TypeChecker {
       }
     }
 
+    // Comparison and logical operators return bool
+    if (
+      expr.operator.type === TokenType.EqualEqual ||
+      expr.operator.type === TokenType.BangEqual ||
+      expr.operator.type === TokenType.Less ||
+      expr.operator.type === TokenType.LessEqual ||
+      expr.operator.type === TokenType.Greater ||
+      expr.operator.type === TokenType.GreaterEqual ||
+      expr.operator.type === TokenType.AndAnd ||
+      expr.operator.type === TokenType.OrOr
+    ) {
+      return {
+        kind: "BasicType",
+        name: "bool",
+        genericArgs: [],
+        pointerDepth: 0,
+        arrayDimensions: [],
+        location: expr.location,
+      };
+    }
+
     // TODO: Check compatibility more thoroughly
     return leftType;
   }
@@ -1265,7 +1286,9 @@ export class TypeChecker {
         (symbol.declaration as any).kind === "StructDecl"
       ) {
         const structDecl = symbol.declaration as AST.StructDecl;
-        const member = structDecl.members.find((m) => m.name === expr.property);
+        // Use resolveStructMember to support inheritance
+        const member = this.resolveStructMember(structDecl, expr.property);
+
         if (member) {
           if (member.kind === "StructField") {
             // Substitute struct generics for field type
@@ -1314,6 +1337,17 @@ export class TypeChecker {
                 compatible = true;
               }
 
+              // Allow implicit dereference if 'this' expects non-pointer but we have a pointer
+              if (
+                !compatible &&
+                thisParamType.kind === "BasicType" &&
+                objectType.kind === "BasicType" &&
+                thisParamType.name === objectType.name &&
+                objectType.pointerDepth === thisParamType.pointerDepth + 1
+              ) {
+                compatible = true;
+              }
+
               if (!compatible) {
                 throw new CompilerError(
                   `Instance type mismatch for 'this'. Expected '${this.typeToString(thisParamType)}', got '${this.typeToString(objectType)}'`,
@@ -1348,16 +1382,6 @@ export class TypeChecker {
             }
             return memberType;
           }
-        }
-        // Check parent
-        if (
-          structDecl.parentType &&
-          structDecl.parentType.kind === "BasicType"
-        ) {
-          // Recursive check on parent (simplified)
-          // Ideally we should resolve parent struct and check its members
-          // For now, let's just return undefined or implement recursive lookup helper
-          // TODO: Implement recursive member lookup
         }
       }
     }
@@ -1746,9 +1770,12 @@ export class TypeChecker {
 
       // Exact name match
       if (rt1.name !== rt2.name) {
-        // TODO: Inheritance check for pointers?
-        // If t1 is Parent* and t2 is Child*, it's okay.
-        return false;
+        // Check inheritance
+        if (
+          !this.isSubtype(rt2 as AST.BasicTypeNode, rt1 as AST.BasicTypeNode)
+        ) {
+          return false;
+        }
       }
 
       // Pointer depth match
@@ -1973,6 +2000,10 @@ export class TypeChecker {
         if (resolvedBase.kind === "BasicType") {
           return {
             ...resolvedBase,
+            genericArgs: [
+              ...resolvedBase.genericArgs,
+              ...type.genericArgs.map((t) => this.resolveType(t)),
+            ],
             pointerDepth: resolvedBase.pointerDepth + type.pointerDepth,
             arrayDimensions: [
               ...resolvedBase.arrayDimensions,
@@ -1998,15 +2029,15 @@ export class TypeChecker {
     return type;
   }
 
-  private resolveStructField(
+  private resolveStructMember(
     structDecl: AST.StructDecl,
-    fieldName: string,
-  ): AST.StructField | undefined {
-    const member = structDecl.members.find(
-      (m) => m.name === fieldName && m.kind === "StructField",
-    ) as AST.StructField | undefined;
+    memberName: string,
+  ): AST.StructField | AST.FunctionDecl | undefined {
+    // Check current struct
+    const member = structDecl.members.find((m) => m.name === memberName);
     if (member) return member;
 
+    // Check parent
     if (structDecl.parentType && structDecl.parentType.kind === "BasicType") {
       const parentSymbol = this.currentScope.resolve(
         structDecl.parentType.name,
@@ -2016,12 +2047,45 @@ export class TypeChecker {
         parentSymbol.kind === "Struct" &&
         (parentSymbol.declaration as any).kind === "StructDecl"
       ) {
-        return this.resolveStructField(
+        return this.resolveStructMember(
           parentSymbol.declaration as AST.StructDecl,
-          fieldName,
+          memberName,
         );
       }
     }
     return undefined;
+  }
+
+  private resolveStructField(
+    structDecl: AST.StructDecl,
+    fieldName: string,
+  ): AST.StructField | undefined {
+    const member = this.resolveStructMember(structDecl, fieldName);
+    if (member && member.kind === "StructField") return member;
+    return undefined;
+  }
+
+  private isSubtype(
+    child: AST.BasicTypeNode,
+    parent: AST.BasicTypeNode,
+  ): boolean {
+    if (child.name === parent.name) return true;
+
+    // Resolve child struct
+    const symbol = this.currentScope.resolve(child.name);
+    if (
+      symbol &&
+      symbol.kind === "Struct" &&
+      (symbol.declaration as any).kind === "StructDecl"
+    ) {
+      const decl = symbol.declaration as AST.StructDecl;
+      if (decl.parentType && decl.parentType.kind === "BasicType") {
+        const parentTypeResolved = this.resolveType(
+          decl.parentType,
+        ) as AST.BasicTypeNode;
+        return this.isSubtype(parentTypeResolved, parent);
+      }
+    }
+    return false;
   }
 }

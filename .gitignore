@@ -39,6 +39,7 @@ examples/**
 !examples/**/
 !examples/**/*.bpl
 !examples/**/test*.sh
+!examples/**/test_config.json
 
 temp/**
 !temp/*.bpl
