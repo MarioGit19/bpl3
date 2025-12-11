@@ -6,10 +6,10 @@ struct Set<T> {
 
     frame add(value: T) {
         # Check if value already exists
-        if call this.has(value) {
+        if this.has(value) {
             return; # Value already in set, don't add
         }
-        call this.items.push(value);
+        this.items.push(value);
     }
 
     frame has(value: T) ret u64 {
@@ -32,7 +32,7 @@ struct Set<T> {
 
     frame delete(value: T) ret u64 {
         local i: u64 = 0;
-        if (call this.has(value)) == 0 {
+        if (this.has(value)) == 0 {
             return 0; # Value not found
         }
 
@@ -59,18 +59,18 @@ struct Set<T> {
     }
 
     frame size() ret u64 {
-        return call this.items.len();
+        return this.items.len();
     }
 
     frame clear() {
-        call this.items.clear();
+        this.items.clear();
     }
 
     frame values() ret *Array<T> {
         return &this.items;
     }
 
-    static new() ret Set<T> {
+    frame new() ret Set<T> {
         local set: Set<T>;
         return set;
     }

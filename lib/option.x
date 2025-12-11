@@ -26,14 +26,14 @@ struct Option<T> {
         return default;
     }
 
-    static Some(val: T) ret Option<T> {
+    frame Some(val: T) ret Option<T> {
         local opt: Option<T>;
         opt.has_value = 1;
         opt.value = val;
         return opt;
     }
 
-    static None() ret Option<T> {
+    frame None() ret Option<T> {
         local opt: Option<T>;
         opt.has_value = 0;
         return opt;

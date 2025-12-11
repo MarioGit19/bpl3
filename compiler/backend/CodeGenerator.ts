@@ -56,6 +56,34 @@ export class CodeGenerator {
   }
 
   private collectStructLayouts(program: AST.Program) {
+    // We need to collect layouts from imported modules as well if possible.
+    // But CodeGenerator only sees the current AST.
+    // The TypeChecker has resolved types, but CodeGenerator needs layout info.
+    // If we have imported structs, they might not be in 'program.statements'.
+    // However, if we use 'import * as std', the std module AST is not merged into current AST.
+    // We need a way to access imported struct layouts.
+    
+    // For now, let's iterate over all statements and if we find an Import, we might need to peek into it?
+    // But ImportStmt doesn't hold the AST.
+    // The TypeChecker has the info.
+    // Maybe we should pass TypeChecker or SymbolTable to CodeGenerator?
+    // Or we can rely on the fact that we might have 'StructDecl' nodes from imports if we merged them?
+    // But we didn't merge them.
+    
+    // Workaround: If we encounter a struct type during generation that we don't know,
+    // we fail. We need to register layouts for imported structs.
+    // Since we don't have easy access to other modules here, we might need to rely on
+    // the fact that we are compiling one module at a time.
+    // But if we use a struct from another module, we need its layout.
+    
+    // Let's assume for now that we only compile single files or merged ASTs.
+    // But 'import' suggests separate compilation or at least separate ASTs.
+    
+    // If we are in a multi-module setup, we should probably have a 'ModuleContext' that holds layouts for all loaded modules.
+    // For this simple compiler, maybe we can just try to find the struct decl in the TypeChecker's resolved symbols?
+    // But CodeGenerator doesn't have access to TypeChecker.
+    
+    // Let's just scan the current program.
     for (const stmt of program.statements) {
       if (stmt.kind === "StructDecl") {
         const decl = stmt as AST.StructDecl;
@@ -67,6 +95,11 @@ export class CodeGenerator {
         this.structLayouts.set(decl.name, layout);
       }
     }
+  }
+
+  // Add a method to register external layouts (to be called by the driver/compiler)
+  public registerStructLayout(name: string, layout: Map<string, number>) {
+      this.structLayouts.set(name, layout);
   }
 
   private generateTopLevel(node: AST.ASTNode) {
@@ -575,30 +608,42 @@ export class CodeGenerator {
 
       if (!objType) throw new Error("Member access on unresolved type");
 
-      let structName = "";
-      if (objType.kind === "BasicType") {
-        structName = objType.name;
-        // Instance call: pass object as first argument
-        argsToGenerate = [memberExpr.object, ...expr.args];
-        isInstanceCall = true;
-      } else if (objType.kind === "MetaType") {
-        const inner = (objType as any).type;
-        if (inner.kind === "BasicType") {
-          structName = inner.name;
-          // Static call: no extra argument
-        } else {
-          throw new Error("Static member access on non-struct type");
-        }
+      if ((objType as any).kind === "ModuleType") {
+        funcName = memberExpr.property;
       } else {
-        throw new Error("Member access on non-struct type");
-      }
+        let structName = "";
+        if (objType.kind === "BasicType") {
+          structName = objType.name;
+          // Instance call: pass object as first argument
+          argsToGenerate = [memberExpr.object, ...expr.args];
+          isInstanceCall = true;
+        } else if (objType.kind === "MetaType") {
+          const inner = (objType as any).type;
+          if (inner.kind === "BasicType") {
+            structName = inner.name;
+            // Static call: no extra argument
+          } else {
+            throw new Error("Static member access on non-struct type");
+          }
+        } else {
+          throw new Error("Member access on non-struct type");
+        }
 
-      funcName = `${structName}_${memberExpr.property}`;
+        funcName = `${structName}_${memberExpr.property}`;
+      }
     } else {
       throw new Error("Only direct function calls supported for now");
     }
 
     const funcType = expr.callee.resolvedType as AST.FunctionTypeNode;
+    if (!funcType) {
+        // If we are calling a module function, the resolvedType might be on the property access?
+        // In checkMember, we return symbol.type.
+        // If symbol is Function, symbol.type is FunctionType.
+        // So expr.callee.resolvedType SHOULD be FunctionType.
+        // But if it's undefined, we have a problem.
+        throw new Error(`Function call '${funcName}' has no resolved type`);
+    }
 
     const args = argsToGenerate
       .map((arg, i) => {
@@ -682,17 +727,37 @@ export class CodeGenerator {
       }
     } else if (expr.kind === "Member") {
       const memberExpr = expr as AST.MemberExpr;
+      
+      // Check for module access
+      const objType = memberExpr.object.resolvedType;
+      if (objType && (objType as any).kind === "ModuleType") {
+          return `@${memberExpr.property}`;
+      }
+
       const objectAddr = this.generateAddress(memberExpr.object);
 
       // We need the type of the object to know which struct layout to use
       // The object's resolvedType should be a BasicType with the struct name
-      const objType = memberExpr.object.resolvedType;
       if (!objType || objType.kind !== "BasicType") {
         throw new Error("Member access on non-struct type");
       }
 
       const structName = objType.name;
-      const layout = this.structLayouts.get(structName);
+      // Handle namespaced struct names (e.g. std.Point)
+      // The structLayouts map keys might not have the namespace prefix if they were compiled in another module.
+      // But wait, if we import a struct, we should probably register its layout in the current module's CodeGenerator?
+      // Or we should use the name as it is known in the current module?
+      // If it's imported as 'std.Point', the type name is 'std.Point'.
+      // But the struct definition in LLVM IR will be '%struct.Point' or '%struct.std.Point'?
+      // Currently we don't namespace LLVM struct names.
+      // So we should strip the namespace for lookup if it's not found.
+      
+      let layout = this.structLayouts.get(structName);
+      if (!layout && structName.includes(".")) {
+          const shortName = structName.split(".").pop()!;
+          layout = this.structLayouts.get(shortName);
+      }
+      
       if (!layout) {
         throw new Error(`Unknown struct type: ${structName}`);
       }
@@ -1016,6 +1081,10 @@ export class CodeGenerator {
   }
 
   private resolveType(type: AST.TypeNode): string {
+    if (!type) {
+        // Should not happen if TypeChecker did its job
+        throw new Error("Cannot resolve undefined type");
+    }
     if (type.kind === "BasicType") {
       const basicType = type as AST.BasicTypeNode;
       let llvmType = "";

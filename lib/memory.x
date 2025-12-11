@@ -9,16 +9,16 @@ frame init_heap() {
     if HEAP_START != NULL {
         return;
     }
-    local prot: u64 = call PROT_READ() | call PROT_WRITE();
-    local flags: u64 = call MAP_PRIVATE() | call MAP_ANONYMOUS();
-    HEAP_START = call sys_mmap(NULL, HEAP_SIZE, prot, flags, cast<u64>(-1), 0);
+    local prot: u64 = PROT_READ() | PROT_WRITE();
+    local flags: u64 = MAP_PRIVATE() | MAP_ANONYMOUS();
+    HEAP_START = sys_mmap(NULL, HEAP_SIZE, prot, flags, cast<u64>(-1), 0);
     HEAP_PTR = HEAP_START;
     HEAP_END = HEAP_START + HEAP_SIZE;
 }
 
 frame std_malloc(size: u64) ret *u8 {
     if HEAP_START == NULL {
-        call init_heap();
+        init_heap();
     }
 
     # Align size to 8 bytes
@@ -48,7 +48,7 @@ frame std_free(ptr: *u8) {
 
 frame std_realloc(ptr: *u8, new_size: u64) ret *u8 {
     if ptr == NULL {
-        return call std_malloc(new_size);
+        return std_malloc(new_size);
     }
 
     local header_ptr: *u64 = cast<*u64>(ptr - 8);
@@ -58,7 +58,7 @@ frame std_realloc(ptr: *u8, new_size: u64) ret *u8 {
         return ptr;
     }
 
-    local new_ptr: *u8 = call std_malloc(new_size);
+    local new_ptr: *u8 = std_malloc(new_size);
     if new_ptr == NULL {
         return NULL;
     }

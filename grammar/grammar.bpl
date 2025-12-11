@@ -43,7 +43,11 @@ StructDeclaration = 'struct' Identifier GenericArgs? '{' StructMember* '}';
 StructMember = (Identifier ':' Type ',') | FunctionDeclaration;
 
 // Imports/Exports
-ImportStatement = 'import' ImportList 'from' StringLiteral ';';
+ImportStatement = 
+    'import' '*' 'as' Identifier 'from' (StringLiteral | Identifier) ';'
+  | 'import' StringLiteral ';'
+  | 'import' Identifier ';'
+  | 'import' ImportList 'from' StringLiteral ';';
 ImportList = ImportItem (',' ImportItem)*;
 ImportItem = Identifier | ('[' Identifier ']');
 ExportStatement = 'export' ImportItem ';';

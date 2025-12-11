@@ -9,11 +9,11 @@ struct Array<T> {
     frame push(value: T) {
         if this.capacity == 0 {
             this.capacity = 4;
-            this.data = cast<*T>(call std_malloc(this.capacity * sizeof(T)));
+            this.data = cast<*T>(std_malloc(this.capacity * sizeof(T)));
             this.length = 0;
         } else if this.length >= this.capacity {
             this.capacity = this.capacity * 2;
-            this.data = cast<*T>(call std_realloc(cast<*u8>(this.data), this.capacity * sizeof(T)));
+            this.data = cast<*T>(std_realloc(cast<*u8>(this.data), this.capacity * sizeof(T)));
         }
 
         this.data[this.length] = value;
@@ -48,7 +48,7 @@ struct Array<T> {
 
     frame free() {
         if this.data != NULL {
-            call std_free(cast<*u8>(this.data));
+            std_free(cast<*u8>(this.data));
             this.data = NULL;
         }
         this.length = 0;
@@ -61,7 +61,7 @@ struct Array<T> {
             if i >= this.length {
                 break;
             }
-            if call item.equals(&this.data[i]) {
+            if item.equals(&this.data[i]) {
                 return i;
             }
             i = i + 1;
@@ -93,7 +93,7 @@ struct Array<T> {
             if i >= this.length {
                 break;
             }
-            if (call this.data[i].equals(&other.data[i])) == 0 {
+            if (this.data[i].equals(&other.data[i])) == 0 {
                 return 0;
             }
             i = i + 1;
@@ -101,11 +101,11 @@ struct Array<T> {
         return 1;
     }
 
-    static empty(capacity: u64) ret Array<T> {
+    frame empty(capacity: u64) ret Array<T> {
         local arr: Array<T>;
         if capacity > 0 {
             arr.capacity = capacity;
-            arr.data = cast<*T>(call std_malloc(capacity * sizeof(T)));
+            arr.data = cast<*T>(std_malloc(capacity * sizeof(T)));
         } else {
             arr.capacity = 0;
             arr.data = NULL;
@@ -114,13 +114,13 @@ struct Array<T> {
         return arr;
     }
 
-    static new(items: T[]) ret Array<T> {
+    frame new(items: T[]) ret Array<T> {
         local arr: Array<T>;
         local size: u64 = items.length;
 
         if size > 0 {
             arr.capacity = size;
-            arr.data = cast<*T>(call std_malloc(size * sizeof(T)));
+            arr.data = cast<*T>(std_malloc(size * sizeof(T)));
 
             local i: u64 = 0;
             loop {

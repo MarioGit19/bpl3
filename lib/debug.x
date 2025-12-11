@@ -20,11 +20,11 @@ extern __get_stack_top() ret *RuntimeStackFrame;
 extern __print_stack_trace();
 
 frame print_stack_trace() {
-    call __print_stack_trace();
+    __print_stack_trace();
 }
 
 frame get_stack_trace() ret *u8 {
-    local curr: *RuntimeStackFrame = call __get_stack_top();
+    local curr: *RuntimeStackFrame = __get_stack_top();
     local temp: *RuntimeStackFrame = curr;
     local size: u64 = 0;
     size = size + 13; # "Stack trace:\n"
@@ -35,35 +35,35 @@ frame get_stack_trace() ret *u8 {
         }
 
         size = size + 20;
-        size = size + call strlen(temp.funcName);
-        size = size + call strlen(temp.fileName);
+        size = size + strlen(temp.funcName);
+        size = size + strlen(temp.fileName);
 
         temp = temp.prev;
     }
 
-    local buffer: *u8 = call malloc(size + 1);
+    local buffer: *u8 = malloc(size + 1);
     if buffer == NULL {
         return NULL;
     }
 
     buffer[0] = 0; # Initialize as empty string
-    call strcat(buffer, "Stack trace:\n");
+    strcat(buffer, "Stack trace:\n");
 
     temp = curr;
-    local line_buf: *u8 = call malloc(1024); # Temp buffer for one line
+    local line_buf: *u8 = malloc(1024); # Temp buffer for one line
 
     loop {
         if temp == NULL {
             break;
         }
 
-        call sprintf(line_buf, "\tat %s (%s:%d)\n", temp.funcName, temp.fileName, temp.line);
-        call strcat(buffer, line_buf);
+        sprintf(line_buf, "\tat %s (%s:%d)\n", temp.funcName, temp.fileName, temp.line);
+        strcat(buffer, line_buf);
 
         temp = temp.prev;
     }
 
-    call free(line_buf);
+    free(line_buf);
     return buffer;
 }
 

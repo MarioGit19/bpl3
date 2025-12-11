@@ -11,7 +11,7 @@ You are working with BPL, a custom programming language. Follow these instructio
 ### Functions
 - Declare functions using the `frame` keyword.
 - Use `return` to exit.
-- Use `call` to invoke other functions.
+- Invoke functions directly by name.
 
 ```bpl
 frame my_function(a: int, b: int): u64 {
@@ -20,7 +20,7 @@ frame my_function(a: int, b: int): u64 {
 }
 
 frame main() ret u8 {
-    local x: u64 = call my_function(10, 20);
+    local x: u64 = my_function(10, 20);
     return 0l
 }
 ```
@@ -58,7 +58,7 @@ import printf from 'libc';
 import [Array] from 'std/array.x';
 
 frame print_hello() {
-    call printf("Hello %s\n", "World")
+    printf("Hello %s\n", "World")
 }
 ```
 

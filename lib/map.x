@@ -20,8 +20,8 @@ struct Map<K, V> {
             i = i + 1;
         }
         # Key doesn't exist, add new entry
-        call this.keys.push(key);
-        call this.values.push(value);
+        this.keys.push(key);
+        this.values.push(value);
     }
 
     frame get(key: K) ret V {
@@ -81,15 +81,15 @@ struct Map<K, V> {
     }
 
     frame size() ret u64 {
-        return call this.keys.len();
+        return this.keys.len();
     }
 
     frame clear() {
-        call this.keys.clear();
-        call this.values.clear();
+        this.keys.clear();
+        this.values.clear();
     }
 
-    static new() ret Map<K, V> {
+    frame new() ret Map<K, V> {
         local map: Map<K, V>;
         return map;
     }

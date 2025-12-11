@@ -10,25 +10,25 @@ import [Map] from "map.x";
 import [Set] from "set.x";
 
 frame print(s: *u8) {
-    call Console.print_str(s);
+    Console.print_str(s);
 }
 
 frame exit(code: u64) {
-    call sys_exit(code);
+    sys_exit(code);
 }
 
 frame exec(cmd: *u8) ret *u8 {
-    local fp: *u8 = call popen(cmd, "r");
+    local fp: *u8 = popen(cmd, "r");
     if fp == NULL {
         return NULL;
     }
 
     local size: u64 = 1024;
-    local buffer: *u8 = call std_malloc(size);
+    local buffer: *u8 = std_malloc(size);
     local total_read: u64 = 0;
 
     loop {
-        local bytes_read: u64 = call fread(buffer + total_read, 1, size - total_read - 1, fp);
+        local bytes_read: u64 = fread(buffer + total_read, 1, size - total_read - 1, fp);
         if bytes_read == 0 {
             break;
         }
@@ -36,7 +36,7 @@ frame exec(cmd: *u8) ret *u8 {
         # TODO: Realloc if needed
     }
     buffer[total_read] = 0;
-    call pclose(fp);
+    pclose(fp);
     return buffer;
 }
 

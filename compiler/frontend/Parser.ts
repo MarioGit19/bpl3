@@ -285,6 +285,72 @@ export class Parser {
   private importStatement(): AST.ImportStmt {
     const startToken = this.previous();
     const items: { name: string; alias?: string; isType: boolean }[] = [];
+    let source = "";
+    let importAll = false;
+    let namespace: string | undefined;
+
+    // Check for 'import * as namespace from "source";'
+    if (this.check(TokenType.Star)) {
+        this.advance(); // consume '*'
+        
+        if (this.check(TokenType.Identifier) && this.peek().lexeme === "as") {
+            this.advance(); // consume 'as'
+            namespace = this.consume(TokenType.Identifier, "Expected namespace identifier.").lexeme;
+        }
+        
+        this.consume(TokenType.From, "Expected 'from' after import list.");
+        
+        if (this.check(TokenType.StringLiteral)) {
+             source = this.consume(TokenType.StringLiteral, "Expected source.").lexeme.replace(/^"|"$/g, "");
+        } else if (this.check(TokenType.Identifier)) {
+             source = this.consume(TokenType.Identifier, "Expected source module.").lexeme;
+        } else {
+             throw this.error(this.peek(), "Expected module source.");
+        }
+        
+        importAll = true;
+        this.consume(TokenType.Semicolon, "Expected ';' after import.");
+        return {
+            kind: "Import",
+            items: [],
+            source,
+            importAll,
+            namespace,
+            location: this.loc(startToken, this.previous()),
+        };
+    }
+
+    // Check for 'import "source";' or 'import std;'
+    if (this.check(TokenType.StringLiteral)) {
+        source = this.consume(TokenType.StringLiteral, "Expected source.").lexeme.replace(/^"|"$/g, "");
+        importAll = true;
+        this.consume(TokenType.Semicolon, "Expected ';' after import.");
+        return {
+            kind: "Import",
+            items: [],
+            source,
+            importAll,
+            location: this.loc(startToken, this.previous()),
+        };
+    } else if (this.check(TokenType.Identifier) && this.tokens[this.current + 1]?.type === TokenType.Semicolon) {
+        // import std;
+        source = this.consume(TokenType.Identifier, "Expected module name.").lexeme;
+        importAll = true;
+        // Default namespace to module name? Or import all into global?
+        // Let's say import std; imports everything into global for now, or maybe creates a namespace 'std'.
+        // If we want 'std.print', we need a namespace.
+        // But 'import std' usually implies 'std' is the namespace.
+        namespace = source; 
+        this.consume(TokenType.Semicolon, "Expected ';' after import.");
+        return {
+            kind: "Import",
+            items: [],
+            source,
+            importAll,
+            namespace,
+            location: this.loc(startToken, this.previous()),
+        };
+    }
 
     // Parse import items: supports mixed functions and types
     // Examples:
@@ -316,22 +382,26 @@ export class Parser {
     } while (this.match(TokenType.Comma));
 
     this.consume(TokenType.From, "Expected 'from' after import list.");
-    const source = this.consume(
+    source = this.consume(
       TokenType.StringLiteral,
       "Expected import source string.",
-    ).lexeme;
+    ).lexeme.replace(/^"|"$/g, "");
     this.consume(TokenType.Semicolon, "Expected ';' after import.");
 
     return {
       kind: "Import",
       items,
-      source: source.replace(/^"|"$/g, ""), // Strip quotes
+      source,
       location: this.loc(startToken, this.previous()),
     };
   }
 
   private exportStatement(): AST.ExportStmt {
     const startToken = this.previous();
+
+    // Only allow exporting existing declarations:
+    // export foo;
+    // export [Bar];
 
     // Check if this is a type export (wrapped in brackets)
     let isType = false;
@@ -453,9 +523,18 @@ export class Parser {
 
   private ifStatement(): AST.IfStmt {
     const startToken = this.previous();
-    this.consume(TokenType.LeftParen, "Expected '(' after 'if'.");
-    const condition = this.expression();
-    this.consume(TokenType.RightParen, "Expected ')' after if condition.");
+    let condition: AST.Expression;
+    // Support both styles:
+    //  - if (cond) { ... }
+    //  - if cond { ... }
+    if (this.check(TokenType.LeftParen)) {
+      this.consume(TokenType.LeftParen, "Expected '(' after 'if'.");
+      condition = this.expression();
+      this.consume(TokenType.RightParen, "Expected ')' after if condition.");
+    } else {
+      // No parentheses style: parse a single expression as the condition
+      condition = this.expression();
+    }
     const thenBranch = this.block();
     let elseBranch: AST.Statement | undefined;
 
@@ -1217,7 +1296,17 @@ export class Parser {
     }
 
     const nameToken = this.consume(TokenType.Identifier, "Expected type name.");
-    const name = nameToken.lexeme;
+    let name = nameToken.lexeme;
+    
+    // Handle namespaced types: std.Point
+    while (this.match(TokenType.Dot)) {
+        const part = this.consume(TokenType.Identifier, "Expected identifier after dot.").lexeme;
+        // We can represent namespaced types as "std.Point" string for now, 
+        // or we need a more complex TypeNode structure.
+        // BasicType has 'name: string'.
+        name += "." + part;
+    }
+
     const genericArgs: AST.TypeNode[] = [];
 
     if (this.match(TokenType.Less)) {

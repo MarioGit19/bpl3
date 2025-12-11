@@ -1,20 +1,20 @@
 struct Math {
 
-    static min(a: u64, b: u64) ret u64 {
+    frame min(a: u64, b: u64) ret u64 {
         if a < b {
             return a;
         }
         return b;
     }
 
-    static max(a: u64, b: u64) ret u64 {
+    frame max(a: u64, b: u64) ret u64 {
         if a > b {
             return a;
         }
         return b;
     }
 
-    static clamp(val: u64, min: u64, max: u64) ret u64 {
+    frame clamp(val: u64, min: u64, max: u64) ret u64 {
         if val < min {
             return min;
         }
@@ -24,7 +24,7 @@ struct Math {
         return val;
     }
 
-    static pow(base: u64, exp: u64) ret u64 {
+    frame pow(base: u64, exp: u64) ret u64 {
         local result: u64 = 1;
         loop {
             if exp == 0 {
@@ -39,14 +39,14 @@ struct Math {
         return result;
     }
 
-    static abs(n: i64) ret i64 {
+    frame abs(n: i64) ret i64 {
         if n < 0 {
             return 0 - n;
         }
         return n;
     }
 
-    static gcd(a: u64, b: u64) ret u64 {
+    frame gcd(a: u64, b: u64) ret u64 {
         local temp: u64;
         loop {
             if b == 0 {
@@ -59,15 +59,15 @@ struct Math {
         return a;
     }
 
-    static lcm(a: u64, b: u64) ret u64 {
+    frame lcm(a: u64, b: u64) ret u64 {
         if a == 0 || b == 0 {
             return 0;
         }
-        local gcd_val: u64 = call Math.gcd(a, b);
+        local gcd_val: u64 = Math.gcd(a, b);
         return cast<u64>(a * b / gcd_val);
     }
 
-    static random(min: u64, max: u64) ret u64 {
+    frame random(min: u64, max: u64) ret u64 {
         local rnd: u64 = 0;
         asm {
             rdrand rax;

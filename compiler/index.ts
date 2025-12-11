@@ -175,6 +175,13 @@ export class Compiler {
           if (stmt.kind === "Import") {
             continue;
           }
+          
+          // Skip exports, but keep the declaration inside if it's an inline export (which we removed support for, but just in case)
+          // Actually, ExportStmt now references a declaration if it was inline, but we changed parser to not allow inline exports.
+          // So ExportStmt just references a name. We can skip ExportStmt.
+          if (stmt.kind === "Export") {
+              continue;
+          }
 
           // Generate a unique key for declarations to avoid duplicates
           let key: string | null = null;
@@ -209,6 +216,19 @@ export class Compiler {
       }
 
       const codeGenerator = new CodeGenerator();
+      
+      // Register struct layouts from all modules explicitly
+      // This is needed because CodeGenerator.collectStructLayouts only scans the AST it is given.
+      // Since we are giving it a combined AST, it SHOULD find all structs.
+      // However, if there are name collisions or if we rely on namespacing, we might have issues.
+      // But for now, we are merging everything into one flat namespace for CodeGen (except for namespaced access in TypeChecker).
+      // Wait, if we have 'std.Point' in TypeChecker, but 'Point' in CodeGen, we need to make sure CodeGen can find 'Point'.
+      // In CodeGenerator.ts we added a fallback to strip namespace.
+      // So if we have 'struct Point' in combined AST, and we try to access 'std.Point', CodeGen will look for 'Point'.
+      // This assumes no name collisions between modules for structs.
+      // If 'std.Point' and 'other.Point' both exist, we have a problem in flat CodeGen.
+      // But for now, let's assume unique names or that we don't support same-named structs in different modules yet.
+      
       const llvmIR = codeGenerator.generate(combinedAST);
 
       return {

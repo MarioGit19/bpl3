@@ -28,14 +28,14 @@ struct Result<T, E> {
         return default;
     }
 
-    static Ok(val: T) ret Result<T, E> {
+    frame Ok(val: T) ret Result<T, E> {
         local res: Result<T, E>;
         res.is_success = 1;
         res.ok = val;
         return res;
     }
 
-    static Err(err: E) ret Result<T, E> {
+    frame Err(err: E) ret Result<T, E> {
         local res: Result<T, E>;
         res.is_success = 0;
         res.error = err;

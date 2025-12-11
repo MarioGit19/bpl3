@@ -5,13 +5,15 @@ export type SymbolKind =
   | "Function"
   | "Struct"
   | "TypeAlias"
-  | "Parameter";
+  | "Parameter"
+  | "Module"; // Added Module kind
 
 export interface Symbol {
   name: string;
   kind: SymbolKind;
   type?: AST.TypeNode; // The type of the symbol (e.g., variable type, function return type)
   declaration: AST.ASTNode; // The AST node where it was declared
+  moduleScope?: SymbolTable; // For Module symbols
 }
 
 export class SymbolTable {

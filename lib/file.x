@@ -52,23 +52,23 @@ struct File {
         local flags: u64 = 0;
         local mode_val: u64 = 438; # 0666 in octal (rw-rw-rw-)
 
-        if (call String.strcmp(mode, "r")) == 0 {
-            flags = call O_RDONLY();
-        } else if (call String.strcmp(mode, "w")) == 0 {
-            flags = call O_WRONLY() | call O_CREAT() | call O_TRUNC();
-        } else if (call String.strcmp(mode, "a")) == 0 {
-            flags = call O_WRONLY() | call O_CREAT() | call O_APPEND();
-        } else if (call String.strcmp(mode, "r+")) == 0 {
-            flags = call O_RDWR();
-        } else if (call String.strcmp(mode, "w+")) == 0 {
-            flags = call O_RDWR() | call O_CREAT() | call O_TRUNC();
-        } else if (call String.strcmp(mode, "a+")) == 0 {
-            flags = call O_RDWR() | call O_CREAT() | call O_APPEND();
+        if (String.strcmp(mode, "r")) == 0 {
+            flags = O_RDONLY();
+        } else if (String.strcmp(mode, "w")) == 0 {
+            flags = O_WRONLY() | O_CREAT() | O_TRUNC();
+        } else if (String.strcmp(mode, "a")) == 0 {
+            flags = O_WRONLY() | O_CREAT() | O_APPEND();
+        } else if (String.strcmp(mode, "r+")) == 0 {
+            flags = O_RDWR();
+        } else if (String.strcmp(mode, "w+")) == 0 {
+            flags = O_RDWR() | O_CREAT() | O_TRUNC();
+        } else if (String.strcmp(mode, "a+")) == 0 {
+            flags = O_RDWR() | O_CREAT() | O_APPEND();
         } else {
             return 0; # Invalid mode
         }
 
-        local res: u64 = call sys_open(path, flags, mode_val);
+        local res: u64 = sys_open(path, flags, mode_val);
 
         # Check for error (negative return value, but u64 so check if > very large number)
         # Linux returns -errno on error. Max errno is 4095.
@@ -76,8 +76,8 @@ struct File {
         # -4096 in u64 is 0xFFFFFFFFFFFFF000
 
         if res > 0xFFFFFFFFFFFFF000 {
-            call Console.print_int(cast<i64>(res));
-            call Console.println();
+            Console.print_int(cast<i64>(res));
+            Console.println();
             this.is_open = 0;
             return 0;
         }
@@ -93,7 +93,7 @@ struct File {
         if this.is_open == 0 {
             return 0;
         }
-        local res: u64 = call sys_close(this.fd);
+        local res: u64 = sys_close(this.fd);
         this.is_open = 0;
         return res;
     }
@@ -105,7 +105,7 @@ struct File {
         if this.is_open == 0 {
             return 0;
         }
-        return call sys_read(this.fd, buffer, size);
+        return sys_read(this.fd, buffer, size);
     }
 
     frame write(buffer: *u8, size: u64) ret u64 {
@@ -115,7 +115,7 @@ struct File {
         if this.is_open == 0 {
             return 0;
         }
-        return call sys_write(this.fd, buffer, size);
+        return sys_write(this.fd, buffer, size);
     }
 
     frame writeString(str: *u8) ret u64 {
@@ -131,7 +131,7 @@ struct File {
             }
             len = len + 1;
         }
-        return call sys_write(this.fd, str, len);
+        return sys_write(this.fd, str, len);
     }
 
     frame seek(offset: u64, whence: u64) ret u64 {
@@ -140,7 +140,7 @@ struct File {
         if this.is_open == 0 {
             return 0;
         }
-        return call sys_lseek(this.fd, offset, whence);
+        return sys_lseek(this.fd, offset, whence);
     }
 
     frame tell() ret u64 {
@@ -149,21 +149,21 @@ struct File {
         if this.is_open == 0 {
             return 0;
         }
-        return call sys_lseek(this.fd, 0, call SEEK_CUR());
+        return sys_lseek(this.fd, 0, SEEK_CUR());
     }
 
     frame rewind() {
         # Rewind to the beginning
 
         if this.is_open != 0 {
-            call sys_lseek(this.fd, 0, call SEEK_SET());
+            sys_lseek(this.fd, 0, SEEK_SET());
         }
     }
 }
 
 # Static helper to delete a file
 frame removeFile(path: *u8) ret u64 {
-    return call sys_unlink(path);
+    return sys_unlink(path);
 }
 
 export [File];

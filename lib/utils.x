@@ -2,41 +2,41 @@ import [Console] from "io.x";
 import exit from "./std.x";
 
 frame print_u64(n: u64) {
-    call Console.print(n);
+    Console.print(n);
 }
 
 frame println_u64(n: u64) {
-    call Console.log(n);
+    Console.log(n);
 }
 
 frame print_i64(n: i64) {
-    call Console.print(n);
+    Console.print(n);
 }
 
 frame println_i64(n: i64) {
-    call Console.log(n);
+    Console.log(n);
 }
 
 frame print_str(s: *u8) {
-    call Console.print(s);
+    Console.print(s);
 }
 
 frame println_str(s: *u8) {
-    call Console.log(s);
+    Console.log(s);
 }
 
 frame print_char(c: u8) {
     # Console.print handles u8 as char if it's a pointer, but here it is value.
     # Console.print_char is defined in io.x
-    call Console.print_char(c);
+    Console.print_char(c);
 }
 
 frame println() {
-    call Console.println();
+    Console.println();
 }
 
 frame exit_program(code: i32) {
-    call exit(code);
+    exit(code);
 }
 
 export print_u64;
