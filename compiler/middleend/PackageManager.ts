@@ -453,4 +453,25 @@ export class PackageManager {
       return null;
     }
   }
+
+  /**
+   * Initialize a new BPL project
+   */
+  init(dir: string, name?: string): void {
+    const manifestPath = path.join(dir, "bpl.json");
+    if (fs.existsSync(manifestPath)) {
+      throw new Error(`bpl.json already exists in ${dir}`);
+    }
+
+    const manifest: PackageManifest = {
+      name: name || path.basename(dir),
+      version: "1.0.0",
+      description: "A BPL project",
+      main: "index.bpl",
+      dependencies: {},
+      devDependencies: {},
+    };
+
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+  }
 }

@@ -1,4 +1,4 @@
-// Literals
+# Literals
 StringLiteral = '"' ( '\\' . | [^"\n\r] )* '"';
 CharLiteral = "'" ( '\\' . | [^'\n\r] ) "'";
 NumberLiteral = 
@@ -11,11 +11,11 @@ NullLiteral = 'null';
 NullptrLiteral = 'nullptr';
 Identifier = [a-zA-Z_] [a-zA-Z0-9_]*;
 
-// Comments
+# Comments
 SingleLineComment = '#' [^\n\r]* ('\n' | '\r\n')?;
 MultiLineComment = '###' ( .* | '\n' )*? '###';
 
-// Types
+# Types
 Type = FunctionType | TupleType | BasicType;
 BasicType = '*'* Identifier GenericArgs? ArraySuffix*;
 FunctionType = 'Func' '<' Type '>' '(' (Type (',' Type)*)? ')';
@@ -24,7 +24,7 @@ TupleType = '(' Type (',' Type)* ','? ')';
 GenericArgs = '<' Type (',' Type)* '>';
 ArraySuffix = '[' NumberLiteral? ']';
 
-// Declarations
+# Declarations
 DestructTarget = Identifier (':' Type)?;
 DestructTargetList = DestructTarget (',' DestructTarget)* ','?;
 DestructuringDeclaration = ('global' | 'local') '(' DestructTargetList ')' '=' Expression ';';
@@ -32,17 +32,17 @@ TypeAlias = 'type' Identifier GenericArgs? '=' Type ';';
 
 VariableDeclaration = ('global' | 'local') Identifier ':' Type ('=' Expression)? ';' | DestructuringDeclaration;
 
-// Functions
+# Functions
 FunctionDeclaration = 'frame' Identifier GenericArgs? '(' ParameterList? ')' ReturnType? Block;
 ParameterList = Parameter (',' Parameter)*;
 Parameter = Identifier ':' Type;
 ReturnType = 'ret' Type;
 
-// Structs
+# Structs
 StructDeclaration = 'struct' Identifier GenericArgs? '{' StructMember* '}';
 StructMember = (Identifier ':' Type ',') | FunctionDeclaration;
 
-// Imports/Exports
+# Imports/Exports
 ImportStatement = 
     'import' '*' 'as' Identifier 'from' (StringLiteral | Identifier) ';'
   | 'import' StringLiteral ';'
@@ -54,17 +54,17 @@ ExportStatement = 'export' ImportItem ';';
 ExternDeclaration = 'extern' Identifier '(' ExternParameterList? ')' ReturnType? ';';
 ExternParameterList = (Parameter (',' Parameter)* (',' '...')?) | '...';
 
-// Asm block (raw assembler content inside braces)
+# Asm block (raw assembler content inside braces)
 AsmBlock = 'asm' '{' ( .* | '\n' )*? '}';
 
-// Statements
+# Statements
 Statement = VariableDeclaration | TypeAlias | FunctionDeclaration | StructDeclaration | ImportStatement | ExportStatement | ExternDeclaration | AsmBlock | LoopStatement | IfStatement | TryStatement | ReturnStatement | ThrowStatement | SwitchStatement | BreakStatement | ContinueStatement | ExpressionStatement;
 Block = '{' (Statement | SingleLineComment | MultiLineComment)* '}';
 ExpressionStatement = Expression ';';
 
-// Control Flow
-LoopStatement = 'loop' Expression? Block;
-IfStatement = 'if' Expression Block ElseClause?;
+# Control Flow
+LoopStatement = 'loop' ('(' Expression ')')? Block;
+IfStatement = 'if' '(' Expression ')' Block ElseClause?;
 ElseClause = 'else' (IfStatement | Block);
 BreakStatement = 'break' ';';
 ContinueStatement = 'continue' ';';
@@ -76,7 +76,7 @@ SwitchStatement = 'switch' Expression '{' SwitchCase* DefaultCase? '}';
 SwitchCase = 'case' Expression ':' Block;
 DefaultCase = 'default' ':' Block;
 
-// Expressions
+# Expressions
 Expression = Assignment | Literal | Identifier | ArrayLiteral | StructLiteral | CastExpression | SizeofExpression | MatchExpression;
 
 Assignment = Ternary (('=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^=') Ternary)*;
@@ -105,7 +105,7 @@ CastExpression = 'cast' '<' Type '>' '(' Expression ')';
 SizeofExpression = 'sizeof' ( '(' Expression ')' | '<' Type '>' '(' ')' );
 MatchExpression = 'match' '<' Type '>' '(' (Expression | Type) ')';
 
-// Program entry
+# Program entry
 Program = (Statement | SingleLineComment | MultiLineComment)* EOF;
 EOF = '<EOF>';
 

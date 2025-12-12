@@ -1,20 +1,17 @@
 extern printf(fmt: string, ...);
-
 # Error handling example using try/catch/throw
-
 struct MathError {
     code: int,
     message: string,
 }
-
 frame divide(a: int, b: int) ret int {
     printf("Dividing %d by %d\n", a, b);
     if (b == 0) {
-        throw 1;  # Throw int error code for division by zero
+        throw 1;
+        # Throw int error code for division by zero
     }
     return a / b;
 }
-
 frame safe_divide(a: int, b: int) {
     try {
         local result: int = divide(a, b);
@@ -27,14 +24,15 @@ frame safe_divide(a: int, b: int) {
         }
     }
 }
-
 frame process_number(n: int) {
     try {
         if (n < 0) {
-            throw true; # Throw bool for negative
+            throw true;
+            # Throw bool for negative
         }
         if (n > 100) {
-            throw 42; # Throw int code for too large
+            throw 42;
+            # Throw int code for too large
         }
         printf("Processing number: %d\n", n);
     } catch (e_bool: bool) {
@@ -43,7 +41,6 @@ frame process_number(n: int) {
         printf("Caught int error: number too large (%d)\n", e_int);
     }
 }
-
 frame test_struct_throw(value: int) {
     try {
         if (value < 0) {
@@ -63,20 +60,22 @@ frame test_struct_throw(value: int) {
         printf("Caught MathError: code=%d, message=%s\n", error.code, error.message);
     }
 }
-
 frame test_multiple_catch(value: int) {
     try {
         if (value < 0) {
-            throw -42;  # Throw int
+            throw -42;
+            # Throw int
         }
         if (value == 0) {
-            throw true;  # Throw bool
+            throw true;
+            # Throw bool
         }
         if (value > 100) {
             local err: MathError;
             err.code = 500;
             err.message = "Overflow error";
-            throw err;  # Throw struct
+            throw err;
+            # Throw struct
         }
         printf("Value %d is valid\n", value);
     } catch (error_int: int) {
@@ -91,29 +90,23 @@ frame test_multiple_catch(value: int) {
         printf("Caught MathError: code=%d, message=%s\n", error_struct.code, error_struct.message);
     }
 }
-
 frame main() ret int {
     printf("=== Division Examples ===\n");
     safe_divide(10, 2);
     safe_divide(10, 0);
     safe_divide(20, 4);
-    
     printf("\n=== Number Processing Examples ===\n");
     process_number(50);
     process_number(-5);
     process_number(150);
-    
     printf("\n=== Struct Throw Examples ===\n");
     test_struct_throw(50);
     test_struct_throw(-10);
     test_struct_throw(200);
-    
     printf("\n=== Multiple Catch Examples ===\n");
     test_multiple_catch(50);
     test_multiple_catch(-5);
     test_multiple_catch(0);
     test_multiple_catch(150);
-    
     return 0;
 }
-

@@ -157,10 +157,7 @@ export class Lexer {
         this.addToken(this.match("=") ? TokenType.StarEqual : TokenType.Star);
         break;
       case "/":
-        if (this.match("/")) {
-          // Single-line comment
-          while (this.peek() != "\n" && !this.isAtEnd()) this.advance();
-        } else if (this.match("=")) {
+        if (this.match("=")) {
           this.addToken(TokenType.SlashEqual);
         } else {
           this.addToken(TokenType.Slash);
@@ -200,6 +197,8 @@ export class Lexer {
         } else {
           // Single-line comment
           while (this.peek() != "\n" && !this.isAtEnd()) this.advance();
+          const text = this.source.substring(this.start, this.current);
+          this.addToken(TokenType.Comment, text);
         }
         break;
 
@@ -245,6 +244,8 @@ export class Lexer {
         this.advance();
         this.advance();
         this.advance();
+        const text = this.source.substring(this.start, this.current);
+        this.addToken(TokenType.Comment, text);
         return;
       }
       if (this.peek() === "\n") {
@@ -253,6 +254,10 @@ export class Lexer {
       }
       this.advance();
     }
+    // Unterminated comment, but we can still emit what we have or error
+    // For now, let's emit it
+    const text = this.source.substring(this.start, this.current);
+    this.addToken(TokenType.Comment, text);
     console.error("Unterminated multi-line comment.");
   }
 

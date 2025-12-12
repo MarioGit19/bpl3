@@ -30,7 +30,7 @@ struct Console {
             }
             i = i - 1;
             buffer[i] = cast<u8>(n % 10 + '0');
-            n = (n // 10);
+            n = (n / 10);
         }
 
         Console.print_str(cast<*u8>(buffer) + i);
@@ -126,7 +126,7 @@ struct Console {
             }
             i = i - 1;
             buffer[i] = hex[n % 16];
-            n = (n // 16);
+            n = (n / 16);
         }
         Console.print_str(cast<*u8>(buffer) + i);
     }

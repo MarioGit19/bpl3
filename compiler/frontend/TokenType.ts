@@ -41,6 +41,9 @@ export enum TokenType {
   True = "True",
   False = "False",
 
+  // Comments
+  Comment = "Comment",
+
   // Symbols
   LeftBrace = "LeftBrace", // {
   RightBrace = "RightBrace", // }

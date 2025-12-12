@@ -26,7 +26,6 @@ frame SYS_LSEEK() ret u64 {
 frame SYS_UNLINK() ret u64 {
     return 87;
 }
-
 # Constants for mmap
 frame PROT_READ() ret u64 {
     return 1;
@@ -40,7 +39,6 @@ frame MAP_PRIVATE() ret u64 {
 frame MAP_ANONYMOUS() ret u64 {
     return 32;
 }
-
 frame sys_write(fd: u64, buf: *u8, count: u64) ret u64 {
     local ret_val: u64;
     asm {
@@ -54,7 +52,6 @@ frame sys_write(fd: u64, buf: *u8, count: u64) ret u64 {
     }
     return ret_val;
 }
-
 frame sys_read(fd: u64, buf: *u8, count: u64) ret u64 {
     local ret_val: u64;
     asm {
@@ -68,7 +65,6 @@ frame sys_read(fd: u64, buf: *u8, count: u64) ret u64 {
     }
     return ret_val;
 }
-
 frame sys_exit(code: u64) {
     asm {
         mov rax, 60
@@ -76,7 +72,6 @@ frame sys_exit(code: u64) {
         syscall
     }
 }
-
 frame sys_mmap(addr: *u8, length: u64, prot: u64, flags: u64, fd: u64, offset: u64) ret *u8 {
     local ret_val: *u8;
     asm {
@@ -93,7 +88,6 @@ frame sys_mmap(addr: *u8, length: u64, prot: u64, flags: u64, fd: u64, offset: u
     }
     return ret_val;
 }
-
 frame sys_munmap(addr: *u8, length: u64) ret u64 {
     local ret_val: u64;
     asm {
@@ -106,7 +100,6 @@ frame sys_munmap(addr: *u8, length: u64) ret u64 {
     }
     return ret_val;
 }
-
 frame sys_open(filename: *u8, flags: u64, mode: u64) ret u64 {
     local ret_val: u64;
     asm {
@@ -120,7 +113,6 @@ frame sys_open(filename: *u8, flags: u64, mode: u64) ret u64 {
     }
     return ret_val;
 }
-
 frame sys_close(fd: u64) ret u64 {
     local ret_val: u64;
     asm {
@@ -132,7 +124,6 @@ frame sys_close(fd: u64) ret u64 {
     }
     return ret_val;
 }
-
 frame sys_lseek(fd: u64, offset: u64, whence: u64) ret u64 {
     local ret_val: u64;
     asm {
@@ -146,7 +137,6 @@ frame sys_lseek(fd: u64, offset: u64, whence: u64) ret u64 {
     }
     return ret_val;
 }
-
 frame sys_unlink(filename: *u8) ret u64 {
     local ret_val: u64;
     asm {
@@ -158,7 +148,6 @@ frame sys_unlink(filename: *u8) ret u64 {
     }
     return ret_val;
 }
-
 export sys_write;
 export sys_read;
 export sys_exit;

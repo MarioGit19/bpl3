@@ -979,9 +979,13 @@ export class TypeChecker {
   private checkIdentifier(expr: AST.IdentifierExpr): AST.TypeNode | undefined {
     const symbol = this.currentScope.resolve(expr.name);
     if (!symbol) {
+      const similar = this.currentScope.findSimilar(expr.name);
+      const hint = similar
+        ? `Did you mean '${similar}'?`
+        : "Ensure the variable or function is declared before use.";
       throw new CompilerError(
         `Undefined symbol '${expr.name}'`,
-        "Ensure the variable or function is declared before use.",
+        hint,
         expr.location,
       );
     }

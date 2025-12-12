@@ -314,6 +314,7 @@ export interface SwitchCase extends ASTNode {
 export interface Program extends ASTNode {
   kind: "Program";
   statements: Statement[];
+  comments?: Token[];
 }
 
 export interface MetaType extends ASTNode {

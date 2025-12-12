@@ -15,6 +15,7 @@ import { CompilerError } from "./common/CompilerError";
 import { ASTPrinter } from "./common/ASTPrinter";
 import { ModuleResolver } from "./middleend/ModuleResolver";
 import { ModuleCache } from "./middleend/ModuleCache";
+import { Formatter } from "./formatter/Formatter";
 import * as path from "path";
 import * as fs from "fs";
 import type * as AST from "./common/AST";
@@ -22,7 +23,7 @@ import type * as AST from "./common/AST";
 export interface CompilerOptions {
   filePath: string;
   outputPath?: string;
-  emitType?: "llvm" | "ast" | "tokens";
+  emitType?: "llvm" | "ast" | "tokens" | "formatted";
   verbose?: boolean;
   resolveImports?: boolean; // New option for full module resolution
   useCache?: boolean; // Enable incremental compilation with caching
@@ -82,6 +83,15 @@ export class Compiler {
         return {
           success: true,
           output: JSON.stringify(ast, null, 2),
+          ast,
+        };
+      }
+
+      if (this.options.emitType === "formatted") {
+        const formatter = new Formatter();
+        return {
+          success: true,
+          output: formatter.format(ast),
           ast,
         };
       }
@@ -361,6 +371,7 @@ export class Compiler {
 }
 
 // Export all components for external use
+export { Formatter } from "./formatter/Formatter";
 export { Lexer } from "./frontend/Lexer";
 export { Parser } from "./frontend/Parser";
 export { TypeChecker } from "./middleend/TypeChecker";

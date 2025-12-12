@@ -1,5 +1,4 @@
 # Standard C library bindings
-
 # Standard I/O (variadic functions)
 extern printf(format: *u8, ...);
 extern scanf(format: *u8, ...);
@@ -7,19 +6,16 @@ extern sprintf(str: *u8, format: *u8, ...);
 extern snprintf(str: *u8, size: u64, format: *u8, ...);
 extern vprintf(format: *u8, ap: *u8) ret i32;
 extern vsprintf(str: *u8, format: *u8, ap: *u8) ret i32;
-
 # Memory management
 extern malloc(size: u64) ret *u8;
 extern free(ptr: *u8);
 extern calloc(nmemb: u64, size: u64) ret *u8;
 extern realloc(ptr: *u8, size: u64) ret *u8;
-
 # Process control
 extern exit(status: i32);
 extern abort();
 extern system(command: *u8) ret i32;
 extern getenv(name: *u8) ret *u8;
-
 # File I/O
 extern fopen(filename: *u8, mode: *u8) ret *u8;
 extern fclose(stream: *u8) ret i32;
@@ -35,7 +31,6 @@ extern rewind(stream: *u8);
 extern fflush(stream: *u8) ret i32;
 extern popen(command: *u8, mode: *u8) ret *u8;
 extern pclose(stream: *u8) ret i32;
-
 # String operations
 extern strlen(s: *u8) ret u64;
 extern strcpy(dest: *u8, src: *u8) ret *u8;
@@ -47,7 +42,6 @@ extern strncmp(s1: *u8, s2: *u8, n: u64) ret i32;
 extern strchr(s: *u8, c: i32) ret *u8;
 extern strstr(haystack: *u8, needle: *u8) ret *u8;
 extern strtok(str: *u8, delim: *u8) ret *u8;
-
 # Utility functions
 extern rand() ret i32;
 extern srand(seed: u32);
@@ -58,17 +52,14 @@ extern atol(nptr: *u8) ret i64;
 extern atoll(nptr: *u8) ret i64;
 extern strtol(nptr: *u8, endptr: **u8, base: i32) ret i64;
 extern strtoll(nptr: *u8, endptr: **u8, base: i32) ret i64;
-
 # Memory operations
 extern memcpy(dest: *u8, src: *u8, n: u64) ret *u8;
 extern memset(s: *u8, c: i32, n: u64) ret *u8;
 extern memcmp(s1: *u8, s2: *u8, n: u64) ret i32;
 extern memmove(dest: *u8, src: *u8, n: u64) ret *u8;
-
 # Time operations
 extern time(t: *u64) ret u64;
 extern clock() ret u64;
-
 # Character operations
 extern getchar() ret i32;
 extern putchar(c: i32) ret i32;
@@ -78,10 +69,8 @@ extern isdigit(c: i32) ret i32;
 extern isspace(c: i32) ret i32;
 extern tolower(c: i32) ret i32;
 extern toupper(c: i32) ret i32;
-
 # Math functions
 extern sin(x: f64) ret f64;
-
 export printf;
 export scanf;
 export sprintf;

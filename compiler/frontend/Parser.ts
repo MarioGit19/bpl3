@@ -5,10 +5,18 @@ import { CompilerError, type SourceLocation } from "../common/CompilerError";
 
 export class Parser {
   private tokens: Token[];
+  private comments: Token[] = [];
   private current: number = 0;
 
   constructor(tokens: Token[]) {
-    this.tokens = tokens;
+    this.tokens = [];
+    for (const token of tokens) {
+      if (token.type === TokenType.Comment) {
+        this.comments.push(token);
+      } else {
+        this.tokens.push(token);
+      }
+    }
   }
 
   public parse(): AST.Program {
@@ -32,6 +40,7 @@ export class Parser {
     return {
       kind: "Program",
       statements,
+      comments: this.comments,
       location: {
         file: startToken?.file || "unknown",
         startLine: startToken?.line || 0,
@@ -494,17 +503,11 @@ export class Parser {
   private ifStatement(): AST.IfStmt {
     const startToken = this.previous();
     let condition: AST.Expression;
-    // Support both styles:
-    //  - if (cond) { ... }
-    //  - if cond { ... }
-    if (this.check(TokenType.LeftParen)) {
-      this.consume(TokenType.LeftParen, "Expected '(' after 'if'.");
-      condition = this.expression();
-      this.consume(TokenType.RightParen, "Expected ')' after if condition.");
-    } else {
-      // No parentheses style: parse a single expression as the condition
-      condition = this.expression();
-    }
+
+    this.consume(TokenType.LeftParen, "Expected '(' after 'if'.");
+    condition = this.expression();
+    this.consume(TokenType.RightParen, "Expected ')' after if condition.");
+
     const thenBranch = this.block();
     let elseBranch: AST.Statement | undefined;
 
@@ -529,8 +532,9 @@ export class Parser {
     const startToken = this.previous();
     let condition: AST.Expression | undefined;
 
-    if (!this.check(TokenType.LeftBrace)) {
+    if (this.match(TokenType.LeftParen)) {
       condition = this.expression();
+      this.consume(TokenType.RightParen, "Expected ')' after loop condition.");
     }
 
     const body = this.block();
@@ -1174,7 +1178,7 @@ export class Parser {
       const type = this.parseType();
       this.consume(TokenType.Greater, "Expected '>' after match type.");
       this.consume(TokenType.LeftParen, "Expected '(' after match.");
-      
+
       const expr = this.expression();
       this.consume(TokenType.RightParen, "Expected ')' after match argument.");
       return {
