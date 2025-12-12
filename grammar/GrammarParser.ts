@@ -1,12 +1,13 @@
-import { Grammar, GrammarRule } from "./types";
-import { readFile } from "../utils/file";
+import type { Grammar, GrammarRule } from "./types";
+
+import { readFileSync } from "fs";
 
 export class GrammarParser {
   private content: string;
   private pos: number = 0;
 
   constructor(filePath: string) {
-    this.content = readFile(filePath);
+    this.content = readFileSync(filePath, "utf-8");
   }
 
   public parse(): Grammar {

@@ -2,6 +2,22 @@
 
 This document outlines the syntax, types, and constructs available in the BPL3 language.
 
+## 1. Syntax Basics
+
+### Comments
+
+- **Single-line comments**: Start with `#` and continue to the end of the line.
+- **Multi-line comments**: Enclosed in `### ... ###`.
+
+```bpl
+# This is a single-line comment
+
+###
+This is a
+multi-line comment
+###
+```
+
 ## 1. Types
 
 ### Primitive Types
@@ -62,7 +78,7 @@ local (a: int, b: bool) = getTuple();
 
 ### Constants
 
-_Currently, there is no `const` keyword. Use `global` or `local`._
+_Currently, there is no `const` keyword. Use `global` or `local`._ (Note: `const` is a reserved keyword but not yet implemented in the parser).
 
 ## 3. Functions
 
@@ -125,10 +141,12 @@ struct Generic<T>{
 
 ### Conditionals
 
+Conditions must be enclosed in parentheses.
+
 ```bpl
-if x > 0 {
+if (x > 0) {
     # ...
-} else if x < 0 {
+} else if (x < 0) {
     # ...
 } else {
     # ...
@@ -137,10 +155,10 @@ if x > 0 {
 
 ### Loops
 
-The only loop construct is `loop`. It functions as a `while` loop.
+The only loop construct is `loop`. It functions as a `while` loop. Conditions must be enclosed in parentheses.
 
 ```bpl
-loop i < 10 {
+loop (i < 10) {
     # ...
 }
 
@@ -152,8 +170,10 @@ loop {
 
 ### Switch
 
+The switch expression must be enclosed in parentheses.
+
 ```bpl
-switch val {
+switch (val) {
     case 1: { ... }
     default: { ... }
 }
@@ -198,6 +218,37 @@ The following are **NOT** currently supported by the grammar:
 - **For Loops**: No C-style `for(;;)` or `foreach`. Use `loop`.
 - **Postfix Increment/Decrement**: `i++` and `i--` are not supported. Use `++i` or `i += 1`.
 - **Enums**: No `enum` keyword.
-- **Type Aliases**: No `type` or `typedef` keyword.
+- **Type Aliases**: Aliases are defined via `type Name = ...`, check Type Aliases Section above.
 - **Visibility**: No `public` / `private` modifiers (all members are public).
 - **Do-While**: No `do { ... } while` loop.
+
+## 8. Modules and Imports
+
+BPL3 supports a module system with explicit imports and exports.
+
+### Imports
+
+Imports must specify the symbols to import and the source file. Types must be enclosed in brackets `[]`.
+
+```bpl
+# Import functions and values
+import myFunc, myGlobal from "./utils.bpl";
+
+# Import types (must be in brackets)
+import [MyStruct], [MyType] from "./types.bpl";
+
+# Mixed imports
+import process, [Config] from "./lib.bpl";
+
+# Namespace import
+import * as std from "std";
+```
+
+### Exports
+
+Symbols are private to the module by default. Use `export` to make them available to other modules.
+
+```bpl
+export myFunc;
+export [MyStruct];
+```

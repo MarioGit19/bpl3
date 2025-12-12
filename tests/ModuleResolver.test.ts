@@ -32,8 +32,8 @@ describe("ModuleResolver", () => {
     const modules = resolver.resolveModules(mainPath);
 
     expect(modules.length).toBe(1);
-    expect(modules[0].path).toBe(mainPath);
-    expect(modules[0].dependencies.size).toBe(0);
+    expect(modules[0]!.path).toBe(mainPath);
+    expect(modules[0]!.dependencies.size).toBe(0);
   });
 
   it("should resolve modules with linear dependencies", () => {
@@ -81,9 +81,9 @@ describe("ModuleResolver", () => {
 
     // Should be in order: A, B, main
     expect(modules.length).toBe(3);
-    expect(path.basename(modules[0].path)).toBe("moduleA.bpl");
-    expect(path.basename(modules[1].path)).toBe("moduleB.bpl");
-    expect(path.basename(modules[2].path)).toBe("main2.bpl");
+    expect(path.basename(modules[0]!.path)).toBe("moduleA.bpl");
+    expect(path.basename(modules[1]!.path)).toBe("moduleB.bpl");
+    expect(path.basename(modules[2]!.path)).toBe("main2.bpl");
   });
 
   it("should detect circular dependencies", () => {
@@ -179,9 +179,9 @@ describe("ModuleResolver", () => {
 
     // Common should appear first, then left and right, then main
     expect(modules.length).toBe(4);
-    expect(path.basename(modules[0].path)).toBe("common.bpl");
+    expect(path.basename(modules[0]!.path)).toBe("common.bpl");
     // Left and right can be in either order
-    const lastModule = path.basename(modules[modules.length - 1].path);
+    const lastModule = path.basename(modules[modules.length - 1]!.path);
     expect(lastModule).toBe("diamond_main.bpl");
   });
 
