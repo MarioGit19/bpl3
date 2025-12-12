@@ -1217,7 +1217,8 @@ export class Parser {
     const startToken = this.peek();
 
     // Function Type: Func<Ret>(Args...)
-    if (this.match(TokenType.Func)) {
+    if (this.check(TokenType.Identifier) && this.peek().lexeme === "Func") {
+      this.advance(); // consume Func
       this.consume(TokenType.Less, "Expected '<' after Func.");
       const returnType = this.parseType();
       this.consume(TokenType.Greater, "Expected '>' after return type.");

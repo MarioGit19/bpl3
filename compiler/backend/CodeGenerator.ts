@@ -23,6 +23,8 @@ export class CodeGenerator {
   private onReturn?: () => void;
   private typeIdMap: Map<string, number> = new Map(); // Type name -> Type ID
   private nextTypeId: number = 10; // Start user types at 10
+  private currentTypeMap: Map<string, AST.TypeNode> = new Map(); // For generic function instantiation
+  private pendingGenerations: (() => void)[] = [];
 
   generate(program: AST.Program): string {
     this.output = [];
@@ -77,6 +79,12 @@ export class CodeGenerator {
 
     for (const stmt of program.statements) {
       this.generateTopLevel(stmt);
+    }
+
+    // Process pending monomorphized functions
+    while (this.pendingGenerations.length > 0) {
+      const task = this.pendingGenerations.shift()!;
+      task();
     }
 
     let header = "";
@@ -252,6 +260,30 @@ export class CodeGenerator {
     }
   }
 
+  private mangleType(type: AST.TypeNode): string {
+    if (type.kind === "BasicType") {
+      let name = type.name;
+      // Handle generic args in mangling
+      if (type.genericArgs.length > 0) {
+        const args = type.genericArgs.map((t) => this.mangleType(t)).join("_");
+        name = `${name}_${args}`;
+      }
+
+      // Cleanup name similarly to before but on AST level names
+      if (name.includes(".")) name = name.replace(/\./g, "_");
+
+      // Basic type pointers/arrays
+      let suffix = "";
+      for (let i = 0; i < type.pointerDepth; i++) suffix += "_ptr";
+      for (let d of type.arrayDimensions) suffix += `_arr_${d}_`;
+
+      return `${name}${suffix}`;
+    } else if (type.kind === "FunctionType") {
+      return "fn"; // simplified mangling for fn types
+    }
+    return "unknown";
+  }
+
   private resolveMonomorphizedType(
     baseStruct: AST.StructDecl,
     genericArgs: AST.TypeNode[],
@@ -259,16 +291,8 @@ export class CodeGenerator {
     // 1. Mangle Name
     const argNames = genericArgs
       .map((arg) => {
-        let resolved = this.resolveType(arg);
-        // resolved is LLVM type string e.g. "i32", "double", "%struct.Foo*"
-        // clean it up for identifiers
-        resolved = resolved
-          .replace(/%struct\./g, "")
-          .replace(/\*/g, "_ptr")
-          .replace(/\[/g, "_arr_")
-          .replace(/\]/g, "_")
-          .replace(/ /g, "");
-        return resolved;
+        // Use lightweight mangling to avoid recursive resolveType for generic args
+        return this.mangleType(arg);
       })
       .join("_");
 
@@ -276,6 +300,10 @@ export class CodeGenerator {
 
     // 2. Check if exists
     if (this.generatedStructs.has(mangledName)) {
+      return `%struct.${mangledName}`;
+    }
+    // Also check structMap in case it was created but not yet generated (e.g. recursive reference)
+    if (this.structMap.has(mangledName)) {
       return `%struct.${mangledName}`;
     }
 
@@ -296,23 +324,149 @@ export class CodeGenerator {
         return {
           ...field,
           type: this.substituteType(field.type, typeMap),
-          resolvedType: this.substituteType(
-            field.resolvedType || field.type,
-            typeMap,
-          ), // Substitute resolved type too
+          resolvedType: undefined, // Force re-resolution
+          typeMap,
         } as AST.StructField;
       }
       return m;
     });
 
+    // Handle generic inheritance
+    let instantiatedParentType = baseStruct.parentType;
+    if (baseStruct.parentType) {
+      // Substitute generics in parent type
+      instantiatedParentType = this.substituteType(
+        baseStruct.parentType,
+        typeMap,
+      );
+
+      // Force resolution of parent to ensure it exists and we get the concrete name
+      const parentLlvmType = this.resolveType(instantiatedParentType);
+
+      // Update name in BasicType to match the mangled parent name
+      if (instantiatedParentType.kind === "BasicType") {
+        let parentName = parentLlvmType;
+        if (parentName.startsWith("%struct.")) {
+          parentName = parentName.substring(8);
+          // remove pointers if any
+          while (parentName.endsWith("*")) parentName = parentName.slice(0, -1);
+        }
+        instantiatedParentType = {
+          ...instantiatedParentType,
+          name: parentName,
+          genericArgs: [], // Cleared because name is now concrete
+        };
+      }
+    }
+
     const instantiatedStruct: AST.StructDecl = {
       ...baseStruct,
-      members: instantiatedMembers,
+      name: mangledName, // Update name
+      genericParams: [], // Concrete now
+      parentType: instantiatedParentType,
+      members: instantiatedMembers.filter((m) => m.kind === "StructField"), // Only fields in struct def
     };
+
+    // Register in structMap so it can be looked up by name (for inheritance etc)
+    this.structMap.set(mangledName, instantiatedStruct);
 
     this.generateStruct(instantiatedStruct, mangledName);
 
+    // Queue generation of methods
+    const methods = baseStruct.members.filter(
+      (m) => m.kind === "FunctionDecl",
+    ) as AST.FunctionDecl[];
+    for (const method of methods) {
+      // If method is not generic, generate it now (monomorphized)
+      if (method.genericParams.length === 0) {
+        this.pendingGenerations.push(() => {
+          const oldName = method.name;
+          method.name = `${mangledName}_${method.name}`;
+          const prevMap = this.currentTypeMap;
+          this.currentTypeMap = typeMap;
+
+          // We pass instantiatedStruct as parent to generateFunction
+          // This correctly sets up "this" type and destructor chaining
+          this.generateFunction(method, instantiatedStruct);
+
+          this.currentTypeMap = prevMap;
+          method.name = oldName;
+        });
+      }
+      // If method IS generic, we don't generate it here.
+      // It will be generated when called, via resolveMonomorphizedFunction.
+    }
+
     return `%struct.${mangledName}`;
+  }
+
+  private resolveMonomorphizedFunction(
+    decl: AST.FunctionDecl,
+    genericArgs: AST.TypeNode[],
+    contextMap?: Map<string, AST.TypeNode>,
+    namePrefix?: string,
+  ): string {
+    // 1. Substitute generic args in case they are also generic
+    const concreteArgs = genericArgs.map((arg) =>
+      this.substituteType(arg, this.currentTypeMap),
+    );
+
+    // 2. Mangle Name
+    const argNames = concreteArgs
+      .map((arg) => {
+        // Use lightweight mangling
+        return this.mangleType(arg);
+      })
+      .join("_");
+
+    let mangledName = `${decl.name}_${argNames}`;
+    if (namePrefix) {
+      mangledName = `${namePrefix}_${decl.name}_${argNames}`;
+    }
+
+    // 3. Check if exists
+    if (this.declaredFunctions.has(mangledName)) {
+      return mangledName;
+    }
+    // We don't add to declaredFunctions here because generateFunction does it (via emit)
+    // But we need to prevent infinite recursion if generateFunction calls this again?
+    // declaredFunctions tracks "declare ..." or generated definitions.
+    if (this.declaredFunctions.has(mangledName)) return mangledName;
+    this.declaredFunctions.add(mangledName);
+
+    // 4. Instantiate
+    // Map generic params to concrete args
+    const instanceMap = new Map<string, AST.TypeNode>(this.currentTypeMap);
+    if (contextMap) {
+      for (const [k, v] of contextMap) {
+        instanceMap.set(k, v);
+      }
+    }
+    if (decl.genericParams.length !== concreteArgs.length) {
+      throw new Error(`Generic argument mismatch for function ${decl.name}`);
+    }
+    for (let i = 0; i < decl.genericParams.length; i++) {
+      instanceMap.set(decl.genericParams[i]!, concreteArgs[i]!);
+    }
+
+    // Queue generation
+    this.pendingGenerations.push(() => {
+      const oldName = decl.name;
+      decl.name = mangledName;
+
+      // Save/Restore previous map (though we are at top level usually, but good practice)
+      const prevMap = this.currentTypeMap;
+      this.currentTypeMap = instanceMap;
+
+      // If passing context, we assume the method might use "this" which is handled by generateFunction logic
+
+      this.generateFunction(decl);
+
+      this.currentTypeMap = prevMap;
+      decl.name = oldName;
+    });
+
+    return mangledName;
   }
 
   private substituteType(
@@ -356,6 +510,14 @@ export class CodeGenerator {
     decl: AST.FunctionDecl,
     parentStruct?: AST.StructDecl,
   ) {
+    // Skip generic templates unless we are instantiating them (map is populated)
+    if (decl.genericParams.length > 0) {
+      const isInstantiating = decl.genericParams.every((p) =>
+        this.currentTypeMap.has(p),
+      );
+      if (!isInstantiating) return;
+    }
+
     this.registerCount = 0;
     this.labelCount = 0;
     this.stackAllocCount = 0;
@@ -634,7 +796,7 @@ export class CodeGenerator {
           `  store ${targetTypeStr} ${structVal}, ${targetTypeStr}* ${localVar}`,
         );
       } else {
-        // For primitive types, cast from i64
+        // For primitive types, cast to i64
         const convertedVal = this.emitCast(
           valI64,
           "i64",
@@ -967,6 +1129,12 @@ export class CodeGenerator {
     if (!expr.resolvedType) {
       throw new Error(`Identifier '${name}' has no resolved type`);
     }
+
+    // Special case: function identifiers (not local variables) evaluate to their address directly
+    if (expr.resolvedType.kind === "FunctionType" && !this.locals.has(name)) {
+      return `@${name}`;
+    }
+
     const type = this.resolveType(expr.resolvedType!);
     const addr = this.generateAddress(expr);
     const reg = this.newRegister();
@@ -1092,10 +1260,49 @@ export class CodeGenerator {
     let argsToGenerate = expr.args;
     let isInstanceCall = false;
 
-    if (expr.callee.kind === "Identifier") {
-      funcName = (expr.callee as AST.IdentifierExpr).name;
-    } else if (expr.callee.kind === "Member") {
-      const memberExpr = expr.callee as AST.MemberExpr;
+    let callee = expr.callee;
+    let genericArgs = expr.genericArgs || [];
+    const callSubstitutionMap = new Map<string, AST.TypeNode>();
+
+    // Handle generic instantiation expression
+    if (callee.kind === "GenericInstantiation") {
+      const genExpr = callee as AST.GenericInstantiationExpr;
+      callee = genExpr.base;
+      genericArgs = genExpr.genericArgs;
+    }
+
+    if (callee.kind === "Identifier") {
+      const ident = callee as AST.IdentifierExpr;
+      funcName = ident.name;
+
+      // Handle generic function call
+      if (genericArgs.length > 0) {
+        // Find declaration
+        // We rely on resolvedType having the declaration
+        const funcType = ident.resolvedType as AST.FunctionTypeNode;
+        if (funcType && funcType.declaration) {
+          funcName = this.resolveMonomorphizedFunction(
+            funcType.declaration,
+            genericArgs,
+          );
+          if (
+            funcType.declaration.genericParams.length === genericArgs.length
+          ) {
+            for (let k = 0; k < genericArgs.length; k++) {
+              callSubstitutionMap.set(
+                funcType.declaration.genericParams[k]!,
+                genericArgs[k]!,
+              );
+            }
+          }
+        } else {
+          // Maybe it's a struct constructor?
+          // If 'resolvedType' is null or no declaration, we can't morph.
+          // But let's assume valid typed AST.
+        }
+      }
+    } else if (callee.kind === "Member") {
+      const memberExpr = callee as AST.MemberExpr;
       const objType = memberExpr.object.resolvedType;
 
       if (!objType) throw new Error("Member access on unresolved type");
@@ -1104,6 +1311,9 @@ export class CodeGenerator {
         funcName = memberExpr.property;
       } else {
         let structName = "";
+        let contextMap: Map<string, AST.TypeNode> | undefined;
+        let prefix: string | undefined;
+
         if (objType.kind === "BasicType") {
           // Use resolved type name to handle monomorphization
           const typeStr = this.resolveType(objType);
@@ -1132,13 +1342,71 @@ export class CodeGenerator {
             structName = objType.name;
           }
 
+          prefix = structName; // e.g. Box_double
+
           // Instance call: pass object as first argument
           argsToGenerate = [memberExpr.object, ...expr.args];
           isInstanceCall = true;
+
+          // Prepare context if object is instantiated generic struct
+          const structDecl = this.structMap.get(objType.name); // Original generic struct
+          if (
+            structDecl &&
+            structDecl.genericParams.length > 0 &&
+            objType.genericArgs.length > 0
+          ) {
+            contextMap = new Map();
+            for (let i = 0; i < structDecl.genericParams.length; i++) {
+              if (i < objType.genericArgs.length) {
+                contextMap.set(
+                  structDecl.genericParams[i]!,
+                  objType.genericArgs[i]!,
+                );
+                callSubstitutionMap.set(
+                  structDecl.genericParams[i]!,
+                  objType.genericArgs[i]!,
+                );
+              }
+            }
+          }
         } else if (objType.kind === "MetaType") {
           const inner = (objType as any).type;
           if (inner.kind === "BasicType") {
             structName = inner.name;
+
+            // Handle generic static calls - need monomorphized name
+            if (inner.genericArgs && inner.genericArgs.length > 0) {
+              // Resolve the monomorphized struct name
+              const structDecl = this.structMap.get(inner.name);
+              if (structDecl && structDecl.genericParams.length > 0) {
+                // Build contextMap for generic substitution
+                contextMap = new Map();
+                for (let i = 0; i < structDecl.genericParams.length; i++) {
+                  if (i < inner.genericArgs.length) {
+                    contextMap.set(
+                      structDecl.genericParams[i]!,
+                      inner.genericArgs[i]!,
+                    );
+                    callSubstitutionMap.set(
+                      structDecl.genericParams[i]!,
+                      inner.genericArgs[i]!,
+                    );
+                  }
+                }
+
+                // Mangle the struct name using the same approach as resolveMonomorphizedType
+                // But first substitute any generic parameters
+                const substitutedArgs = inner.genericArgs.map(
+                  (arg: AST.TypeNode) =>
+                    this.substituteType(arg, this.currentTypeMap),
+                );
+                const argNames = substitutedArgs
+                  .map((arg: AST.TypeNode) => this.mangleType(arg))
+                  .join("_");
+                structName = `${inner.name}_${argNames}`;
+                prefix = structName;
+              }
+            }
             // Static call: no extra argument
           } else {
             throw new Error("Static member access on non-struct type");
@@ -1148,18 +1416,94 @@ export class CodeGenerator {
         }
 
         funcName = `${structName}_${memberExpr.property}`;
+
+        // Handle generic method call
+        if (genericArgs.length > 0) {
+          const funcType = expr.callee.resolvedType as AST.FunctionTypeNode;
+          if (funcType && funcType.declaration) {
+            funcName = this.resolveMonomorphizedFunction(
+              funcType.declaration,
+              genericArgs,
+              contextMap,
+              prefix,
+            );
+            if (
+              funcType.declaration.genericParams.length === genericArgs.length
+            ) {
+              for (let k = 0; k < genericArgs.length; k++) {
+                callSubstitutionMap.set(
+                  funcType.declaration.genericParams[k]!,
+                  genericArgs[k]!,
+                );
+              }
+            }
+          }
+        }
+      }
+    }
+    let callTarget = "";
+    // If identifier and local, indirect call
+    if (callee.kind === "Identifier") {
+      const ident = callee as AST.IdentifierExpr;
+      if (this.locals.has(ident.name)) {
+        // Indirect call
+        const funcSig = this.resolveType(ident.resolvedType!);
+        const addr = this.generateAddress(ident);
+        const loadedPtr = this.newRegister();
+        // addr is funcSig**
+        this.emit(`  ${loadedPtr} = load ${funcSig}, ${funcSig}* ${addr}`);
+        callTarget = loadedPtr;
+      } else {
+        callTarget = `@${funcName}`;
+      }
+    } else if (callee.kind === "Member") {
+      const memberExpr = callee as AST.MemberExpr;
+      const objType = memberExpr.object.resolvedType as AST.BasicTypeNode;
+      if (objType && objType.kind === "BasicType") {
+        let structName = objType.name;
+        if (this.currentTypeMap.has(structName)) {
+          const typeStr = this.resolveType(objType); // %struct.Name
+          if (typeStr.startsWith("%struct.")) {
+            structName = typeStr.substring(8);
+            while (structName.endsWith("*"))
+              structName = structName.slice(0, -1);
+          }
+        }
+
+        // Check layout
+        const layout = this.structLayouts.get(structName);
+        if (layout && layout.has(memberExpr.property)) {
+          // It IS a field! Indirect call.
+          // We should generate the member access to get the pointer.
+          const ptrToFuncPtr = this.generateMember(memberExpr); // Get address of field
+          const funcSig = this.resolveType(callee.resolvedType!);
+          const loadedPtr = this.newRegister();
+          this.emit(
+            `  ${loadedPtr} = load ${funcSig}, ${funcSig}* ${ptrToFuncPtr}`,
+          );
+          callTarget = loadedPtr;
+
+          // Reset args (remove "this" injection done for methods)
+          if (isInstanceCall) {
+            argsToGenerate = expr.args; // Revert to original args
+            isInstanceCall = false;
+          }
+        } else {
+          callTarget = `@${funcName}`;
+        }
+      } else {
+        callTarget = `@${funcName}`;
       }
     } else {
-      throw new Error("Only direct function calls supported for now");
+      // Other expressions (Index, Call, etc) evaluating to function pointer
+      // e.g. arr[0]()
+      const funcSig = this.resolveType(callee.resolvedType!);
+      const ptrVal = this.generateExpression(callee);
+      callTarget = ptrVal;
     }
 
     const funcType = expr.callee.resolvedType as AST.FunctionTypeNode;
     if (!funcType) {
-      // If we are calling a module function, the resolvedType might be on the property access?
-      // In checkMember, we return symbol.type.
-      // If symbol is Function, symbol.type is FunctionType.
-      // So expr.callee.resolvedType SHOULD be FunctionType.
-      // But if it's undefined, we have a problem.
       throw new Error(`Function call '${funcName}' has no resolved type`);
     }
 
@@ -1189,10 +1533,18 @@ export class CodeGenerator {
         }
 
         if (targetTypeNode) {
+          // Apply substitution
+          if (callSubstitutionMap.size > 0) {
+            targetTypeNode = this.substituteType(
+              targetTypeNode,
+              callSubstitutionMap,
+            );
+          }
+
           const destType = this.resolveType(targetTypeNode);
           const srcType = this.resolveType(arg.resolvedType!);
 
-          // Optimize for L-values passing to pointer: take address directly
+          // Optimize for L-values passing to pointer: take address directly (T -> *T)
           if (destType === srcType + "*") {
             if (
               arg.kind === "Identifier" ||
@@ -1201,6 +1553,22 @@ export class CodeGenerator {
             ) {
               const addr = this.generateAddress(arg as any);
               return `${destType} ${addr}`;
+            }
+          }
+
+          if (srcType.startsWith("[") && destType.endsWith("*")) {
+            if (
+              arg.kind === "Identifier" ||
+              arg.kind === "Member" ||
+              arg.kind === "Index"
+            ) {
+              const addr = this.generateAddress(arg as any);
+
+              const decayReg = this.newRegister();
+              this.emit(
+                `  ${decayReg} = getelementptr inbounds ${srcType}, ${srcType}* ${addr}, i64 0, i64 0`,
+              );
+              return `${destType} ${decayReg}`;
             }
           }
 
@@ -1230,9 +1598,9 @@ export class CodeGenerator {
         const paramTypesStr = funcType.paramTypes
           .map((t) => this.resolveType(t))
           .join(", ");
-        this.emit(`  call void (${paramTypesStr}, ...) @${funcName}(${args})`);
+        this.emit(`  call void (${paramTypesStr}, ...) ${callTarget}(${args})`);
       } else {
-        this.emit(`  call void @${funcName}(${args})`);
+        this.emit(`  call void ${callTarget}(${args})`);
       }
       return "";
     } else {
@@ -1243,10 +1611,10 @@ export class CodeGenerator {
           .map((t) => this.resolveType(t))
           .join(", ");
         this.emit(
-          `  ${reg} = call ${retType} (${paramTypesStr}, ...) @${funcName}(${args})`,
+          `  ${reg} = call ${retType} (${paramTypesStr}, ...) ${callTarget}(${args})`,
         );
       } else {
-        this.emit(`  ${reg} = call ${retType} @${funcName}(${args})`);
+        this.emit(`  ${reg} = call ${retType} ${callTarget}(${args})`);
       }
       return reg;
     }
@@ -1266,19 +1634,16 @@ export class CodeGenerator {
       } else if (this.globals.has(name)) {
         return `@${name}`;
       } else {
-        // Maybe it's a function parameter that wasn't added to locals?
-        // Or an error.
-        // For now assume local if not global, to support params if I missed something.
-        // But I added params to locals.
-        // What about function names? (Function pointers)
-        // If it's a function, we return the function pointer?
-        // But generateAddress is for lvalues (storage).
-        // Functions are not lvalues unless we have function pointers variables.
-        // Check map first
         const ptr = this.localPointers.get(name);
         if (ptr) {
           return ptr;
         }
+
+        // If it's a function type, it's likely a global function
+        if (expr.resolvedType && expr.resolvedType.kind === "FunctionType") {
+          return `@${name}`;
+        }
+
         return `%${name}_ptr`;
       }
     } else if (expr.kind === "Member") {
@@ -1309,15 +1674,6 @@ export class CodeGenerator {
         while (structName.endsWith("*")) structName = structName.slice(0, -1);
       }
 
-      // Handle namespaced struct names (e.g. std.Point)
-      // The structLayouts map keys might not have the namespace prefix if they were compiled in another module.
-      // But wait, if we import a struct, we should probably register its layout in the current module's CodeGenerator?
-      // Or we should use the name as it is known in the current module?
-      // If it's imported as 'std.Point', the type name is 'std.Point'.
-      // But the struct definition in LLVM IR will be '%struct.Point' or '%struct.std.Point'?
-      // Currently we don't namespace LLVM struct names.
-      // So we should strip the namespace for lookup if it's not found.
-
       let layout = this.structLayouts.get(structName);
       if (!layout && structName.includes(".")) {
         const shortName = structName.split(".").pop()!;
@@ -1344,12 +1700,6 @@ export class CodeGenerator {
       }
 
       const addr = this.newRegister();
-      // llvmType acts incorrectly here if it has * pointers.
-      // If objectAddr is struct**, baseAddr is struct*.
-      // GEP needs struct type (without *) if we passing pointer.
-
-      // llvmType includes pointers if pointerDepth > 0
-      // We want the base struct identifier e.g. %struct.Box_i32
       const structBase = `%struct.${structName}`;
 
       this.emit(
@@ -1379,21 +1729,10 @@ export class CodeGenerator {
         throw new Error("Indexing non-basic type");
       }
 
-      const addr = this.newRegister();
-
+      let addr: string;
       if (objType.arrayDimensions.length > 0) {
-        // Array indexing
-        // If it's a fixed size array on stack (alloca [N x T]), objectAddr is [N x T]*
-        // We need to use GEP with 0, index
-
-        // However, if it's passed as parameter, it might be T* (decayed)
-        // But my resolveType for arrays isn't fully implemented yet.
-
-        // Let's assume for now arrays are pointers or [N x T]
-        // If resolveType returns [N x T], we need 0, index.
-        // If resolveType returns T*, we need index.
-
         const llvmType = this.resolveType(objType);
+        addr = this.newRegister();
         if (llvmType.startsWith("[")) {
           this.emit(
             `  ${addr} = getelementptr inbounds ${llvmType}, ${llvmType}* ${objectAddr}, i64 0, i64 ${indexVal}`,
@@ -1405,24 +1744,12 @@ export class CodeGenerator {
           );
         }
       } else if (objType.pointerDepth > 0) {
-        // Pointer indexing
-        // objectAddr is T** (address of the pointer variable)
-        // We need to load the pointer first
         const ptrReg = this.newRegister();
         const ptrType = this.resolveType(objType); // T*
         this.emit(`  ${ptrReg} = load ${ptrType}, ${ptrType}* ${objectAddr}`);
 
-        // Now GEP on the pointer
-        // The element type is T (ptrType minus one *)
-        // But GEP takes the pointer type.
-        // Wait, GEP syntax: getelementptr <ty>, <ty>* <ptrval>, <indices>
-        // In LLVM < 8: getelementptr <ty>*, <ty>** ...
-        // In modern LLVM: getelementptr <ty>, <ty>* ...
-
-        // If ptrReg is i32*, and we want ptrReg[i], we do GEP i32, i32* ptrReg, i
-
-        // We need the element type.
         const elemType = this.resolveType(indexExpr.resolvedType!);
+        addr = this.newRegister();
         this.emit(
           `  ${addr} = getelementptr inbounds ${elemType}, ${ptrType} ${ptrReg}, i64 ${indexVal}`,
         );
@@ -1677,14 +2004,34 @@ export class CodeGenerator {
       const basicType = type as AST.BasicTypeNode;
       let llvmType = "";
 
+      // Check currentTypeMap for generic substitutions
+      if (this.currentTypeMap.has(basicType.name)) {
+        let llvmType = this.resolveType(
+          this.currentTypeMap.get(basicType.name)!,
+        );
+
+        for (let i = 0; i < basicType.pointerDepth; i++) {
+          llvmType += "*";
+        }
+
+        for (let i = basicType.arrayDimensions.length - 1; i >= 0; i--) {
+          llvmType = `[${basicType.arrayDimensions[i]} x ${llvmType}]`;
+        }
+        return llvmType;
+      }
+
       // Check for generics usage
       if (basicType.genericArgs && basicType.genericArgs.length > 0) {
+        // Substitute generic args first
+        const instantiatedArgs = basicType.genericArgs.map((arg) =>
+          this.substituteType(arg, this.currentTypeMap),
+        );
         const structDecl = this.structMap.get(basicType.name);
         if (structDecl) {
           // Instantiate generic!
           llvmType = this.resolveMonomorphizedType(
             structDecl,
-            basicType.genericArgs,
+            instantiatedArgs,
           );
         } else {
           // Maybe a primitive like int<T>? Should not happen.

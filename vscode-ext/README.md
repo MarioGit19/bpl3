@@ -5,16 +5,19 @@ This extension provides comprehensive language support for the BPL3 programming 
 ## Features
 
 - **Syntax Highlighting**:
+
   - Full highlighting for keywords, control flow, types, and literals.
   - Distinct colors for variable declarations (`local`, `global`) and function definitions.
   - Support for BPL3 specific constructs like `frame`, `struct`, `import`, and `asm` blocks.
 
 - **IntelliSense & Tooltips**:
+
   - **Hover Information**: View full signatures for functions and structs by hovering over them.
   - **Member Access**: Hover over object properties (e.g., `obj.field`) to see the field's type and definition.
   - **Keyword Documentation**: Explanations for standard BPL3 keywords and built-in types.
 
 - **Navigation**:
+
   - **Go to Definition**: Jump to the definition of symbols (functions, structs, variables) within the current file or across imported files.
   - **Import Resolution**: Click on import paths to open the referenced file.
 

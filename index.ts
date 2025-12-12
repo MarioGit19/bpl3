@@ -135,49 +135,8 @@ function processFile(filePath: string, options: any) {
           console.log(`LLVM IR written to ${outputPath}`);
         }
 
-        // Run if requested
-        if (options.run) {
-          // Compile LLVM IR to executable using clang
-          const execPath = outputPath.replace(/\.ll$/, "");
-
-          if (options.verbose) {
-            console.log("Compiling LLVM IR to executable with clang...");
-          }
-
-          const compileResult = spawnSync(
-            "clang",
-            ["-Wno-override-module", outputPath, "-o", execPath],
-            {
-              stdio: options.verbose ? "inherit" : "pipe",
-            },
-          );
-
-          if (compileResult.status !== 0) {
-            console.error("Failed to compile LLVM IR with clang");
-            if (!options.verbose && compileResult.stderr) {
-              console.error(compileResult.stderr.toString());
-            }
-            process.exit(compileResult.status ?? 1);
-          }
-
-          if (options.verbose) {
-            console.log(`Running executable: ${execPath}`);
-          }
-
-          const runResult = spawnSync(execPath, [], {
-            stdio: "inherit",
-          });
-
-          // Clean up executable
-          try {
-            fs.unlinkSync(execPath);
-          } catch (e) {
-            // Ignore cleanup errors
-          }
-
-          if (runResult.status !== 0) {
-            process.exit(runResult.status ?? 1);
-          }
+        if (options.emit === "llvm") {
+          compileBinaryAndRun(outputPath, options);
         }
       }
 
@@ -243,59 +202,9 @@ function processFile(filePath: string, options: any) {
       console.log(`LLVM IR written to ${outputPath}`);
     }
 
-    // 5. Run
-    if (options.run) {
-      // Compile LLVM IR to executable using clang
-      const execPath = outputPath.replace(/\.ll$/, "");
-
-      if (options.verbose) {
-        console.log("---------------------------------------------");
-        console.log(`Compiling LLVM IR to executable with clang...`);
-        console.log("---------------------------------------------");
-      }
-
-      const compileResult = spawnSync(
-        "clang",
-        ["-Wno-override-module", outputPath, "-o", execPath],
-        {
-          stdio: options.verbose ? "inherit" : "pipe",
-        },
-      );
-
-      if (compileResult.status !== 0) {
-        console.error("Failed to compile LLVM IR with clang");
-        if (!options.verbose && compileResult.stderr) {
-          console.error(compileResult.stderr.toString());
-        }
-        process.exit(compileResult.status ?? 1);
-      }
-
-      if (options.verbose) {
-        console.log("---------------------------------------------");
-        console.log(`Running executable: ${execPath}`);
-        console.log("---------------------------------------------");
-      }
-
-      const result = spawnSync(execPath, [], { stdio: "inherit" });
-
-      // Clean up executable
-      try {
-        fs.unlinkSync(execPath);
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-
-      if (result.status !== 0) {
-        if (options.verbose) {
-          console.log("---------------------------------------------");
-          console.error(`Program exited with code ${result.status}`);
-          console.log("---------------------------------------------");
-        } else {
-        }
-        process.exit(result.status ?? 1);
-      } else if (options.verbose) {
-        console.log("---------------------------------------------");
-      }
+    // 5. Compile & Run
+    if (options.emit === "llvm") {
+      compileBinaryAndRun(outputPath, options);
     }
   } catch (e) {
     if (e instanceof CompilerError) {
@@ -307,6 +216,60 @@ function processFile(filePath: string, options: any) {
       }
     }
     process.exit(1);
+  }
+}
+
+function compileBinaryAndRun(outputPath: string, options: any) {
+  const execPath = outputPath.replace(/\.ll$/, "");
+
+  if (options.verbose) {
+    console.log("---------------------------------------------");
+    console.log(`Compiling LLVM IR to executable with clang...`);
+    console.log("---------------------------------------------");
+  }
+
+  const compileResult = spawnSync(
+    "clang",
+    ["-Wno-override-module", outputPath, "-o", execPath],
+    {
+      stdio: options.verbose ? "inherit" : "pipe",
+    },
+  );
+
+  if (compileResult.status !== 0) {
+    console.error("Failed to compile LLVM IR with clang");
+    if (!options.verbose && compileResult.stderr) {
+      console.error(compileResult.stderr.toString());
+    }
+    process.exit(compileResult.status ?? 1);
+  }
+
+  if (options.verbose) {
+    console.log(`Executable created: ${execPath}`);
+  }
+
+  if (options.run) {
+    if (options.verbose) {
+      console.log("---------------------------------------------");
+      console.log(`Running executable: ${execPath}`);
+      console.log("---------------------------------------------");
+    }
+
+    const runResult = spawnSync(execPath, [], { stdio: "inherit" });
+
+    // Note: We no longer delete the executable after running,
+    // so it remains available (like standard compilers).
+
+    if (runResult.status !== 0) {
+      if (options.verbose) {
+        console.log("---------------------------------------------");
+        console.error(`Program exited with code ${runResult.status}`);
+        console.log("---------------------------------------------");
+      }
+      process.exit(runResult.status ?? 1);
+    } else if (options.verbose) {
+      console.log("---------------------------------------------");
+    }
   }
 }
 

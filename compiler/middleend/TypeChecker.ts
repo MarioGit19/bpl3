@@ -1287,24 +1287,31 @@ export class TypeChecker {
         (symbol.declaration as any).kind === "StructDecl"
       ) {
         const structDecl = symbol.declaration as AST.StructDecl;
-        // Use resolveStructMember to support inheritance
-        const member = this.resolveStructMember(structDecl, expr.property);
 
-        if (member) {
+        // Use resolveMemberWithContext to handling inheritance substitution
+        const result = this.resolveMemberWithContext(objectType, expr.property);
+
+        if (result) {
+          const { member, contextType, contextDecl } = result;
+
+          // Create substitution mapping from context
+          const mapping = new Map<string, AST.TypeNode>();
+          if (
+            contextDecl.genericParams.length > 0 &&
+            contextType.genericArgs.length === contextDecl.genericParams.length
+          ) {
+            for (let i = 0; i < contextDecl.genericParams.length; i++) {
+              mapping.set(
+                contextDecl.genericParams[i]!,
+                contextType.genericArgs[i]!,
+              );
+            }
+          }
+
           if (member.kind === "StructField") {
             // Substitute struct generics for field type
             let fieldType = member.type;
-            if (
-              structDecl.genericParams.length > 0 &&
-              objectType.genericArgs.length === structDecl.genericParams.length
-            ) {
-              const mapping = new Map<string, AST.TypeNode>();
-              for (let i = 0; i < structDecl.genericParams.length; i++) {
-                mapping.set(
-                  structDecl.genericParams[i]!,
-                  objectType.genericArgs[i]!,
-                );
-              }
+            if (mapping.size > 0) {
               fieldType = this.substituteType(fieldType, mapping);
             }
             return fieldType;
@@ -1320,33 +1327,62 @@ export class TypeChecker {
 
             let paramTypes = member.params.map((p) => p.type);
             if (member.params.length > 0 && member.params[0]!.name === "this") {
-              const thisParamType = member.params[0]!.type;
+              let thisParamType = member.params[0]!.type;
+
+              // Substitute 'this' type if we have a mapping
+              if (mapping.size > 0) {
+                thisParamType = this.substituteType(thisParamType, mapping);
+              }
 
               let compatible = this.areTypesCompatible(
-                thisParamType,
+                thisParamType, // substituted this param
                 objectType,
               );
+
+              const thisParamRef = thisParamType; // alias for error msg
 
               // Allow implicit address-of if 'this' expects a pointer to the object type
               if (
                 !compatible &&
-                thisParamType.kind === "BasicType" &&
+                thisParamRef.kind === "BasicType" &&
                 objectType.kind === "BasicType" &&
-                thisParamType.name === objectType.name &&
-                thisParamType.pointerDepth === objectType.pointerDepth + 1
+                thisParamRef.name === objectType.name &&
+                thisParamRef.pointerDepth === objectType.pointerDepth + 1
               ) {
                 compatible = true;
               }
 
-              // Allow implicit dereference if 'this' expects non-pointer but we have a pointer
+              // Allow implicit dereference
               if (
                 !compatible &&
-                thisParamType.kind === "BasicType" &&
+                thisParamRef.kind === "BasicType" &&
                 objectType.kind === "BasicType" &&
-                thisParamType.name === objectType.name &&
-                objectType.pointerDepth === thisParamType.pointerDepth + 1
+                thisParamRef.name === objectType.name &&
+                objectType.pointerDepth === thisParamRef.pointerDepth + 1
               ) {
                 compatible = true;
+              }
+
+              if (!compatible) {
+                // Try address-of
+                const objPtr = {
+                  ...objectType,
+                  pointerDepth: objectType.pointerDepth + 1,
+                };
+                if (this.areTypesCompatible(thisParamRef, objPtr)) {
+                  compatible = true;
+                }
+              }
+
+              // Try deref
+              if (!compatible && objectType.pointerDepth > 0) {
+                const objDeref = {
+                  ...objectType,
+                  pointerDepth: objectType.pointerDepth - 1,
+                };
+                if (this.areTypesCompatible(thisParamRef, objDeref)) {
+                  compatible = true;
+                }
               }
 
               if (!compatible) {
@@ -1367,18 +1403,7 @@ export class TypeChecker {
               declaration: member,
             };
 
-            // Substitute struct generics
-            if (
-              structDecl.genericParams.length > 0 &&
-              objectType.genericArgs.length === structDecl.genericParams.length
-            ) {
-              const mapping = new Map<string, AST.TypeNode>();
-              for (let i = 0; i < structDecl.genericParams.length; i++) {
-                mapping.set(
-                  structDecl.genericParams[i]!,
-                  objectType.genericArgs[i]!,
-                );
-              }
+            if (mapping.size > 0) {
               return this.substituteType(memberType, mapping);
             }
             return memberType;
@@ -1758,7 +1783,8 @@ export class TypeChecker {
     // 2. Handle BasicType
     if (rt1.kind === "BasicType" && rt2.kind === "BasicType") {
       // Void handling
-      if (rt1.name === "void" || rt2.name === "void") return false; // Cannot assign void
+      if (rt1.name === "void" && rt2.name === "void") return true;
+      if (rt1.name === "void" || rt2.name === "void") return false; // Cannot assign void (one side)
 
       // Nullptr handling
       if (rt1.name === "nullptr") {
@@ -1779,14 +1805,32 @@ export class TypeChecker {
         }
       }
 
-      // Pointer depth match
-      if (rt1.pointerDepth !== rt2.pointerDepth) return false;
-
-      // Array dimensions match
-      if (rt1.arrayDimensions.length !== rt2.arrayDimensions.length)
-        return false;
-      for (let i = 0; i < rt1.arrayDimensions.length; i++) {
-        if (rt1.arrayDimensions[i] !== rt2.arrayDimensions[i]) return false;
+      // Pointer depth match or array decay
+      if (rt1.pointerDepth !== rt2.pointerDepth) {
+        // Check for array to pointer decay: int[3] -> int*
+        // rt1 (param) has ptrDepth = rt2.ptrDepth + 1
+        // rt2 (arg) has arrayDims > 0
+        if (
+          rt1.pointerDepth === rt2.pointerDepth + 1 &&
+          rt2.arrayDimensions.length > 0 &&
+          rt1.arrayDimensions.length === rt2.arrayDimensions.length - 1
+        ) {
+          // Check remaining dimensions
+          for (let i = 0; i < rt1.arrayDimensions.length; i++) {
+            if (rt1.arrayDimensions[i] !== rt2.arrayDimensions[i + 1])
+              return false;
+          }
+          // Decay OK
+        } else {
+          return false;
+        }
+      } else {
+        // pointerDepth matches, check array dimensions strictly
+        if (rt1.arrayDimensions.length !== rt2.arrayDimensions.length)
+          return false;
+        for (let i = 0; i < rt1.arrayDimensions.length; i++) {
+          if (rt1.arrayDimensions[i] !== rt2.arrayDimensions[i]) return false;
+        }
       }
 
       // Generic args match
@@ -2063,6 +2107,63 @@ export class TypeChecker {
   ): AST.StructField | undefined {
     const member = this.resolveStructMember(structDecl, fieldName);
     if (member && member.kind === "StructField") return member;
+    return undefined;
+  }
+
+  private resolveMemberWithContext(
+    objectType: AST.BasicTypeNode,
+    memberName: string,
+  ):
+    | {
+        member: AST.StructField | AST.FunctionDecl;
+        contextType: AST.BasicTypeNode;
+        contextDecl: AST.StructDecl;
+      }
+    | undefined {
+    let currentType = objectType;
+    let depth = 0;
+    while (depth < 100) {
+      const symbol = this.currentScope.resolve(currentType.name);
+      if (
+        !symbol ||
+        symbol.kind !== "Struct" ||
+        (symbol.declaration as any).kind !== "StructDecl"
+      )
+        return undefined;
+      const decl = symbol.declaration as AST.StructDecl;
+
+      const member = decl.members.find((m) => m.name === memberName);
+      if (member)
+        return { member, contextType: currentType, contextDecl: decl };
+
+      if (decl.parentType) {
+        // Resolve parentType AST node to ensure it's a BasicType and resolve aliases
+        const resolvedParentRaw = this.resolveType(decl.parentType);
+
+        if (resolvedParentRaw.kind === "BasicType") {
+          const mapping = new Map<string, AST.TypeNode>();
+          if (
+            decl.genericParams.length > 0 &&
+            currentType.genericArgs.length === decl.genericParams.length
+          ) {
+            for (let i = 0; i < decl.genericParams.length; i++) {
+              mapping.set(decl.genericParams[i]!, currentType.genericArgs[i]!);
+            }
+          }
+
+          const substitutedParent = this.substituteType(
+            resolvedParentRaw,
+            mapping,
+          );
+          if (substitutedParent.kind === "BasicType") {
+            currentType = substitutedParent;
+            depth++;
+            continue;
+          }
+        }
+      }
+      return undefined;
+    }
     return undefined;
   }
 
