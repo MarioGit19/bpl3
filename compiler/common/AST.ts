@@ -20,7 +20,7 @@ export interface BasicTypeNode extends ASTNode {
   name: string;
   genericArgs: TypeNode[];
   pointerDepth: number;
-  arrayDimensions: (number | null)[]; // null for [], number for [N]
+  arrayDimensions: (number | null)[];
 }
 
 export interface TupleTypeNode extends ASTNode {
@@ -33,7 +33,7 @@ export interface FunctionTypeNode extends ASTNode {
   returnType: TypeNode;
   paramTypes: TypeNode[];
   isVariadic?: boolean;
-  declaration?: FunctionDecl; // Optional reference to declaration for generics
+  declaration?: FunctionDecl;
 }
 
 // --- Expressions ---

@@ -34,7 +34,6 @@ export class CodeGenerator {
     this.declaredFunctions.clear();
     this.globals.clear();
     this.locals.clear();
-    this.locals.clear();
     this.generatedStructs.clear();
     this.typeIdMap.clear();
 
@@ -69,7 +68,6 @@ export class CodeGenerator {
     this.emitDeclaration(`@exception_value = global i64 0`);
     this.emitDeclaration(`@exception_type = global i32 0`);
 
-    // Check local OS for setjmp name? Usually @setjmp on Linux.
     this.emitDeclaration(`declare i32 @setjmp(i8*) returns_twice`);
     this.declaredFunctions.add("setjmp");
     this.emitDeclaration(`declare void @longjmp(i8*, i32) noreturn`);
@@ -184,7 +182,6 @@ export class CodeGenerator {
       case "Export":
         // Exports are metadata for module resolution and don't generate code directly
         break;
-      // TODO: Global variables
       default:
         console.warn(`Unhandled top-level node kind: ${node.kind}`);
         break;

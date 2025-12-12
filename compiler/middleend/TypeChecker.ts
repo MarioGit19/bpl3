@@ -20,8 +20,6 @@ export class TypeChecker {
     this.currentScope = this.globalScope;
     this.skipImportResolution = options.skipImportResolution || false;
     this.initializeBuiltins();
-    // Register the current "main" module if we knew its name, but we don't.
-    // We'll handle imports relative to the file location.
   }
 
   /**
@@ -150,7 +148,7 @@ export class TypeChecker {
         stmt.resolvedType = {
           kind: "BasicType",
           name: stmt.name,
-          genericArgs: [], // TODO: Handle generics
+          genericArgs: [],
           pointerDepth: 0,
           arrayDimensions: [],
           location: stmt.location,
@@ -191,7 +189,6 @@ export class TypeChecker {
           paramTypes: stmt.params.map((p) => this.resolveType(p.type)),
           isVariadic: stmt.isVariadic,
           location: stmt.location,
-          // declaration: stmt // ExternDecl is not FunctionDecl, but maybe we need to store it?
         };
         this.defineSymbol(stmt.name, "Function", externType, stmt);
         stmt.resolvedType = externType;

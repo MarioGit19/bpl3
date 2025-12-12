@@ -128,13 +128,6 @@ export class Lexer {
         if (this.match("=")) {
           this.addToken(TokenType.GreaterEqual);
         } else {
-          // We treat '>>' as two '>' tokens to support nested generics like Box<Box<int>>
-          // The parser will handle '>>' as a shift operator if needed by checking for adjacent tokens
-          // But wait, if we do this, 'a >> b' becomes 'a > > b'.
-          // The parser needs to be smart enough to combine them OR we keep it as GreaterGreater
-          // and the parser splits it when parsing types.
-          // Splitting in parser is safer for existing code.
-          // Let's try to keep GreaterGreater here but handle it in Parser.
           if (this.match(">")) {
             this.addToken(TokenType.GreaterGreater);
           } else {
@@ -165,7 +158,7 @@ export class Lexer {
         break;
       case "/":
         if (this.match("/")) {
-          // A comment goes until the end of the line.
+          // Single-line comment
           while (this.peek() != "\n" && !this.isAtEnd()) this.advance();
         } else if (this.match("=")) {
           this.addToken(TokenType.SlashEqual);

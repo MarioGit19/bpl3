@@ -19,8 +19,6 @@ export class Parser {
         if (stmt) statements.push(stmt);
       } catch (error) {
         if (error instanceof CompilerError) {
-          // For now, we just rethrow to stop parsing.
-          // In a real compiler, we might synchronize and continue.
           throw error;
         } else {
           throw error;
@@ -171,7 +169,7 @@ export class Parser {
       pointerDepth: 0,
       arrayDimensions: [],
       location: this.loc(this.previous(), this.previous()),
-    }; // Default void? Or require it? Grammar says ReturnType?
+    };
 
     if (this.match(TokenType.Ret)) {
       returnType = this.parseType();
@@ -1176,16 +1174,7 @@ export class Parser {
       const type = this.parseType();
       this.consume(TokenType.Greater, "Expected '>' after match type.");
       this.consume(TokenType.LeftParen, "Expected '(' after match.");
-      // Argument can be Expression or Type. This is ambiguous.
-      // We'll try to parse as expression first. If it fails or looks like a type start, we parse type.
-      // But types start with Identifier or Func or *. Expressions start with Identifier or Literal etc.
-      // Identifier is the conflict.
-      // Simple heuristic: if it parses as expression, good.
-      // Actually, `match<T>(int)` -> `int` is a type. `match<T>(x)` -> `x` is expr.
-      // Let's try to parse as Type if the next token suggests a type (Func, *, or known type keyword if we had them).
-      // Since types are mostly identifiers, we might need lookahead or backtracking.
-      // For now, let's assume Expression covers Identifier. If we want to support `match<T>(int)`, `int` is an identifier expression.
-      // We can resolve this in semantic analysis phase.
+      
       const expr = this.expression();
       this.consume(TokenType.RightParen, "Expected ')' after match argument.");
       return {
@@ -1276,10 +1265,6 @@ export class Parser {
         TokenType.Identifier,
         "Expected identifier after dot.",
       ).lexeme;
-      // We can represent namespaced types as "std.Point" string for now,
-      // or we need a more complex TypeNode structure.
-      // BasicType has 'name: string'.
-      // TODO: Represent as basic type with namespace attribute if needed.
       name += "." + part;
     }
 
@@ -1293,18 +1278,6 @@ export class Parser {
       // Handle nested generics closing with >>
       if (this.check(TokenType.GreaterGreater)) {
         // Split >> into > and >
-        // We consume the >> token but pretend we only consumed one >
-        // This is tricky. Better to change the token type of the current token?
-        // Or just consume it and push a new > token back?
-        // Recursive descent parsers usually look ahead.
-
-        // Strategy: If we see >>, we treat it as closing the current generic arg list
-        // AND the parent one.
-        // But here we are inside one parseType call.
-        // If we are at the end of `Box<Box<int>>`, the inner parseType sees `>>`.
-        // It should consume one `>` and leave the other for the outer parseType.
-
-        // Let's modify the token stream in place?
         const token = this.peek();
         token.type = TokenType.Greater;
         // We need to insert another Greater token after this one
@@ -1312,7 +1285,7 @@ export class Parser {
           ...token,
           type: TokenType.Greater,
           lexeme: ">",
-        } as any); // Hacky but works for simple array of tokens
+        } as any);
 
         this.consume(
           TokenType.Greater,

@@ -47,9 +47,6 @@ export class ASTPrinter {
     // Find children
     const children: { key: string; value: AST.ASTNode | AST.ASTNode[] }[] = [];
 
-    // Define order of keys for better readability if possible, or just iterate
-    // Iterating is easier but might be random order.
-    // Let's just iterate for now.
     const keys = Object.keys(node);
     for (const k of keys) {
       if (
