@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import * as fs from "fs";
+import * as os from "os";
 import { Compiler } from "./compiler";
 import { PackageManager } from "./compiler/middleend/PackageManager";
 import { lexWithGrammar } from "./compiler/frontend/GrammarLexer";
@@ -16,6 +17,25 @@ const program = new Command();
 
 const packageJson = require("./package.json");
 
+function getHostDefaults() {
+  const platform = os.platform();
+  const arch = os.arch();
+
+  let target: string | undefined;
+
+  if (platform === "linux") {
+    if (arch === "x64") target = "x86_64-pc-linux-gnu";
+    else if (arch === "arm64") target = "aarch64-unknown-linux-gnu";
+  } else if (platform === "darwin") {
+    if (arch === "arm64") target = "arm64-apple-darwin";
+    else if (arch === "x64") target = "x86_64-apple-darwin";
+  } else if (platform === "win32") {
+    if (arch === "x64") target = "x86_64-pc-windows-gnu";
+  }
+
+  return { target };
+}
+
 program
   .name("bpl")
   .description(packageJson.description ?? "BPL3 Compiler")
@@ -25,6 +45,17 @@ program
   .argument("<files...>", "source file(s) to compile")
   .option("-o, --output <file>", "output file path")
   .option("--emit <type>", "emit type: llvm, ast, tokens, formatted", "llvm")
+  .option(
+    "--target <triple>",
+    "target triple for clang (e.g. x86_64-pc-windows-gnu)"
+  )
+  .option("--sysroot <path>", "sysroot path for cross-compilation")
+  .option("--cpu <cpu>", "target CPU for clang (e.g. znver4)")
+  .option("--march <arch>", "target architecture for clang (e.g. arm64)")
+  .option(
+    "--clang-flag <flag...>",
+    "additional flags forwarded directly to clang"
+  )
   .option("--run", "run the generated code")
   .option("-v, --verbose", "enable verbose output")
   .option("--cache", "enable incremental compilation with module caching")
@@ -50,7 +81,7 @@ program
 
     if (files.length > 1) {
       console.error(
-        "Error: Multiple input files are only supported for formatting.",
+        "Error: Multiple input files are only supported for formatting."
       );
       process.exit(1);
     }
@@ -220,6 +251,7 @@ function processFile(filePath: string, options: any) {
 
 function compileBinaryAndRun(outputPath: string, options: any) {
   const execPath = outputPath.replace(/\.ll$/, "");
+  const hostDefaults = getHostDefaults();
 
   if (options.verbose) {
     console.log("---------------------------------------------");
@@ -227,13 +259,47 @@ function compileBinaryAndRun(outputPath: string, options: any) {
     console.log("---------------------------------------------");
   }
 
-  const compileResult = spawnSync(
-    "clang",
-    ["-Wno-override-module", outputPath, "-o", execPath],
-    {
-      stdio: options.verbose ? "inherit" : "pipe",
-    },
-  );
+  const clangArgs = ["-Wno-override-module"];
+
+  const target = options.target ?? hostDefaults.target;
+  if (target) {
+    clangArgs.push("-target", target);
+    if (options.verbose && !options.target) {
+      console.log(`Using host default target: ${target}`);
+    }
+  }
+
+  if (options.sysroot) {
+    clangArgs.push("--sysroot", options.sysroot);
+  }
+
+  if (options.cpu) {
+    clangArgs.push(`-mcpu=${options.cpu}`);
+  }
+
+  if (options.march) {
+    clangArgs.push(`-march=${options.march}`);
+  }
+
+  const extraClangFlags = options.clangFlag
+    ? Array.isArray(options.clangFlag)
+      ? options.clangFlag
+      : [options.clangFlag]
+    : [];
+
+  for (const flag of extraClangFlags) {
+    clangArgs.push(flag);
+  }
+
+  clangArgs.push(outputPath, "-o", execPath);
+
+  if (options.verbose) {
+    console.log(`clang ${clangArgs.join(" ")}`);
+  }
+
+  const compileResult = spawnSync("clang", clangArgs, {
+    stdio: options.verbose ? "inherit" : "pipe",
+  });
 
   if (compileResult.status !== 0) {
     console.error("Failed to compile LLVM IR with clang");
@@ -317,7 +383,7 @@ program
         }
       } catch (e) {
         console.error(
-          `Error processing ${filePath}: ${e instanceof Error ? e.message : e}`,
+          `Error processing ${filePath}: ${e instanceof Error ? e.message : e}`
         );
         hasError = true;
       }
@@ -398,7 +464,7 @@ program
       }
 
       console.log(
-        `\nInstalled packages (${options.global ? "global" : "local"}):\n`,
+        `\nInstalled packages (${options.global ? "global" : "local"}):\n`
       );
       for (const pkg of packages) {
         console.log(`  ${pkg.manifest.name}@${pkg.manifest.version}`);
