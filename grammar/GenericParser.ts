@@ -1,4 +1,4 @@
-import { Grammar } from "./types";
+import type { Grammar } from "./types";
 
 export interface TokenNode {
   type: string;

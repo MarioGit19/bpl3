@@ -452,7 +452,7 @@ export class Formatter {
           expr as AST.GenericInstantiationExpr,
         );
       default:
-        return `/* Unknown expr: ${expr.kind} */`;
+        return `/* Unknown expr: ${(expr as AST.Expression).kind} */`;
     }
   }
 
@@ -619,29 +619,44 @@ export class Formatter {
   // --- Precedence helpers ---
   private getPrecedence(op: string): number {
     switch (op) {
-      case "||": return 1;
-      case "&&": return 2;
-      case "|": return 3;
-      case "^": return 4;
-      case "&": return 5;
+      case "||":
+        return 1;
+      case "&&":
+        return 2;
+      case "|":
+        return 3;
+      case "^":
+        return 4;
+      case "&":
+        return 5;
       case "==":
-      case "!=": return 6;
+      case "!=":
+        return 6;
       case "<":
       case "<=":
       case ">":
-      case ">=": return 7;
+      case ">=":
+        return 7;
       case "<<":
-      case ">>": return 8;
+      case ">>":
+        return 8;
       case "+":
-      case "-": return 9;
+      case "-":
+        return 9;
       case "*":
       case "/":
-      case "%": return 10;
-      default: return 0; // unknown or assignment handled elsewhere
+      case "%":
+        return 10;
+      default:
+        return 0; // unknown or assignment handled elsewhere
     }
   }
 
-  private requiresParenForEqualPrecedence(childOp: string, parentOp: string, isLeft: boolean): boolean {
+  private requiresParenForEqualPrecedence(
+    childOp: string,
+    parentOp: string,
+    isLeft: boolean,
+  ): boolean {
     // For equal precedence but different operators, parentheses help preserve AST grouping
     if (childOp !== parentOp) return true;
     // For non-associative ops like comparisons and equality, parenthesize
@@ -655,7 +670,10 @@ export class Formatter {
     return false;
   }
 
-  private parenthesizeBitwiseInsideComparison(childOp: string, parentOp: string): boolean {
+  private parenthesizeBitwiseInsideComparison(
+    childOp: string,
+    parentOp: string,
+  ): boolean {
     const comparisons = ["==", "!=", "<", "<=", ">", ">="];
     const bitwise = ["|", "^", "&", "<<", ">>"];
     return comparisons.includes(parentOp) && bitwise.includes(childOp);

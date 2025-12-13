@@ -996,7 +996,7 @@ export class CodeGenerator {
 
             const targetType = target.type
               ? this.resolveType(target.type)
-              : this.getTargetTypeFromTuple(decl.initializer.resolvedType!, [
+              : this.getTargetTypeFromTuple(decl.initializer!.resolvedType!, [
                   ...indexPath,
                   i,
                 ]);
