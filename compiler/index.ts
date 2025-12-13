@@ -5,6 +5,7 @@
  * 1. Frontend: Lexing and Parsing
  * 2. Middleend: Type Checking and Semantic Analysis
  * 3. Backend: Code Generation (LLVM IR)
+ * 4. Linking: Link LLVM IR with object files
  */
 
 import { lexWithGrammar } from "./frontend/GrammarLexer";
@@ -15,6 +16,7 @@ import { CompilerError } from "./common/CompilerError";
 import { ASTPrinter } from "./common/ASTPrinter";
 import { ModuleResolver } from "./middleend/ModuleResolver";
 import { ModuleCache } from "./middleend/ModuleCache";
+import { Linker } from "./middleend/Linker";
 import { Formatter } from "./formatter/Formatter";
 import * as path from "path";
 import * as fs from "fs";
@@ -27,6 +29,12 @@ export interface CompilerOptions {
   verbose?: boolean;
   resolveImports?: boolean; // New option for full module resolution
   useCache?: boolean; // Enable incremental compilation with caching
+  objectFiles?: string[]; // Object files to link
+  libraries?: string[]; // Libraries to link
+  libraryPaths?: string[]; // Library search paths
+  target?: string; // Target triple
+  sysroot?: string; // Sysroot for cross-compilation
+  clangFlags?: string[]; // Additional clang flags
 }
 
 export interface CompilationResult {
@@ -109,6 +117,50 @@ export class Compiler {
       const codeGenerator = new CodeGenerator();
       const llvmIR = codeGenerator.generate(ast);
 
+      // 5. Linking (if object files provided)
+      if (
+        this.options.objectFiles ||
+        this.options.libraries ||
+        this.options.libraryPaths
+      ) {
+        if (this.options.verbose) {
+          console.log("[Linker] Linking with object files...");
+        }
+
+        const irFile = this.options.outputPath || "temp.ll";
+        fs.writeFileSync(irFile, llvmIR);
+
+        const linker = new Linker();
+        const linkSuccess = linker.link({
+          irFiles: [irFile],
+          objectFiles: this.options.objectFiles,
+          libraries: this.options.libraries,
+          libraryPaths: this.options.libraryPaths,
+          outputPath:
+            this.options.outputPath?.replace(/\.ll$/, "") ||
+            this.options.filePath.replace(/\.[^/.]+$/, ""),
+          target: this.options.target,
+          sysroot: this.options.sysroot,
+          clangFlags: this.options.clangFlags,
+          verbose: this.options.verbose,
+        });
+
+        if (!linkSuccess) {
+          return {
+            success: false,
+            errors: [
+              new CompilerError("Linking failed", "See error messages above", {
+                file: this.options.filePath,
+                startLine: 0,
+                startColumn: 0,
+                endLine: 0,
+                endColumn: 0,
+              }),
+            ],
+          };
+        }
+      }
+
       return {
         success: true,
         output: llvmIR,
@@ -161,8 +213,19 @@ export class Compiler {
         if (this.options.verbose) {
           console.log(`  Checking: ${path.basename(module.path)}`);
         }
+        typeChecker.setCurrentModulePath(module.path);
         typeChecker.checkProgram(module.ast);
         module.checked = true;
+      }
+
+      // Check for undefined symbols (linker verification)
+      if (this.options.verbose) {
+        console.log("[Linker] Verifying symbols...");
+      }
+      const linkerSymbolTable = typeChecker.getLinkerSymbolTable();
+      const linkerErrors = linkerSymbolTable.verifySymbols();
+      if (linkerErrors.length > 0) {
+        throw linkerErrors[0]; // Throw first linker error
       }
 
       // 3. Merge all module ASTs into a single program for code generation
@@ -322,7 +385,7 @@ export class Compiler {
         entryModule.path,
         allContent,
         llvmIR,
-        this.options.verbose,
+        this.options.verbose
       );
 
       const objectFiles = [objectFile];
@@ -341,7 +404,9 @@ export class Compiler {
       if (this.options.verbose) {
         const stats = cache.getStats();
         console.log(
-          `[Module Cache] Cache stats: ${stats.totalModules} modules, ${(stats.cacheSize / 1024).toFixed(2)} KB`,
+          `[Module Cache] Cache stats: ${stats.totalModules} modules, ${(
+            stats.cacheSize / 1024
+          ).toFixed(2)} KB`
         );
       }
 

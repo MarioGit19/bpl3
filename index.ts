@@ -56,6 +56,9 @@ program
     "--clang-flag <flag...>",
     "additional flags forwarded directly to clang"
   )
+  .option("-l, --lib <lib...>", "libraries to link with")
+  .option("-L, --lib-path <path...>", "library search paths")
+  .option("--object <file...>", "object files to link (.o, .ll, etc.)")
   .option("--run", "run the generated code")
   .option("-v, --verbose", "enable verbose output")
   .option("--cache", "enable incremental compilation with module caching")
@@ -110,6 +113,12 @@ function processFile(filePath: string, options: any) {
         verbose: options.verbose,
         resolveImports: !options.cache, // Use module resolution if not caching
         useCache: options.cache, // Use caching if enabled
+        objectFiles: options.object || undefined,
+        libraries: options.lib || undefined,
+        libraryPaths: options.libPath || undefined,
+        target: options.target,
+        sysroot: options.sysroot,
+        clangFlags: options.clangFlag,
       });
 
       const result = compiler.compile(content);

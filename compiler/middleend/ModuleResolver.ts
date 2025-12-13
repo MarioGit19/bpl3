@@ -52,38 +52,111 @@ export class ModuleResolver {
   /** Module search paths */
   private searchPaths: string[] = [];
 
+  /** Supported file extensions */
+  private readonly SUPPORTED_EXTENSIONS = [".x", ".bpl", ""];
+
   constructor(options: { stdLibPath?: string; searchPaths?: string[] } = {}) {
     this.stdLibPath = options.stdLibPath || path.join(__dirname, "../../lib");
     this.searchPaths = options.searchPaths || [];
   }
 
   /**
+   * Normalize a file path and resolve symlinks
+   */
+  private normalizePath(filePath: string): string {
+    let normalized = path.normalize(filePath);
+
+    // Resolve symlinks if they exist
+    if (fs.existsSync(normalized)) {
+      try {
+        normalized = fs.realpathSync(normalized);
+      } catch (e) {
+        // If realpath fails, continue with normalized path
+      }
+    }
+
+    return normalized;
+  }
+
+  /**
+   * Try to resolve a path with various extensions
+   */
+  private tryResolveWithExtensions(filePath: string): string | null {
+    // Check if path exists as-is
+    if (fs.existsSync(filePath)) {
+      const stat = fs.statSync(filePath);
+      if (stat.isFile()) {
+        return this.normalizePath(filePath);
+      }
+      if (stat.isDirectory()) {
+        // Try index files in the directory
+        for (const indexName of ["index.x", "index.bpl"]) {
+          const indexPath = path.join(filePath, indexName);
+          if (fs.existsSync(indexPath)) {
+            return this.normalizePath(indexPath);
+          }
+        }
+      }
+    }
+
+    // Try with extensions
+    for (const ext of this.SUPPORTED_EXTENSIONS) {
+      const withExt = filePath + ext;
+      if (fs.existsSync(withExt)) {
+        const stat = fs.statSync(withExt);
+        if (stat.isFile()) {
+          return this.normalizePath(withExt);
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Resolve a module path from an import statement
+   * Supports: relative paths, absolute paths, stdlib, and packages
    */
   resolveModulePath(importSource: string, fromFile: string): string {
+    // Handle absolute paths
+    if (path.isAbsolute(importSource)) {
+      const resolved = this.tryResolveWithExtensions(importSource);
+      if (resolved) {
+        return resolved;
+      }
+      throw new Error(
+        `Module not found: ${importSource} (absolute path does not exist)`
+      );
+    }
+
     // Handle relative imports
     if (importSource.startsWith("./") || importSource.startsWith("../")) {
       const fromDir = path.dirname(fromFile);
       const resolved = path.resolve(fromDir, importSource);
+      const result = this.tryResolveWithExtensions(resolved);
 
-      // Try with extensions
-      for (const ext of [".x", ".bpl", ""]) {
-        const withExt = resolved + ext;
-        if (fs.existsSync(withExt)) {
-          return withExt;
-        }
+      if (result) {
+        return result;
       }
 
       throw new Error(
-        `Module not found: ${importSource} (resolved to ${resolved})`,
+        `Module not found: ${importSource} (resolved to ${resolved})`
       );
     }
 
     // Handle standard library imports (e.g., "std", "io", "math")
-    if (!importSource.includes("/")) {
+    if (!importSource.includes("/") && !importSource.includes("\\")) {
       const stdPath = path.join(this.stdLibPath, `${importSource}.x`);
-      if (fs.existsSync(stdPath)) {
-        return stdPath;
+      const result = this.tryResolveWithExtensions(stdPath);
+      if (result) {
+        return result;
+      }
+
+      // Also try in stdlib subdirectories (e.g., "std/io")
+      const stdSubPath = path.join(this.stdLibPath, importSource);
+      const subResult = this.tryResolveWithExtensions(stdSubPath);
+      if (subResult) {
+        return subResult;
       }
     }
 
@@ -93,19 +166,21 @@ export class ModuleResolver {
       // First try from current working directory
       let packagePath = packageManager.resolvePackage(
         importSource,
-        process.cwd(),
+        process.cwd()
       );
       if (packagePath) {
-        return packagePath;
+        const result = this.tryResolveWithExtensions(packagePath);
+        if (result) return result;
       }
 
       // Then try from the file's directory
       packagePath = packageManager.resolvePackage(
         importSource,
-        path.dirname(fromFile),
+        path.dirname(fromFile)
       );
       if (packagePath) {
-        return packagePath;
+        const result = this.tryResolveWithExtensions(packagePath);
+        if (result) return result;
       }
     } catch (e) {
       // Package not found, continue with other search paths
@@ -114,11 +189,9 @@ export class ModuleResolver {
     // Search in additional paths
     for (const searchPath of this.searchPaths) {
       const resolved = path.join(searchPath, importSource);
-      for (const ext of [".x", ".bpl", ""]) {
-        const withExt = resolved + ext;
-        if (fs.existsSync(withExt)) {
-          return withExt;
-        }
+      const result = this.tryResolveWithExtensions(resolved);
+      if (result) {
+        return result;
       }
     }
 
@@ -130,7 +203,7 @@ export class ModuleResolver {
    */
   private loadModule(
     modulePath: string,
-    visited: Set<string> = new Set(),
+    visited: Set<string> = new Set()
   ): ModuleInfo {
     // Check cache
     if (this.modules.has(modulePath)) {
@@ -173,9 +246,11 @@ export class ModuleResolver {
           this.loadModule(depPath, new Set(visited));
         } catch (error) {
           throw new CompilerError(
-            `Failed to resolve import '${importStmt.source}': ${error instanceof Error ? error.message : String(error)}`,
+            `Failed to resolve import '${importStmt.source}': ${
+              error instanceof Error ? error.message : String(error)
+            }`,
             "Check that the module path is correct and the file exists.",
-            importStmt.location,
+            importStmt.location
           );
         }
       }
@@ -198,7 +273,7 @@ export class ModuleResolver {
 
       if (visiting.has(modulePath)) {
         throw new Error(
-          `Circular dependency detected involving: ${modulePath}`,
+          `Circular dependency detected involving: ${modulePath}`
         );
       }
 

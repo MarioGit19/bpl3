@@ -23,7 +23,7 @@ function toSourceLocation(
   loc: {
     start: { line: number; column: number };
     end: { line: number; column: number };
-  }
+  },
 ): SourceLocation {
   return {
     file: filePath,
@@ -55,7 +55,7 @@ export function parseWithPeggy(source: string, filePath: string): AST.Program {
       throw new CompilerError(
         msg,
         "Syntax error",
-        toSourceLocation(filePath, loc)
+        toSourceLocation(filePath, loc),
       );
     }
     throw error;

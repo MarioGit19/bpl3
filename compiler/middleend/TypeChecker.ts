@@ -1,6 +1,7 @@
 import * as AST from "../common/AST";
 import { SymbolTable, type Symbol, type SymbolKind } from "./SymbolTable";
 import { CompilerError, type SourceLocation } from "../common/CompilerError";
+import { LinkerSymbolTable, type SymbolInfo } from "./LinkerSymbolTable";
 import * as fs from "fs";
 import * as path from "path";
 import { lexWithGrammar } from "../frontend/GrammarLexer";
@@ -14,11 +15,14 @@ export class TypeChecker {
   private modules: Map<string, SymbolTable> = new Map();
   private skipImportResolution: boolean;
   private preLoadedModules: Map<string, AST.Program> = new Map();
+  private linkerSymbolTable: LinkerSymbolTable;
+  private currentModulePath: string = "unknown";
 
   constructor(options: { skipImportResolution?: boolean } = {}) {
     this.globalScope = new SymbolTable();
     this.currentScope = this.globalScope;
     this.skipImportResolution = options.skipImportResolution || false;
+    this.linkerSymbolTable = new LinkerSymbolTable();
     this.initializeBuiltins();
   }
 
@@ -27,6 +31,42 @@ export class TypeChecker {
    */
   registerModule(modulePath: string, ast: AST.Program): void {
     this.preLoadedModules.set(modulePath, ast);
+  }
+
+  /**
+   * Set current module path for symbol tracking
+   */
+  setCurrentModulePath(modulePath: string): void {
+    this.currentModulePath = modulePath;
+  }
+
+  /**
+   * Get the linker symbol table
+   */
+  getLinkerSymbolTable(): LinkerSymbolTable {
+    return this.linkerSymbolTable;
+  }
+
+  /**
+   * Register a symbol with the linker
+   */
+  private registerLinkerSymbol(
+    name: string,
+    kind: "function" | "variable" | "type",
+    type?: AST.TypeNode,
+    declaration?: AST.ASTNode,
+    isExtern: boolean = false
+  ): void {
+    this.linkerSymbolTable.defineSymbol({
+      name,
+      kind,
+      module: this.currentModulePath,
+      isExported: false,
+      type,
+      declaration,
+      isExtern,
+      location: declaration?.location,
+    });
   }
 
   private initializeBuiltins() {
@@ -170,6 +210,7 @@ export class TypeChecker {
     switch (stmt.kind) {
       case "StructDecl":
         this.defineSymbol(stmt.name, "Struct", undefined, stmt);
+        this.registerLinkerSymbol(stmt.name, "type", undefined, stmt);
         stmt.resolvedType = {
           kind: "BasicType",
           name: stmt.name,
@@ -188,6 +229,7 @@ export class TypeChecker {
           declaration: stmt,
         };
         this.defineSymbol(stmt.name, "Function", functionType, stmt);
+        this.registerLinkerSymbol(stmt.name, "function", functionType, stmt);
         stmt.resolvedType = functionType;
         break;
       case "TypeAlias":
@@ -195,7 +237,7 @@ export class TypeChecker {
           stmt.name,
           "TypeAlias",
           this.resolveType(stmt.type),
-          stmt,
+          stmt
         );
         break;
       case "Extern":
@@ -216,6 +258,13 @@ export class TypeChecker {
           location: stmt.location,
         };
         this.defineSymbol(stmt.name, "Function", externType, stmt);
+        this.registerLinkerSymbol(
+          stmt.name,
+          "function",
+          externType,
+          stmt,
+          true
+        );
         stmt.resolvedType = externType;
         break;
       case "Import":
@@ -242,7 +291,7 @@ export class TypeChecker {
             stmt.name,
             "TypeAlias",
             this.resolveType(stmt.type),
-            stmt,
+            stmt
           );
         }
         break;
@@ -306,7 +355,7 @@ export class TypeChecker {
 
   private isIntegerTypeCompatible(
     val: bigint,
-    targetType: AST.TypeNode,
+    targetType: AST.TypeNode
   ): boolean {
     const resolvedTarget = this.resolveType(targetType);
     if (resolvedTarget.kind !== "BasicType") return false;
@@ -387,7 +436,7 @@ export class TypeChecker {
     if (Array.isArray(decl.name)) {
       // Destructuring - recursively flatten nested targets
       const flattenTargets = (
-        targets: any[],
+        targets: any[]
       ): { name: string; type?: AST.TypeNode }[] => {
         const result: { name: string; type?: AST.TypeNode }[] = [];
         for (const target of targets) {
@@ -415,19 +464,19 @@ export class TypeChecker {
         if (decl.typeAnnotation && initType) {
           let compatible = this.areTypesCompatible(
             decl.typeAnnotation,
-            initType,
+            initType
           );
           if (!compatible) {
             const val = this.getIntegerConstantValue(decl.initializer);
             if (val !== undefined) {
               compatible = this.isIntegerTypeCompatible(
                 val,
-                decl.typeAnnotation,
+                decl.typeAnnotation
               );
             } else {
               compatible = this.isImplicitWideningAllowed(
                 initType,
-                decl.typeAnnotation,
+                decl.typeAnnotation
               );
             }
           }
@@ -438,7 +487,7 @@ export class TypeChecker {
             const resolvedInitType = this.resolveType(initType);
             compatible = this.areTypesCompatible(
               resolvedDeclType,
-              resolvedInitType,
+              resolvedInitType
             );
 
             if (!compatible) {
@@ -446,12 +495,12 @@ export class TypeChecker {
               if (val !== undefined) {
                 compatible = this.isIntegerTypeCompatible(
                   val,
-                  resolvedDeclType,
+                  resolvedDeclType
                 );
               } else {
                 compatible = this.isImplicitWideningAllowed(
                   resolvedInitType,
-                  resolvedDeclType,
+                  resolvedDeclType
                 );
               }
             }
@@ -459,9 +508,13 @@ export class TypeChecker {
 
           if (!compatible) {
             throw new CompilerError(
-              `Type mismatch in variable declaration: expected ${this.typeToString(decl.typeAnnotation)}, got ${this.typeToString(initType)}`,
-              `Variable '${decl.name as string}' cannot be assigned a value of incompatible type.`,
-              decl.location,
+              `Type mismatch in variable declaration: expected ${this.typeToString(
+                decl.typeAnnotation
+              )}, got ${this.typeToString(initType)}`,
+              `Variable '${
+                decl.name as string
+              }' cannot be assigned a value of incompatible type.`,
+              decl.location
             );
           }
         }
@@ -470,7 +523,7 @@ export class TypeChecker {
         decl.name as string,
         "Variable",
         decl.typeAnnotation ? this.resolveType(decl.typeAnnotation) : undefined,
-        decl,
+        decl
       );
       // console.log(`Defined variable ${decl.name} with type ${this.typeToString(decl.typeAnnotation)}`);
       decl.resolvedType = decl.typeAnnotation
@@ -481,7 +534,7 @@ export class TypeChecker {
 
   private checkFunctionBody(
     decl: AST.FunctionDecl,
-    parentStruct?: AST.StructDecl,
+    parentStruct?: AST.StructDecl
   ): void {
     // Symbol already defined in hoist pass
 
@@ -513,7 +566,7 @@ export class TypeChecker {
           arrayDimensions: [],
           location: decl.location,
         },
-        decl,
+        decl
       );
     }
 
@@ -534,7 +587,7 @@ export class TypeChecker {
         throw new CompilerError(
           `Function '${decl.name}' might not return a value.`,
           "Ensure all code paths return a value matching the return type.",
-          decl.location,
+          decl.location
         );
       }
     }
@@ -553,7 +606,7 @@ export class TypeChecker {
           throw new CompilerError(
             `Undefined parent struct '${decl.parentType.name}'`,
             "Ensure the parent struct is defined before inheritance.",
-            decl.parentType.location,
+            decl.parentType.location
           );
         }
       }
@@ -621,7 +674,7 @@ export class TypeChecker {
         throw new CompilerError(
           `Module not found: ${stmt.source}`,
           "Module resolution failed",
-          stmt.location,
+          stmt.location
         );
       }
     } else {
@@ -639,7 +692,7 @@ export class TypeChecker {
           throw new CompilerError(
             `Module not found: ${importPath}`,
             "Ensure the file exists and the path is correct.",
-            stmt.location,
+            stmt.location
           );
         }
 
@@ -726,7 +779,7 @@ export class TypeChecker {
         "Module",
         undefined,
         stmt,
-        exportedScope,
+        exportedScope
       );
     } else if (stmt.importAll) {
       // Import all exported symbols
@@ -746,7 +799,7 @@ export class TypeChecker {
                 symbol.name,
                 symbol.kind,
                 symbol.type,
-                symbol.declaration,
+                symbol.declaration
               );
             }
           }
@@ -784,7 +837,7 @@ export class TypeChecker {
                   symbol.name,
                   symbol.kind,
                   symbol.type,
-                  symbol.declaration,
+                  symbol.declaration
                 );
               }
             }
@@ -815,7 +868,7 @@ export class TypeChecker {
         throw new CompilerError(
           `Module '${stmt.source}' does not export '${item.name}'`,
           "Ensure the symbol is exported (or defined) in the module.",
-          stmt.location,
+          stmt.location
         );
       }
 
@@ -826,7 +879,7 @@ export class TypeChecker {
         item.alias || item.name,
         symbol.kind,
         symbol.type,
-        symbol.declaration,
+        symbol.declaration
       );
     }
   }
@@ -868,9 +921,11 @@ export class TypeChecker {
           !this.areTypesCompatible(this.currentFunctionReturnType, returnType)
         ) {
           throw new CompilerError(
-            `Return type mismatch: expected ${this.typeToString(this.currentFunctionReturnType)}, got ${this.typeToString(returnType)}`,
+            `Return type mismatch: expected ${this.typeToString(
+              this.currentFunctionReturnType
+            )}, got ${this.typeToString(returnType)}`,
             "The return value does not match the function's declared return type.",
-            stmt.location,
+            stmt.location
           );
         }
       }
@@ -882,9 +937,11 @@ export class TypeChecker {
         this.currentFunctionReturnType.name !== "void"
       ) {
         throw new CompilerError(
-          `Missing return value: expected ${this.typeToString(this.currentFunctionReturnType)}`,
+          `Missing return value: expected ${this.typeToString(
+            this.currentFunctionReturnType
+          )}`,
           "Functions with non-void return types must return a value.",
-          stmt.location,
+          stmt.location
         );
       }
     }
@@ -1025,7 +1082,7 @@ export class TypeChecker {
       throw new CompilerError(
         `Undefined symbol '${expr.name}'`,
         hint,
-        expr.location,
+        expr.location
       );
     }
     // console.log(`Resolved identifier ${expr.name} to type ${this.typeToString(symbol.type)}`);
@@ -1120,9 +1177,11 @@ export class TypeChecker {
           };
         } else {
           throw new CompilerError(
-            `Cannot dereference non-pointer type ${this.typeToString(operandType)}`,
+            `Cannot dereference non-pointer type ${this.typeToString(
+              operandType
+            )}`,
             "Ensure the operand is a pointer.",
-            expr.location,
+            expr.location
           );
         }
       }
@@ -1154,9 +1213,11 @@ export class TypeChecker {
 
       if (!compatible) {
         throw new CompilerError(
-          `Type mismatch in assignment: cannot assign ${this.typeToString(valueType)} to ${this.typeToString(targetType)}`,
+          `Type mismatch in assignment: cannot assign ${this.typeToString(
+            valueType
+          )} to ${this.typeToString(targetType)}`,
           "The assigned value is not compatible with the target variable's type.",
-          expr.location,
+          expr.location
         );
       }
     }
@@ -1204,9 +1265,13 @@ export class TypeChecker {
           !this.areTypesCompatible(paramType, argType)
         ) {
           throw new CompilerError(
-            `Function argument type mismatch at position ${i + 1}: expected ${this.typeToString(paramType)}, got ${this.typeToString(argType)}`,
+            `Function argument type mismatch at position ${
+              i + 1
+            }: expected ${this.typeToString(
+              paramType
+            )}, got ${this.typeToString(argType)}`,
             "The argument type does not match the parameter type.",
-            expr.args[i]!.location,
+            expr.args[i]!.location
           );
         }
       }
@@ -1223,9 +1288,11 @@ export class TypeChecker {
       const symbol = moduleScope.resolve(expr.property);
       if (!symbol) {
         throw new CompilerError(
-          `Module '${(objectType as any).name}' has no exported member '${expr.property}'`,
+          `Module '${(objectType as any).name}' has no exported member '${
+            expr.property
+          }'`,
           "Check the module exports.",
-          expr.location,
+          expr.location
         );
       }
 
@@ -1268,7 +1335,7 @@ export class TypeChecker {
                 throw new CompilerError(
                   `Cannot access instance member '${expr.property}' on type '${inner.name}'`,
                   "Use an instance of the struct to access this member.",
-                  expr.location,
+                  expr.location
                 );
               }
               const memberType: AST.FunctionTypeNode = {
@@ -1342,7 +1409,7 @@ export class TypeChecker {
             for (let i = 0; i < contextDecl.genericParams.length; i++) {
               mapping.set(
                 contextDecl.genericParams[i]!,
-                contextType.genericArgs[i]!,
+                contextType.genericArgs[i]!
               );
             }
           }
@@ -1360,7 +1427,7 @@ export class TypeChecker {
               throw new CompilerError(
                 `Cannot access static member '${expr.property}' on instance of '${objectType.name}'`,
                 `Use '${objectType.name}.${expr.property}' instead.`,
-                expr.location,
+                expr.location
               );
             }
 
@@ -1375,7 +1442,7 @@ export class TypeChecker {
 
               let compatible = this.areTypesCompatible(
                 thisParamType, // substituted this param
-                objectType,
+                objectType
               );
 
               const thisParamRef = thisParamType; // alias for error msg
@@ -1426,9 +1493,11 @@ export class TypeChecker {
 
               if (!compatible) {
                 throw new CompilerError(
-                  `Instance type mismatch for 'this'. Expected '${this.typeToString(thisParamType)}', got '${this.typeToString(objectType)}'`,
+                  `Instance type mismatch for 'this'. Expected '${this.typeToString(
+                    thisParamType
+                  )}', got '${this.typeToString(objectType)}'`,
                   "Ensure the instance matches the 'this' parameter type.",
-                  expr.location,
+                  expr.location
                 );
               }
               paramTypes = paramTypes.slice(1);
@@ -1483,7 +1552,7 @@ export class TypeChecker {
       throw new CompilerError(
         `Array index must be an integer, got ${this.typeToString(indexType)}`,
         "Ensure the index expression evaluates to an integer.",
-        expr.index.location,
+        expr.index.location
       );
     }
 
@@ -1516,7 +1585,7 @@ export class TypeChecker {
         throw new CompilerError(
           `Cannot index type ${this.typeToString(objectType)}`,
           "Only arrays and pointers can be indexed.",
-          expr.object.location,
+          expr.object.location
         );
       }
     }
@@ -1534,9 +1603,11 @@ export class TypeChecker {
       !this.areTypesCompatible(trueType, falseType)
     ) {
       throw new CompilerError(
-        `Ternary branches have incompatible types: ${this.typeToString(trueType)} vs ${this.typeToString(falseType)}`,
+        `Ternary branches have incompatible types: ${this.typeToString(
+          trueType
+        )} vs ${this.typeToString(falseType)}`,
         "Both branches of a ternary expression must have the same type.",
-        expr.location,
+        expr.location
       );
     }
     return trueType;
@@ -1547,9 +1618,11 @@ export class TypeChecker {
 
     if (sourceType && !this.isCastAllowed(sourceType, expr.targetType)) {
       throw new CompilerError(
-        `Unsafe cast: cannot cast ${this.typeToString(sourceType)} to ${this.typeToString(expr.targetType)}`,
+        `Unsafe cast: cannot cast ${this.typeToString(
+          sourceType
+        )} to ${this.typeToString(expr.targetType)}`,
         "This cast is not allowed. Check pointer depths, numeric types, or struct compatibility.",
-        expr.location,
+        expr.location
       );
     }
 
@@ -1586,7 +1659,7 @@ export class TypeChecker {
   }
 
   private checkArrayLiteral(
-    expr: AST.ArrayLiteralExpr,
+    expr: AST.ArrayLiteralExpr
   ): AST.TypeNode | undefined {
     if (expr.elements.length === 0) return undefined; // Cannot infer type of empty array without context
     const firstType = this.checkExpression(expr.elements[0]!);
@@ -1606,14 +1679,14 @@ export class TypeChecker {
   }
 
   private checkStructLiteral(
-    expr: AST.StructLiteralExpr,
+    expr: AST.StructLiteralExpr
   ): AST.TypeNode | undefined {
     const symbol = this.currentScope.resolve(expr.structName);
     if (!symbol || symbol.kind !== "Struct") {
       throw new CompilerError(
         `Unknown struct '${expr.structName}'`,
         "Ensure the struct is defined.",
-        expr.location,
+        expr.location
       );
     }
 
@@ -1625,7 +1698,7 @@ export class TypeChecker {
         throw new CompilerError(
           `Unknown field '${field.name}' in struct '${expr.structName}'`,
           "Check the struct definition for valid fields.",
-          field.value.location,
+          field.value.location
         );
       }
 
@@ -1636,9 +1709,13 @@ export class TypeChecker {
 
         if (!this.areTypesCompatible(resolvedMemberType, resolvedValueType)) {
           throw new CompilerError(
-            `Type mismatch for field '${field.name}': expected ${this.typeToString(member.type)}, got ${this.typeToString(valueType)}`,
+            `Type mismatch for field '${
+              field.name
+            }': expected ${this.typeToString(
+              member.type
+            )}, got ${this.typeToString(valueType)}`,
             "Field value must match the declared type.",
-            field.value.location,
+            field.value.location
           );
         }
       }
@@ -1677,7 +1754,7 @@ export class TypeChecker {
   }
 
   private checkGenericInstantiation(
-    expr: AST.GenericInstantiationExpr,
+    expr: AST.GenericInstantiationExpr
   ): AST.TypeNode | undefined {
     const baseType = this.checkExpression(expr.base);
     if (!baseType) return undefined;
@@ -1701,7 +1778,7 @@ export class TypeChecker {
           throw new CompilerError(
             `Generic argument count mismatch: expected ${decl.genericParams.length}, got ${expr.genericArgs.length}`,
             "Provide the correct number of generic arguments.",
-            expr.location,
+            expr.location
           );
         }
 
@@ -1718,7 +1795,7 @@ export class TypeChecker {
 
   private substituteType(
     type: AST.TypeNode,
-    mapping: Map<string, AST.TypeNode>,
+    mapping: Map<string, AST.TypeNode>
   ): AST.TypeNode {
     if (type.kind === "BasicType") {
       if (mapping.has(type.name)) {
@@ -1740,7 +1817,7 @@ export class TypeChecker {
       return {
         ...type,
         genericArgs: type.genericArgs.map((arg) =>
-          this.substituteType(arg, mapping),
+          this.substituteType(arg, mapping)
         ),
       };
     } else if (type.kind === "FunctionType") {
@@ -1760,7 +1837,7 @@ export class TypeChecker {
     kind: SymbolKind,
     type: AST.TypeNode | undefined,
     node: AST.ASTNode,
-    moduleScope?: SymbolTable,
+    moduleScope?: SymbolTable
   ): void {
     if (
       this.currentScope.resolve(name) &&
@@ -1963,7 +2040,7 @@ export class TypeChecker {
 
   private isImplicitWideningAllowed(
     source: AST.TypeNode,
-    target: AST.TypeNode,
+    target: AST.TypeNode
   ): boolean {
     const resolvedSource = this.resolveType(source);
     const resolvedTarget = this.resolveType(target);
@@ -2117,7 +2194,7 @@ export class TypeChecker {
 
   private resolveStructMember(
     structDecl: AST.StructDecl,
-    memberName: string,
+    memberName: string
   ): AST.StructField | AST.FunctionDecl | undefined {
     // Check current struct
     const member = structDecl.members.find((m) => m.name === memberName);
@@ -2126,7 +2203,7 @@ export class TypeChecker {
     // Check parent
     if (structDecl.parentType && structDecl.parentType.kind === "BasicType") {
       const parentSymbol = this.currentScope.resolve(
-        structDecl.parentType.name,
+        structDecl.parentType.name
       );
       if (
         parentSymbol &&
@@ -2135,7 +2212,7 @@ export class TypeChecker {
       ) {
         return this.resolveStructMember(
           parentSymbol.declaration as AST.StructDecl,
-          memberName,
+          memberName
         );
       }
     }
@@ -2144,7 +2221,7 @@ export class TypeChecker {
 
   private resolveStructField(
     structDecl: AST.StructDecl,
-    fieldName: string,
+    fieldName: string
   ): AST.StructField | undefined {
     const member = this.resolveStructMember(structDecl, fieldName);
     if (member && member.kind === "StructField") return member;
@@ -2153,7 +2230,7 @@ export class TypeChecker {
 
   private resolveMemberWithContext(
     objectType: AST.BasicTypeNode,
-    memberName: string,
+    memberName: string
   ):
     | {
         member: AST.StructField | AST.FunctionDecl;
@@ -2194,7 +2271,7 @@ export class TypeChecker {
 
           const substitutedParent = this.substituteType(
             resolvedParentRaw,
-            mapping,
+            mapping
           );
           if (substitutedParent.kind === "BasicType") {
             currentType = substitutedParent;
@@ -2210,7 +2287,7 @@ export class TypeChecker {
 
   private isSubtype(
     child: AST.BasicTypeNode,
-    parent: AST.BasicTypeNode,
+    parent: AST.BasicTypeNode
   ): boolean {
     if (child.name === parent.name) return true;
 
@@ -2224,7 +2301,7 @@ export class TypeChecker {
       const decl = symbol.declaration as AST.StructDecl;
       if (decl.parentType && decl.parentType.kind === "BasicType") {
         const parentTypeResolved = this.resolveType(
-          decl.parentType,
+          decl.parentType
         ) as AST.BasicTypeNode;
         return this.isSubtype(parentTypeResolved, parent);
       }
