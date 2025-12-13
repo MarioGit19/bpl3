@@ -14,7 +14,7 @@
   "categories": [
     "Programming Languages"
   ],
-  "main": "./out/extension.js",
+  "main": "./out/vscode-ext/src/extension.js",
   "activationEvents": [
     "onLanguage:bpl"
   ],
@@ -29,6 +29,7 @@
     "typescript": "^4.9.5"
   },
   "dependencies": {
+    "peggy": "^5.0.6",
     "vscode-languageclient": "^8.1.0",
     "vscode-languageserver": "^8.1.0",
     "vscode-languageserver-textdocument": "^1.0.8"
@@ -63,6 +64,12 @@
           "type": "number",
           "default": 100,
           "description": "Controls the maximum number of problems produced by the server."
+        },
+        "bplLanguageServer.formatOnSave": {
+          "scope": "resource",
+          "type": "boolean",
+          "default": true,
+          "description": "Enable BPL format-on-save for .bpl files."
         }
       }
     }

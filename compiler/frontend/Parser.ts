@@ -16,7 +16,10 @@ export class Parser {
 
   public parse(): AST.Program {
     const ast = parseWithPeggy(this.source, this.filePath);
-    const comments = this.tokens.filter((t) => t.type === TokenType.Comment);
-    return { ...ast, comments };
+    if (this.tokens.length > 0) {
+      const comments = this.tokens.filter((t) => t.type === TokenType.Comment);
+      return { ...ast, comments };
+    }
+    return ast;
   }
 }

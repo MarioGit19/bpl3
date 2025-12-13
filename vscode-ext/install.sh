@@ -9,6 +9,10 @@ npm install
 echo "Compiling extension..."
 npm run compile
 
+echo "Copying grammar files..."
+mkdir -p out/grammar
+cp ../grammar/bpl.peggy out/grammar/bpl.peggy
+
 echo "Deleting old .vsix files, if any..."
 rm -f *.vsix
 

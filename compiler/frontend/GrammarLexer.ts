@@ -1,4 +1,4 @@
-import path from "path";
+import { resolve } from "path";
 import { GrammarParser } from "../../grammar/GrammarParser";
 import { GenericParser, type TokenNode } from "../../grammar/GenericParser";
 import type { Grammar } from "../../grammar/types";
@@ -9,7 +9,7 @@ let cachedGrammar: Grammar | null = null;
 
 function loadGrammar(): Grammar {
   if (cachedGrammar) return cachedGrammar;
-  const grammarPath = path.resolve(__dirname, "../../grammar/grammar.bpl");
+  const grammarPath = resolve(__dirname, "../../grammar/grammar.bpl");
   const parser = new GrammarParser(grammarPath);
   cachedGrammar = parser.parse();
   return cachedGrammar;

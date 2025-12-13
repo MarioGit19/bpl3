@@ -1,6 +1,6 @@
-import fs from "fs";
-import path from "path";
-import peggy from "peggy";
+import { readFileSync } from "fs";
+import { resolve } from "path";
+import * as peggy from "peggy";
 import * as AST from "../common/AST";
 import { CompilerError, type SourceLocation } from "../common/CompilerError";
 
@@ -8,8 +8,8 @@ let cachedParser: peggy.Parser | null = null;
 
 function loadParser(): peggy.Parser {
   if (cachedParser) return cachedParser;
-  const grammarPath = path.resolve(__dirname, "../../grammar/bpl.peggy");
-  const source = fs.readFileSync(grammarPath, "utf-8");
+  const grammarPath = resolve(__dirname, "../../grammar/bpl.peggy");
+  const source = readFileSync(grammarPath, "utf-8");
   cachedParser = peggy.generate(source, {
     output: "parser",
     format: "commonjs",
@@ -20,7 +20,10 @@ function loadParser(): peggy.Parser {
 
 function toSourceLocation(
   filePath: string,
-  loc: peggy.SourceLocation,
+  loc: {
+    start: { line: number; column: number };
+    end: { line: number; column: number };
+  }
 ): SourceLocation {
   return {
     file: filePath,
@@ -33,19 +36,48 @@ function toSourceLocation(
 
 export function parseWithPeggy(source: string, filePath: string): AST.Program {
   try {
-    const parser = loadParser();
-    return parser.parse(source, { filePath }) as AST.Program;
+    const parser: peggy.Parser = loadParser();
+    const comments: any[] = [];
+    const program = parser.parse(source, { filePath, comments }) as AST.Program;
+    program.comments = comments;
+    return program;
   } catch (error: unknown) {
-    if (error && typeof error === "object" && "location" in error) {
-      const loc = (error as peggy.ParserSyntaxError)
-        .location as peggy.SourceLocation;
-      const msg = (error as Error).message.split("\n")[0] || "Syntax error";
+    const err = error as (Error & { location?: any }) | unknown;
+    if (isPeggySyntaxError(err)) {
+      const loc = err.location as {
+        start: { line: number; column: number };
+        end: { line: number; column: number };
+      };
+      const baseMsg: string =
+        typeof err.message === "string" ? err.message : "Syntax error";
+      const parts = baseMsg.split("\n");
+      const msg: string = parts[0] ?? baseMsg;
       throw new CompilerError(
         msg,
         "Syntax error",
-        toSourceLocation(filePath, loc),
+        toSourceLocation(filePath, loc)
       );
     }
     throw error;
   }
+}
+
+function isPeggySyntaxError(e: unknown): e is {
+  message: string;
+  location: {
+    start: { line: number; column: number };
+    end: { line: number; column: number };
+  };
+} {
+  return (
+    !!e &&
+    typeof e === "object" &&
+    "message" in e &&
+    typeof (e as any).message === "string" &&
+    "location" in e &&
+    (e as any).location &&
+    typeof (e as any).location === "object" &&
+    "start" in (e as any).location &&
+    "end" in (e as any).location
+  );
 }

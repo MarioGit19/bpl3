@@ -7,6 +7,7 @@ export class Formatter {
   private indentString: string = "    "; // 4 spaces
   private comments: Token[] = [];
   private currentCommentIndex: number = 0;
+  private lastLineProcessed: number = 0;
 
   format(program: AST.Program): string {
     this.indentLevel = 0;
@@ -17,6 +18,7 @@ export class Formatter {
       return a.column - b.column;
     });
     this.currentCommentIndex = 0;
+    this.lastLineProcessed = 0;
 
     let output = this.formatStatements(program.statements);
 
@@ -31,8 +33,22 @@ export class Formatter {
     while (this.currentCommentIndex < this.comments.length) {
       const comment = this.comments[this.currentCommentIndex];
       if (comment && comment.line < line) {
+        // Check for gap before comment
+        if (
+          this.lastLineProcessed > 0 &&
+          comment.line > this.lastLineProcessed + 1
+        ) {
+          output += "\n";
+        }
+
         const indent = this.getIndent();
         output += `${indent}${comment.lexeme}\n`;
+
+        // Update lastLineProcessed
+        // Estimate comment height based on newlines in lexeme
+        const lines = comment.lexeme.split("\n").length;
+        this.lastLineProcessed = comment.line + lines - 1;
+
         this.currentCommentIndex++;
       } else {
         break;
@@ -70,10 +86,21 @@ export class Formatter {
     let output = "";
     for (const stmt of statements) {
       output += this.printCommentsBefore(stmt.location.startLine);
+
+      // Check for gap before statement (after comments)
+      if (
+        this.lastLineProcessed > 0 &&
+        stmt.location.startLine > this.lastLineProcessed + 1
+      ) {
+        output += "\n";
+      }
+
       const formatted = this.formatStatement(stmt);
       const inlineComment = this.getInlineComment(stmt.location.endLine);
       output += formatted + inlineComment;
       output += "\n";
+
+      this.lastLineProcessed = stmt.location.endLine;
     }
     return output;
   }
@@ -116,7 +143,9 @@ export class Formatter {
       case "Switch":
         return this.formatSwitch(stmt as AST.SwitchStmt);
       case "ExpressionStmt":
-        return `${indent}${this.formatExpression((stmt as AST.ExpressionStmt).expression)};`;
+        return `${indent}${this.formatExpression(
+          (stmt as AST.ExpressionStmt).expression,
+        )};`;
       default:
         return `${indent}// Unknown statement kind: ${(stmt as any).kind}`;
     }
@@ -155,7 +184,9 @@ export class Formatter {
             return this.formatDestructPattern(item);
           } else if (typeof item === "object" && item.name) {
             // Single target
-            return `${item.name}${item.type ? `: ${this.formatType(item.type)}` : ""}`;
+            return `${item.name}${
+              item.type ? `: ${this.formatType(item.type)}` : ""
+            }`;
           }
           return "";
         })
@@ -205,16 +236,28 @@ export class Formatter {
     output += " {\n";
     this.indentLevel++;
 
+    this.lastLineProcessed = decl.location.startLine;
+
     for (const member of decl.members) {
       // Print comments before member
-      // StructMember has location? Yes, ASTNode has location.
       output += this.printCommentsBefore(member.location.startLine);
 
+      if (
+        this.lastLineProcessed > 0 &&
+        member.location.startLine > this.lastLineProcessed + 1
+      ) {
+        output += "\n";
+      }
+
       if (member.kind === "StructField") {
-        output += `${this.getIndent()}${member.name}: ${this.formatType(member.type)},\n`;
+        output += `${this.getIndent()}${member.name}: ${this.formatType(
+          member.type,
+        )},\n`;
       } else if (member.kind === "FunctionDecl") {
         output += this.formatFunctionDecl(member as AST.FunctionDecl) + "\n";
       }
+
+      this.lastLineProcessed = member.location.endLine;
     }
 
     // Print comments inside struct (before closing brace)
@@ -353,6 +396,11 @@ export class Formatter {
     }
     output += "{\n";
     this.indentLevel++;
+
+    // Update lastLineProcessed to the start of the block so inner statements
+    // don't get extra padding relative to the opening brace.
+    this.lastLineProcessed = stmt.location.startLine;
+
     output += this.formatStatements(stmt.statements);
 
     // Print comments inside the block (before the closing brace)
@@ -388,22 +436,48 @@ export class Formatter {
 
   private formatSwitch(stmt: AST.SwitchStmt): string {
     const indent = this.getIndent();
-    let output = `${indent}switch (${this.formatExpression(stmt.expression)}) {\n`;
+    let output = `${indent}switch (${this.formatExpression(
+      stmt.expression,
+    )}) {\n`;
     this.indentLevel++;
+
+    this.lastLineProcessed = stmt.location.startLine;
 
     for (const kase of stmt.cases) {
       output += this.printCommentsBefore(kase.location.startLine);
-      output += `${this.getIndent()}case ${this.formatExpression(kase.value)}: `;
+
+      if (
+        this.lastLineProcessed > 0 &&
+        kase.location.startLine > this.lastLineProcessed + 1
+      ) {
+        output += "\n";
+      }
+
+      output += `${this.getIndent()}case ${this.formatExpression(
+        kase.value,
+      )}: `;
       output += this.formatBlock(kase.body, false);
       output += "\n";
+
+      this.lastLineProcessed = kase.location.endLine;
     }
 
     if (stmt.defaultCase) {
       // Default case doesn't have explicit location in AST usually, but block does
       output += this.printCommentsBefore(stmt.defaultCase.location.startLine);
+
+      if (
+        this.lastLineProcessed > 0 &&
+        stmt.defaultCase.location.startLine > this.lastLineProcessed + 1
+      ) {
+        output += "\n";
+      }
+
       output += `${this.getIndent()}default: `;
       output += this.formatBlock(stmt.defaultCase, false);
       output += "\n";
+
+      this.lastLineProcessed = stmt.defaultCase.location.endLine;
     }
 
     output += this.printCommentsBefore(stmt.location.endLine);
@@ -518,7 +592,9 @@ export class Formatter {
   private formatCall(expr: AST.CallExpr): string {
     let output = this.formatExpression(expr.callee);
     if (expr.genericArgs.length > 0) {
-      output += `<${expr.genericArgs.map((t) => this.formatType(t)).join(", ")}>`;
+      output += `<${expr.genericArgs
+        .map((t) => this.formatType(t))
+        .join(", ")}>`;
     }
     output += "(";
     output += expr.args.map((a) => this.formatExpression(a)).join(", ");
@@ -531,19 +607,27 @@ export class Formatter {
   }
 
   private formatIndex(expr: AST.IndexExpr): string {
-    return `${this.formatExpression(expr.object)}[${this.formatExpression(expr.index)}]`;
+    return `${this.formatExpression(expr.object)}[${this.formatExpression(
+      expr.index,
+    )}]`;
   }
 
   private formatAssignment(expr: AST.AssignmentExpr): string {
-    return `${this.formatExpression(expr.assignee)} ${expr.operator.lexeme} ${this.formatExpression(expr.value)}`;
+    return `${this.formatExpression(expr.assignee)} ${
+      expr.operator.lexeme
+    } ${this.formatExpression(expr.value)}`;
   }
 
   private formatTernary(expr: AST.TernaryExpr): string {
-    return `${this.formatExpression(expr.condition)} ? ${this.formatExpression(expr.trueExpr)} : ${this.formatExpression(expr.falseExpr)}`;
+    return `${this.formatExpression(expr.condition)} ? ${this.formatExpression(
+      expr.trueExpr,
+    )} : ${this.formatExpression(expr.falseExpr)}`;
   }
 
   private formatCast(expr: AST.CastExpr): string {
-    return `cast<${this.formatType(expr.targetType)}>(${this.formatExpression(expr.expression)})`;
+    return `cast<${this.formatType(expr.targetType)}>(${this.formatExpression(
+      expr.expression,
+    )})`;
   }
 
   private formatSizeof(expr: AST.SizeofExpr): string {
@@ -555,7 +639,9 @@ export class Formatter {
   }
 
   private formatMatch(expr: AST.MatchExpr): string {
-    return `match<${this.formatType(expr.targetType)}>(${this.formatExpression(expr.value as AST.Expression)})`;
+    return `match<${this.formatType(expr.targetType)}>(${this.formatExpression(
+      expr.value as AST.Expression,
+    )})`;
   }
 
   private formatArrayLiteral(expr: AST.ArrayLiteralExpr): string {
@@ -582,7 +668,9 @@ export class Formatter {
   private formatGenericInstantiation(
     expr: AST.GenericInstantiationExpr,
   ): string {
-    return `${this.formatExpression(expr.base)}<${expr.genericArgs.map((t) => this.formatType(t)).join(", ")}>`;
+    return `${this.formatExpression(expr.base)}<${expr.genericArgs
+      .map((t) => this.formatType(t))
+      .join(", ")}>`;
   }
 
   // --- Types ---
@@ -594,7 +682,9 @@ export class Formatter {
         for (let i = 0; i < type.pointerDepth; i++) output += "*";
         output += type.name;
         if (type.genericArgs.length > 0) {
-          output += `<${type.genericArgs.map((t) => this.formatType(t)).join(", ")}>`;
+          output += `<${type.genericArgs
+            .map((t) => this.formatType(t))
+            .join(", ")}>`;
         }
         for (const dim of type.arrayDimensions) {
           output += `[${dim !== null ? dim : ""}]`;

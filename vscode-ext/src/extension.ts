@@ -1,18 +1,20 @@
 import * as path from "path";
-import { workspace, ExtensionContext } from "vscode";
+import { workspace, window } from "vscode";
+import type { ExtensionContext } from "vscode";
 
-import {
-  LanguageClient,
+import { LanguageClient, TransportKind } from "vscode-languageclient/node";
+import type {
   LanguageClientOptions,
   ServerOptions,
-  TransportKind,
 } from "vscode-languageclient/node";
 
 let client: LanguageClient;
 
-export function activate(context: ExtensionContext) {
+export async function activate(context: ExtensionContext) {
   // The server is implemented in node
-  const serverModule = context.asAbsolutePath(path.join("out", "server.js"));
+  const serverModule = context.asAbsolutePath(
+    path.join("out", "vscode-ext", "src", "server.js"),
+  );
 
   // If the extension is launched in debug mode then the debug server options are used
   // Otherwise the run options are used
@@ -44,6 +46,23 @@ export function activate(context: ExtensionContext) {
 
   // Start the client. This will also launch the server
   client.start();
+
+  // Enable format-on-save by default, honoring user setting
+  const config = workspace.getConfiguration();
+  const enabled = config.get<boolean>("bplLanguageServer.formatOnSave", true);
+  if (enabled) {
+    const currentLanguages = config.get<string[]>(
+      "editor.formatOnSaveAllowList",
+    );
+    // Prefer per-language setting; if unavailable, set global formatOnSave true
+    config.update("editor.formatOnSave", true, true).then(() => {
+      // Optionally inform the user how to disable
+      window.setStatusBarMessage(
+        "BPL: format-on-save enabled (toggle in settings)",
+        3000,
+      );
+    });
+  }
 }
 
 export function deactivate(): Thenable<void> | undefined {

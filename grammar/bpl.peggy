@@ -938,8 +938,21 @@ Whitespace
   = [ \t\n\r]+
 
 Comment
-  = "###" (!"###" .)* "###"
-  / "#"[^\n\r]*
+  = c:("###" (!"###" .)* "###"
+  / "#"[^\n\r]*) {
+    if (options && options.comments) {
+      const loc = location();
+      options.comments.push({
+        type: "Comment",
+        lexeme: text(),
+        literal: null,
+        line: loc.start.line,
+        column: loc.start.column,
+        file: options.filePath || "unknown"
+      });
+    }
+    return c;
+  }
 
 EOF = !.
 

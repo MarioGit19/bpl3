@@ -35,14 +35,9 @@
 - [x] AST/IR printing flags (CLI `--emit` option)
 - [x] Language Specification Update
 - [x] VS Code Extension
+- [x] Language Server Protocol (LSP) Implementation
 
 ## Pending Features (expanded)
-
-- [2] Language Server Protocol (LSP) Implementation
-
-  - Description: Implement a Language Server that integrates with the VS Code extension to provide diagnostics, formatting (using the new Formatter), and basic code intelligence.
-  - Implementation notes: Use `vscode-languageserver-node`. Hook up the `Formatter` class for `textDocument/formatting`. Use `Parser` and `TypeChecker` for `textDocument/publishDiagnostics`.
-  - Acceptance criteria: Formatting works in VS Code. Syntax errors are reported in the Problems panel.
 
 - [3] Standard Library Module
 

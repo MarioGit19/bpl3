@@ -4,17 +4,19 @@ import {
   Diagnostic,
   DiagnosticSeverity,
   ProposedFeatures,
-  InitializeParams,
   DidChangeConfigurationNotification,
   CompletionItem,
   CompletionItemKind,
-  TextDocumentPositionParams,
   TextDocumentSyncKind,
-  InitializeResult,
   Location,
   Range,
   Hover,
   MarkupKind,
+} from "vscode-languageserver/node";
+import type {
+  InitializeParams,
+  TextDocumentPositionParams,
+  InitializeResult,
 } from "vscode-languageserver/node";
 
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -59,6 +61,7 @@ connection.onInitialize((params: InitializeParams) => {
       },
       definitionProvider: true,
       hoverProvider: true,
+      documentFormattingProvider: true,
     },
   };
   if (hasWorkspaceFolderCapability) {
@@ -140,53 +143,122 @@ documents.onDidChangeContent((change) => {
   validateTextDocument(change.document);
 });
 
+// Compiler integration
+import { Parser } from "../../compiler/frontend/Parser";
+import { TypeChecker } from "../../compiler/middleend/TypeChecker";
+import { CompilerError } from "../../compiler/common/CompilerError";
+import * as AST from "../../compiler/common/AST";
+import { Formatter } from "../../compiler/formatter/Formatter";
+
 async function validateTextDocument(textDocument: TextDocument): Promise<void> {
-  // In this simple example we get the settings for every validate run.
   const settings = await getDocumentSettings(textDocument.uri);
-  const maxNumberOfProblems = settings?.maxNumberOfProblems || 100;
+  const maxNumberOfProblems = settings?.maxNumberOfProblems || 1000;
 
-  // The validator creates diagnostics for all uppercase words length 2 and more
   const text = textDocument.getText();
-  const pattern = /\b[A-Z]{2,}\b/g;
-  let m: RegExpExecArray | null;
+  const filePath = fileURLToPath(textDocument.uri);
 
-  let problems = 0;
   const diagnostics: Diagnostic[] = [];
-  while ((m = pattern.exec(text)) && problems < maxNumberOfProblems) {
-    problems++;
-    const diagnostic: Diagnostic = {
-      severity: DiagnosticSeverity.Warning,
-      range: {
-        start: textDocument.positionAt(m.index),
-        end: textDocument.positionAt(m.index + m[0].length),
-      },
-      message: `${m[0]} is all uppercase.`,
-      source: "ex",
-    };
-    if (hasDiagnosticRelatedInformationCapability) {
-      diagnostic.relatedInformation = [
-        {
-          location: {
-            uri: textDocument.uri,
-            range: Object.assign({}, diagnostic.range),
-          },
-          message: "Spelling matters",
-        },
-        {
-          location: {
-            uri: textDocument.uri,
-            range: Object.assign({}, diagnostic.range),
-          },
-          message: "Particularly for names",
-        },
-      ];
+  try {
+    // Parse to AST
+    const parser = new Parser(text, filePath);
+    const program: AST.Program = parser.parse();
+
+    // Type check (single-file scope; skip heavy import resolution)
+    const checker = new TypeChecker({ skipImportResolution: true });
+    // Validate and collect any semantic errors thrown during checking phases
+    // Many type errors are thrown; wrap to capture
+    try {
+      // Assuming TypeChecker has an entry like checkProgram
+      // If not, constructing will perform symbol definition; we need a pass:
+      (checker as any).checkProgram
+        ? (checker as any).checkProgram(program)
+        : null;
+    } catch (e: any) {
+      if (e && e instanceof CompilerError) {
+        diagnostics.push(compilerErrorToDiagnostic(e, textDocument));
+      } else {
+        // Unknown error: surface as generic diagnostic at top
+        diagnostics.push({
+          severity: DiagnosticSeverity.Error,
+          range: Range.create(0, 0, 0, 1),
+          message: String(e?.message || e),
+          source: "bpl-lsp",
+        });
+      }
     }
-    diagnostics.push(diagnostic);
+  } catch (e: any) {
+    if (e && e instanceof CompilerError) {
+      diagnostics.push(compilerErrorToDiagnostic(e, textDocument));
+    } else {
+      diagnostics.push({
+        severity: DiagnosticSeverity.Error,
+        range: Range.create(0, 0, 0, 1),
+        message: String(e?.message || e),
+        source: "bpl-lsp",
+      });
+    }
   }
 
-  // Send the computed diagnostics to VSCode.
-  connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
+  // Cap diagnostics if needed
+  const limited = diagnostics.slice(0, maxNumberOfProblems);
+  connection.sendDiagnostics({ uri: textDocument.uri, diagnostics: limited });
 }
+
+function compilerErrorToDiagnostic(
+  err: CompilerError,
+  doc: TextDocument,
+): Diagnostic {
+  const start = clampPosition(
+    doc,
+    err.location.startLine,
+    err.location.startColumn,
+  );
+  const end = clampPosition(
+    doc,
+    err.location.endLine ?? err.location.startLine,
+    err.location.endColumn ?? err.location.startColumn + 1,
+  );
+  return {
+    severity: DiagnosticSeverity.Error,
+    range: Range.create(start, end),
+    message: `${err.message}${err.hint ? `\nHint: ${err.hint}` : ""}`,
+    source: "bpl-lsp",
+  };
+}
+
+function clampPosition(doc: TextDocument, line: number, character: number) {
+  const text = doc.getText();
+  const lines = text.split(/\r?\n/);
+  const l = Math.max(0, Math.min(lines.length - 1, (line ?? 1) - 1));
+  const maxChar = lines[l]?.length ?? 0;
+  const c = Math.max(0, Math.min(maxChar, (character ?? 1) - 1));
+  return { line: l, character: c };
+}
+
+// Formatting: full document only; no on-type formatting
+connection.onDocumentFormatting(async (params) => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc) return [];
+  const text = doc.getText();
+  const filePath = fileURLToPath(doc.uri);
+  try {
+    const parser = new Parser(text, filePath);
+    const program: AST.Program = parser.parse();
+    const formatter = new Formatter();
+    const formatted = formatter.format(program);
+    const fullRange = Range.create(0, 0, doc.lineCount, 0);
+    return [
+      {
+        range: fullRange,
+        newText: formatted,
+      },
+    ];
+  } catch (e: any) {
+    // If formatting fails, return no edits
+    connection.console.error(`Formatting failed: ${e?.message || e}`);
+    return [];
+  }
+});
 
 connection.onDidChangeWatchedFiles((_change) => {
   // Monitored files have change in VSCode
@@ -310,10 +382,10 @@ function findSymbolDefinition(
 
       for (let i = 0; i < maxLines; i++) {
         if (currentLineIdx + i >= lines.length) break;
-        const line = lines[currentLineIdx + i];
-        collectedLines.push(line);
+        const lineStr = lines[currentLineIdx + i] ?? "";
+        collectedLines.push(lineStr);
 
-        for (const char of line) {
+        for (const char of lineStr) {
           if (char === "{") {
             braceCount++;
             foundStartBrace = true;
@@ -333,20 +405,20 @@ function findSymbolDefinition(
 
       for (let i = 0; i < maxLines; i++) {
         if (currentLineIdx + i >= lines.length) break;
-        let line = lines[currentLineIdx + i];
+        let lineStr = lines[currentLineIdx + i] ?? "";
 
-        const braceIdx = line.indexOf("{");
+        const braceIdx = lineStr.indexOf("{");
         if (braceIdx !== -1) {
-          line = line.substring(0, braceIdx);
-          collectedLines.push(line);
+          lineStr = lineStr.substring(0, braceIdx);
+          collectedLines.push(lineStr);
           break;
         } else {
-          collectedLines.push(line);
+          collectedLines.push(lineStr);
         }
       }
       lineContent = collectedLines.join("\n").trim();
     } else {
-      lineContent = lines[currentLineIdx].trim();
+      lineContent = (lines[currentLineIdx] ?? "").trim();
     }
 
     return {
@@ -365,7 +437,7 @@ function findSymbolDefinition(
 
     if (importedSymbols && importedSymbols.includes(word)) {
       const currentDir = path.dirname(fileURLToPath(document.uri));
-      let resolvedPath = path.resolve(currentDir, importPath);
+      let resolvedPath = path.resolve(currentDir, importPath || "");
       if (
         !fs.existsSync(resolvedPath) &&
         fs.existsSync(resolvedPath + ".bpl")
@@ -406,10 +478,10 @@ function findSymbolDefinition(
 
             for (let i = 0; i < maxLines; i++) {
               if (currentLineIdx + i >= lines.length) break;
-              const line = lines[currentLineIdx + i];
-              collectedLines.push(line);
+              const lineStr = lines[currentLineIdx + i] ?? "";
+              collectedLines.push(lineStr);
 
-              for (const char of line) {
+              for (const char of lineStr) {
                 if (char === "{") {
                   braceCount++;
                   foundStartBrace = true;
@@ -429,20 +501,20 @@ function findSymbolDefinition(
 
             for (let i = 0; i < maxLines; i++) {
               if (currentLineIdx + i >= lines.length) break;
-              let line = lines[currentLineIdx + i];
+              let lineStr = lines[currentLineIdx + i] ?? "";
 
-              const braceIdx = line.indexOf("{");
+              const braceIdx = lineStr.indexOf("{");
               if (braceIdx !== -1) {
-                line = line.substring(0, braceIdx);
-                collectedLines.push(line);
+                lineStr = lineStr.substring(0, braceIdx);
+                collectedLines.push(lineStr);
                 break;
               } else {
-                collectedLines.push(line);
+                collectedLines.push(lineStr);
               }
             }
             lineContent = collectedLines.join("\n").trim();
           } else {
-            lineContent = lines[currentLineIdx].trim();
+            lineContent = (lines[currentLineIdx] ?? "").trim();
           }
 
           return {
@@ -467,7 +539,8 @@ connection.onDefinition(
     const offset = document.offsetAt(params.position);
 
     // Check if we are on an import string
-    const line = text.split("\n")[params.position.line];
+    const lines = text.split("\n");
+    const line = lines[params.position.line] ?? "";
     // Matches:
     // import A, [B] from "path"
     // import [A], [B] from "path"
@@ -478,8 +551,8 @@ connection.onDefinition(
       );
     if (importMatch) {
       const importPath = importMatch[1];
-      const startCol = line.indexOf(importPath);
-      const endCol = startCol + importPath.length;
+      const startCol = line.indexOf(importPath || "");
+      const endCol = startCol + (importPath?.length ?? 0);
 
       if (
         params.position.character >= startCol &&
@@ -487,7 +560,7 @@ connection.onDefinition(
       ) {
         // Resolve path
         const currentDir = path.dirname(fileURLToPath(document.uri));
-        let resolvedPath = path.resolve(currentDir, importPath);
+        let resolvedPath = path.resolve(currentDir, importPath || "");
 
         // Try adding .bpl extension if missing
         if (
@@ -641,7 +714,7 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
   if (foundMatch.index > 0 && text[foundMatch.index - 1] === ".") {
     // Find the object name (scan backwards)
     let i = foundMatch.index - 2;
-    while (i >= 0 && /[a-zA-Z0-9_]/.test(text[i])) {
+    while (i >= 0 && /[a-zA-Z0-9_]/.test(text[i] || "")) {
       i--;
     }
     const objName = text.substring(i + 1, foundMatch.index - 1);
@@ -657,7 +730,7 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
           const typeName = typeMatch[1];
 
           // 3. Find definition of the type (struct)
-          const structDef = findSymbolDefinition(document, typeName);
+          const structDef = findSymbolDefinition(document, typeName || "");
           if (structDef) {
             // 4. Find member in struct definition
             // Matches: member : Type
