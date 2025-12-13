@@ -82,8 +82,9 @@ export class ModuleResolver {
    * Try to resolve a path with various extensions
    */
   private tryResolveWithExtensions(filePath: string): string | null {
+    const exists = fs.existsSync(filePath);
     // Check if path exists as-is
-    if (fs.existsSync(filePath)) {
+    if (exists) {
       const stat = fs.statSync(filePath);
       if (stat.isFile()) {
         return this.normalizePath(filePath);
@@ -125,7 +126,7 @@ export class ModuleResolver {
         return resolved;
       }
       throw new Error(
-        `Module not found: ${importSource} (absolute path does not exist)`
+        `Module not found: ${importSource} (absolute path does not exist)`,
       );
     }
 
@@ -140,7 +141,7 @@ export class ModuleResolver {
       }
 
       throw new Error(
-        `Module not found: ${importSource} (resolved to ${resolved})`
+        `Module not found: ${importSource} (resolved to ${resolved})`,
       );
     }
 
@@ -160,13 +161,23 @@ export class ModuleResolver {
       }
     }
 
+    // Handle explicit std/ prefix
+    if (importSource.startsWith("std/")) {
+      const relativePath = importSource.substring(4); // Remove "std/"
+      const stdPath = path.join(this.stdLibPath, relativePath);
+      const result = this.tryResolveWithExtensions(stdPath);
+      if (result) {
+        return result;
+      }
+    }
+
     // Try to resolve as a package import
     const packageManager = new PackageManager();
     try {
       // First try from current working directory
       let packagePath = packageManager.resolvePackage(
         importSource,
-        process.cwd()
+        process.cwd(),
       );
       if (packagePath) {
         const result = this.tryResolveWithExtensions(packagePath);
@@ -176,7 +187,7 @@ export class ModuleResolver {
       // Then try from the file's directory
       packagePath = packageManager.resolvePackage(
         importSource,
-        path.dirname(fromFile)
+        path.dirname(fromFile),
       );
       if (packagePath) {
         const result = this.tryResolveWithExtensions(packagePath);
@@ -203,7 +214,7 @@ export class ModuleResolver {
    */
   private loadModule(
     modulePath: string,
-    visited: Set<string> = new Set()
+    visited: Set<string> = new Set(),
   ): ModuleInfo {
     // Check cache
     if (this.modules.has(modulePath)) {
@@ -250,7 +261,7 @@ export class ModuleResolver {
               error instanceof Error ? error.message : String(error)
             }`,
             "Check that the module path is correct and the file exists.",
-            importStmt.location
+            importStmt.location,
           );
         }
       }
@@ -273,7 +284,7 @@ export class ModuleResolver {
 
       if (visiting.has(modulePath)) {
         throw new Error(
-          `Circular dependency detected involving: ${modulePath}`
+          `Circular dependency detected involving: ${modulePath}`,
         );
       }
 

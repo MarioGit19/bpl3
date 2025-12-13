@@ -1239,7 +1239,7 @@ export class CodeGenerator {
       return expr.value.toString();
     } else if (expr.type === "bool") {
       return expr.value ? "1" : "0";
-    } else if (expr.type === "nullptr") {
+    } else if (expr.type === "nullptr" || expr.type === "null") {
       return "null";
     } else if (expr.type === "string") {
       const content = expr.value;
@@ -1296,7 +1296,10 @@ export class CodeGenerator {
       if (expr.operator.type === TokenType.Plus) {
         const reg = this.newRegister();
         this.emit(
-          `  ${reg} = getelementptr inbounds ${leftType.slice(0, -1)}, ${leftType} ${leftRaw}, i64 ${right}`,
+          `  ${reg} = getelementptr inbounds ${leftType.slice(
+            0,
+            -1,
+          )}, ${leftType} ${leftRaw}, i64 ${right}`,
         );
         return reg;
       } else if (expr.operator.type === TokenType.Minus) {
@@ -1305,7 +1308,10 @@ export class CodeGenerator {
         this.emit(`  ${negRight} = sub i64 0, ${right}`);
         const reg = this.newRegister();
         this.emit(
-          `  ${reg} = getelementptr inbounds ${leftType.slice(0, -1)}, ${leftType} ${leftRaw}, i64 ${negRight}`,
+          `  ${reg} = getelementptr inbounds ${leftType.slice(
+            0,
+            -1,
+          )}, ${leftType} ${leftRaw}, i64 ${negRight}`,
         );
         return reg;
       }
@@ -1330,7 +1336,10 @@ export class CodeGenerator {
 
       const reg = this.newRegister();
       this.emit(
-        `  ${reg} = getelementptr inbounds ${rightType.slice(0, -1)}, ${rightType} ${rightRaw}, i64 ${left}`,
+        `  ${reg} = getelementptr inbounds ${rightType.slice(
+          0,
+          -1,
+        )}, ${rightType} ${rightRaw}, i64 ${left}`,
       );
       return reg;
     }
@@ -2232,7 +2241,7 @@ export class CodeGenerator {
             llvmType = "i1";
             break;
           case "void":
-            llvmType = "void";
+            llvmType = basicType.pointerDepth > 0 ? "i8" : "void";
             break;
           case "string":
             llvmType = "i8*";

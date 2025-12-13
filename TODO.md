@@ -36,6 +36,7 @@
 - [x] Language Specification Update
 - [x] VS Code Extension
 - [x] Language Server Protocol (LSP) Implementation
+- [x] Robust Import/Export & Linking
 
 ## Pending Features (expanded)
 
@@ -45,13 +46,7 @@
   - Implementation notes: Start with small, critical modules (strings, arrays, io). Provide both high-level BPL implementations and low-level runtime helpers backed by `lib/` for performance-critical functions.
   - Acceptance criteria: Example programs can `import std` and use library features; library code compiles and links with generated code.
 
-- [3] Robust Import/Export & Linking
-
-  - Description: Improve module resolution for relative/absolute imports, support compiled-object linking and extern declarations for FFI, allow importing from 'std' and resolution from like file 'package.json', eg 'web-server' maps to ~/.bpl/lib/web-server.
-  - Implementation notes: Implement full import resolution phase, module cache, and link-time symbol verification. Add `extern` declarations for linking with C/LLVM objects.
-  - Acceptance criteria: Multi-file projects import and link correctly; extern functions can be declared and linked.
-
-- [3] Semantic Analysis Improvements
+- [9] Semantic Analysis Improvements
 
   - Description: Enhance the TypeChecker and semantic analysis to catch more errors at compile time, such as unreachable code, variable shadowing, and unused variables.
   - Implementation notes: Add passes for control flow analysis (reachability) and scope analysis (shadowing).

@@ -67,7 +67,7 @@ export class Linker {
       if (options.objectFiles && options.objectFiles.length > 0) {
         if (options.verbose) {
           console.log(
-            `[Linker] Registering ${options.objectFiles.length} object file(s)...`
+            `[Linker] Registering ${options.objectFiles.length} object file(s)...`,
           );
         }
 
@@ -75,7 +75,7 @@ export class Linker {
           try {
             ObjectFileParser.registerObjectFile(
               objFile,
-              this.linkerSymbolTable
+              this.linkerSymbolTable,
             );
             if (options.verbose) {
               console.log(`  Registered: ${objFile}`);

@@ -385,7 +385,7 @@ export class Compiler {
         entryModule.path,
         allContent,
         llvmIR,
-        this.options.verbose
+        this.options.verbose,
       );
 
       const objectFiles = [objectFile];
@@ -406,7 +406,7 @@ export class Compiler {
         console.log(
           `[Module Cache] Cache stats: ${stats.totalModules} modules, ${(
             stats.cacheSize / 1024
-          ).toFixed(2)} KB`
+          ).toFixed(2)} KB`,
         );
       }
 

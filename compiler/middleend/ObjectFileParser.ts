@@ -82,7 +82,7 @@ export class ObjectFileParser {
 
       if (result.error) {
         console.warn(
-          `Warning: Could not parse ELF object with nm: ${result.error.message}`
+          `Warning: Could not parse ELF object with nm: ${result.error.message}`,
         );
         return [];
       }
@@ -147,7 +147,7 @@ export class ObjectFileParser {
       return this.parseELFObject(filePath);
     } else {
       throw new Error(
-        `Unsupported object file format: ${ext} (supported: .ll, .o, .obj, .a)`
+        `Unsupported object file format: ${ext} (supported: .ll, .o, .obj, .a)`,
       );
     }
   }
@@ -157,7 +157,7 @@ export class ObjectFileParser {
    */
   static registerObjectFile(
     filePath: string,
-    linkerSymbolTable: LinkerSymbolTable
+    linkerSymbolTable: LinkerSymbolTable,
   ): void {
     try {
       const symbols = this.parseObjectFile(filePath);

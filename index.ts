@@ -47,14 +47,14 @@ program
   .option("--emit <type>", "emit type: llvm, ast, tokens, formatted", "llvm")
   .option(
     "--target <triple>",
-    "target triple for clang (e.g. x86_64-pc-windows-gnu)"
+    "target triple for clang (e.g. x86_64-pc-windows-gnu)",
   )
   .option("--sysroot <path>", "sysroot path for cross-compilation")
   .option("--cpu <cpu>", "target CPU for clang (e.g. znver4)")
   .option("--march <arch>", "target architecture for clang (e.g. arm64)")
   .option(
     "--clang-flag <flag...>",
-    "additional flags forwarded directly to clang"
+    "additional flags forwarded directly to clang",
   )
   .option("-l, --lib <lib...>", "libraries to link with")
   .option("-L, --lib-path <path...>", "library search paths")
@@ -84,7 +84,7 @@ program
 
     if (files.length > 1) {
       console.error(
-        "Error: Multiple input files are only supported for formatting."
+        "Error: Multiple input files are only supported for formatting.",
       );
       process.exit(1);
     }
@@ -392,7 +392,7 @@ program
         }
       } catch (e) {
         console.error(
-          `Error processing ${filePath}: ${e instanceof Error ? e.message : e}`
+          `Error processing ${filePath}: ${e instanceof Error ? e.message : e}`,
         );
         hasError = true;
       }
@@ -473,7 +473,7 @@ program
       }
 
       console.log(
-        `\nInstalled packages (${options.global ? "global" : "local"}):\n`
+        `\nInstalled packages (${options.global ? "global" : "local"}):\n`,
       );
       for (const pkg of packages) {
         console.log(`  ${pkg.manifest.name}@${pkg.manifest.version}`);

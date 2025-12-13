@@ -71,7 +71,7 @@ export class LinkerSymbolTable {
         !info.isExtern
       ) {
         throw new Error(
-          `Duplicate symbol definition: ${info.name} in module ${info.module}`
+          `Duplicate symbol definition: ${info.name} in module ${info.module}`,
         );
       }
     }
@@ -136,8 +136,8 @@ export class LinkerSymbolTable {
             `Undefined symbol: ${name}`,
             `Symbol '${name}' is referenced but not defined. ` +
               `Did you mean to import it from a module or declare it with 'extern'?`,
-            location
-          )
+            location,
+          ),
         );
       }
     }
@@ -189,7 +189,7 @@ export class LinkerSymbolTable {
    */
   getExportedSymbols(module: string): SymbolInfo[] {
     return Array.from(this.symbols.values()).filter(
-      (s) => s.module === module && s.isExported
+      (s) => s.module === module && s.isExported,
     );
   }
 
