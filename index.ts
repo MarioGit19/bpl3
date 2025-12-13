@@ -3,7 +3,7 @@ import { Command } from "commander";
 import * as fs from "fs";
 import { Compiler } from "./compiler";
 import { PackageManager } from "./compiler/middleend/PackageManager";
-import { Lexer } from "./compiler/frontend/Lexer";
+import { lexWithGrammar } from "./compiler/frontend/GrammarLexer";
 import { Parser } from "./compiler/frontend/Parser";
 import { Formatter } from "./compiler/formatter/Formatter";
 import { TypeChecker } from "./compiler/middleend/TypeChecker";
@@ -145,8 +145,7 @@ function processFile(filePath: string, options: any) {
 
     // Original single-file compilation path
 
-    const lexer = new Lexer(content, filePath);
-    const tokens = lexer.scanTokens();
+    const tokens = lexWithGrammar(content, filePath);
 
     if (options.emit === "tokens") {
       console.log(JSON.stringify(tokens, null, 2));
@@ -154,7 +153,7 @@ function processFile(filePath: string, options: any) {
     }
 
     // 2. Parsing
-    const parser = new Parser(tokens);
+    const parser = new Parser(content, filePath, tokens);
     const ast = parser.parse();
 
     if (options.emit === "ast") {
@@ -299,9 +298,8 @@ program
         }
 
         const content = fs.readFileSync(filePath, "utf-8");
-        const lexer = new Lexer(content, filePath);
-        const tokens = lexer.scanTokens();
-        const parser = new Parser(tokens);
+        const tokens = lexWithGrammar(content, filePath);
+        const parser = new Parser(content, filePath, tokens);
         const ast = parser.parse();
         const formatter = new Formatter();
         const formatted = formatter.format(ast);

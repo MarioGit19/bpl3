@@ -13,7 +13,7 @@ struct Rectangle {
         return this.width * this.height;
     }
     frame perimeter(this: Rectangle) ret int {
-        return 2 * this.width + this.height;
+        return (2 * this.width) + this.height;
     }
     frame is_square(this: Rectangle) ret bool {
         return this.width == this.height;

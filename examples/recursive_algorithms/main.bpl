@@ -19,7 +19,7 @@ frame power(base: int, exp: int) ret int {
     if (exp == 1) {
         return base;
     }
-    if (exp % 2 == 0) {
+    if ((exp % 2) == 0) {
         local half: int = power(base, exp / 2);
         return half * half;
     } else {
@@ -31,7 +31,7 @@ frame binary_search(arr: *int, left: int, right: int, target: int) ret int {
         return -1;
         # Not found
     }
-    local mid: int = left + right - left / 2;
+    local mid: int = (left + right) - (left / 2);
     local mid_ptr: *int = arr + mid;
     if (*mid_ptr == target) {
         return mid;
@@ -47,7 +47,7 @@ frame print_array(arr: *int, size: int) {
     loop (i < size) {
         local ptr: *int = arr + i;
         printf("%d", *ptr);
-        if (i < size - 1) {
+        if (i < (size - 1)) {
             printf(", ");
         }
         i = i + 1;

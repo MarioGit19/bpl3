@@ -29,7 +29,7 @@
     "Testing logical in control flow:",
     "Can drive: age=25, hasLicense=1",
     "Good grade: score=85",
-    "Loop stopped at i=8, sum=28",
+    "Loop stopped at i=9, sum=36",
     "Testing logical in functions:",
     "isInRange(5, 1, 10) = 1",
     "isInRange(15, 1, 10) = 0",

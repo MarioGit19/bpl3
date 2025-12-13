@@ -73,7 +73,7 @@ frame square(x: int) ret int {
     return x * x;
 }
 frame isEven(x: int) ret bool {
-    return x % 2 == 0;
+    return (x % 2) == 0;
 }
 frame main() ret int {
     local arr1: Array<int> = Array<int>.new(10);

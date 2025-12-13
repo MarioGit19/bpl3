@@ -60,7 +60,7 @@ export interface LiteralExpr extends ASTNode {
   kind: "Literal";
   value: any;
   raw: string;
-  type: "string" | "number" | "bool" | "char" | "null" | "nullptr";
+  type: "string" | "number" | "bool" | "char" | "null" | "nullptr" | "unit";
 }
 
 export interface IdentifierExpr extends ASTNode {

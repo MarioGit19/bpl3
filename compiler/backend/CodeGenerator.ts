@@ -944,7 +944,81 @@ export class CodeGenerator {
 
   private generateVariableDecl(decl: AST.VariableDecl) {
     if (typeof decl.name !== "string") {
-      throw new Error("Destructuring not supported in code generation yet");
+      // Tuple destructuring: local (a, b, c) = expr;
+      const targets = decl.name as
+        | { name: string; type?: AST.TypeNode }[]
+        | any[];
+
+      if (!decl.initializer) {
+        throw new Error("Tuple destructuring requires an initializer");
+      }
+
+      // Generate the tuple value
+      const tupleVal = this.generateExpression(decl.initializer);
+      const tupleType = this.resolveType(decl.initializer.resolvedType!);
+
+      // Helper to recursively extract nested tuples
+      const extractTargets = (
+        targets: any[],
+        tupleVal: string,
+        tupleType: string,
+        indexPath: number[] = [],
+      ) => {
+        for (let i = 0; i < targets.length; i++) {
+          const target = targets[i];
+
+          if (Array.isArray(target)) {
+            // Nested tuple destructuring - extract the nested tuple first
+            const nestedVal = this.newRegister();
+
+            // Extract the nested tuple from the current level (single index)
+            this.emit(
+              `  ${nestedVal} = extractvalue ${tupleType} ${tupleVal}, ${i}`,
+            );
+
+            // Determine the nested tuple type
+            let nestedType = decl.initializer!.resolvedType!;
+            for (const idx of indexPath) {
+              if (nestedType.kind === "TupleType") {
+                nestedType = (nestedType as AST.TupleTypeNode).types[idx]!;
+              }
+            }
+            if (nestedType.kind === "TupleType") {
+              nestedType = (nestedType as AST.TupleTypeNode).types[i]!;
+            }
+            const nestedTypeStr = this.resolveType(nestedType);
+
+            // Recursively extract from the nested tuple value
+            extractTargets(target, nestedVal, nestedTypeStr, [...indexPath, i]);
+          } else {
+            // Simple target
+            this.locals.add(target.name);
+
+            const targetType = target.type
+              ? this.resolveType(target.type)
+              : this.getTargetTypeFromTuple(decl.initializer.resolvedType!, [
+                  ...indexPath,
+                  i,
+                ]);
+
+            const addr = this.allocateStack(target.name, targetType);
+
+            // Extract the i-th element from the current tuple level (single index)
+            const elemPtr = this.newRegister();
+            this.emit(
+              `  ${elemPtr} = extractvalue ${tupleType} ${tupleVal}, ${i}`,
+            );
+
+            // Store to the target variable
+            this.emit(
+              `  store ${targetType} ${elemPtr}, ${targetType}* ${addr}`,
+            );
+          }
+        }
+      };
+
+      extractTargets(targets, tupleVal, tupleType);
+      return;
     }
 
     this.locals.add(decl.name);
@@ -1086,12 +1160,69 @@ export class CodeGenerator {
         return this.generateCast(expr as AST.CastExpr);
       case "StructLiteral":
         return this.generateStructLiteral(expr as AST.StructLiteralExpr);
+      case "TupleLiteral":
+        return this.generateTupleLiteral(expr as AST.TupleLiteralExpr);
       case "Sizeof":
         return this.generateSizeof(expr as AST.SizeofExpr);
+      case "Ternary":
+        return this.generateTernary(expr as AST.TernaryExpr);
       default:
         // console.warn(`Unhandled expression kind: ${expr.kind}`);
         return "0"; // Placeholder
     }
+  }
+
+  private generateTernary(expr: AST.TernaryExpr): string {
+    const cond = this.generateExpression(expr.condition);
+    const thenLabel = this.newLabel("then");
+    const elseLabel = this.newLabel("else");
+    const mergeLabel = this.newLabel("merge");
+
+    this.emit(`  br i1 ${cond}, label %${thenLabel}, label %${elseLabel}`);
+
+    this.emit(`${thenLabel}:`);
+    const thenVal = this.generateExpression(expr.trueExpr);
+    const thenEndLabel = this.getCurrentLabel();
+    this.emit(`  br label %${mergeLabel}`);
+
+    this.emit(`${elseLabel}:`);
+    const elseVal = this.generateExpression(expr.falseExpr);
+    const elseEndLabel = this.getCurrentLabel();
+    this.emit(`  br label %${mergeLabel}`);
+
+    this.emit(`${mergeLabel}:`);
+    const type = this.resolveType(expr.resolvedType!);
+    const phi = this.newRegister();
+    this.emit(
+      `  ${phi} = phi ${type} [ ${thenVal}, %${thenEndLabel} ], [ ${elseVal}, %${elseEndLabel} ]`,
+    );
+    return phi;
+  }
+
+  private getCurrentLabel(): string {
+    // Find the last emitted label by scanning backwards
+    for (let i = this.output.length - 1; i >= 0; i--) {
+      const line = this.output[i]!.trim();
+      if (line.endsWith(":") && !line.includes(" ")) {
+        return line.slice(0, -1); // Remove the ':'
+      }
+    }
+    return "entry"; // fallback
+  }
+
+  private getTargetTypeFromTuple(
+    tupleType: AST.TypeNode,
+    indexPath: number[],
+  ): string {
+    let currentType = tupleType;
+    for (const idx of indexPath) {
+      if (currentType.kind === "TupleType") {
+        currentType = (currentType as AST.TupleTypeNode).types[idx]!;
+      } else {
+        return "i32"; // fallback
+      }
+    }
+    return this.resolveType(currentType);
   }
 
   private generateLiteral(expr: AST.LiteralExpr): string {
@@ -1244,6 +1375,21 @@ export class CodeGenerator {
         break;
       case TokenType.Percent:
         op = isFloat ? "frem" : "srem";
+        break;
+      case TokenType.Ampersand:
+        op = "and";
+        break;
+      case TokenType.Pipe:
+        op = "or";
+        break;
+      case TokenType.Caret:
+        op = "xor";
+        break;
+      case TokenType.LessLess:
+        op = "shl";
+        break;
+      case TokenType.GreaterGreater:
+        op = "ashr"; // Assuming arithmetic shift right
         break;
     }
 
@@ -1951,25 +2097,39 @@ export class CodeGenerator {
 
   private generateLogicalOr(expr: AST.BinaryExpr): string {
     const leftVal = this.generateExpression(expr.left);
+
     const resPtr = this.allocateStack(`or_res_${this.labelCount++}`, "i1");
+
     const trueLabel = this.newLabel("or.true");
-    const falseLabel = this.newLabel("or.false");
+
+    const evalRhsLabel = this.newLabel("or.eval_rhs");
+
     const endLabel = this.newLabel("or.end");
 
-    this.emit(`  br i1 ${leftVal}, label %${trueLabel}, label %${falseLabel}`);
+    this.emit(
+      `  br i1 ${leftVal}, label %${trueLabel}, label %${evalRhsLabel}`,
+    );
 
     this.emit(`${trueLabel}:`);
+
     this.emit(`  store i1 1, i1* ${resPtr}`);
+
     this.emit(`  br label %${endLabel}`);
 
-    this.emit(`${falseLabel}:`);
+    this.emit(`${evalRhsLabel}:`);
+
     const rightVal = this.generateExpression(expr.right);
+
     this.emit(`  store i1 ${rightVal}, i1* ${resPtr}`);
+
     this.emit(`  br label %${endLabel}`);
 
     this.emit(`${endLabel}:`);
+
     const reg = this.newRegister();
+
     this.emit(`  ${reg} = load i1, i1* ${resPtr}`);
+
     return reg;
   }
 
@@ -2077,6 +2237,10 @@ export class CodeGenerator {
           case "string":
             llvmType = "i8*";
             break;
+          case "null":
+          case "nullptr":
+            llvmType = "i8*"; // Generic pointer type
+            break;
           default:
             llvmType = `%struct.${basicType.name}`;
             break;
@@ -2092,6 +2256,11 @@ export class CodeGenerator {
       }
 
       return llvmType;
+    } else if (type.kind === "TupleType") {
+      const tupleType = type as AST.TupleTypeNode;
+      // Represent tuples as LLVM structs: { type0, type1, ... }
+      const elementTypes = tupleType.types.map((t) => this.resolveType(t));
+      return `{ ${elementTypes.join(", ")} }`;
     } else if (type.kind === "FunctionType") {
       const funcType = type as AST.FunctionTypeNode;
       const ret = this.resolveType(funcType.returnType);
@@ -2131,12 +2300,49 @@ export class CodeGenerator {
   }
 
   private generateAssignment(expr: AST.AssignmentExpr): string {
-    const val = this.generateExpression(expr.value);
+    // Handle tuple destructuring assignment: (a, b) = expr
+    if (expr.assignee.kind === "TupleLiteral") {
+      const tupleLit = expr.assignee as AST.TupleLiteralExpr;
+      const tupleVal = this.generateExpression(expr.value);
+      const tupleType = this.resolveType(expr.value.resolvedType!);
+
+      // Extract each element and assign to the corresponding target
+      for (let i = 0; i < tupleLit.elements.length; i++) {
+        const target = tupleLit.elements[i]!;
+        const addr = this.generateAddress(target);
+
+        const elemType = this.resolveType(target.resolvedType!);
+        const elemVal = this.newRegister();
+        this.emit(`  ${elemVal} = extractvalue ${tupleType} ${tupleVal}, ${i}`);
+        this.emit(`  store ${elemType} ${elemVal}, ${elemType}* ${addr}`);
+      }
+
+      return tupleVal;
+    }
+
     const addr = this.generateAddress(expr.assignee);
-
     const destType = this.resolveType(expr.assignee.resolvedType!);
-    const srcType = this.resolveType(expr.value.resolvedType!);
 
+    if (expr.operator.type === TokenType.Equal) {
+      const val = this.generateExpression(expr.value);
+      const srcType = this.resolveType(expr.value.resolvedType!);
+      const castVal = this.emitCast(
+        val,
+        srcType,
+        destType,
+        expr.value.resolvedType!,
+        expr.assignee.resolvedType!,
+      );
+      this.emit(`  store ${destType} ${castVal}, ${destType}* ${addr}`);
+      return castVal;
+    }
+
+    // Compound assignment
+    const currentValue = this.newRegister();
+    this.emit(`  ${currentValue} = load ${destType}, ${destType}* ${addr}`);
+
+    const val = this.generateExpression(expr.value);
+    const srcType = this.resolveType(expr.value.resolvedType!);
     const castVal = this.emitCast(
       val,
       srcType,
@@ -2145,8 +2351,38 @@ export class CodeGenerator {
       expr.assignee.resolvedType!,
     );
 
-    this.emit(`  store ${destType} ${castVal}, ${destType}* ${addr}`);
-    return castVal;
+    const isFloat = destType === "double";
+    let op = "";
+    switch (expr.operator.type) {
+      case TokenType.PlusEqual:
+        op = isFloat ? "fadd" : "add";
+        break;
+      case TokenType.MinusEqual:
+        op = isFloat ? "fsub" : "sub";
+        break;
+      case TokenType.StarEqual:
+        op = isFloat ? "fmul" : "mul";
+        break;
+      case TokenType.SlashEqual:
+        op = isFloat ? "fdiv" : "sdiv";
+        break;
+      case TokenType.PercentEqual:
+        op = isFloat ? "frem" : "srem";
+        break;
+      // Bitwise operators can be added here
+    }
+
+    if (!op) {
+      throw new Error(
+        `Unsupported compound assignment operator: ${expr.operator.lexeme}`,
+      );
+    }
+
+    const result = this.newRegister();
+    this.emit(`  ${result} = ${op} ${destType} ${currentValue}, ${castVal}`);
+    this.emit(`  store ${destType} ${result}, ${destType}* ${addr}`);
+
+    return result;
   }
 
   private generateMember(expr: AST.MemberExpr): string {
@@ -2166,6 +2402,32 @@ export class CodeGenerator {
   }
 
   private generateUnary(expr: AST.UnaryExpr): string {
+    if (
+      expr.operator.type === TokenType.PlusPlus ||
+      expr.operator.type === TokenType.MinusMinus
+    ) {
+      const addr = this.generateAddress(expr.operand);
+      const type = this.resolveType(expr.operand.resolvedType!);
+      const isFloat = type === "double";
+      const one = isFloat ? "1.0" : "1";
+
+      const currentValue = this.newRegister();
+      this.emit(`  ${currentValue} = load ${type}, ${type}* ${addr}`);
+
+      let op = "";
+      if (expr.operator.type === TokenType.PlusPlus) {
+        op = isFloat ? "fadd" : "add";
+      } else {
+        op = isFloat ? "fsub" : "sub";
+      }
+
+      const newValue = this.newRegister();
+      this.emit(`  ${newValue} = ${op} ${type} ${currentValue}, ${one}`);
+      this.emit(`  store ${type} ${newValue}, ${type}* ${addr}`);
+
+      return expr.isPrefix ? newValue : currentValue;
+    }
+
     if (expr.operator.type === TokenType.Ampersand) {
       return this.generateAddress(expr.operand);
     } else if (expr.operator.type === TokenType.Star) {
@@ -2188,6 +2450,12 @@ export class CodeGenerator {
       const val = this.generateExpression(expr.operand);
       const reg = this.newRegister();
       this.emit(`  ${reg} = xor i1 ${val}, true`);
+      return reg;
+    } else if (expr.operator.type === TokenType.Tilde) {
+      const val = this.generateExpression(expr.operand);
+      const type = this.resolveType(expr.resolvedType!);
+      const reg = this.newRegister();
+      this.emit(`  ${reg} = xor ${type} ${val}, -1`);
       return reg;
     }
     return "0";
@@ -2253,6 +2521,25 @@ export class CodeGenerator {
     }
 
     return structVal;
+  }
+
+  private generateTupleLiteral(expr: AST.TupleLiteralExpr): string {
+    const type = this.resolveType(expr.resolvedType!);
+    let tupleVal = "undef";
+
+    // Generate each element and insert into the tuple struct
+    for (let i = 0; i < expr.elements.length; i++) {
+      const elemExpr = expr.elements[i]!;
+      const elemVal = this.generateExpression(elemExpr);
+      const elemType = this.resolveType(elemExpr.resolvedType!);
+      const nextVal = this.newRegister();
+      this.emit(
+        `  ${nextVal} = insertvalue ${type} ${tupleVal}, ${elemType} ${elemVal}, ${i}`,
+      );
+      tupleVal = nextVal;
+    }
+
+    return tupleVal;
   }
 
   private escapeString(str: string): string {

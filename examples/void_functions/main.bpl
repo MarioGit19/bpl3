@@ -1,30 +1,24 @@
 extern printf(fmt: string, ...);
-
 frame printMessage(msg: string) {
     printf("Message: %s\n", msg);
 }
-
 frame doNothing() {
     # Void function that does nothing
 }
-
 frame calculate(a: int, b: int) {
     local result: int = a + b;
     printf("Sum of %d and %d is %d\n", a, b, result);
     # No return statement needed for void
 }
-
 frame processArray(arr: *int, size: int) {
     printf("Processing array of size %d: ", size);
     local i: int = 0;
     loop (i < size) {
         printf("%d ", arr[i]);
-        #++i;
-        i=i+1;
+        ++i;
     }
     printf("\n");
 }
-
 frame earlyReturn(x: int) {
     if (x < 0) {
         printf("Negative value, returning early\n");
@@ -36,7 +30,6 @@ frame earlyReturn(x: int) {
     }
     printf("Positive value: %d\n", x);
 }
-
 frame nestedVoidCalls() {
     printf("Starting nested void calls\n");
     printMessage("First message");
@@ -44,7 +37,6 @@ frame nestedVoidCalls() {
     printMessage("Second message");
     printf("Finished nested void calls\n");
 }
-
 frame recursiveVoid(count: int) {
     if (count <= 0) {
         return;
@@ -52,16 +44,12 @@ frame recursiveVoid(count: int) {
     printf("Count: %d\n", count);
     recursiveVoid(count - 1);
 }
-
 frame main() ret int {
     # Call void functions
     printMessage("Hello from void function");
-    
     doNothing();
     printf("After calling doNothing()\n");
-    
     calculate(15, 25);
-    
     # Test with array
     local numbers: int[5];
     numbers[0] = 1;
@@ -70,28 +58,22 @@ frame main() ret int {
     numbers[3] = 4;
     numbers[4] = 5;
     processArray(&numbers[0], 5);
-    
     # Test early returns
     earlyReturn(-5);
     earlyReturn(0);
     earlyReturn(10);
-    
     # Test nested calls
     nestedVoidCalls();
-    
     # Test recursive void
     printf("Recursive countdown:\n");
     recursiveVoid(5);
-    
     # Void function in loop
     printf("Void function in loop:\n");
     local i: int = 0;
     loop (i < 3) {
         printMessage("Loop iteration");
-        #++i;
-        i=i+1;
+        ++i;
     }
-    
     # Void function in conditional
     local flag: bool = true;
     if (flag) {
@@ -99,6 +81,5 @@ frame main() ret int {
     } else {
         printMessage("Flag is false");
     }
-    
     return 0;
 }

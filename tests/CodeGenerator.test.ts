@@ -1,13 +1,12 @@
 import { describe, it, expect } from "bun:test";
-import { Lexer } from "../compiler/frontend/Lexer";
+import { lexWithGrammar } from "../compiler/frontend/GrammarLexer";
 import { Parser } from "../compiler/frontend/Parser";
 import { TypeChecker } from "../compiler/middleend/TypeChecker";
 import { CodeGenerator } from "../compiler/backend/CodeGenerator";
 
 function compile(source: string): string {
-  const lexer = new Lexer(source, "test.bpl");
-  const tokens = lexer.scanTokens();
-  const parser = new Parser(tokens);
+  const tokens = lexWithGrammar(source, "test.bpl");
+  const parser = new Parser(source, "test.bpl", tokens);
   const program = parser.parse();
   const typeChecker = new TypeChecker();
   typeChecker.checkProgram(program);

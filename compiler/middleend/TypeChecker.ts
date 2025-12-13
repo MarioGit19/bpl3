@@ -3,7 +3,7 @@ import { SymbolTable, type Symbol, type SymbolKind } from "./SymbolTable";
 import { CompilerError, type SourceLocation } from "../common/CompilerError";
 import * as fs from "fs";
 import * as path from "path";
-import { Lexer } from "../frontend/Lexer";
+import { lexWithGrammar } from "../frontend/GrammarLexer";
 import { Parser } from "../frontend/Parser";
 import { TokenType } from "../frontend/TokenType";
 
@@ -46,7 +46,6 @@ export class TypeChecker {
       "u64",
       "double",
       "void",
-      "string",
       "null",
       "nullptr",
     ];
@@ -127,6 +126,32 @@ export class TypeChecker {
         } as any,
       });
     }
+
+    scope.define({
+      name: "string",
+      kind: "TypeAlias",
+      type: {
+        kind: "BasicType",
+        name: "i8",
+        genericArgs: [],
+        pointerDepth: 1,
+        arrayDimensions: [],
+        location: internalLoc,
+      },
+      declaration: {
+        kind: "TypeAlias",
+        location: internalLoc,
+        name: "string",
+        type: {
+          kind: "BasicType",
+          name: "i8",
+          genericArgs: [],
+          pointerDepth: 1,
+          arrayDimensions: [],
+          location: internalLoc,
+        },
+      } as any,
+    });
   }
 
   public checkProgram(program: AST.Program): void {
@@ -360,8 +385,23 @@ export class TypeChecker {
 
   private checkVariableDecl(decl: AST.VariableDecl): void {
     if (Array.isArray(decl.name)) {
-      // Destructuring
-      for (const target of decl.name) {
+      // Destructuring - recursively flatten nested targets
+      const flattenTargets = (
+        targets: any[],
+      ): { name: string; type?: AST.TypeNode }[] => {
+        const result: { name: string; type?: AST.TypeNode }[] = [];
+        for (const target of targets) {
+          if (Array.isArray(target)) {
+            result.push(...flattenTargets(target));
+          } else {
+            result.push(target);
+          }
+        }
+        return result;
+      };
+
+      const flatTargets = flattenTargets(decl.name);
+      for (const target of flatTargets) {
         this.defineSymbol(target.name, "Variable", target.type, decl);
       }
       if (decl.initializer) {
@@ -604,9 +644,8 @@ export class TypeChecker {
         }
 
         const content = fs.readFileSync(importPath, "utf-8");
-        const lexer = new Lexer(content, importPath);
-        const tokens = lexer.scanTokens();
-        const parser = new Parser(tokens);
+        const tokens = lexWithGrammar(content, importPath);
+        const parser = new Parser(content, importPath, tokens);
         ast = parser.parse();
       }
 
@@ -1978,6 +2017,8 @@ export class TypeChecker {
   private checkAllPathsReturn(stmt: AST.Statement): boolean {
     switch (stmt.kind) {
       case "Block":
+        // Check if any statement in the block guarantees all paths return
+        // This handles cases like sequential if statements where the last one has an else
         for (const s of stmt.statements) {
           if (this.checkAllPathsReturn(s)) return true;
         }

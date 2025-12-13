@@ -1,14 +1,13 @@
 import { describe, it, expect } from "bun:test";
-import { Lexer } from "../compiler/frontend/Lexer";
+import { lexWithGrammar } from "../compiler/frontend/GrammarLexer";
 import { Parser } from "../compiler/frontend/Parser";
 import { TokenType } from "../compiler/frontend/TokenType";
 
 describe("Parser", () => {
   it("should parse a simple function declaration", () => {
     const source = "frame main() { return; }";
-    const lexer = new Lexer(source, "test.bpl");
-    const tokens = lexer.scanTokens();
-    const parser = new Parser(tokens);
+    const tokens = lexWithGrammar(source, "test.bpl");
+    const parser = new Parser(source, "test.bpl", tokens);
     const program = parser.parse();
 
     expect(program.statements.length).toBe(1);
@@ -22,9 +21,8 @@ describe("Parser", () => {
 
   it("should parse a struct declaration", () => {
     const source = "struct Point { x: int, y: int, }";
-    const lexer = new Lexer(source, "test.bpl");
-    const tokens = lexer.scanTokens();
-    const parser = new Parser(tokens);
+    const tokens = lexWithGrammar(source, "test.bpl");
+    const parser = new Parser(source, "test.bpl", tokens);
     const program = parser.parse();
 
     expect(program.statements.length).toBe(1);
@@ -38,9 +36,8 @@ describe("Parser", () => {
 
   it("should parse variable declarations", () => {
     const source = "local x: int = 10; global y: string;";
-    const lexer = new Lexer(source, "test.bpl");
-    const tokens = lexer.scanTokens();
-    const parser = new Parser(tokens);
+    const tokens = lexWithGrammar(source, "test.bpl");
+    const parser = new Parser(source, "test.bpl", tokens);
     const program = parser.parse();
 
     expect(program.statements.length).toBe(2);

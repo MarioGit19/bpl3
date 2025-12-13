@@ -104,7 +104,7 @@
       "patterns": [
         {
           "name": "keyword.control.bpl",
-          "match": "\\b(if|else|loop|break|continue|return|switch|case|default|try|catch|throw|import|from|as|export|extern|asm)\\b"
+          "match": "\\b(if|else|loop|break|continue|return|switch|case|default|try|catch|catchOther|throw|import|from|as|export|extern|asm)\\b"
         },
         {
           "name": "storage.type.function.bpl",

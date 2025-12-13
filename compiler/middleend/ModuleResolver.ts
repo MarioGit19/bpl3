@@ -14,7 +14,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { Lexer } from "../frontend/Lexer";
+import { lexWithGrammar } from "../frontend/GrammarLexer";
 import { Parser } from "../frontend/Parser";
 import { TypeChecker } from "./TypeChecker";
 import { SymbolTable } from "./SymbolTable";
@@ -145,9 +145,8 @@ export class ModuleResolver {
 
     // Read and parse
     const content = fs.readFileSync(modulePath, "utf-8");
-    const lexer = new Lexer(content, modulePath);
-    const tokens = lexer.scanTokens();
-    const parser = new Parser(tokens);
+    const tokens = lexWithGrammar(content, modulePath);
+    const parser = new Parser(content, modulePath, tokens);
     const ast = parser.parse();
 
     // Create module info

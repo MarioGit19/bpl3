@@ -23,7 +23,7 @@ frame test_multidimensional_arrays() {
     loop (row < 3) {
         local col: int = 0;
         loop (col < 3) {
-            local index: int = row * 3 + col;
+            local index: int = (row * 3) + col;
             if (row == col) {
                 matrix[index] = 1;
             } else {
@@ -39,7 +39,7 @@ frame test_multidimensional_arrays() {
     loop (row < 3) {
         local c: int = 0;
         loop (c < 3) {
-            local idx: int = row * 3 + c;
+            local idx: int = (row * 3) + c;
             printf("%d ", matrix[idx]);
             c = c + 1;
         }

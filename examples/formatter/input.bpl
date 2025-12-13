@@ -3,8 +3,8 @@ Point struct holds two integer coordinates. x and y.
 ###
 struct Point {
     x: int,
-    # this is x
     y: int,
+    # this is x
     ### this is y ###
 }
 #test comment

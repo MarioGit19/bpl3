@@ -41,6 +41,18 @@ export class Formatter {
     return output;
   }
 
+  private getInlineComment(line: number): string {
+    // Check if there's a comment on the same line
+    if (this.currentCommentIndex < this.comments.length) {
+      const comment = this.comments[this.currentCommentIndex];
+      if (comment && comment.line === line) {
+        this.currentCommentIndex++;
+        return ` ${comment.lexeme}`;
+      }
+    }
+    return "";
+  }
+
   private printRemainingComments(): string {
     let output = "";
     while (this.currentCommentIndex < this.comments.length) {
@@ -58,7 +70,9 @@ export class Formatter {
     let output = "";
     for (const stmt of statements) {
       output += this.printCommentsBefore(stmt.location.startLine);
-      output += this.formatStatement(stmt);
+      const formatted = this.formatStatement(stmt);
+      const inlineComment = this.getInlineComment(stmt.location.endLine);
+      output += formatted + inlineComment;
       output += "\n";
     }
     return output;
@@ -119,12 +133,8 @@ export class Formatter {
         output += `: ${this.formatType(decl.typeAnnotation)}`;
       }
     } else {
-      // Destructuring
-      output += "(";
-      output += decl.name
-        .map((t) => `${t.name}: ${t.type ? this.formatType(t.type) : "var"}`)
-        .join(", ");
-      output += ")";
+      // Destructuring (may be nested)
+      output += this.formatDestructPattern(decl.name);
     }
 
     if (decl.initializer) {
@@ -133,6 +143,25 @@ export class Formatter {
 
     output += ";";
     return output;
+  }
+
+  private formatDestructPattern(pattern: any): string {
+    if (Array.isArray(pattern)) {
+      // Nested array or list of targets
+      return `(${pattern
+        .map((item) => {
+          if (Array.isArray(item)) {
+            // Nested destructuring
+            return this.formatDestructPattern(item);
+          } else if (typeof item === "object" && item.name) {
+            // Single target
+            return `${item.name}${item.type ? `: ${this.formatType(item.type)}` : ""}`;
+          }
+          return "";
+        })
+        .join(", ")})`;
+    }
+    return "";
   }
 
   private formatFunctionDecl(decl: AST.FunctionDecl): string {
@@ -416,6 +445,8 @@ export class Formatter {
         return this.formatArrayLiteral(expr as AST.ArrayLiteralExpr);
       case "StructLiteral":
         return this.formatStructLiteral(expr as AST.StructLiteralExpr);
+      case "TupleLiteral":
+        return this.formatTupleLiteral(expr as AST.TupleLiteralExpr);
       case "GenericInstantiation":
         return this.formatGenericInstantiation(
           expr as AST.GenericInstantiationExpr,
@@ -426,21 +457,61 @@ export class Formatter {
   }
 
   private formatLiteral(expr: AST.LiteralExpr): string {
-    if (expr.type === "string") {
-      return `"${expr.value.replace(/\n/g, "\\n")}"`;
-    }
+    // Preserve original literal lexeme to avoid changing escapes
     return expr.raw;
   }
 
   private formatBinary(expr: AST.BinaryExpr): string {
-    return `${this.formatExpression(expr.left)} ${expr.operator.lexeme} ${this.formatExpression(expr.right)}`;
+    const op = expr.operator.lexeme;
+    const prec = this.getPrecedence(op);
+
+    const left = expr.left;
+    const right = expr.right;
+
+    let leftStr = this.formatExpression(left);
+    let rightStr = this.formatExpression(right);
+
+    // Always parenthesize ternary when nested inside binary
+    if (left.kind === "Ternary") leftStr = `(${leftStr})`;
+    if (right.kind === "Ternary") rightStr = `(${rightStr})`;
+
+    // Add parentheses when child binary has lower or equal precedence that could alter grouping
+    if (left.kind === "Binary") {
+      const childOp = (left as AST.BinaryExpr).operator.lexeme;
+      const childPrec = this.getPrecedence(childOp);
+      if (
+        childPrec < prec ||
+        this.requiresParenForEqualPrecedence(childOp, op, true) ||
+        this.parenthesizeBitwiseInsideComparison(childOp, op)
+      ) {
+        leftStr = `(${leftStr})`;
+      }
+    }
+
+    if (right.kind === "Binary") {
+      const childOp = (right as AST.BinaryExpr).operator.lexeme;
+      const childPrec = this.getPrecedence(childOp);
+      if (
+        childPrec < prec ||
+        this.requiresParenForEqualPrecedence(childOp, op, false) ||
+        this.parenthesizeBitwiseInsideComparison(childOp, op)
+      ) {
+        rightStr = `(${rightStr})`;
+      }
+    }
+
+    return `${leftStr} ${op} ${rightStr}`;
   }
 
   private formatUnary(expr: AST.UnaryExpr): string {
+    const operandIsComplex =
+      expr.operand.kind === "Binary" || expr.operand.kind === "Ternary";
+    const operandStr = this.formatExpression(expr.operand);
+    const wrappedOperand = operandIsComplex ? `(${operandStr})` : operandStr;
     if (expr.isPrefix) {
-      return `${expr.operator.lexeme}${this.formatExpression(expr.operand)}`;
+      return `${expr.operator.lexeme}${wrappedOperand}`;
     } else {
-      return `${this.formatExpression(expr.operand)}${expr.operator.lexeme}`;
+      return `${wrappedOperand}${expr.operator.lexeme}`;
     }
   }
 
@@ -504,6 +575,10 @@ export class Formatter {
     return output;
   }
 
+  private formatTupleLiteral(expr: AST.TupleLiteralExpr): string {
+    return `(${expr.elements.map((e) => this.formatExpression(e)).join(", ")})`;
+  }
+
   private formatGenericInstantiation(
     expr: AST.GenericInstantiationExpr,
   ): string {
@@ -539,5 +614,50 @@ export class Formatter {
 
   private getIndent(): string {
     return this.indentString.repeat(this.indentLevel);
+  }
+
+  // --- Precedence helpers ---
+  private getPrecedence(op: string): number {
+    switch (op) {
+      case "||": return 1;
+      case "&&": return 2;
+      case "|": return 3;
+      case "^": return 4;
+      case "&": return 5;
+      case "==":
+      case "!=": return 6;
+      case "<":
+      case "<=":
+      case ">":
+      case ">=": return 7;
+      case "<<":
+      case ">>": return 8;
+      case "+":
+      case "-": return 9;
+      case "*":
+      case "/":
+      case "%": return 10;
+      default: return 0; // unknown or assignment handled elsewhere
+    }
+  }
+
+  private requiresParenForEqualPrecedence(childOp: string, parentOp: string, isLeft: boolean): boolean {
+    // For equal precedence but different operators, parentheses help preserve AST grouping
+    if (childOp !== parentOp) return true;
+    // For non-associative ops like comparisons and equality, parenthesize
+    const nonAssoc = ["==", "!=", "<", "<=", ">", ">="];
+    if (nonAssoc.includes(parentOp)) return true;
+    // For right side of left-associative ops, adding parens avoids re-grouping
+    if (!isLeft) {
+      const leftAssoc = ["|", "^", "&", "<<", ">>", "+", "-", "*", "/", "%"];
+      if (leftAssoc.includes(parentOp)) return true;
+    }
+    return false;
+  }
+
+  private parenthesizeBitwiseInsideComparison(childOp: string, parentOp: string): boolean {
+    const comparisons = ["==", "!=", "<", "<=", ">", ">="];
+    const bitwise = ["|", "^", "&", "<<", ">>"];
+    return comparisons.includes(parentOp) && bitwise.includes(childOp);
   }
 }

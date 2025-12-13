@@ -7,7 +7,7 @@
  * 3. Backend: Code Generation (LLVM IR)
  */
 
-import { Lexer } from "./frontend/Lexer";
+import { lexWithGrammar } from "./frontend/GrammarLexer";
 import { Parser } from "./frontend/Parser";
 import { TypeChecker } from "./middleend/TypeChecker";
 import { CodeGenerator } from "./backend/CodeGenerator";
@@ -62,8 +62,7 @@ export class Compiler {
       if (this.options.verbose) {
         console.log("[Frontend] Lexical Analysis...");
       }
-      const lexer = new Lexer(sourceCode, this.options.filePath);
-      const tokens = lexer.scanTokens();
+      const tokens = lexWithGrammar(sourceCode, this.options.filePath);
 
       if (this.options.emitType === "tokens") {
         return {
@@ -76,7 +75,7 @@ export class Compiler {
       if (this.options.verbose) {
         console.log("[Frontend] Syntax Analysis...");
       }
-      const parser = new Parser(tokens);
+      const parser = new Parser(sourceCode, this.options.filePath, tokens);
       const ast = parser.parse();
 
       if (this.options.emitType === "ast") {
@@ -372,7 +371,7 @@ export class Compiler {
 
 // Export all components for external use
 export { Formatter } from "./formatter/Formatter";
-export { Lexer } from "./frontend/Lexer";
+export { lexWithGrammar } from "./frontend/GrammarLexer";
 export { Parser } from "./frontend/Parser";
 export { TypeChecker } from "./middleend/TypeChecker";
 export { CodeGenerator } from "./backend/CodeGenerator";

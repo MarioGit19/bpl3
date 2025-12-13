@@ -34,7 +34,7 @@ frame print_array(arr: *int, size: int) {
     loop (i < size) {
         local ptr: *int = arr + i;
         printf("%d", *ptr);
-        if (i < size - 1) {
+        if (i < (size - 1)) {
             printf(", ");
         }
         i = i + 1;

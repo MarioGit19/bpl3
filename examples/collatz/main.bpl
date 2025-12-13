@@ -3,10 +3,10 @@ extern printf(fmt: string, ...);
 # if n is even, divide by 2; if odd, multiply by 3 and add 1.
 # Repeat until n becomes 1.
 frame collatz_step(n: int) ret int {
-    if (n % 2 == 0) {
+    if ((n % 2) == 0) {
         return n / 2;
     } else {
-        return n * 3 + 1;
+        return (n * 3) + 1;
     }
 }
 frame collatz_sequence(n: int) ret int {
