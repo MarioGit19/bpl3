@@ -1,0 +1,7 @@
+{
+  "order": 20,
+  "title": "Command-line Arguments",
+  "snippet": "Access program arguments",
+  "description": "Command-line arguments allow you to pass data to your program. This example would use the Args module in a real program.",
+  "code": "extern printf(fmt: string, ...);\n\n# Note: Command-line arguments require standard library imports\n# This example shows a simplified version\n\nframe main() ret int {\n    printf(\"Command-line Arguments Demo\\n\");\n    printf(\"To access command-line arguments, you would:\\n\");\n    printf(\"1. Import the Args module: import [Args] from \\\"std/args.bpl\\\"\\n\");\n    printf(\"2. Get count: argc = Args.count()\\n\");\n    printf(\"3. Get arguments: arg = Args.get(i)\\n\");\n    return 0;\n}"
+}

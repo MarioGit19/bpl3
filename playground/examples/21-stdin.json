@@ -1,0 +1,8 @@
+{
+  "order": 21,
+  "title": "Standard Input",
+  "snippet": "Read user input",
+  "description": "Read input from the user using scanf or other standard library functions. You can test this by entering input in the 'Standard Input' section.",
+  "code": "extern printf(fmt: string, ...);\n\n# Note: Standard input is not available in the playground\n# This example shows what the code would look like\n\nframe main() ret int {\n    printf(\"Standard input is not available in this playground environment.\\n\");\n    printf(\"To read from stdin, use the readln function in a compiled program.\\n\");\n    return 0;\n}",
+  "input": "Alice\\n25\\n87.5"
+}

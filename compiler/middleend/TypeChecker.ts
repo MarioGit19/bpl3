@@ -2066,9 +2066,13 @@ export class TypeChecker {
       // Pointer to int / int to pointer
       if (
         (resolvedSource.pointerDepth > 0 &&
-          ["i64", "u64", "long", "ulong"].includes(resolvedTarget.name)) ||
+          ["i64", "u64", "long", "ulong", "int", "uint", "i32", "u32"].includes(
+            resolvedTarget.name,
+          )) ||
         (resolvedTarget.pointerDepth > 0 &&
-          ["i64", "u64", "long", "ulong"].includes(resolvedSource.name))
+          ["i64", "u64", "long", "ulong", "int", "uint", "i32", "u32"].includes(
+            resolvedSource.name,
+          ))
       ) {
         return true;
       }

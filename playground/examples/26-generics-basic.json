@@ -1,0 +1,7 @@
+{
+  "order": 26,
+  "title": "Generics - Basic",
+  "snippet": "Generic function with type parameter",
+  "description": "Learn how to write generic functions that work with any type. Use angle brackets <T> to declare a type parameter that can be any type.",
+  "code": "# Generic identity function - returns its input unchanged\nframe identity<T>(val: T) ret T {\n    local result: T;\n    result = val;\n    return result;\n}\n\nextern printf(fmt: string, ...);\n\nframe main() ret int {\n    # Call generic function with int\n    local num: int = 42;\n    local result_int: int = identity<int>(num);\n    printf(\"Identity of 42: %d\\n\", result_int);\n    \n    # Call generic function with float\n    local pi: float = 3.14;\n    local result_float: float = identity<float>(pi);\n    printf(\"Identity of 3.14: %.2f\\n\", result_float);\n    \n    # Another example\n    local val: int = 100;\n    local copy: int = identity<int>(val);\n    printf(\"Identity of 100: %d\\n\", copy);\n    \n    return 0;\n}"
+}

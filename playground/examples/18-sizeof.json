@@ -1,0 +1,7 @@
+{
+  "order": 18,
+  "title": "Sizeof Operator",
+  "snippet": "Get type sizes",
+  "description": "The sizeof operator returns the size in bytes of a type or variable. Useful for memory management.",
+  "code": "extern printf(fmt: string, ...);\n\nstruct Point {\n    x: int,\n    y: int,\n}\n\nframe main() ret int {\n    # Note: sizeof has some limitations in the playground\n    # In a full BPL program, you can use sizeof(Type) or sizeof(variable)\n    \n    printf(\"Type sizes (typically):\\n\");\n    printf(\"int: %d bytes\\n\", sizeof(int));\n    printf(\"float: %d bytes\\n\", sizeof(float));\n    printf(\"bool: %d bytes\\n\", sizeof(bool));\n    \n    local p: Point;\n    printf(\"Point struct: %d bytes\\n\", sizeof(Point));\n    \n    printf(\"\\nSizeof can be used for:\\n\");\n    printf(\"- Memory allocation\\n\");\n    printf(\"- Array element calculation\\n\");\n    printf(\"- Struct layout understanding\\n\");\n    \n    return 0;\n}"
+}

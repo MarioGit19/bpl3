@@ -12,7 +12,8 @@
     "check": "bunx tsc --noEmit --lib ESNext",
     "test": "bun test tests/",
     "format": "prettier --write -u *",
-    "format-examples": "bun index.ts format -w examples/**/*.bpl"
+    "format-examples": "bun index.ts format -w examples/**/*.bpl",
+    "playground": "cd playground &&bash ./start.sh"
   },
   "repository": {
     "type": "git",

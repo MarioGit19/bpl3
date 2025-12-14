@@ -1,0 +1,7 @@
+{
+  "order": 28,
+  "title": "Standard Library Imports",
+  "snippet": "Import from the BPL standard library",
+  "description": "The BPL standard library (std) provides built-in utilities. Import commonly used functions like strlen, strcpy from the string library, or use array and io utilities.",
+  "code": "# Import from the standard library (using stdlib modules)\n# BPL provides built-in utilities in the std library\n\nextern printf(fmt: string, ...);\nextern strlen(str: string) ret int;\n\nframe main() ret int {\n    # Example: working with string functions\n    local message: string = \"Hello, BPL!\";\n    \n    # Get string length\n    local length: int = strlen(message);\n    printf(\"Message: %s\\n\", message);\n    printf(\"Length: %d\\n\", length);\n    \n    # Work with arrays\n    local numbers: int[5] = [1, 2, 3, 4, 5];\n    local i: int = 0;\n    printf(\"Array contents: \");\n    loop (i < 5) {\n        printf(\"%d \", numbers[i]);\n        i = i + 1;\n    }\n    printf(\"\\n\");\n    \n    return 0;\n}"
+}

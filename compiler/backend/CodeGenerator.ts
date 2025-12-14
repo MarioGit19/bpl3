@@ -1189,6 +1189,8 @@ export class CodeGenerator {
         return this.generateUnary(expr as AST.UnaryExpr);
       case "Cast":
         return this.generateCast(expr as AST.CastExpr);
+      case "ArrayLiteral":
+        return this.generateArrayLiteral(expr as AST.ArrayLiteralExpr);
       case "StructLiteral":
         return this.generateStructLiteral(expr as AST.StructLiteralExpr);
       case "TupleLiteral":
@@ -2512,6 +2514,24 @@ export class CodeGenerator {
       expr.expression.resolvedType!,
       expr.targetType,
     );
+  }
+
+  private generateArrayLiteral(expr: AST.ArrayLiteralExpr): string {
+    const type = this.resolveType(expr.resolvedType!);
+    let arrayVal = "undef";
+
+    for (let i = 0; i < expr.elements.length; i++) {
+      const elemExpr = expr.elements[i]!;
+      const elemVal = this.generateExpression(elemExpr);
+      const elemType = this.resolveType(elemExpr.resolvedType!);
+      const nextVal = this.newRegister();
+      this.emit(
+        `  ${nextVal} = insertvalue ${type} ${arrayVal}, ${elemType} ${elemVal}, ${i}`,
+      );
+      arrayVal = nextVal;
+    }
+
+    return arrayVal;
   }
 
   private generateStructLiteral(expr: AST.StructLiteralExpr): string {

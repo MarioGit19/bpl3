@@ -1,0 +1,7 @@
+{
+  "order": 25,
+  "title": "Fibonacci Sequence",
+  "snippet": "Famous number sequence",
+  "description": "The Fibonacci sequence is a series where each number is the sum of the two preceding ones: 0, 1, 1, 2, 3, 5, 8...",
+  "code": "extern printf(fmt: string, ...);\n\nframe fibonacci(n: int) ret int {\n    if (n <= 1) {\n        return n;\n    }\n    return fibonacci(n - 1) + fibonacci(n - 2);\n}\n\nframe main() ret int {\n    local i: int;\n    \n    printf(\"First 8 Fibonacci numbers:\\n\");\n    i = 0;\n    loop (i < 8) {\n        printf(\"%d \", fibonacci(i));\n        i = i + 1;\n    }\n    printf(\"\\n\");\n    \n    return 0;\n}"
+}
