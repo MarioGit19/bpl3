@@ -2050,7 +2050,7 @@ export class TypeChecker {
           );
         });
         if (match) {
-          targetType = match;
+          targetType = match as any;
           targetDecl = (match as any).declaration;
         }
       }
