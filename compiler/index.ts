@@ -214,7 +214,7 @@ export class Compiler {
           console.log(`  Checking: ${path.basename(module.path)}`);
         }
         typeChecker.setCurrentModulePath(module.path);
-        typeChecker.checkProgram(module.ast);
+        typeChecker.checkProgram(module.ast, module.path);
         module.checked = true;
       }
 
@@ -256,8 +256,6 @@ export class Compiler {
           let key: string | null = null;
           if (stmt.kind === "StructDecl") {
             key = `struct:${(stmt as AST.StructDecl).name}`;
-          } else if (stmt.kind === "FunctionDecl") {
-            key = `function:${(stmt as AST.FunctionDecl).name}`;
           } else if (stmt.kind === "Extern") {
             key = `extern:${(stmt as AST.ExternDecl).name}`;
           } else if (stmt.kind === "TypeAlias") {
@@ -265,6 +263,8 @@ export class Compiler {
           } else if (stmt.kind === "VariableDecl") {
             key = `global:${(stmt as AST.VariableDecl).name}`;
           }
+          // FunctionDecl is not deduplicated here to allow overloads.
+          // CodeGenerator handles duplicate definitions if they occur.
 
           // Add statement if we haven't seen this declaration before
           if (!key || !seenDeclarations.has(key)) {

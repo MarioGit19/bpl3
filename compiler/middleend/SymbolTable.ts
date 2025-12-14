@@ -14,6 +14,7 @@ export interface Symbol {
   type?: AST.TypeNode;
   declaration: AST.ASTNode;
   moduleScope?: SymbolTable;
+  overloads?: Symbol[];
 }
 
 export class SymbolTable {
@@ -25,7 +26,23 @@ export class SymbolTable {
   }
 
   public define(symbol: Symbol): void {
-    this.symbols.set(symbol.name, symbol);
+    const existing = this.symbols.get(symbol.name);
+    if (
+      existing &&
+      existing.kind === "Function" &&
+      symbol.kind === "Function"
+    ) {
+      if (!existing.overloads) {
+        existing.overloads = [];
+      }
+      existing.overloads.push(symbol);
+    } else {
+      this.symbols.set(symbol.name, symbol);
+    }
+  }
+
+  public getInCurrentScope(name: string): Symbol | undefined {
+    return this.symbols.get(name);
   }
 
   public resolve(name: string): Symbol | undefined {

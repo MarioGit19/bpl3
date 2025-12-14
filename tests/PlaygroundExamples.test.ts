@@ -51,6 +51,8 @@ async function checkServerReady(maxAttempts = 30): Promise<void> {
   );
 }
 
+const failedCompilation: { name: string; error?: string }[] = [];
+
 async function compileExample(
   code: string,
   input?: string,
@@ -93,6 +95,10 @@ function loadExamples(): Example[] {
       examples.push(example);
     } catch (e) {
       console.error(`Failed to load example ${file}:`, e);
+      failedCompilation.push({
+        name: `Loading Example ${file}`,
+        error: `Failed to load example ${file}: ${e}`,
+      });
     }
   }
 
@@ -115,8 +121,16 @@ describe("BPL Playground Examples", () => {
     console.log("=".repeat(60));
 
     let passed = 0;
-    let failed = 0;
+    let failed = failedCompilation.length;
     const failedExamples: string[] = [];
+
+    failedCompilation.forEach((f) => {
+      failedExamples.push(f.name);
+      console.log(`❌ ${f.name}`);
+      if (f.error) {
+        console.log(`   Error: ${f.error.split("\n")[0]?.substring(0, 80)}`);
+      }
+    });
 
     for (const [name, result] of results) {
       if (result.passed) {

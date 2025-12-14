@@ -1,5 +1,6 @@
 import [JSON] from "std/json.bpl";
 import [IO] from "std/io.bpl";
+import [String] from "std/string.bpl";
 
 extern printf(fmt: string, ...) ret int;
 

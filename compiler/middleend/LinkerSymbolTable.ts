@@ -36,6 +36,9 @@ export interface SymbolInfo {
 
   /** Source location for error reporting */
   location?: any;
+
+  /** Overloaded definitions for functions */
+  overloads?: SymbolInfo[];
 }
 
 export interface ObjectFileSymbol {
@@ -58,25 +61,31 @@ export class LinkerSymbolTable {
    * Define a symbol in the linker symbol table
    */
   defineSymbol(info: SymbolInfo): void {
-    // Allow same symbol from different modules - they're separate scopes
-    // Only prevent duplicates within the same module
     const key = `${info.module}:${info.name}`;
-    const existingKey = `${info.module}:${info.name}`;
+    const existing = this.symbols.get(key);
 
-    for (const [existing, existingInfo] of this.symbols) {
+    if (existing) {
       if (
-        existingInfo.name === info.name &&
-        existingInfo.module === info.module &&
-        !existingInfo.isExtern &&
+        existing.kind === "function" &&
+        info.kind === "function" &&
+        !existing.isExtern &&
         !info.isExtern
       ) {
+        if (!existing.overloads) {
+          existing.overloads = [];
+        }
+        existing.overloads.push(info);
+        return;
+      }
+
+      if (!existing.isExtern && !info.isExtern) {
         throw new Error(
           `Duplicate symbol definition: ${info.name} in module ${info.module}`,
         );
       }
     }
 
-    this.symbols.set(`${info.module}:${info.name}`, info);
+    this.symbols.set(key, info);
   }
 
   /**

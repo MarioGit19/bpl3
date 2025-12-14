@@ -265,6 +265,32 @@
     const end = normalizeLoc(endLoc).end;
     return { start, end };
   }
+
+  function parseChar(raw) {
+    const inner = raw.slice(1, -1);
+    if (inner.startsWith("\\")) {
+      const esc = inner[1];
+      switch (esc) {
+        case "n":
+          return "\n";
+        case "t":
+          return "\t";
+        case "r":
+          return "\r";
+        case "\\":
+          return "\\";
+        case "'":
+          return "'";
+        case '"':
+          return '"';
+        case "0":
+          return "\0";
+        default:
+          return esc || "";
+      }
+    }
+    return inner;
+  }
 }
 
 Program
@@ -955,31 +981,3 @@ Comment
   }
 
 EOF = !.
-
-{
-  function parseChar(raw) {
-    const inner = raw.slice(1, -1);
-    if (inner.startsWith("\\")) {
-      const esc = inner[1];
-      switch (esc) {
-        case "n":
-          return "\n";
-        case "t":
-          return "\t";
-        case "r":
-          return "\r";
-        case "\\":
-          return "\\";
-        case "'":
-          return "'";
-        case '"':
-          return '"';
-        case "0":
-          return "\0";
-        default:
-          return esc || "";
-      }
-    }
-    return inner;
-  }
-}

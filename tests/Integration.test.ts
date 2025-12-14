@@ -7,11 +7,21 @@ const EXAMPLES_DIR = path.join(process.cwd(), "examples");
 const CMP_SCRIPT = path.join(process.cwd(), "cmp.sh");
 
 // Helper to find example directories
-function getExampleDirectories() {
-  if (!fs.existsSync(EXAMPLES_DIR)) return [];
-  return fs.readdirSync(EXAMPLES_DIR).filter((file) => {
-    return fs.statSync(path.join(EXAMPLES_DIR, file)).isDirectory();
-  });
+function getExampleDirectories(dir = EXAMPLES_DIR): string[] {
+  if (!fs.existsSync(dir)) return [];
+  let results: string[] = [];
+  const list = fs.readdirSync(dir);
+  for (const file of list) {
+    const fullPath = path.join(dir, file);
+    const stat = fs.statSync(fullPath);
+    if (stat.isDirectory()) {
+      if (fs.existsSync(path.join(fullPath, "main.bpl"))) {
+        results.push(path.relative(EXAMPLES_DIR, fullPath));
+      }
+      results = results.concat(getExampleDirectories(fullPath));
+    }
+  }
+  return results;
 }
 
 describe("Integration Tests", () => {
@@ -68,9 +78,13 @@ describe("Integration Tests", () => {
 
         const output = result.stdout;
         if (config.expectedOutput) {
-          config.expectedOutput.forEach((expectedLine: string) => {
-            expect(output).toContain(expectedLine);
-          });
+          if (Array.isArray(config.expectedOutput)) {
+            config.expectedOutput.forEach((expectedLine: string) => {
+              expect(output).toContain(expectedLine);
+            });
+          } else if (typeof config.expectedOutput === "string") {
+            expect(output).toContain(config.expectedOutput);
+          }
         }
       });
     }

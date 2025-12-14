@@ -1,5 +1,6 @@
 import [Stack] from "std/stack.bpl";
 import [Queue] from "std/queue.bpl";
+import [Option] from "std/option.bpl";
 import [IO] from "std/io.bpl";
 
 frame main() ret int {

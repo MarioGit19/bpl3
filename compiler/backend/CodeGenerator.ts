@@ -130,6 +130,26 @@ export class CodeGenerator {
     this.declarationsOutput.push(line);
   }
 
+  private getMangledName(
+    name: string,
+    type: AST.FunctionTypeNode,
+    isExtern: boolean = false,
+  ): string {
+    if (name === "main" || isExtern) return name;
+    return `${name}_${type.paramTypes.map((t) => this.mangleType(t)).join("_")}`;
+  }
+
+  private mangleType(type: AST.TypeNode): string {
+    if (type.kind === "BasicType") {
+      let s = type.name;
+      if (type.pointerDepth > 0) s += "p".repeat(type.pointerDepth);
+      return s;
+    } else if (type.kind === "ArrayType") {
+      return `arr${this.mangleType(type.elementType)}`;
+    }
+    return "unknown";
+  }
+
   private getTypeId(type: AST.TypeNode): number {
     const typeName = this.resolveType(type); // Get LLVM type name as key
 
@@ -430,31 +450,7 @@ export class CodeGenerator {
       this.substituteType(arg, this.currentTypeMap),
     );
 
-    // 2. Mangle Name
-    const argNames = concreteArgs
-      .map((arg) => {
-        // Use lightweight mangling
-        return this.mangleType(arg);
-      })
-      .join("_");
-
-    let mangledName = `${decl.name}_${argNames}`;
-    if (namePrefix) {
-      mangledName = `${namePrefix}_${decl.name}_${argNames}`;
-    }
-
-    // 3. Check if exists
-    if (this.declaredFunctions.has(mangledName)) {
-      return mangledName;
-    }
-    // We don't add to declaredFunctions here because generateFunction does it (via emit)
-    // But we need to prevent infinite recursion if generateFunction calls this again?
-    // declaredFunctions tracks "declare ..." or generated definitions.
-    if (this.declaredFunctions.has(mangledName)) return mangledName;
-    this.declaredFunctions.add(mangledName);
-
-    // 4. Instantiate
-    // Map generic params to concrete args
+    // 2. Create Instance Map
     const instanceMap = new Map<string, AST.TypeNode>(this.currentTypeMap);
     if (contextMap) {
       for (const [k, v] of contextMap) {
@@ -468,21 +464,43 @@ export class CodeGenerator {
       instanceMap.set(decl.genericParams[i]!, concreteArgs[i]!);
     }
 
-    // Queue generation
-    this.pendingGenerations.push(() => {
-      const oldName = decl.name;
-      decl.name = mangledName;
+    // 3. Substitute Function Type to get correct mangled name
+    const substitutedType = this.substituteType(
+      decl.resolvedType as AST.FunctionTypeNode,
+      instanceMap,
+    ) as AST.FunctionTypeNode;
 
-      // Save/Restore previous map (though we are at top level usually, but good practice)
+    // 4. Calculate Mangled Name
+    let mangledName = this.getMangledName(decl.name, substitutedType);
+    if (namePrefix) {
+      mangledName = `${namePrefix}_${this.getMangledName(decl.name, substitutedType)}`;
+    }
+
+    // 5. Check Cache
+    if (this.declaredFunctions.has(mangledName)) {
+      return mangledName;
+    }
+    this.declaredFunctions.add(mangledName);
+
+    // 6. Queue Generation
+    this.pendingGenerations.push(() => {
+      // Create a specialized declaration
+      const newDecl: AST.FunctionDecl = {
+        ...decl,
+        name: decl.name,
+        resolvedType: substitutedType,
+      };
+
+      if (namePrefix) {
+        newDecl.name = `${namePrefix}_${decl.name}`;
+      }
+
       const prevMap = this.currentTypeMap;
       this.currentTypeMap = instanceMap;
 
-      // If passing context, we assume the method might use "this" which is handled by generateFunction logic
-
-      this.generateFunction(decl);
+      this.generateFunction(newDecl);
 
       this.currentTypeMap = prevMap;
-      decl.name = oldName;
     });
 
     return mangledName;
@@ -558,19 +576,25 @@ export class CodeGenerator {
       this.onReturn = undefined;
     }
 
-    const name = decl.name;
+    let name = decl.name;
     const funcType = decl.resolvedType as AST.FunctionTypeNode;
+    if (decl.resolvedType && decl.resolvedType.kind === "FunctionType") {
+      name = this.getMangledName(
+        decl.name,
+        decl.resolvedType as AST.FunctionTypeNode,
+      );
+    }
     let retType = this.resolveType(funcType.returnType);
 
     // Special case: if this is main with void return, change to i32 for exit code
-    this.isMainWithVoidReturn = name === "main" && retType === "void";
+    this.isMainWithVoidReturn = decl.name === "main" && retType === "void";
     if (this.isMainWithVoidReturn) {
       retType = "i32";
     }
 
     // Special handling for main function to accept argc/argv
     let params: string;
-    if (name === "main") {
+    if (decl.name === "main") {
       params = "i32 %argc, i8** %argv";
     } else {
       params = decl.params
@@ -1296,6 +1320,15 @@ export class CodeGenerator {
 
     // Special case: function identifiers (not local variables) evaluate to their address directly
     if (expr.resolvedType.kind === "FunctionType" && !this.locals.has(name)) {
+      if (
+        expr.resolvedDeclaration &&
+        expr.resolvedDeclaration.kind === "FunctionDecl"
+      ) {
+        const decl = expr.resolvedDeclaration as AST.FunctionDecl;
+        // If it's a generic function, we might need to handle it, but usually identifiers refer to specific instances or non-generics
+        // If it has a resolvedType that is a FunctionType, we can use that for mangling
+        return `@${this.getMangledName(decl.name, expr.resolvedType as AST.FunctionTypeNode)}`;
+      }
       return `@${name}`;
     }
 
@@ -1488,6 +1521,20 @@ export class CodeGenerator {
           // If 'resolvedType' is null or no declaration, we can't morph.
           // But let's assume valid typed AST.
         }
+      } else if (expr.resolvedDeclaration) {
+        const decl = expr.resolvedDeclaration;
+        if (decl.kind === "Extern") {
+          funcName = decl.name;
+        } else {
+          if (decl.resolvedType && decl.resolvedType.kind === "FunctionType") {
+            funcName = this.getMangledName(
+              decl.name,
+              decl.resolvedType as AST.FunctionTypeNode,
+            );
+          } else {
+            funcName = decl.name;
+          }
+        }
       }
     } else if (callee.kind === "Member") {
       const memberExpr = callee as AST.MemberExpr;
@@ -1604,6 +1651,16 @@ export class CodeGenerator {
         }
 
         funcName = `${structName}_${memberExpr.property}`;
+
+        if (expr.resolvedDeclaration) {
+          const decl = expr.resolvedDeclaration;
+          if (decl.resolvedType && decl.resolvedType.kind === "FunctionType") {
+            funcName = this.getMangledName(
+              funcName,
+              decl.resolvedType as AST.FunctionTypeNode,
+            );
+          }
+        }
 
         // Handle generic method call
         if (genericArgs.length > 0) {

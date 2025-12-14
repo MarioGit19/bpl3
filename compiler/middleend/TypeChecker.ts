@@ -194,7 +194,15 @@ export class TypeChecker {
     });
   }
 
-  public checkProgram(program: AST.Program): void {
+  public checkProgram(program: AST.Program, modulePath?: string): void {
+    // Create a new scope for this module
+    const moduleScope = new SymbolTable(this.globalScope);
+    this.currentScope = moduleScope;
+
+    if (modulePath) {
+      this.modules.set(modulePath, moduleScope);
+    }
+
     // Pass 1: Hoist declarations (Structs, Functions, TypeAliases, Externs)
     for (const stmt of program.statements) {
       this.hoistDeclaration(stmt);
@@ -645,6 +653,54 @@ export class TypeChecker {
     this.defineSymbol(decl.name, "TypeAlias", decl.type, decl);
   }
 
+  private defineImportedSymbol(
+    name: string,
+    symbol: Symbol,
+    scope?: SymbolTable,
+  ): void {
+    // Define primary symbol
+    if (scope) {
+      scope.define({
+        name,
+        kind: symbol.kind,
+        type: symbol.type,
+        declaration: symbol.declaration,
+        moduleScope: symbol.moduleScope,
+      });
+    } else {
+      this.defineSymbol(
+        name,
+        symbol.kind,
+        symbol.type,
+        symbol.declaration,
+        symbol.moduleScope,
+      );
+    }
+
+    // Define overloads
+    if (symbol.overloads) {
+      for (const overload of symbol.overloads) {
+        if (scope) {
+          scope.define({
+            name,
+            kind: overload.kind,
+            type: overload.type,
+            declaration: overload.declaration,
+            moduleScope: overload.moduleScope,
+          });
+        } else {
+          this.defineSymbol(
+            name,
+            overload.kind,
+            overload.type,
+            overload.declaration,
+            overload.moduleScope,
+          );
+        }
+      }
+    }
+  }
+
   private checkImport(stmt: AST.ImportStmt): void {
     const currentFile = stmt.location.file;
 
@@ -774,13 +830,7 @@ export class TypeChecker {
             const exportStmt = s as AST.ExportStmt;
             const symbol = moduleScope.resolve(exportStmt.item);
             if (symbol) {
-              exportedScope.define({
-                name: symbol.name,
-                kind: symbol.kind,
-                type: symbol.type,
-                declaration: symbol.declaration,
-                moduleScope: symbol.moduleScope,
-              });
+              this.defineImportedSymbol(symbol.name, symbol, exportedScope);
             }
           }
         }
@@ -834,12 +884,7 @@ export class TypeChecker {
             const exportStmt = s as AST.ExportStmt;
             const symbol = moduleScope.resolve(exportStmt.item);
             if (symbol) {
-              this.defineSymbol(
-                symbol.name,
-                symbol.kind,
-                symbol.type,
-                symbol.declaration,
-              );
+              this.defineImportedSymbol(symbol.name, symbol);
             }
           }
         }
@@ -872,12 +917,7 @@ export class TypeChecker {
               const exportStmt = s as AST.ExportStmt;
               const symbol = moduleScope.resolve(exportStmt.item);
               if (symbol) {
-                this.defineSymbol(
-                  symbol.name,
-                  symbol.kind,
-                  symbol.type,
-                  symbol.declaration,
-                );
+                this.defineImportedSymbol(symbol.name, symbol);
               }
             }
           }
@@ -914,12 +954,7 @@ export class TypeChecker {
       const symbol = exportedSymbol;
 
       // Define in current scope
-      this.defineSymbol(
-        item.alias || item.name,
-        symbol.kind,
-        symbol.type,
-        symbol.declaration,
-      );
+      this.defineImportedSymbol(item.alias || item.name, symbol);
     }
   }
 
@@ -1125,6 +1160,11 @@ export class TypeChecker {
       );
     }
     // console.log(`Resolved identifier ${expr.name} to type ${this.typeToString(symbol.type)}`);
+
+    if (symbol.declaration) {
+      expr.resolvedDeclaration = symbol.declaration as any;
+    }
+
     if (symbol.kind === "Module") {
       return {
         kind: "ModuleType",
@@ -1263,11 +1303,170 @@ export class TypeChecker {
     return targetType;
   }
 
+  private areSignaturesEqual(
+    a: AST.FunctionTypeNode,
+    b: AST.FunctionTypeNode,
+  ): boolean {
+    if (a.paramTypes.length !== b.paramTypes.length) return false;
+    for (let i = 0; i < a.paramTypes.length; i++) {
+      if (
+        this.typeToString(a.paramTypes[i]!) !==
+        this.typeToString(b.paramTypes[i]!)
+      )
+        return false;
+    }
+    return true;
+  }
+
+  private resolveOverload(
+    name: string,
+    candidates: Symbol[],
+    argTypes: (AST.TypeNode | undefined)[],
+    genericArgs: AST.TypeNode[],
+    location: SourceLocation,
+  ): { symbol: Symbol; type: AST.FunctionTypeNode; declaration: AST.ASTNode } {
+    let viable = candidates.filter((c) => {
+      const ft = c.type as AST.FunctionTypeNode;
+      const decl = c.declaration as AST.FunctionDecl | AST.ExternDecl;
+
+      // Check generic params count
+      if (genericArgs.length > 0) {
+        if (decl.kind !== "FunctionDecl") return false;
+        if (decl.genericParams.length !== genericArgs.length) return false;
+      } else {
+        // If no generic args provided, we only match non-generic functions for now
+        // (Inference not implemented)
+        if (decl.kind === "FunctionDecl" && decl.genericParams.length > 0)
+          return false;
+      }
+
+      if (ft.isVariadic) return ft.paramTypes.length <= argTypes.length;
+      return ft.paramTypes.length === argTypes.length;
+    });
+
+    if (viable.length === 0) {
+      throw new CompilerError(
+        `No matching function for call to '${name}' with ${argTypes.length} arguments${genericArgs.length > 0 ? ` and ${genericArgs.length} generic arguments` : ""}.`,
+        `Available overloads:\n${candidates
+          .map((c) => this.typeToString(c.type!))
+          .join("\n")}`,
+        location,
+      );
+    }
+
+    // Create a list of candidates with substituted types if generic
+    const substitutedCandidates = viable.map((c) => {
+      const decl = c.declaration as AST.FunctionDecl | AST.ExternDecl;
+      // console.log(`Checking candidate: ${name}, decl generics: ${decl?.genericParams?.length}, provided generics: ${genericArgs.length}`);
+      if (genericArgs.length > 0 && decl.kind === "FunctionDecl") {
+        const map = new Map<string, AST.TypeNode>();
+        for (let i = 0; i < decl.genericParams.length; i++) {
+          map.set(decl.genericParams[i]!, genericArgs[i]!);
+        }
+        const sub = this.substituteType(c.type!, map) as AST.FunctionTypeNode;
+        // console.log(`Substituted type: ${this.typeToString(sub)}`);
+        return {
+          symbol: c,
+          type: sub,
+          declaration: decl,
+        };
+      }
+      return {
+        symbol: c,
+        type: c.type as AST.FunctionTypeNode,
+        declaration: decl,
+      };
+    });
+
+    const matched = substitutedCandidates.filter((c) => {
+      const ft = c.type;
+      for (let i = 0; i < ft.paramTypes.length; i++) {
+        if (
+          !argTypes[i] ||
+          !this.areTypesCompatible(ft.paramTypes[i]!, argTypes[i]!)
+        ) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    if (matched.length === 0) {
+      throw new CompilerError(
+        `No matching function for call to '${name}' with provided argument types.`,
+        `Available overloads:\n${candidates
+          .map((c) => this.typeToString(c.type!))
+          .join("\n")}`,
+        location,
+      );
+    }
+
+    return matched[0]!;
+  }
+
   private checkCall(expr: AST.CallExpr): AST.TypeNode | undefined {
+    if (expr.callee.kind === "Identifier") {
+      const name = (expr.callee as AST.IdentifierExpr).name;
+      const symbol = this.currentScope.resolve(name);
+
+      if (symbol && symbol.kind === "Function") {
+        const candidates = [symbol, ...(symbol.overloads || [])];
+        const argTypes = expr.args.map((arg) => this.checkExpression(arg));
+
+        const match = this.resolveOverload(
+          name,
+          candidates,
+          argTypes,
+          expr.genericArgs || [],
+          expr.location,
+        );
+
+        expr.resolvedDeclaration = match.declaration as
+          | AST.FunctionDecl
+          | AST.ExternDecl;
+        expr.callee.resolvedType = match.type;
+
+        return (match.type as AST.FunctionTypeNode).returnType;
+      }
+    }
+
     const calleeType = this.checkExpression(expr.callee);
 
     // Always check arguments to ensure they are valid expressions and resolve their types
     const argTypes = expr.args.map((arg) => this.checkExpression(arg));
+
+    if (calleeType && (calleeType as any).overloads) {
+      const overloads = (calleeType as any).overloads as AST.FunctionTypeNode[];
+      const candidates: Symbol[] = overloads.map((ft) => ({
+        name:
+          expr.callee.kind === "Member"
+            ? (expr.callee as AST.MemberExpr).property
+            : "function",
+        kind: "Function",
+        type: ft,
+        declaration: (ft as any).declaration,
+      }));
+
+      const name =
+        expr.callee.kind === "Member"
+          ? (expr.callee as AST.MemberExpr).property
+          : "function";
+
+      const match = this.resolveOverload(
+        name,
+        candidates,
+        argTypes,
+        expr.genericArgs || [],
+        expr.location,
+      );
+
+      expr.resolvedDeclaration = match.declaration as
+        | AST.FunctionDecl
+        | AST.ExternDecl;
+      expr.callee.resolvedType = match.type;
+
+      return (match.type as AST.FunctionTypeNode).returnType;
+    }
 
     if (calleeType && calleeType.kind === "FunctionType") {
       // Check if it's variadic (hacky check: if params empty but args exist, or if we marked it)
@@ -1367,36 +1566,43 @@ export class TypeChecker {
         const symbol = this.currentScope.resolve(inner.name);
         if (symbol && symbol.kind === "Struct") {
           const decl = symbol.declaration as AST.StructDecl;
-          const member = decl.members.find((m) => m.name === expr.property);
-          if (member) {
-            if (member.kind === "FunctionDecl") {
-              if (!member.isStatic) {
-                throw new CompilerError(
-                  `Cannot access instance member '${expr.property}' on type '${inner.name}'`,
-                  "Use an instance of the struct to access this member.",
-                  expr.location,
-                );
-              }
-              const memberType: AST.FunctionTypeNode = {
-                kind: "FunctionType",
-                returnType: member.returnType,
-                paramTypes: member.params.map((p) => p.type),
-                location: member.location,
-                declaration: member,
-              };
+          const members = decl.members.filter((m) => m.name === expr.property);
+          if (members.length > 0) {
+            const candidates: AST.FunctionTypeNode[] = [];
+            for (const m of members) {
+              if (m.kind === "FunctionDecl") {
+                const member = m as AST.FunctionDecl;
+                let memberType: AST.FunctionTypeNode = {
+                  kind: "FunctionType",
+                  returnType: member.returnType,
+                  paramTypes: member.params.map((p) => p.type),
+                  location: member.location,
+                  declaration: member,
+                };
 
-              // Substitute struct generics
-              if (
-                decl.genericParams.length > 0 &&
-                inner.genericArgs.length === decl.genericParams.length
-              ) {
-                const mapping = new Map<string, AST.TypeNode>();
-                for (let i = 0; i < decl.genericParams.length; i++) {
-                  mapping.set(decl.genericParams[i]!, inner.genericArgs[i]!);
+                // Substitute struct generics
+                if (
+                  decl.genericParams.length > 0 &&
+                  inner.genericArgs.length === decl.genericParams.length
+                ) {
+                  const mapping = new Map<string, AST.TypeNode>();
+                  for (let i = 0; i < decl.genericParams.length; i++) {
+                    mapping.set(decl.genericParams[i]!, inner.genericArgs[i]!);
+                  }
+                  memberType = this.substituteType(
+                    memberType,
+                    mapping,
+                  ) as AST.FunctionTypeNode;
+                  (memberType as any).declaration = member;
                 }
-                return this.substituteType(memberType, mapping);
+                candidates.push(memberType);
               }
-              return memberType;
+            }
+
+            if (candidates.length > 0) {
+              const first = candidates[0]!;
+              (first as any).overloads = candidates;
+              return first;
             }
           }
         }
@@ -1426,18 +1632,23 @@ export class TypeChecker {
           symbol = namespaceSymbol.moduleScope.resolve(typeName);
         }
       }
-      if (
+      let structDecl: AST.StructDecl | undefined;
+      if (objectType.resolvedDeclaration) {
+        structDecl = objectType.resolvedDeclaration;
+      } else if (
         symbol &&
         symbol.kind === "Struct" &&
         (symbol.declaration as any).kind === "StructDecl"
       ) {
-        const structDecl = symbol.declaration as AST.StructDecl;
+        structDecl = symbol.declaration as AST.StructDecl;
+      }
 
+      if (structDecl) {
         // Use resolveMemberWithContext to handling inheritance substitution
         const result = this.resolveMemberWithContext(objectType, expr.property);
 
         if (result) {
-          const { member, contextType, contextDecl } = result;
+          const { members, contextType, contextDecl } = result;
 
           // Create substitution mapping from context
           const mapping = new Map<string, AST.TypeNode>();
@@ -1453,107 +1664,117 @@ export class TypeChecker {
             }
           }
 
-          if (member.kind === "StructField") {
+          const field = members.find((m) => m.kind === "StructField");
+          if (field) {
+            const member = field as AST.StructField;
             // Substitute struct generics for field type
             let fieldType = member.type;
             if (mapping.size > 0) {
               fieldType = this.substituteType(fieldType, mapping);
             }
             return fieldType;
-          } else if (member.kind === "FunctionDecl") {
-            // Method access
-            if (member.isStatic) {
+          }
+
+          const functions = members.filter(
+            (m) => m.kind === "FunctionDecl",
+          ) as AST.FunctionDecl[];
+
+          if (functions.length > 0) {
+            const candidates: AST.FunctionTypeNode[] = [];
+
+            for (const member of functions) {
+              if (member.isStatic) continue;
+
+              let paramTypes = member.params.map((p) => p.type);
+              let compatible = true;
+
+              if (
+                member.params.length > 0 &&
+                member.params[0]!.name === "this"
+              ) {
+                let thisParamType = member.params[0]!.type;
+
+                if (mapping.size > 0) {
+                  thisParamType = this.substituteType(thisParamType, mapping);
+                }
+
+                let isThisCompatible = this.areTypesCompatible(
+                  thisParamType,
+                  objectType,
+                );
+                const thisParamRef = thisParamType;
+
+                if (
+                  !isThisCompatible &&
+                  thisParamRef.kind === "BasicType" &&
+                  objectType.kind === "BasicType" &&
+                  thisParamRef.name === objectType.name &&
+                  thisParamRef.pointerDepth === objectType.pointerDepth + 1
+                )
+                  isThisCompatible = true;
+                if (
+                  !isThisCompatible &&
+                  thisParamRef.kind === "BasicType" &&
+                  objectType.kind === "BasicType" &&
+                  thisParamRef.name === objectType.name &&
+                  objectType.pointerDepth === thisParamRef.pointerDepth + 1
+                )
+                  isThisCompatible = true;
+                if (!isThisCompatible) {
+                  const objPtr = {
+                    ...objectType,
+                    pointerDepth: objectType.pointerDepth + 1,
+                  };
+                  if (this.areTypesCompatible(thisParamRef, objPtr))
+                    isThisCompatible = true;
+                }
+                if (!isThisCompatible && objectType.pointerDepth > 0) {
+                  const objDeref = {
+                    ...objectType,
+                    pointerDepth: objectType.pointerDepth - 1,
+                  };
+                  if (this.areTypesCompatible(thisParamRef, objDeref))
+                    isThisCompatible = true;
+                }
+
+                if (!isThisCompatible) {
+                  compatible = false;
+                } else {
+                  paramTypes = paramTypes.slice(1);
+                }
+              }
+
+              if (compatible) {
+                let returnType = member.returnType;
+                if (mapping.size > 0) {
+                  returnType = this.substituteType(returnType, mapping);
+                  paramTypes = paramTypes.map((p) =>
+                    this.substituteType(p, mapping),
+                  );
+                }
+
+                const funcType: AST.FunctionTypeNode = {
+                  kind: "FunctionType",
+                  returnType,
+                  paramTypes,
+                  location: member.location,
+                };
+                (funcType as any).declaration = member;
+                candidates.push(funcType);
+              }
+            }
+
+            if (candidates.length === 0) {
               throw new CompilerError(
-                `Cannot access static member '${expr.property}' on instance of '${objectType.name}'`,
-                `Use '${objectType.name}.${expr.property}' instead.`,
+                `No matching overload for method '${expr.property}' on type '${objectType.name}'`,
+                "Check 'this' parameter compatibility or static/instance mismatch.",
                 expr.location,
               );
             }
 
-            let paramTypes = member.params.map((p) => p.type);
-            if (member.params.length > 0 && member.params[0]!.name === "this") {
-              let thisParamType = member.params[0]!.type;
-
-              // Substitute 'this' type if we have a mapping
-              if (mapping.size > 0) {
-                thisParamType = this.substituteType(thisParamType, mapping);
-              }
-
-              let compatible = this.areTypesCompatible(
-                thisParamType, // substituted this param
-                objectType,
-              );
-
-              const thisParamRef = thisParamType; // alias for error msg
-
-              // Allow implicit address-of if 'this' expects a pointer to the object type
-              if (
-                !compatible &&
-                thisParamRef.kind === "BasicType" &&
-                objectType.kind === "BasicType" &&
-                thisParamRef.name === objectType.name &&
-                thisParamRef.pointerDepth === objectType.pointerDepth + 1
-              ) {
-                compatible = true;
-              }
-
-              // Allow implicit dereference
-              if (
-                !compatible &&
-                thisParamRef.kind === "BasicType" &&
-                objectType.kind === "BasicType" &&
-                thisParamRef.name === objectType.name &&
-                objectType.pointerDepth === thisParamRef.pointerDepth + 1
-              ) {
-                compatible = true;
-              }
-
-              if (!compatible) {
-                // Try address-of
-                const objPtr = {
-                  ...objectType,
-                  pointerDepth: objectType.pointerDepth + 1,
-                };
-                if (this.areTypesCompatible(thisParamRef, objPtr)) {
-                  compatible = true;
-                }
-              }
-
-              // Try deref
-              if (!compatible && objectType.pointerDepth > 0) {
-                const objDeref = {
-                  ...objectType,
-                  pointerDepth: objectType.pointerDepth - 1,
-                };
-                if (this.areTypesCompatible(thisParamRef, objDeref)) {
-                  compatible = true;
-                }
-              }
-
-              if (!compatible) {
-                throw new CompilerError(
-                  `Instance type mismatch for 'this'. Expected '${this.typeToString(
-                    thisParamType,
-                  )}', got '${this.typeToString(objectType)}'`,
-                  "Ensure the instance matches the 'this' parameter type.",
-                  expr.location,
-                );
-              }
-              paramTypes = paramTypes.slice(1);
-            }
-
-            const memberType: AST.FunctionTypeNode = {
-              kind: "FunctionType",
-              returnType: member.returnType,
-              paramTypes: paramTypes,
-              location: member.location,
-              declaration: member,
-            };
-
-            if (mapping.size > 0) {
-              return this.substituteType(memberType, mapping);
-            }
-            return memberType;
+            const resultType = candidates[0]!;
+            (resultType as any).overloads = candidates;
+            return resultType;
           }
         }
       }
@@ -1811,22 +2032,47 @@ export class TypeChecker {
         } as any;
       }
     } else if (baseType.kind === "FunctionType") {
-      const decl = (baseType as any).declaration as AST.FunctionDecl;
-      if (decl) {
-        if (decl.genericParams.length !== expr.genericArgs.length) {
+      let targetDecl = (baseType as any).declaration as AST.FunctionDecl;
+      let targetType = baseType;
+
+      // If we have overloads, try to find the one with matching generic param count
+      if ((baseType as any).overloads) {
+        const candidates = [
+          baseType,
+          ...((baseType as any).overloads as AST.TypeNode[]),
+        ];
+        const match = candidates.find((c) => {
+          const d = (c as any).declaration as AST.FunctionDecl;
+          return (
+            d &&
+            d.genericParams &&
+            d.genericParams.length === expr.genericArgs.length
+          );
+        });
+        if (match) {
+          targetType = match;
+          targetDecl = (match as any).declaration;
+        }
+      }
+
+      if (targetDecl) {
+        if (targetDecl.genericParams.length !== expr.genericArgs.length) {
           throw new CompilerError(
-            `Generic argument count mismatch: expected ${decl.genericParams.length}, got ${expr.genericArgs.length}`,
+            `Generic argument count mismatch: expected ${targetDecl.genericParams.length}, got ${expr.genericArgs.length}`,
             "Provide the correct number of generic arguments.",
             expr.location,
           );
         }
 
         const mapping = new Map<string, AST.TypeNode>();
-        for (let i = 0; i < decl.genericParams.length; i++) {
-          mapping.set(decl.genericParams[i]!, expr.genericArgs[i]!);
+        for (let i = 0; i < targetDecl.genericParams.length; i++) {
+          mapping.set(targetDecl.genericParams[i]!, expr.genericArgs[i]!);
         }
 
-        return this.substituteType(baseType, mapping);
+        const result = this.substituteType(targetType, mapping);
+        // Strip overloads to prevent checkCall from re-resolving
+        delete (result as any).overloads;
+        return result;
       }
     }
     return baseType;
@@ -1878,19 +2124,34 @@ export class TypeChecker {
     node: AST.ASTNode,
     moduleScope?: SymbolTable,
   ): void {
+    const existing = this.currentScope.getInCurrentScope(name);
+
     if (
-      this.currentScope.resolve(name) &&
-      this.currentScope === this.globalScope
+      existing &&
+      existing.kind === "Function" &&
+      kind === "Function" &&
+      type &&
+      type.kind === "FunctionType"
     ) {
-      // Allow shadowing in local scopes, but maybe warn?
-      // But if defined in SAME scope, it's an error.
-      // My resolve checks parent scopes too.
-      // I need to check ONLY current scope for redefinition.
-      // SymbolTable doesn't expose "get only current".
-      // Let's assume for now we just define.
+      const candidates = [existing, ...(existing.overloads || [])];
+      for (const cand of candidates) {
+        if (cand.type && cand.type.kind === "FunctionType") {
+          if (
+            this.areSignaturesEqual(
+              cand.type as AST.FunctionTypeNode,
+              type as AST.FunctionTypeNode,
+            )
+          ) {
+            throw new CompilerError(
+              `Function '${name}' with this signature is already defined.`,
+              "Overloads must have different parameter types.",
+              node.location,
+            );
+          }
+        }
+      }
     }
 
-    // Check for redefinition in current scope manually if needed, or add method to SymbolTable
     this.currentScope.define({
       name,
       kind,
@@ -1950,49 +2211,72 @@ export class TypeChecker {
         return rt1.pointerDepth > 0;
       }
 
+      // Normalize names for primitive types
+      const normalize = (name: string) => {
+        if (name === "i32") return "int";
+        if (name === "i64") return "long";
+        if (name === "u32") return "uint";
+        if (name === "u64") return "ulong";
+        if (name === "f32") return "float";
+        if (name === "f64") return "double";
+        return name;
+      };
+
+      const n1 = normalize(rt1.name);
+      const n2 = normalize(rt2.name);
+
+      // console.log(`Comparing ${rt1.name} (${n1}) with ${rt2.name} (${n2})`);
+
       // Exact name match
-      if (rt1.name !== rt2.name) {
+      if (n1 !== n2) {
         // Check inheritance
         if (
           !this.isSubtype(rt2 as AST.BasicTypeNode, rt1 as AST.BasicTypeNode)
         ) {
+          // console.log(`Failed name match: ${n1} != ${n2}`);
           return false;
         }
       }
 
       // Pointer depth match or array decay
       if (rt1.pointerDepth !== rt2.pointerDepth) {
-        // Check for array to pointer decay: int[3] -> int*
-        // rt1 (param) has ptrDepth = rt2.ptrDepth + 1
-        // rt2 (arg) has arrayDims > 0
+        // ...
         if (
           rt1.pointerDepth === rt2.pointerDepth + 1 &&
           rt2.arrayDimensions.length > 0 &&
           rt1.arrayDimensions.length === rt2.arrayDimensions.length - 1
         ) {
-          // Check remaining dimensions
-          for (let i = 0; i < rt1.arrayDimensions.length; i++) {
-            if (rt1.arrayDimensions[i] !== rt2.arrayDimensions[i + 1])
-              return false;
-          }
-          // Decay OK
+          // ...
         } else {
+          // console.log(`Failed pointer depth: ${rt1.pointerDepth} != ${rt2.pointerDepth}`);
           return false;
         }
       } else {
         // pointerDepth matches, check array dimensions strictly
-        if (rt1.arrayDimensions.length !== rt2.arrayDimensions.length)
+        if (rt1.arrayDimensions.length !== rt2.arrayDimensions.length) {
+          // console.log(`Failed array dims length`);
           return false;
+        }
         for (let i = 0; i < rt1.arrayDimensions.length; i++) {
-          if (rt1.arrayDimensions[i] !== rt2.arrayDimensions[i]) return false;
+          if (rt1.arrayDimensions[i] !== rt2.arrayDimensions[i]) {
+            console.log(`Failed array dims content`);
+            return false;
+          }
         }
       }
 
       // Generic args match
-      if (rt1.genericArgs.length !== rt2.genericArgs.length) return false;
+      if (rt1.genericArgs.length !== rt2.genericArgs.length) {
+        console.log(`Failed generic args length`);
+        return false;
+      }
       for (let i = 0; i < rt1.genericArgs.length; i++) {
-        if (!this.areTypesCompatible(rt1.genericArgs[i]!, rt2.genericArgs[i]!))
+        if (
+          !this.areTypesCompatible(rt1.genericArgs[i]!, rt2.genericArgs[i]!)
+        ) {
+          console.log(`Failed generic arg ${i}`);
           return false;
+        }
       }
 
       return true;
@@ -2131,7 +2415,25 @@ export class TypeChecker {
     if (!sRank || !tRank) return false;
 
     // Allow widening
-    return sRank < tRank;
+    if (sRank < tRank) return true;
+
+    // Allow implicit downsizing from i64/long to int/i32 (common for sizeof results)
+    if (
+      (sName === "i64" || sName === "long") &&
+      (tName === "int" || tName === "i32")
+    ) {
+      return true;
+    }
+
+    // Allow implicit downsizing from u64/ulong to uint/u32
+    if (
+      (sName === "u64" || sName === "ulong") &&
+      (tName === "uint" || tName === "u32")
+    ) {
+      return true;
+    }
+
+    return false;
   }
 
   private checkAllPathsReturn(stmt: AST.Statement): boolean {
@@ -2192,6 +2494,12 @@ export class TypeChecker {
   private resolveType(type: AST.TypeNode): AST.TypeNode {
     if (type.kind === "BasicType") {
       const symbol = this.currentScope.resolve(type.name);
+
+      if (symbol && symbol.kind === "Struct") {
+        (type as AST.BasicTypeNode).resolvedDeclaration =
+          symbol.declaration as AST.StructDecl;
+      }
+
       if (symbol && symbol.kind === "TypeAlias" && symbol.type) {
         // If the alias points to itself (base type definition), return it
         if (
@@ -2276,7 +2584,7 @@ export class TypeChecker {
     memberName: string,
   ):
     | {
-        member: AST.StructField | AST.FunctionDecl;
+        members: (AST.StructField | AST.FunctionDecl)[];
         contextType: AST.BasicTypeNode;
         contextDecl: AST.StructDecl;
       }
@@ -2284,18 +2592,25 @@ export class TypeChecker {
     let currentType = objectType;
     let depth = 0;
     while (depth < 100) {
-      const symbol = this.currentScope.resolve(currentType.name);
-      if (
-        !symbol ||
-        symbol.kind !== "Struct" ||
-        (symbol.declaration as any).kind !== "StructDecl"
-      )
-        return undefined;
-      const decl = symbol.declaration as AST.StructDecl;
+      let decl: AST.StructDecl | undefined;
+      if (currentType.resolvedDeclaration) {
+        decl = currentType.resolvedDeclaration;
+      } else {
+        const symbol = this.currentScope.resolve(currentType.name);
+        if (
+          symbol &&
+          symbol.kind === "Struct" &&
+          (symbol.declaration as any).kind === "StructDecl"
+        ) {
+          decl = symbol.declaration as AST.StructDecl;
+        }
+      }
 
-      const member = decl.members.find((m) => m.name === memberName);
-      if (member)
-        return { member, contextType: currentType, contextDecl: decl };
+      if (!decl) return undefined;
+
+      const members = decl.members.filter((m) => m.name === memberName);
+      if (members.length > 0)
+        return { members, contextType: currentType, contextDecl: decl };
 
       if (decl.parentType) {
         // Resolve parentType AST node to ensure it's a BasicType and resolve aliases

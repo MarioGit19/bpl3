@@ -21,6 +21,7 @@ export interface BasicTypeNode extends ASTNode {
   genericArgs: TypeNode[];
   pointerDepth: number;
   arrayDimensions: (number | null)[];
+  resolvedDeclaration?: StructDecl;
 }
 
 export interface TupleTypeNode extends ASTNode {
@@ -66,6 +67,7 @@ export interface LiteralExpr extends ASTNode {
 export interface IdentifierExpr extends ASTNode {
   kind: "Identifier";
   name: string;
+  resolvedDeclaration?: FunctionDecl | ExternDecl | VariableDecl | StructDecl;
 }
 
 export interface BinaryExpr extends ASTNode {
@@ -87,6 +89,7 @@ export interface CallExpr extends ASTNode {
   callee: Expression;
   args: Expression[];
   genericArgs: TypeNode[];
+  resolvedDeclaration?: FunctionDecl | ExternDecl;
 }
 
 export interface MemberExpr extends ASTNode {

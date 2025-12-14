@@ -37,6 +37,7 @@
 - [x] VS Code Extension
 - [x] Language Server Protocol (LSP) Implementation
 - [x] Robust Import/Export & Linking
+- [x] Function Overloading by Parameter Types
 
 ## Pending Features (expanded)
 
@@ -57,12 +58,6 @@
   - Description: Add generic constraints (e.g., `T: Comparable`) and local inference so generic functions can deduce type parameters from call-sites where possible.
   - Implementation notes: Extend type parameter structures to include bounds; implement constraint checking during type inference/resolution. Add unification and constraint propagation algorithm to TypeChecker.
   - Acceptance criteria: Constrained generics accept only types satisfying bounds; generic functions without explicit type args can be called with types that infer correctly.
-
-- [4] Function Overloading by Parameter Types
-
-  - Description: Allow multiple functions with the same name but different parameter type lists. Overload resolution must pick the best match based on argument types and implicit conversions.
-  - Implementation notes: Extend symbol table to store overload sets; implement overload resolution algorithm considering exact matches, promotions, and user-defined conversions. Detect ambiguities and report errors.
-  - Acceptance criteria: Multiple functions with same name but different signatures compile and calls resolve to correct overload; ambiguous calls produce clear diagnostics.
 
 - [4] Operator Overloading for User Types
 
