@@ -18,7 +18,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Run the executable
-"$SCRIPT_DIR/$EXEC_NAME"
+"$SCRIPT_DIR/$EXEC_NAME" ${@:2}
 EXIT_CODE=$?;
 
 # Clean up executable

@@ -150,6 +150,93 @@ import { CompilerError } from "../../compiler/common/CompilerError";
 import * as AST from "../../compiler/common/AST";
 import { Formatter } from "../../compiler/formatter/Formatter";
 
+function getTextForUri(
+  uri: string,
+  openDocuments: TextDocuments<TextDocument>,
+): string | null {
+  const doc = openDocuments.get(uri);
+  if (doc) return doc.getText();
+  try {
+    const fsPath = fileURLToPath(uri);
+    return fs.readFileSync(fsPath, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+// Resolve workspace lib directory (for std/* imports)
+function findWorkspaceLibDir(startDir: string): string | null {
+  let dir = startDir;
+  const maxUp = 10;
+  for (let i = 0; i < maxUp; i++) {
+    const libDir = path.join(dir, "lib");
+    if (
+      fs.existsSync(libDir) &&
+      fs.existsSync(path.join(libDir, "string.bpl"))
+    ) {
+      return libDir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+function resolveImportToFile(
+  importPath: string | undefined,
+  currentDir: string,
+): string | null {
+  if (!importPath) return null;
+
+  if (importPath.startsWith("std/") || importPath.startsWith("std\\")) {
+    const libDir =
+      findWorkspaceLibDir(currentDir) || path.join(currentDir, "lib");
+    let candidate = path.join(libDir, importPath.replace(/^std[\/]/, ""));
+    if (!candidate.endsWith(".bpl")) candidate += ".bpl";
+    return fs.existsSync(candidate) ? candidate : null;
+  }
+
+  let resolvedPath = path.resolve(currentDir, importPath || "");
+  if (!fs.existsSync(resolvedPath) && fs.existsSync(resolvedPath + ".bpl")) {
+    resolvedPath += ".bpl";
+  }
+  return fs.existsSync(resolvedPath) ? resolvedPath : null;
+}
+
+// Check if an import error should be suppressed (only for valid std/* imports)
+function shouldSuppressImportError(
+  errorMessage: string,
+  documentText: string,
+  documentUri: string,
+): boolean {
+  // Only check import-related errors
+  if (!/module not found|cannot resolve import/i.test(errorMessage)) {
+    return false;
+  }
+
+  const currentDir = path.dirname(fileURLToPath(documentUri));
+  const importRegex = /import\s+.+?\s+from\s+["'](.+?)["']/g;
+  let match;
+
+  while ((match = importRegex.exec(documentText)) !== null) {
+    const importPath = match[1];
+    if (
+      importPath &&
+      (importPath.startsWith("std/") || importPath.startsWith("std\\"))
+    ) {
+      const resolved = resolveImportToFile(importPath, currentDir);
+      if (resolved && fs.existsSync(resolved)) {
+        // This is a valid std/* import, suppress the error
+        return true;
+      }
+    }
+  }
+
+  // No valid std/* imports found, don't suppress
+  return false;
+}
+
 async function validateTextDocument(textDocument: TextDocument): Promise<void> {
   const settings = await getDocumentSettings(textDocument.uri);
   const maxNumberOfProblems = settings?.maxNumberOfProblems || 1000;
@@ -175,27 +262,39 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
         : null;
     } catch (e: any) {
       if (e && e instanceof CompilerError) {
-        diagnostics.push(compilerErrorToDiagnostic(e, textDocument));
+        const msg = `${e.message}`;
+        // Only suppress import errors for valid std/* imports that exist
+        if (!shouldSuppressImportError(msg, text, textDocument.uri)) {
+          diagnostics.push(compilerErrorToDiagnostic(e, textDocument));
+        }
       } else {
-        // Unknown error: surface as generic diagnostic at top
-        diagnostics.push({
-          severity: DiagnosticSeverity.Error,
-          range: Range.create(0, 0, 0, 1),
-          message: String(e?.message || e),
-          source: "bpl-lsp",
-        });
+        const msg = String(e?.message || e);
+        if (!shouldSuppressImportError(msg, text, textDocument.uri)) {
+          diagnostics.push({
+            severity: DiagnosticSeverity.Error,
+            range: Range.create(0, 0, 0, 1),
+            message: msg,
+            source: "bpl-lsp",
+          });
+        }
       }
     }
   } catch (e: any) {
     if (e && e instanceof CompilerError) {
-      diagnostics.push(compilerErrorToDiagnostic(e, textDocument));
+      const msg = `${e.message}`;
+      if (!shouldSuppressImportError(msg, text, textDocument.uri)) {
+        diagnostics.push(compilerErrorToDiagnostic(e, textDocument));
+      }
     } else {
-      diagnostics.push({
-        severity: DiagnosticSeverity.Error,
-        range: Range.create(0, 0, 0, 1),
-        message: String(e?.message || e),
-        source: "bpl-lsp",
-      });
+      const msg = String(e?.message || e);
+      if (!shouldSuppressImportError(msg, text, textDocument.uri)) {
+        diagnostics.push({
+          severity: DiagnosticSeverity.Error,
+          range: Range.create(0, 0, 0, 1),
+          message: msg,
+          source: "bpl-lsp",
+        });
+      }
     }
   }
 
@@ -434,18 +533,15 @@ function findSymbolDefinition(
   while ((impMatch = importRegex.exec(text)) !== null) {
     const importedSymbols = impMatch[1];
     const importPath = impMatch[2];
-
-    if (importedSymbols && importedSymbols.includes(word)) {
+    // Clean up brackets and check if word is imported
+    const cleanSymbols = importedSymbols
+      .replace(/[\[\]]/g, "")
+      .split(",")
+      .map((s) => s.trim());
+    if (cleanSymbols.includes(word)) {
       const currentDir = path.dirname(fileURLToPath(document.uri));
-      let resolvedPath = path.resolve(currentDir, importPath || "");
-      if (
-        !fs.existsSync(resolvedPath) &&
-        fs.existsSync(resolvedPath + ".bpl")
-      ) {
-        resolvedPath += ".bpl";
-      }
-
-      if (fs.existsSync(resolvedPath)) {
+      const resolvedPath = resolveImportToFile(importPath, currentDir);
+      if (resolvedPath) {
         const importedText = fs.readFileSync(resolvedPath, "utf-8");
         const importedDoc = TextDocument.create(
           pathToFileURL(resolvedPath).toString(),
@@ -550,7 +646,7 @@ connection.onDefinition(
         line,
       );
     if (importMatch) {
-      const importPath = importMatch[1];
+      const importPath = importMatch[1] ?? "";
       const startCol = line.indexOf(importPath || "");
       const endCol = startCol + (importPath?.length ?? 0);
 
@@ -558,19 +654,10 @@ connection.onDefinition(
         params.position.character >= startCol &&
         params.position.character <= endCol
       ) {
-        // Resolve path
+        // Resolve path (supports std/* alias)
         const currentDir = path.dirname(fileURLToPath(document.uri));
-        let resolvedPath = path.resolve(currentDir, importPath || "");
-
-        // Try adding .bpl extension if missing
-        if (
-          !fs.existsSync(resolvedPath) &&
-          fs.existsSync(resolvedPath + ".bpl")
-        ) {
-          resolvedPath += ".bpl";
-        }
-
-        if (fs.existsSync(resolvedPath)) {
+        const resolvedPath = resolveImportToFile(importPath, currentDir);
+        if (resolvedPath) {
           return Location.create(
             pathToFileURL(resolvedPath).toString(),
             Range.create(0, 0, 0, 0),
@@ -592,6 +679,42 @@ connection.onDefinition(
 
     if (!word) {
       return null;
+    }
+
+    // Support navigating to struct method definitions `TypeName.method`
+    const lineText = lines[params.position.line] ?? "";
+    const dotIdx = lineText.lastIndexOf(".", params.position.character);
+    if (dotIdx > -1) {
+      // Extract type name left of dot
+      let j = dotIdx - 1;
+      while (j >= 0 && /[a-zA-Z0-9_]/.test(lineText[j] || "")) j--;
+      const typeName = lineText.substring(j + 1, dotIdx);
+      const structDef = findSymbolDefinition(document, typeName || "");
+      if (structDef) {
+        const structText = getTextForUri(structDef.uri, documents);
+        if (structText) {
+          const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const methodRegex = new RegExp(
+            `\\bframe\\s+${escapedWord}\\s*\\(`,
+            "m",
+          );
+          const m = methodRegex.exec(structText);
+          if (m) {
+            const structDoc = TextDocument.create(
+              structDef.uri,
+              "bpl",
+              1,
+              structText,
+            );
+            const startPos = structDoc.positionAt(m.index);
+            const endPos = structDoc.positionAt(m.index + m[0].length);
+            return Location.create(
+              structDef.uri,
+              Range.create(startPos, endPos),
+            );
+          }
+        }
+      }
     }
 
     const def = findSymbolDefinition(document, word);
@@ -747,6 +870,31 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
                   value: `(property) \`${typeName}.${word}\`: \`${memberType}\``,
                 },
               };
+            }
+
+            // 5. Also detect methods declared inside struct blocks using full file content for accuracy
+            const structText = getTextForUri(structDef.uri, documents);
+            if (structText) {
+              const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+              const methodRegex = new RegExp(
+                `^\\s*frame\\s+${escapedWord}\\s*\\([^)]*\\)`,
+                "m",
+              );
+              const methodMatch = methodRegex.exec(structText);
+              if (methodMatch) {
+                const signatureLine = methodMatch[0]?.trim() || `${word}()`;
+                return {
+                  contents: {
+                    kind: MarkupKind.Markdown,
+                    value: [
+                      "```bpl",
+                      signatureLine,
+                      "```",
+                      `(method) \`${typeName}.${word}\``,
+                    ].join("\n"),
+                  },
+                };
+              }
             }
           }
         }

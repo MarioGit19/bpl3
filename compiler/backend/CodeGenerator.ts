@@ -70,10 +70,29 @@ export class CodeGenerator {
     this.emitDeclaration(`@exception_value = global i64 0`);
     this.emitDeclaration(`@exception_type = global i32 0`);
 
+    // Global argc/argv for Args library
+    this.emitDeclaration(`@__bpl_argc_value = global i32 0`);
+    this.emitDeclaration(`@__bpl_argv_value = global i8** null`);
+
     this.emitDeclaration(`declare i32 @setjmp(i8*) returns_twice`);
     this.declaredFunctions.add("setjmp");
     this.emitDeclaration(`declare void @longjmp(i8*, i32) noreturn`);
     this.declaredFunctions.add("longjmp");
+
+    // Helper functions for accessing argc/argv
+    this.emitDeclaration(`define i32 @__bpl_argc() {`);
+    this.emitDeclaration(`  %1 = load i32, i32* @__bpl_argc_value`);
+    this.emitDeclaration(`  ret i32 %1`);
+    this.emitDeclaration(`}`);
+    this.emitDeclaration(``);
+    this.emitDeclaration(`define i8* @__bpl_argv_get(i32 %index) {`);
+    this.emitDeclaration(`  %1 = load i8**, i8*** @__bpl_argv_value`);
+    this.emitDeclaration(`  %2 = getelementptr i8*, i8** %1, i32 %index`);
+    this.emitDeclaration(`  %3 = load i8*, i8** %2`);
+    this.emitDeclaration(`  ret i8* %3`);
+    this.emitDeclaration(`}`);
+    this.declaredFunctions.add("__bpl_argc");
+    this.declaredFunctions.add("__bpl_argv_get");
 
     this.emitDeclaration("");
 
@@ -549,16 +568,28 @@ export class CodeGenerator {
       retType = "i32";
     }
 
-    const params = decl.params
-      .map((p, i) => {
-        const type = this.resolveType(funcType.paramTypes[i]!);
-        const name = `%${p.name}`;
-        return `${type} ${name}`;
-      })
-      .join(", ");
+    // Special handling for main function to accept argc/argv
+    let params: string;
+    if (name === "main") {
+      params = "i32 %argc, i8** %argv";
+    } else {
+      params = decl.params
+        .map((p, i) => {
+          const type = this.resolveType(funcType.paramTypes[i]!);
+          const name = `%${p.name}`;
+          return `${type} ${name}`;
+        })
+        .join(", ");
+    }
 
     this.emit(`define ${retType} @${name}(${params}) {`);
     this.emit("entry:");
+
+    // Store argc/argv in global variables for main function
+    if (name === "main") {
+      this.emit(`  store i32 %argc, i32* @__bpl_argc_value`);
+      this.emit(`  store i8** %argv, i8*** @__bpl_argv_value`);
+    }
 
     // Allocate stack space for parameters to make them mutable
     for (let i = 0; i < decl.params.length; i++) {
