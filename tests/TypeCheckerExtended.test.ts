@@ -10,6 +10,10 @@ function check(source: string) {
   const program = parser.parse();
   const typeChecker = new TypeChecker();
   typeChecker.checkProgram(program);
+  const typeErrors = typeChecker.getErrors();
+  if (typeErrors.length > 0) {
+    throw typeErrors[0];
+  }
   return program;
 }
 

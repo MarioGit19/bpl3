@@ -686,7 +686,7 @@ export class CodeGenerator {
         this.generateThrow(stmt as AST.ThrowStmt);
         break;
       default:
-        // console.warn(`Unhandled statement kind: ${stmt.kind}`);
+        console.warn(`Unhandled statement kind: ${stmt.kind}`);
         break;
     }
   }
@@ -1219,7 +1219,7 @@ export class CodeGenerator {
       case "Ternary":
         return this.generateTernary(expr as AST.TernaryExpr);
       default:
-        // console.warn(`Unhandled expression kind: ${expr.kind}`);
+        console.warn(`Unhandled expression kind: ${expr.kind}`);
         return "0"; // Placeholder
     }
   }

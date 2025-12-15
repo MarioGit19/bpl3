@@ -251,35 +251,25 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
     const program: AST.Program = parser.parse();
 
     // Type check (single-file scope; skip heavy import resolution)
-    const checker = new TypeChecker({ skipImportResolution: true });
-    // Validate and collect any semantic errors thrown during checking phases
-    // Many type errors are thrown; wrap to capture
-    try {
-      // Assuming TypeChecker has an entry like checkProgram
-      // If not, constructing will perform symbol definition; we need a pass:
-      (checker as any).checkProgram
-        ? (checker as any).checkProgram(program)
-        : null;
-    } catch (e: any) {
-      if (e && e instanceof CompilerError) {
-        const msg = `${e.message}`;
-        // Only suppress import errors for valid std/* imports that exist
-        if (!shouldSuppressImportError(msg, text, textDocument.uri)) {
-          diagnostics.push(compilerErrorToDiagnostic(e, textDocument));
-        }
-      } else {
-        const msg = String(e?.message || e);
-        if (!shouldSuppressImportError(msg, text, textDocument.uri)) {
-          diagnostics.push({
-            severity: DiagnosticSeverity.Error,
-            range: Range.create(0, 0, 0, 1),
-            message: msg,
-            source: "bpl-lsp",
-          });
-        }
+    // TypeChecker now collects all errors instead of throwing
+    const checker = new TypeChecker({
+      skipImportResolution: true,
+      collectAllErrors: true,
+    });
+
+    checker.checkProgram(program);
+
+    // Collect all errors from the type checker
+    const errors = checker.getErrors();
+    for (const err of errors) {
+      const msg = `${err.message}`;
+      // Only suppress import errors for valid std/* imports that exist
+      if (!shouldSuppressImportError(msg, text, textDocument.uri)) {
+        diagnostics.push(compilerErrorToDiagnostic(err, textDocument));
       }
     }
   } catch (e: any) {
+    // Handle parse errors or unexpected errors
     if (e && e instanceof CompilerError) {
       const msg = `${e.message}`;
       if (!shouldSuppressImportError(msg, text, textDocument.uri)) {

@@ -4,6 +4,7 @@ import { TypeChecker } from "../../compiler/middleend/TypeChecker";
 import { CodeGenerator } from "../../compiler/backend/CodeGenerator";
 import { Formatter } from "../../compiler/formatter/Formatter";
 import { CompilerError } from "../../compiler/common/CompilerError";
+import { DiagnosticFormatter } from "../../compiler/common/DiagnosticFormatter";
 import { lexWithGrammar } from "../../compiler/frontend/GrammarLexer";
 import * as AST from "../../compiler/common/AST";
 import path from "path";
@@ -12,6 +13,13 @@ import { exec } from "child_process";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
+
+// Create formatter with specific settings for playground
+const diagnosticFormatter = new DiagnosticFormatter({
+  colorize: false, // JSON API, don't use ANSI colors
+  contextLines: 3,
+  showCodeSnippets: true,
+});
 
 // Helper to stringify AST avoiding circular references
 function safeStringify(obj: any): string {
@@ -116,7 +124,7 @@ async function compileAndRun(req: CompileRequest): Promise<CompileResponse> {
 
       if (!result.success) {
         const errorMsg = result.errors
-          ? result.errors.map((e) => e.toString()).join("\n")
+          ? diagnosticFormatter.formatErrors(result.errors)
           : "Unknown compilation error";
         return {
           success: false,

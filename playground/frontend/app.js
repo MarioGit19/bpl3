@@ -280,7 +280,11 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
 
 // Run code
 document.getElementById("run-btn").addEventListener("click", async () => {
-  document.getElementById("format-btn")?.click(); // Auto-format before running
+  // Auto-format before running if checkbox is checked
+  const autoFormat = document.getElementById("auto-format-checkbox")?.checked;
+  if (autoFormat) {
+    document.getElementById("format-btn")?.click();
+  }
   const code = editor.getValue();
   const stdin = document.getElementById("stdin-input").value;
   const argsInput = document.getElementById("args-input").value;
@@ -365,10 +369,37 @@ document.getElementById("format-btn").addEventListener("click", async () => {
     if (result.success && result.code) {
       editor.setValue(result.code);
     } else {
-      alert("Formatting failed: " + (result.error || "Unknown error"));
+      // Display error in output tab instead of alert
+      const outputEl = document.getElementById("output-content");
+      outputEl.textContent =
+        "Formatting failed:\n\n" + (result.error || "Unknown error");
+      outputEl.className = "error";
+
+      // Switch to output tab to show the error
+      document
+        .querySelectorAll(".tab-btn")
+        .forEach((b) => b.classList.remove("active"));
+      document.querySelector('[data-tab="output"]').classList.add("active");
+      document
+        .querySelectorAll(".tab-pane")
+        .forEach((p) => p.classList.remove("active"));
+      document.getElementById("tab-output").classList.add("active");
     }
   } catch (error) {
-    alert("Failed to connect to server: " + error.message);
+    // Display connection error in output tab instead of alert
+    const outputEl = document.getElementById("output-content");
+    outputEl.textContent = `Failed to connect to server: ${error.message}\n\nMake sure the backend server is running:\ncd playground/backend && bun run dev`;
+    outputEl.className = "error";
+
+    // Switch to output tab to show the error
+    document
+      .querySelectorAll(".tab-btn")
+      .forEach((b) => b.classList.remove("active"));
+    document.querySelector('[data-tab="output"]').classList.add("active");
+    document
+      .querySelectorAll(".tab-pane")
+      .forEach((p) => p.classList.remove("active"));
+    document.getElementById("tab-output").classList.add("active");
   }
 });
 

@@ -17,12 +17,20 @@ export class TypeChecker {
   private preLoadedModules: Map<string, AST.Program> = new Map();
   private linkerSymbolTable: LinkerSymbolTable;
   private currentModulePath: string = "unknown";
+  private errors: CompilerError[] = [];
+  private collectAllErrors: boolean = true;
 
-  constructor(options: { skipImportResolution?: boolean } = {}) {
+  constructor(
+    options: {
+      skipImportResolution?: boolean;
+      collectAllErrors?: boolean;
+    } = {},
+  ) {
     this.globalScope = new SymbolTable();
     this.currentScope = this.globalScope;
     this.skipImportResolution = options.skipImportResolution || false;
     this.linkerSymbolTable = new LinkerSymbolTable();
+    this.collectAllErrors = options.collectAllErrors ?? true;
     this.initializeBuiltins();
   }
 
@@ -45,6 +53,13 @@ export class TypeChecker {
    */
   getLinkerSymbolTable(): LinkerSymbolTable {
     return this.linkerSymbolTable;
+  }
+
+  /**
+   * Get collected type checking errors
+   */
+  getErrors(): CompilerError[] {
+    return this.errors;
   }
 
   /**
@@ -205,12 +220,28 @@ export class TypeChecker {
 
     // Pass 1: Hoist declarations (Structs, Functions, TypeAliases, Externs)
     for (const stmt of program.statements) {
-      this.hoistDeclaration(stmt);
+      try {
+        this.hoistDeclaration(stmt);
+      } catch (e) {
+        if (this.collectAllErrors && e instanceof CompilerError) {
+          this.errors.push(e);
+          continue;
+        }
+        throw e;
+      }
     }
 
     // Pass 2: Check bodies
     for (const stmt of program.statements) {
-      this.checkStatement(stmt);
+      try {
+        this.checkStatement(stmt);
+      } catch (e) {
+        if (this.collectAllErrors && e instanceof CompilerError) {
+          this.errors.push(e);
+          continue;
+        }
+        throw e;
+      }
     }
   }
 
@@ -533,7 +564,6 @@ export class TypeChecker {
         decl.typeAnnotation ? this.resolveType(decl.typeAnnotation) : undefined,
         decl,
       );
-      // console.log(`Defined variable ${decl.name} with type ${this.typeToString(decl.typeAnnotation)}`);
       decl.resolvedType = decl.typeAnnotation
         ? this.resolveType(decl.typeAnnotation)
         : undefined;
@@ -965,7 +995,16 @@ export class TypeChecker {
   private checkBlock(stmt: AST.BlockStmt, newScope: boolean = true): void {
     if (newScope) this.currentScope = this.currentScope.enterScope();
     for (const s of stmt.statements) {
-      this.checkStatement(s);
+      try {
+        this.checkStatement(s);
+      } catch (e) {
+        if (this.collectAllErrors && e instanceof CompilerError) {
+          this.errors.push(e);
+          // Continue with next statement in block
+          continue;
+        }
+        throw e;
+      }
     }
     if (newScope) this.currentScope = this.currentScope.exitScope();
   }
@@ -1159,7 +1198,6 @@ export class TypeChecker {
         expr.location,
       );
     }
-    // console.log(`Resolved identifier ${expr.name} to type ${this.typeToString(symbol.type)}`);
 
     if (symbol.declaration) {
       expr.resolvedDeclaration = symbol.declaration as any;
@@ -1523,14 +1561,12 @@ export class TypeChecker {
     // Create a list of candidates with substituted types if generic
     const substitutedCandidates = viable.map((c) => {
       const decl = c.declaration as AST.FunctionDecl | AST.ExternDecl;
-      // console.log(`Checking candidate: ${name}, decl generics: ${decl?.genericParams?.length}, provided generics: ${genericArgs.length}`);
       if (genericArgs.length > 0 && decl.kind === "FunctionDecl") {
         const map = new Map<string, AST.TypeNode>();
         for (let i = 0; i < decl.genericParams.length; i++) {
           map.set(decl.genericParams[i]!, genericArgs[i]!);
         }
         const sub = this.substituteType(c.type!, map) as AST.FunctionTypeNode;
-        // console.log(`Substituted type: ${this.typeToString(sub)}`);
         return {
           symbol: c,
           type: sub,
@@ -2411,15 +2447,12 @@ export class TypeChecker {
       const n1 = normalize(rt1.name);
       const n2 = normalize(rt2.name);
 
-      // console.log(`Comparing ${rt1.name} (${n1}) with ${rt2.name} (${n2})`);
-
       // Exact name match
       if (n1 !== n2) {
         // Check inheritance
         if (
           !this.isSubtype(rt2 as AST.BasicTypeNode, rt1 as AST.BasicTypeNode)
         ) {
-          // console.log(`Failed name match: ${n1} != ${n2}`);
           return false;
         }
       }
@@ -2434,18 +2467,15 @@ export class TypeChecker {
         ) {
           // ...
         } else {
-          // console.log(`Failed pointer depth: ${rt1.pointerDepth} != ${rt2.pointerDepth}`);
           return false;
         }
       } else {
         // pointerDepth matches, check array dimensions strictly
         if (rt1.arrayDimensions.length !== rt2.arrayDimensions.length) {
-          // console.log(`Failed array dims length`);
           return false;
         }
         for (let i = 0; i < rt1.arrayDimensions.length; i++) {
           if (rt1.arrayDimensions[i] !== rt2.arrayDimensions[i]) {
-            console.log(`Failed array dims content`);
             return false;
           }
         }
@@ -2453,14 +2483,12 @@ export class TypeChecker {
 
       // Generic args match
       if (rt1.genericArgs.length !== rt2.genericArgs.length) {
-        console.log(`Failed generic args length`);
         return false;
       }
       for (let i = 0; i < rt1.genericArgs.length; i++) {
         if (
           !this.areTypesCompatible(rt1.genericArgs[i]!, rt2.genericArgs[i]!)
         ) {
-          console.log(`Failed generic arg ${i}`);
           return false;
         }
       }

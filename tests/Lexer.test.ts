@@ -126,7 +126,6 @@ describe("Lexer - Extended Tests", () => {
     });
 
     it("should tokenize 'this' keyword", () => {
-      // TODO: Should tokenize "this" as separate token instead of Identifier
       const tokens = tokenize("this");
       expect(tokens[0]!.type).toBe(TokenType.This);
     });
@@ -314,7 +313,6 @@ describe("Lexer - Extended Tests", () => {
   describe("Identifiers", () => {
     it("should tokenize simple identifier", () => {
       const tokens = tokenize("myVariable");
-      console.error(tokens);
       expect(tokens[0]!.type).toBe(TokenType.Identifier);
       expect(tokens[0]!.lexeme).toBe("myVariable");
     });

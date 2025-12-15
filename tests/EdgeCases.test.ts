@@ -34,7 +34,9 @@ describe("Edge Cases and Error Handling", () => {
           return x;
         }
       `;
-      expect(() => compile(source)).toThrow(CompilerError);
+      expect(() => compile(source)).toThrowError(
+        "Identifier 'x' has no resolved type",
+      );
     });
 
     it("should handle null in comparisons", () => {

@@ -11,9 +11,17 @@ import { TypeChecker } from "./compiler/middleend/TypeChecker";
 import { ASTPrinter } from "./compiler/common/ASTPrinter";
 import { CodeGenerator } from "./compiler/backend/CodeGenerator";
 import { CompilerError } from "./compiler/common/CompilerError";
+import { DiagnosticFormatter } from "./compiler/common/DiagnosticFormatter";
 import { spawnSync } from "child_process";
 
 const program = new Command();
+
+// Create diagnostic formatter for CLI output
+const diagnosticFormatter = new DiagnosticFormatter({
+  colorize: process.env.NO_COLOR !== "1",
+  contextLines: 3,
+  showCodeSnippets: true,
+});
 
 const packageJson = require("./package.json");
 
@@ -125,9 +133,7 @@ function processFile(filePath: string, options: any) {
 
       if (!result.success) {
         if (result.errors) {
-          for (const error of result.errors) {
-            console.error(error.toString());
-          }
+          console.error(diagnosticFormatter.formatErrors(result.errors));
         }
         process.exit(1);
       }
@@ -219,8 +225,6 @@ function processFile(filePath: string, options: any) {
 
     if (options.verbose) {
       console.log("Semantic analysis completed successfully.");
-      const printer = new ASTPrinter();
-      console.log(printer.print(ast));
     }
 
     // 4. Code Generation
@@ -247,7 +251,7 @@ function processFile(filePath: string, options: any) {
     }
   } catch (e) {
     if (e instanceof CompilerError) {
-      console.error(e.toString());
+      console.error(diagnosticFormatter.formatError(e));
     } else {
       console.error(`Error: ${e}`);
       if (e instanceof Error && e.stack && options.verbose) {

@@ -35,6 +35,7 @@ export interface CompilerOptions {
   target?: string; // Target triple
   sysroot?: string; // Sysroot for cross-compilation
   clangFlags?: string[]; // Additional clang flags
+  collectAllErrors?: boolean; // Continue scanning and report all errors
 }
 
 export interface CompilationResult {
@@ -107,8 +108,14 @@ export class Compiler {
       if (this.options.verbose) {
         console.log("[Middleend] Semantic Analysis...");
       }
-      const typeChecker = new TypeChecker();
+      const typeChecker = new TypeChecker({
+        collectAllErrors: this.options.collectAllErrors,
+      });
       typeChecker.checkProgram(ast);
+      const typeErrors = typeChecker.getErrors();
+      if (typeErrors.length > 0) {
+        return { success: false, errors: typeErrors, ast };
+      }
 
       // 4. Backend: Code Generation
       if (this.options.verbose) {
@@ -202,7 +209,10 @@ export class Compiler {
         console.log("[Middleend] Type checking modules...");
       }
 
-      const typeChecker = new TypeChecker({ skipImportResolution: true });
+      const typeChecker = new TypeChecker({
+        skipImportResolution: true,
+        collectAllErrors: this.options.collectAllErrors,
+      });
 
       // Pre-register all modules with TypeChecker
       for (const module of modules) {
@@ -224,8 +234,12 @@ export class Compiler {
       }
       const linkerSymbolTable = typeChecker.getLinkerSymbolTable();
       const linkerErrors = linkerSymbolTable.verifySymbols();
-      if (linkerErrors.length > 0) {
-        throw linkerErrors[0]; // Throw first linker error
+      const typeErrors = typeChecker.getErrors();
+      if (linkerErrors.length > 0 || typeErrors.length > 0) {
+        return {
+          success: false,
+          errors: [...typeErrors, ...linkerErrors],
+        };
       }
 
       // 3. Merge all module ASTs into a single program for code generation
@@ -325,10 +339,16 @@ export class Compiler {
       }
 
       // 2. Type check all modules in dependency order
-      const typeChecker = new TypeChecker();
+      const typeChecker = new TypeChecker({
+        collectAllErrors: this.options.collectAllErrors,
+      });
       for (const module of modules) {
         typeChecker.checkProgram(module.ast);
         module.checked = true;
+      }
+      const typeErrors = typeChecker.getErrors();
+      if (typeErrors.length > 0) {
+        return { success: false, errors: typeErrors };
       }
 
       // 3. Generate combined LLVM IR (for now, until we implement proper per-module compilation)
