@@ -201,7 +201,7 @@ describe("TypeChecker - Extended Tests", () => {
     it("should support multiple inheritance", () => {
       const source = `
         struct A { a: int, }
-        struct B { b: int, }
+        struct B: A { b: int, }
         struct C: B { c: int, }
         frame main() ret int {
           local obj: C;

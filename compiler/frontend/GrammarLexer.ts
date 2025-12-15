@@ -120,6 +120,9 @@ function convertTokenNodeToToken(node: TokenNode): Token {
   const { type, value, line, column, file } = node;
 
   if (type === "Identifier") {
+    if (keywordMap[value]) {
+      return new Token(keywordMap[value], value, null, line, column, file);
+    }
     return new Token(TokenType.Identifier, value, null, line, column, file);
   }
 
@@ -203,6 +206,8 @@ const keywordMap: Record<string, TokenType> = {
   export: TokenType.Export,
   extern: TokenType.Extern,
   asm: TokenType.Asm,
+  as: TokenType.As,
+  this: TokenType.This,
   loop: TokenType.Loop,
   if: TokenType.If,
   else: TokenType.Else,

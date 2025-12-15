@@ -19,6 +19,8 @@ export enum TokenType {
   Export = "Export",
   Extern = "Extern",
   Asm = "Asm",
+  As = "As",
+  This = "This",
   Loop = "Loop",
   If = "If",
   Else = "Else",

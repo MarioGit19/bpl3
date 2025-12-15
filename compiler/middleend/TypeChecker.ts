@@ -899,7 +899,7 @@ export class TypeChecker {
         // For now, let's assume we can get AST.
         // If moduleScope exists, we didn't parse AST.
         // We should store exports in ModuleInfo or similar.
-        // But TypeChecker doesn't use ModuleInfo directly.
+        // AST has ExportStmt.
 
         // Let's try to find AST from preLoadedModules if available
         if (!ast && this.skipImportResolution) {
@@ -1190,44 +1190,162 @@ export class TypeChecker {
     return symbol.type;
   }
 
+  private isIntegerType(type: AST.TypeNode): boolean {
+    if (type.kind !== "BasicType") return false;
+    if (type.pointerDepth > 0) return false;
+    const integerTypes = [
+      "i8",
+      "u8",
+      "i16",
+      "u16",
+      "i32",
+      "u32",
+      "i64",
+      "u64",
+      "int",
+      "uint",
+      "long",
+      "ulong",
+      "short",
+      "ushort",
+      "char",
+      "uchar",
+    ];
+    return integerTypes.includes(type.name);
+  }
+
+  private isComparisonOperator(op: TokenType): boolean {
+    return [
+      TokenType.EqualEqual,
+      TokenType.BangEqual,
+      TokenType.Less,
+      TokenType.LessEqual,
+      TokenType.Greater,
+      TokenType.GreaterEqual,
+    ].includes(op);
+  }
+
   private checkBinary(expr: AST.BinaryExpr): AST.TypeNode | undefined {
     const leftType = this.checkExpression(expr.left);
     const rightType = this.checkExpression(expr.right);
 
     if (!leftType || !rightType) return undefined;
 
-    // Pointer arithmetic: ptr + int -> ptr
-    if (leftType.kind === "BasicType" && leftType.pointerDepth > 0) {
-      if (
-        rightType.kind === "BasicType" &&
-        rightType.name === "int" &&
-        rightType.pointerDepth === 0
-      ) {
-        return leftType;
+    const op = expr.operator.type;
+
+    // Pointer Arithmetic
+    const isLeftPtr =
+      leftType.kind === "BasicType" && leftType.pointerDepth > 0;
+    const isRightPtr =
+      rightType.kind === "BasicType" && rightType.pointerDepth > 0;
+
+    if (isLeftPtr || isRightPtr) {
+      if (op === TokenType.Plus || op === TokenType.Minus) {
+        if (isLeftPtr && isRightPtr) {
+          if (op === TokenType.Minus) {
+            // ptr - ptr -> long
+            if (!this.areTypesCompatible(leftType, rightType)) {
+              throw new CompilerError(
+                "Pointer subtraction requires compatible pointer types",
+                "Ensure both pointers point to the same type.",
+                expr.location,
+              );
+            }
+            return {
+              kind: "BasicType",
+              name: "long",
+              genericArgs: [],
+              pointerDepth: 0,
+              arrayDimensions: [],
+              location: expr.location,
+            };
+          }
+          throw new CompilerError(
+            "Cannot add two pointers",
+            "Pointer addition is not supported.",
+            expr.location,
+          );
+        }
+        if (isLeftPtr) {
+          if (!this.isIntegerType(rightType)) {
+            throw new CompilerError(
+              `Pointer arithmetic requires integer operand, got ${this.typeToString(
+                rightType,
+              )}`,
+              "Ensure the offset is an integer.",
+              expr.right.location,
+            );
+          }
+          return leftType;
+        }
+        if (isRightPtr) {
+          if (op === TokenType.Minus)
+            throw new CompilerError(
+              "Cannot subtract pointer from integer",
+              "Pointer must be on the left side of subtraction.",
+              expr.location,
+            );
+          if (!this.isIntegerType(leftType)) {
+            throw new CompilerError(
+              `Pointer arithmetic requires integer operand, got ${this.typeToString(
+                leftType,
+              )}`,
+              "Ensure the offset is an integer.",
+              expr.left.location,
+            );
+          }
+          return rightType;
+        }
       }
-    }
-    // int + ptr -> ptr
-    if (rightType.kind === "BasicType" && rightType.pointerDepth > 0) {
-      if (
-        leftType.kind === "BasicType" &&
-        leftType.name === "int" &&
-        leftType.pointerDepth === 0
-      ) {
-        return rightType;
+
+      if (this.isComparisonOperator(op)) {
+        if (!this.areTypesCompatible(leftType, rightType)) {
+          // Allow nullptr comparison
+          const isLeftNull =
+            leftType.kind === "BasicType" && leftType.name === "nullptr";
+          const isRightNull =
+            rightType.kind === "BasicType" && rightType.name === "nullptr";
+          if (!isLeftNull && !isRightNull) {
+            throw new CompilerError(
+              "Comparison between incompatible pointer types",
+              "Ensure pointers are compatible.",
+              expr.location,
+            );
+          }
+        }
+        return {
+          kind: "BasicType",
+          name: "bool",
+          genericArgs: [],
+          pointerDepth: 0,
+          arrayDimensions: [],
+          location: expr.location,
+        };
       }
+
+      throw new CompilerError(
+        `Invalid operator '${expr.operator.lexeme}' for pointer type`,
+        "Pointers only support addition, subtraction, and comparison.",
+        expr.location,
+      );
     }
 
-    // Comparison and logical operators return bool
-    if (
-      expr.operator.type === TokenType.EqualEqual ||
-      expr.operator.type === TokenType.BangEqual ||
-      expr.operator.type === TokenType.Less ||
-      expr.operator.type === TokenType.LessEqual ||
-      expr.operator.type === TokenType.Greater ||
-      expr.operator.type === TokenType.GreaterEqual ||
-      expr.operator.type === TokenType.AndAnd ||
-      expr.operator.type === TokenType.OrOr
-    ) {
+    // Comparison operators
+    if (this.isComparisonOperator(op)) {
+      if (!this.areTypesCompatible(leftType, rightType)) {
+        // Allow comparison between integer types
+        if (this.isIntegerType(leftType) && this.isIntegerType(rightType)) {
+          // Allowed
+        } else {
+          throw new CompilerError(
+            `Comparison between incompatible types: ${this.typeToString(
+              leftType,
+            )} and ${this.typeToString(rightType)}`,
+            "Ensure operands are compatible.",
+            expr.location,
+          );
+        }
+      }
       return {
         kind: "BasicType",
         name: "bool",
@@ -1238,7 +1356,55 @@ export class TypeChecker {
       };
     }
 
-    // TODO: Check compatibility more thoroughly
+    // Logical operators
+    if (op === TokenType.AndAnd || op === TokenType.OrOr) {
+      const isBool = (t: AST.TypeNode) =>
+        t.kind === "BasicType" &&
+        (t.name === "bool" || t.name === "i1") &&
+        t.pointerDepth === 0;
+
+      if (!isBool(leftType)) {
+        throw new CompilerError(
+          "Logical operator requires boolean operands",
+          "Left operand must be boolean.",
+          expr.left.location,
+        );
+      }
+      if (!isBool(rightType)) {
+        throw new CompilerError(
+          "Logical operator requires boolean operands",
+          "Right operand must be boolean.",
+          expr.right.location,
+        );
+      }
+      return {
+        kind: "BasicType",
+        name: "bool",
+        genericArgs: [],
+        pointerDepth: 0,
+        arrayDimensions: [],
+        location: expr.location,
+      };
+    }
+
+    // Arithmetic operators
+    if (!this.areTypesCompatible(leftType, rightType)) {
+      // Allow arithmetic between integer types
+      if (this.isIntegerType(leftType) && this.isIntegerType(rightType)) {
+        const size1 = this.getIntegerSize(leftType);
+        const size2 = this.getIntegerSize(rightType);
+        return size1 >= size2 ? leftType : rightType;
+      }
+
+      throw new CompilerError(
+        `Operator '${expr.operator.lexeme}' cannot be applied to types '${this.typeToString(
+          leftType,
+        )}' and '${this.typeToString(rightType)}'`,
+        "Ensure operands are compatible.",
+        expr.location,
+      );
+    }
+
     return leftType;
   }
 
@@ -1776,6 +1942,12 @@ export class TypeChecker {
             (resultType as any).overloads = candidates;
             return resultType;
           }
+        } else {
+          throw new CompilerError(
+            `Struct '${objectType.name}' has no member '${expr.property}'`,
+            "Check the struct definition.",
+            expr.location,
+          );
         }
       }
     }
@@ -2198,11 +2370,8 @@ export class TypeChecker {
 
     // 2. Handle BasicType
     if (rt1.kind === "BasicType" && rt2.kind === "BasicType") {
-      // Void handling
-      if (rt1.name === "void" && rt2.name === "void") return true;
-      if (rt1.name === "void" || rt2.name === "void") return false; // Cannot assign void (one side)
-
       // Nullptr handling
+      if (rt1.name === "nullptr" && rt2.name === "nullptr") return true;
       if (rt1.name === "nullptr") {
         // nullptr is compatible with any pointer type
         return rt2.pointerDepth > 0;
@@ -2210,6 +2379,23 @@ export class TypeChecker {
       if (rt2.name === "nullptr") {
         return rt1.pointerDepth > 0;
       }
+
+      // Void handling
+      if (rt1.name === "void" && rt2.name === "void") return true;
+
+      // Allow void* assignment (T* -> void*)
+      if (rt1.name === "void" && rt1.pointerDepth > 0 && rt2.pointerDepth > 0) {
+        return true;
+      }
+      // Allow void* -> T* (unsafe but allowed in C, maybe restricted here? Test says "pointer to *void assignment")
+      // The test case is: local vp: *void = p; (int* -> void*)
+      // So the above rule covers it.
+
+      if (
+        (rt1.name === "void" && rt1.pointerDepth === 0) ||
+        (rt2.name === "void" && rt2.pointerDepth === 0)
+      )
+        return false; // Cannot assign void value
 
       // Normalize names for primitive types
       const normalize = (name: string) => {
@@ -2665,5 +2851,15 @@ export class TypeChecker {
       }
     }
     return false;
+  }
+
+  private getIntegerSize(type: AST.TypeNode): number {
+    if (!this.isIntegerType(type)) return 0;
+    const name = (type as AST.BasicTypeNode).name;
+    if (["i8", "u8", "char", "uchar"].includes(name)) return 1;
+    if (["i16", "u16", "short", "ushort"].includes(name)) return 2;
+    if (["i32", "u32", "int", "uint"].includes(name)) return 4;
+    if (["i64", "u64", "long", "ulong"].includes(name)) return 8;
+    return 4; // Default
   }
 }
