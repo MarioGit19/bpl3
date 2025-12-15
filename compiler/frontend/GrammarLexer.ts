@@ -295,27 +295,31 @@ function decodeString(raw: string): string {
   }
 }
 
-function decodeChar(raw: string): string {
+function decodeChar(raw: string): number {
   const inner = raw.slice(1, -1);
+  // Single-quoted char literal -> numeric codepoint (int)
+  // Supports common escape sequences
   if (inner.startsWith("\\")) {
     switch (inner[1]) {
       case "n":
-        return "\n";
+        return "\n".charCodeAt(0);
       case "t":
-        return "\t";
+        return "\t".charCodeAt(0);
       case "r":
-        return "\r";
+        return "\r".charCodeAt(0);
       case "\\":
-        return "\\";
+        return "\\".charCodeAt(0);
       case "'":
-        return "'";
+        return "'".charCodeAt(0);
       case '"':
-        return '"';
+        return '"'.charCodeAt(0);
       case "0":
-        return "\0";
+        return "\0".charCodeAt(0);
       default:
-        return inner[1] ?? "";
+        // Unknown escape: take following char's codepoint
+        return inner[1]?.charCodeAt(0) ?? 0;
     }
   }
-  return inner;
+  // Regular single character
+  return inner.charCodeAt(0) ?? 0;
 }

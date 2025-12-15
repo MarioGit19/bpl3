@@ -1289,6 +1289,8 @@ export class CodeGenerator {
         }
       }
       return expr.value.toString();
+    } else if (expr.type === "char") {
+      return expr.value.toString().charCodeAt(0);
     } else if (expr.type === "bool") {
       return expr.value ? "1" : "0";
     } else if (expr.type === "nullptr" || expr.type === "null") {

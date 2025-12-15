@@ -280,6 +280,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
 
 // Run code
 document.getElementById("run-btn").addEventListener("click", async () => {
+  document.getElementById("format-btn")?.click(); // Auto-format before running
   const code = editor.getValue();
   const stdin = document.getElementById("stdin-input").value;
   const argsInput = document.getElementById("args-input").value;
