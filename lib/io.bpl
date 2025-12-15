@@ -20,6 +20,10 @@ struct IO {
         printf("%d\n", n);
     }
 
+    frame print(s: string) {
+        printf("%s", s);
+    }
+
     frame printString(s: string) {
         printf("%s\n", s);
     }

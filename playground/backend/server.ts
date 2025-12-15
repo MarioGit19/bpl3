@@ -1,3 +1,4 @@
+import { Compiler } from "../../compiler/index";
 import { Parser } from "../../compiler/frontend/Parser";
 import { TypeChecker } from "../../compiler/middleend/TypeChecker";
 import { CodeGenerator } from "../../compiler/backend/CodeGenerator";
@@ -90,47 +91,48 @@ async function compileAndRun(req: CompileRequest): Promise<CompileResponse> {
     }
 
     const warnings: string[] = [];
-    let ast: AST.Program;
+    let ast: AST.Program | undefined;
     let tokens: any[] = [];
     let ir = "";
 
-    // Parse
+    // Get tokens (always do this for visualization)
     try {
-      const parser = new Parser(req.code, sourceFile);
-      ast = parser.parse();
-
-      // Get tokens
       tokens = lexWithGrammar(req.code, sourceFile);
-    } catch (e: any) {
-      return {
-        success: false,
-        error: e instanceof CompilerError ? e.message : String(e),
-      };
+    } catch (e) {
+      // Ignore lexing errors here, let compiler catch them
     }
 
-    // Type check
+    // Compile using Compiler class
     try {
-      const checker = new TypeChecker();
-      checker.checkProgram(ast);
-    } catch (e: any) {
-      return {
-        success: false,
-        error: e instanceof CompilerError ? e.message : String(e),
-        ast: safeStringify(ast),
-        tokens: JSON.stringify(tokens, null, 2),
-      };
-    }
+      const compiler = new Compiler({
+        filePath: sourceFile,
+        outputPath: irFile,
+        emitType: "llvm",
+        resolveImports: true,
+        verbose: false,
+      });
 
-    // Generate IR
-    try {
-      const generator = new CodeGenerator();
-      ir = generator.generate(ast);
+      const result = compiler.compile(req.code);
+
+      if (!result.success) {
+        const errorMsg = result.errors
+          ? result.errors.map((e) => e.toString()).join("\n")
+          : "Unknown compilation error";
+        return {
+          success: false,
+          error: errorMsg,
+          tokens: JSON.stringify(tokens, null, 2),
+        };
+      }
+
+      ir = result.output || "";
+      ast = result.ast;
+
       fs.writeFileSync(irFile, ir, "utf-8");
     } catch (e: any) {
       return {
         success: false,
         error: e instanceof CompilerError ? e.message : String(e),
-        ast: safeStringify(ast),
         tokens: JSON.stringify(tokens, null, 2),
       };
     }

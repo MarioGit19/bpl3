@@ -531,8 +531,8 @@ function findSymbolDefinition(
   const importRegex = /import\s+(.+?)\s+from\s+["'](.+?)["']/g;
   let impMatch;
   while ((impMatch = importRegex.exec(text)) !== null) {
-    const importedSymbols = impMatch[1];
-    const importPath = impMatch[2];
+    const importedSymbols = impMatch[1] || "";
+    const importPath = impMatch[2] || "";
     // Clean up brackets and check if word is imported
     const cleanSymbols = importedSymbols
       .replace(/[\[\]]/g, "")

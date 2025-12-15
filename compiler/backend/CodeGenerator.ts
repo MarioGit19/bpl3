@@ -139,17 +139,6 @@ export class CodeGenerator {
     return `${name}_${type.paramTypes.map((t) => this.mangleType(t)).join("_")}`;
   }
 
-  private mangleType(type: AST.TypeNode): string {
-    if (type.kind === "BasicType") {
-      let s = type.name;
-      if (type.pointerDepth > 0) s += "p".repeat(type.pointerDepth);
-      return s;
-    } else if (type.kind === "ArrayType") {
-      return `arr${this.mangleType(type.elementType)}`;
-    }
-    return "unknown";
-  }
-
   private getTypeId(type: AST.TypeNode): number {
     const typeName = this.resolveType(type); // Get LLVM type name as key
 
@@ -758,10 +747,12 @@ export class CodeGenerator {
     this.generateBlock(stmt.tryBlock);
 
     // On success, pop stack
-    this.emit(
-      `  store %struct.ExceptionFrame* ${prevFramePtrReg}, %struct.ExceptionFrame** @exception_top`,
-    );
-    this.emit(`  br label %${endLabel}`);
+    if (!this.isTerminator(this.output[this.output.length - 1] || "")) {
+      this.emit(
+        `  store %struct.ExceptionFrame* ${prevFramePtrReg}, %struct.ExceptionFrame** @exception_top`,
+      );
+      this.emit(`  br label %${endLabel}`);
+    }
 
     // Catch Block
     this.emit(`${catchLabel}:`);
@@ -875,13 +866,17 @@ export class CodeGenerator {
       }
 
       this.generateBlock(clause.body);
-      this.emit(`  br label %${endLabel}`);
+      if (!this.isTerminator(this.output[this.output.length - 1] || "")) {
+        this.emit(`  br label %${endLabel}`);
+      }
 
       // If nextTarget was "catch.other", we need to emit it
       if (i === stmt.catchClauses.length - 1 && stmt.catchOther) {
         this.emit(`${nextTarget}:`);
         this.generateBlock(stmt.catchOther);
-        this.emit(`  br label %${endLabel}`);
+        if (!this.isTerminator(this.output[this.output.length - 1] || "")) {
+          this.emit(`  br label %${endLabel}`);
+        }
       }
     }
 

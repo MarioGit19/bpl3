@@ -424,7 +424,7 @@ function loadExample(example, itemEl) {
 
   // Update editor
   if (editor) {
-    editor.setValue(example.code);
+    editor.setValue(example.code.join("\n"));
   }
 
   // Clear input/args

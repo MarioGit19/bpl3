@@ -17,6 +17,9 @@ struct Fmt {
     frame printHexLn(n: int) {
         printf("0x%x\n", n);
     }
+    frame printString(s: string) {
+        printf("%s", s);
+    }
     frame printPaddedLeft(text: string, width: int) {
         printf("%*s", width, text);
     }
