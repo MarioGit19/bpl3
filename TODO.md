@@ -38,18 +38,9 @@
 - [x] Language Server Protocol (LSP) Implementation
 - [x] Robust Import/Export & Linking
 - [x] Function Overloading by Parameter Types
+- [x] Standard Library Module
 
 ## Pending Features (expanded)
-
-- [3] Standard Library Module
-  - Description: Build a comprehensive standard library as an importable module providing data structures (lists, maps, sets), algorithms, string utilities, and math helpers.
-  - Implementation notes: Start with small, critical modules (strings, arrays, io). Provide both high-level BPL implementations and low-level runtime helpers backed by `lib/` for performance-critical functions.
-  - Acceptance criteria: Example programs can `import std` and use library features; library code compiles and links with generated code.
-
-- [9] Semantic Analysis Improvements
-  - Description: Enhance the TypeChecker and semantic analysis to catch more errors at compile time, such as unreachable code, variable shadowing, and unused variables.
-  - Implementation notes: Add passes for control flow analysis (reachability) and scope analysis (shadowing).
-  - Acceptance criteria: Compiler warns or errors on unreachable code and shadowed variables.
 
 - [4] Advanced Generics (Constraints, Inference)
   - Description: Add generic constraints (e.g., `T: Comparable`) and local inference so generic functions can deduce type parameters from call-sites where possible.
@@ -115,3 +106,8 @@
   - Description: Allow embedding inline assembly with explicit register lists and integration with calling conventions.
   - Implementation notes: Add parser support and a safe lowered representation. During codegen, inject asm inline properly and validate register usage.
   - Acceptance criteria: `asm [rax, rbx] { rdrand rax\n mov rbx, rax\n mov (variable), rbx }` compiles and emits inline assembly; constraints are documented.
+
+- [9] Semantic Analysis Improvements
+  - Description: Enhance the TypeChecker and semantic analysis to catch more errors at compile time, such as unreachable code, variable shadowing, and unused variables.
+  - Implementation notes: Add passes for control flow analysis (reachability) and scope analysis (shadowing).
+  - Acceptance criteria: Compiler warns or errors on unreachable code and shadowed variables.
