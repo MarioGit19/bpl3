@@ -1,6 +1,0 @@
-{
-  "expectedOutput": ["=== JSON Demo ===", "-123", "456"],
-  "args": [],
-  "env": {},
-  "input": ""
-}

@@ -34,18 +34,12 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .DS_Store
 
 # example build artifacts
-examples/**
-!examples/*.sh
-!examples/**/
-!examples/**/*.bpl
-!examples/**/test*.sh
-!examples/**/test_config.json
-
-temp/**
-!temp/*.bpl
+example/**
+!example/*.sh
+!example/**/
+!example/**/*.x
+!example/**/test*.sh
 
 lib/*.asm
 lib/*.o
 lib/*.ll
-
-.bpl-cache
