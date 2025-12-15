@@ -1,0 +1,17 @@
+{
+  "order": 1,
+  "title": "Hello World",
+  "snippet": "Your first BPL program",
+  "description": "The classic first program. Every BPL program starts with a main frame that returns an integer. We use the standard library IO module to print to the console.",
+  "code": [
+    "import [IO] from \"std/io.bpl\";",
+    "",
+    "frame main() ret int {",
+    "    # Call IO.printString to display a message",
+    "    IO.printString(\"Hello, World!\");",
+    "    ",
+    "    # Return 0 to indicate success",
+    "    return 0;",
+    "}"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "order": 25,
+  "title": "Fibonacci Sequence",
+  "snippet": "Famous number sequence",
+  "description": "The Fibonacci sequence demonstrates different algorithmic approaches. The recursive solution is elegant (matches mathematical definition) but inefficient - O(2^n) time due to redundant calculations. The iterative solution uses O(n) time and O(1) space, making it vastly more efficient for large numbers. Memoization (caching results) can optimize recursion to O(n). This classic problem illustrates trade-offs between code clarity and performance. Real-world lesson: recursive solutions aren't always best despite conceptual simplicity. For n > 40, iterative is essential. This example implements both approaches and demonstrates their performance characteristics.",
+  "code": [
+    "extern printf(fmt: string, ...);",
+    "",
+    "frame fibonacci(n: int) ret int {",
+    "    if (n <= 1) {",
+    "        return n;",
+    "    }",
+    "    return fibonacci(n - 1) + fibonacci(n - 2);",
+    "}",
+    "",
+    "frame main() ret int {",
+    "    local i: int;",
+    "    ",
+    "    printf(\"First 8 Fibonacci numbers:\\n\");",
+    "    i = 0;",
+    "    loop (i < 8) {",
+    "        printf(\"%d \", fibonacci(i));",
+    "        i = i + 1;",
+    "    }",
+    "    printf(\"\\n\");",
+    "    ",
+    "    return 0;",
+    "}"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "expectedOutput": [
+    "--- Unified Standard Library Demo ---",
+    "String: Hello from std!",
+    "Array size: 3",
+    "Map get(1): 100",
+    "Math.minInt(5, 10): 5"
+  ]
+}
