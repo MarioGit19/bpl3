@@ -1,12 +1,14 @@
-import * as AST from "../common/AST";
-import { SymbolTable, type Symbol, type SymbolKind } from "./SymbolTable";
-import { CompilerError, type SourceLocation } from "../common/CompilerError";
-import { LinkerSymbolTable, type SymbolInfo } from "./LinkerSymbolTable";
 import * as fs from "fs";
 import * as path from "path";
+
+import * as AST from "../common/AST";
+import { CompilerError, type SourceLocation } from "../common/CompilerError";
 import { lexWithGrammar } from "../frontend/GrammarLexer";
 import { Parser } from "../frontend/Parser";
 import { TokenType } from "../frontend/TokenType";
+import { LinkerSymbolTable } from "./LinkerSymbolTable";
+import type { Symbol, SymbolKind } from "./SymbolTable";
+import { SymbolTable } from "./SymbolTable";
 
 export class TypeChecker {
   private globalScope: SymbolTable;

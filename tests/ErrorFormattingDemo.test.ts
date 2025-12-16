@@ -1,10 +1,11 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { Compiler } from "../compiler";
-import { DiagnosticFormatter } from "../compiler/common/DiagnosticFormatter";
-import { CompilerError } from "../compiler/common/CompilerError";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as fs from "fs";
-import * as path from "path";
 import * as os from "os";
+import * as path from "path";
+
+import { Compiler } from "../compiler";
+import { CompilerError } from "../compiler/common/CompilerError";
+import { DiagnosticFormatter } from "../compiler/common/DiagnosticFormatter";
 
 /**
  * Error Formatting Demo Test Suite

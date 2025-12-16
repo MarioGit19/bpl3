@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import path from "path";
-import fs from "fs";
-import { Compiler } from "../compiler/index";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { exec } from "child_process";
+import fs from "fs";
+import path from "path";
 import { promisify } from "util";
+
+import { Compiler } from "../compiler/index";
 
 const execAsync = promisify(exec);
 

@@ -1,4 +1,5 @@
 import { readFileSync } from "fs";
+
 import type { Grammar, GrammarRule } from "./types";
 
 /**

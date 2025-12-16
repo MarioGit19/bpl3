@@ -8,12 +8,11 @@
  * - Manages compiler invocation for final executable generation
  */
 
-import * as fs from "fs";
-import * as path from "path";
 import { spawnSync } from "child_process";
+import * as fs from "fs";
+
 import { LinkerSymbolTable } from "./LinkerSymbolTable";
 import { ObjectFileParser } from "./ObjectFileParser";
-import { CompilerError } from "../common/CompilerError";
 
 export interface LinkOptions {
   /** LLVM IR files to link */

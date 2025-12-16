@@ -1,4 +1,5 @@
 import { Token } from "../frontend/Token";
+
 import type { SourceLocation } from "./CompilerError";
 
 export interface ASTNode {

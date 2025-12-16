@@ -1,6 +1,8 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
+
 import { lexWithGrammar } from "../compiler/frontend/GrammarLexer";
 import { Parser } from "../compiler/frontend/Parser";
+
 import type * as AST from "../compiler/common/AST";
 
 function parse(source: string): AST.Program {

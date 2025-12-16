@@ -1,4 +1,3 @@
-import { Token } from "../frontend/Token";
 import * as fs from "fs";
 import * as path from "path";
 

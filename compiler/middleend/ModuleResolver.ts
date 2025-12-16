@@ -12,16 +12,17 @@
  * - Proper symbol resolution across module boundaries
  */
 
+import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+
+import { CompilerError } from "../common/CompilerError";
 import { lexWithGrammar } from "../frontend/GrammarLexer";
 import { Parser } from "../frontend/Parser";
-import { TypeChecker } from "./TypeChecker";
-import { SymbolTable } from "./SymbolTable";
-import { CompilerError } from "../common/CompilerError";
 import { PackageManager } from "./PackageManager";
-import type * as AST from "../common/AST";
+import { SymbolTable } from "./SymbolTable";
 
+import type * as AST from "../common/AST";
 export interface ModuleInfo {
   /** Absolute path to the module file */
   path: string;
@@ -56,7 +57,19 @@ export class ModuleResolver {
   private readonly SUPPORTED_EXTENSIONS = [".x", ".bpl", ""];
 
   constructor(options: { stdLibPath?: string; searchPaths?: string[] } = {}) {
-    this.stdLibPath = options.stdLibPath || path.join(__dirname, "../../lib");
+    // Determine stdLibPath by resolving the location of the 'bpl' executable and appending '/lib'
+    let bplPath: string | undefined;
+    try {
+      // Find the path to the 'bpl' executable
+      bplPath = execSync("which bpl").toString().trim();
+      // Resolve symlinks to get the real path
+      bplPath = fs.realpathSync(bplPath);
+      // Use the directory containing 'bpl' and append '/lib'
+      this.stdLibPath = path.join(path.dirname(bplPath), "lib");
+    } catch (e) {
+      // Fallback to provided option or default
+      this.stdLibPath = options.stdLibPath || path.join(__dirname, "../../lib");
+    }
     this.searchPaths = options.searchPaths || [];
   }
 

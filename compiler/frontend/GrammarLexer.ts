@@ -1,10 +1,11 @@
 import { resolve } from "path";
-import { GrammarParser } from "../../grammar/GrammarParser";
+
 import { GenericParser, type TokenNode } from "../../grammar/GenericParser";
-import type { Grammar } from "../../grammar/types";
+import { GrammarParser } from "../../grammar/GrammarParser";
 import { Token } from "./Token";
 import { TokenType } from "./TokenType";
 
+import type { Grammar } from "../../grammar/types";
 let cachedGrammar: Grammar | null = null;
 
 function loadGrammar(): Grammar {

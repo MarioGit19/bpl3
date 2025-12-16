@@ -1,12 +1,13 @@
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+
 import {
   CompilerError,
   DiagnosticSeverity,
 } from "../compiler/common/CompilerError";
 import { DiagnosticFormatter } from "../compiler/common/DiagnosticFormatter";
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
 
 describe("Enhanced Error Messaging", () => {
   test("should format error with location information", () => {

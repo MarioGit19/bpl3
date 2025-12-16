@@ -1,8 +1,9 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
+
 import { lexWithGrammar } from "../compiler/frontend/GrammarLexer";
-import type { Token } from "../compiler/frontend/Token";
 import { TokenType } from "../compiler/frontend/TokenType";
 
+import type { Token } from "../compiler/frontend/Token";
 function tokenize(source: string): Token[] {
   return lexWithGrammar(source, "test.bpl");
 }

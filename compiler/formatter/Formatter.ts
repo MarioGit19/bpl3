@@ -1,5 +1,4 @@
 import * as AST from "../common/AST";
-import { TokenType } from "../frontend/TokenType";
 import { Token } from "../frontend/Token";
 
 export class Formatter {

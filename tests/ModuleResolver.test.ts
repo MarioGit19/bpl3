@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { ModuleResolver } from "../compiler/middleend/ModuleResolver";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import * as fs from "fs";
-import * as path from "path";
 import * as os from "os";
+import * as path from "path";
+
+import { ModuleResolver } from "../compiler/middleend/ModuleResolver";
 
 describe("ModuleResolver", () => {
   // Create temp directory for test files

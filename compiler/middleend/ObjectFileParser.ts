@@ -11,6 +11,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
+
 import { LinkerSymbolTable, type ObjectFileSymbol } from "./LinkerSymbolTable";
 
 export class ObjectFileParser {

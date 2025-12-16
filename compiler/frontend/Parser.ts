@@ -1,7 +1,7 @@
-import { Token } from "./Token";
-import { TokenType } from "./TokenType";
 import * as AST from "../common/AST";
 import { parseWithPeggy } from "./PeggyParser";
+import { Token } from "./Token";
+import { TokenType } from "./TokenType";
 
 export class Parser {
   private readonly source: string;

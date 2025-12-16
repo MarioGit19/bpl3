@@ -35,4 +35,38 @@ struct String {
     frame cstr(this: *String) ret *char {
         return this.data;
     }
+
+    frame assign(this: *String, text: *char) {
+        this.destroy();
+        local newStr: String = String.new(text);
+        this.data = newStr.data;
+        this.length = newStr.length;
+    }
+
+    frame includes(this: *String, substr: *char) ret bool {
+        if ((this.data == null) || (substr == null)) {
+            return false;
+        }
+        local substrLen: int = strlen(substr);
+        if ((substrLen == 0) || (substrLen > this.length)) {
+            return false;
+        }
+        local i: int = 0;
+        loop (i <= (this.length - substrLen)) {
+            local found: bool = true;
+            local j: int = 0;
+            loop (j < substrLen) {
+                if (*(this.data + cast<i64>(i + j)) != *(substr + cast<i64>(j))) {
+                    found = false;
+                    break;
+                }
+                j = j + 1;
+            }
+            if (found) {
+                return true;
+            }
+            i = i + 1;
+        }
+        return false;
+    }
 }

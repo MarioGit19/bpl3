@@ -5,7 +5,12 @@
     "1",
     "hello world",
     "1",
-    "a+b+c"
+    "a+b+c",
+    "=== String.assign & includes ===",
+    "1",
+    "goodbye",
+    "0",
+    "1"
   ],
   "args": [],
   "env": {},

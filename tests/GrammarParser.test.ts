@@ -1,6 +1,7 @@
-import { describe, it, expect } from "bun:test";
-import { GrammarParser } from "../grammar/GrammarParser";
+import { describe, expect, it } from "bun:test";
 import { join } from "path";
+
+import { GrammarParser } from "../grammar/GrammarParser";
 
 describe("GrammarParser", () => {
   it("should parse grammar.bpl file correctly", () => {

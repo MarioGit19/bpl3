@@ -1,18 +1,18 @@
 #!/usr/bin/env node
+import { spawnSync } from "child_process";
 import { Command } from "commander";
 import * as fs from "fs";
 import * as os from "os";
+
 import { Compiler } from "./compiler";
-import { PackageManager } from "./compiler/middleend/PackageManager";
-import { lexWithGrammar } from "./compiler/frontend/GrammarLexer";
-import { Parser } from "./compiler/frontend/Parser";
-import { Formatter } from "./compiler/formatter/Formatter";
-import { TypeChecker } from "./compiler/middleend/TypeChecker";
-import { ASTPrinter } from "./compiler/common/ASTPrinter";
 import { CodeGenerator } from "./compiler/backend/CodeGenerator";
 import { CompilerError } from "./compiler/common/CompilerError";
 import { DiagnosticFormatter } from "./compiler/common/DiagnosticFormatter";
-import { spawnSync } from "child_process";
+import { Formatter } from "./compiler/formatter/Formatter";
+import { lexWithGrammar } from "./compiler/frontend/GrammarLexer";
+import { Parser } from "./compiler/frontend/Parser";
+import { PackageManager } from "./compiler/middleend/PackageManager";
+import { TypeChecker } from "./compiler/middleend/TypeChecker";
 
 const program = new Command();
 

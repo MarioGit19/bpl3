@@ -1,16 +1,17 @@
-import { Compiler } from "../../compiler/index";
-import { Parser } from "../../compiler/frontend/Parser";
-import { TypeChecker } from "../../compiler/middleend/TypeChecker";
+import { exec } from "child_process";
+import fs from "fs";
+import path from "path";
+import { promisify } from "util";
+
 import { CodeGenerator } from "../../compiler/backend/CodeGenerator";
-import { Formatter } from "../../compiler/formatter/Formatter";
+import * as AST from "../../compiler/common/AST";
 import { CompilerError } from "../../compiler/common/CompilerError";
 import { DiagnosticFormatter } from "../../compiler/common/DiagnosticFormatter";
+import { Formatter } from "../../compiler/formatter/Formatter";
 import { lexWithGrammar } from "../../compiler/frontend/GrammarLexer";
-import * as AST from "../../compiler/common/AST";
-import path from "path";
-import fs from "fs";
-import { exec } from "child_process";
-import { promisify } from "util";
+import { Parser } from "../../compiler/frontend/Parser";
+import { Compiler } from "../../compiler/index";
+import { TypeChecker } from "../../compiler/middleend/TypeChecker";
 
 const execAsync = promisify(exec);
 

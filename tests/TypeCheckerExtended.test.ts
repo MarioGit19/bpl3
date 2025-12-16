@@ -1,8 +1,9 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
+
+import { CompilerError } from "../compiler/common/CompilerError";
 import { lexWithGrammar } from "../compiler/frontend/GrammarLexer";
 import { Parser } from "../compiler/frontend/Parser";
 import { TypeChecker } from "../compiler/middleend/TypeChecker";
-import { CompilerError } from "../compiler/common/CompilerError";
 
 function check(source: string) {
   const tokens = lexWithGrammar(source, "test.bpl");

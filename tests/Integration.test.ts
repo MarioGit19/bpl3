@@ -1,7 +1,7 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
+import { spawnSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-import { spawnSync } from "child_process";
 
 const EXAMPLES_DIR = path.join(process.cwd(), "examples");
 const CMP_SCRIPT = path.join(process.cwd(), "cmp.sh");

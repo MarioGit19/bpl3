@@ -6,10 +6,11 @@
  * is cached if unchanged.
  */
 
+import { spawnSync } from "child_process";
+import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
-import * as crypto from "crypto";
-import { spawnSync } from "child_process";
+
 import type * as AST from "../common/AST";
 
 export interface CachedModule {

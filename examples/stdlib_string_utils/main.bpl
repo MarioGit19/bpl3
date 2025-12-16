@@ -24,5 +24,30 @@ frame main() ret int {
     IO.printInt(StringUtils.find("abc", cast<char>(98)));
     local replaced: String = StringUtils.replaceChar("a-b-c", cast<char>(45), cast<char>(43));
     printf("%s\n", replaced.cstr());
+
+    IO.log("=== String.assign & includes ===");
+    # Managed String tests for assign() and includes()
+    local m: String = String.new("hello world");
+    # includes should find substring "world"
+    local inc1: bool = m.includes("world");
+    if (inc1) {
+        IO.printInt(1);
+    } else {
+        IO.printInt(0);
+    }
+
+    # assign a new C-string into the managed String
+    m.assign("goodbye");
+    IO.printString(m.cstr());
+    # now includes should not find "world"
+    local inc2: bool = m.includes("world");
+    if (inc2) {
+        IO.printInt(1);
+    } else {
+        IO.printInt(0);
+    }
+
+    # includes should find substring "good"
+    IO.printInt(m.includes("good") ? 1 : 0);
     return 0;
 }

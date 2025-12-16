@@ -1,28 +1,35 @@
+import * as fs from "fs";
+import * as path from "path";
+import { fileURLToPath, pathToFileURL } from "url";
+import { TextDocument } from "vscode-languageserver-textdocument";
 import {
-  createConnection,
-  TextDocuments,
-  Diagnostic,
-  DiagnosticSeverity,
-  ProposedFeatures,
-  DidChangeConfigurationNotification,
   CompletionItem,
   CompletionItemKind,
-  TextDocumentSyncKind,
-  Location,
-  Range,
+  createConnection,
+  Diagnostic,
+  DiagnosticSeverity,
+  DidChangeConfigurationNotification,
   Hover,
+  Location,
   MarkupKind,
+  ProposedFeatures,
+  Range,
+  TextDocuments,
+  TextDocumentSyncKind,
 } from "vscode-languageserver/node";
+
+// Compiler integration
+import * as AST from "../../compiler/common/AST";
+import { CompilerError } from "../../compiler/common/CompilerError";
+import { Formatter } from "../../compiler/formatter/Formatter";
+import { Parser } from "../../compiler/frontend/Parser";
+import { TypeChecker } from "../../compiler/middleend/TypeChecker";
+
 import type {
   InitializeParams,
   TextDocumentPositionParams,
   InitializeResult,
 } from "vscode-languageserver/node";
-
-import { TextDocument } from "vscode-languageserver-textdocument";
-import * as fs from "fs";
-import * as path from "path";
-import { fileURLToPath, pathToFileURL } from "url";
 
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
@@ -143,13 +150,6 @@ documents.onDidChangeContent((change) => {
   validateTextDocument(change.document);
 });
 
-// Compiler integration
-import { Parser } from "../../compiler/frontend/Parser";
-import { TypeChecker } from "../../compiler/middleend/TypeChecker";
-import { CompilerError } from "../../compiler/common/CompilerError";
-import * as AST from "../../compiler/common/AST";
-import { Formatter } from "../../compiler/formatter/Formatter";
-
 function getTextForUri(
   uri: string,
   openDocuments: TextDocuments<TextDocument>,
@@ -204,6 +204,83 @@ function resolveImportToFile(
   return fs.existsSync(resolvedPath) ? resolvedPath : null;
 }
 
+// Import cache: stores parsed modules to avoid re-parsing on every validation
+interface CacheEntry {
+  program: AST.Program;
+  timestamp: number;
+  filePath: string;
+}
+
+const importCache = new Map<string, CacheEntry>();
+const fileWatchers = new Map<string, NodeJS.Timeout>();
+
+// Invalidate cache entry when a file changes
+function invalidateCacheEntry(filePath: string): void {
+  importCache.delete(filePath);
+  // Also invalidate any files that imported this module
+  for (const [key] of importCache) {
+    importCache.delete(key);
+  }
+}
+
+// Watch a file for changes and invalidate cache
+function watchFileForChanges(filePath: string): void {
+  if (fileWatchers.has(filePath)) {
+    return; // Already watching
+  }
+
+  try {
+    const watcher = fs.watch(filePath, (eventType) => {
+      if (eventType === "change") {
+        invalidateCacheEntry(filePath);
+      }
+    });
+    fileWatchers.set(filePath, watcher as any);
+  } catch {
+    // File watch might fail on some systems, that's okay
+  }
+}
+
+// Load and parse an imported module with caching
+function loadImportedModuleWithCache(
+  importPath: string,
+  currentDir: string,
+): { text: string; program: AST.Program } | null {
+  const resolvedPath = resolveImportToFile(importPath, currentDir);
+  if (!resolvedPath) return null;
+
+  // Check cache first
+  const cached = importCache.get(resolvedPath);
+  if (cached) {
+    const stat = fs.statSync(resolvedPath);
+    if (stat.mtimeMs === cached.timestamp) {
+      return { text: "", program: cached.program }; // Timestamp matches, cache is valid
+    }
+  }
+
+  // Parse fresh
+  try {
+    const moduleText = fs.readFileSync(resolvedPath, "utf-8");
+    const parser = new Parser(moduleText, resolvedPath);
+    const program = parser.parse();
+
+    // Store in cache with timestamp
+    const stat = fs.statSync(resolvedPath);
+    importCache.set(resolvedPath, {
+      program,
+      timestamp: stat.mtimeMs,
+      filePath: resolvedPath,
+    });
+
+    // Watch for future changes
+    watchFileForChanges(resolvedPath);
+
+    return { text: moduleText, program };
+  } catch {
+    return null;
+  }
+}
+
 // Check if an import error should be suppressed (only for valid std/* imports)
 function shouldSuppressImportError(
   errorMessage: string,
@@ -221,13 +298,25 @@ function shouldSuppressImportError(
 
   while ((match = importRegex.exec(documentText)) !== null) {
     const importPath = match[1];
+    // Suppress for valid std/* imports
     if (
       importPath &&
       (importPath.startsWith("std/") || importPath.startsWith("std\\"))
     ) {
-      const resolved = resolveImportToFile(importPath, currentDir);
-      if (resolved && fs.existsSync(resolved)) {
-        // This is a valid std/* import, suppress the error
+      const resolvedStd = resolveImportToFile(importPath, currentDir);
+      if (resolvedStd && fs.existsSync(resolvedStd)) {
+        return true;
+      }
+    }
+    // Also suppress for valid relative imports that resolve on disk
+    if (
+      importPath &&
+      (importPath.startsWith("./") ||
+        importPath.startsWith("../") ||
+        importPath.startsWith("/"))
+    ) {
+      const resolvedRel = resolveImportToFile(importPath, currentDir);
+      if (resolvedRel && fs.existsSync(resolvedRel)) {
         return true;
       }
     }
@@ -243,6 +332,7 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 
   const text = textDocument.getText();
   const filePath = fileURLToPath(textDocument.uri);
+  const currentDir = path.dirname(filePath);
 
   const diagnostics: Diagnostic[] = [];
   try {
@@ -250,41 +340,32 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
     const parser = new Parser(text, filePath);
     const program: AST.Program = parser.parse();
 
-    // Type check (single-file scope; skip heavy import resolution)
+    // Type check with full import resolution for accuracy matching CLI compiler
     // TypeChecker now collects all errors instead of throwing
     const checker = new TypeChecker({
-      skipImportResolution: true,
+      skipImportResolution: false,
       collectAllErrors: true,
     });
 
     checker.checkProgram(program);
 
-    // Collect all errors from the type checker
+    // Collect all errors from the type checker - report them as-is
+    // No filtering: with import resolution enabled, errors are accurate
     const errors = checker.getErrors();
     for (const err of errors) {
-      const msg = `${err.message}`;
-      // Only suppress import errors for valid std/* imports that exist
-      if (!shouldSuppressImportError(msg, text, textDocument.uri)) {
-        diagnostics.push(compilerErrorToDiagnostic(err, textDocument));
-      }
+      diagnostics.push(compilerErrorToDiagnostic(err, textDocument));
     }
   } catch (e: any) {
     // Handle parse errors or unexpected errors
     if (e && e instanceof CompilerError) {
-      const msg = `${e.message}`;
-      if (!shouldSuppressImportError(msg, text, textDocument.uri)) {
-        diagnostics.push(compilerErrorToDiagnostic(e, textDocument));
-      }
+      diagnostics.push(compilerErrorToDiagnostic(e, textDocument));
     } else {
-      const msg = String(e?.message || e);
-      if (!shouldSuppressImportError(msg, text, textDocument.uri)) {
-        diagnostics.push({
-          severity: DiagnosticSeverity.Error,
-          range: Range.create(0, 0, 0, 1),
-          message: msg,
-          source: "bpl-lsp",
-        });
-      }
+      diagnostics.push({
+        severity: DiagnosticSeverity.Error,
+        range: Range.create(0, 0, 0, 1),
+        message: String(e?.message || e),
+        source: "bpl-lsp",
+      });
     }
   }
 

@@ -4,11 +4,11 @@
  * Handles packaging, installation, and dependency management for BPL projects.
  */
 
-import * as fs from "fs";
-import * as path from "path";
-import * as crypto from "crypto";
 import { spawnSync } from "child_process";
+import * as crypto from "crypto";
+import * as fs from "fs";
 import * as os from "os";
+import * as path from "path";
 
 export interface PackageManifest {
   name: string;

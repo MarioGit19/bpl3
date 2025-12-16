@@ -1,8 +1,9 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { PackageManager } from "../compiler/middleend/PackageManager";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as fs from "fs";
-import * as path from "path";
 import * as os from "os";
+import * as path from "path";
+
+import { PackageManager } from "../compiler/middleend/PackageManager";
 
 describe("PackageManager", () => {
   let tempDir: string;

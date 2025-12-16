@@ -8,18 +8,20 @@
  * 4. Linking: Link LLVM IR with object files
  */
 
+import * as fs from "fs";
+import * as path from "path";
+
+import { CodeGenerator } from "./backend/CodeGenerator";
+import { ASTPrinter } from "./common/ASTPrinter";
+import { CompilerError } from "./common/CompilerError";
+import { Formatter } from "./formatter/Formatter";
 import { lexWithGrammar } from "./frontend/GrammarLexer";
 import { Parser } from "./frontend/Parser";
-import { TypeChecker } from "./middleend/TypeChecker";
-import { CodeGenerator } from "./backend/CodeGenerator";
-import { CompilerError } from "./common/CompilerError";
-import { ASTPrinter } from "./common/ASTPrinter";
-import { ModuleResolver } from "./middleend/ModuleResolver";
-import { ModuleCache } from "./middleend/ModuleCache";
 import { Linker } from "./middleend/Linker";
-import { Formatter } from "./formatter/Formatter";
-import * as path from "path";
-import * as fs from "fs";
+import { ModuleCache } from "./middleend/ModuleCache";
+import { ModuleResolver } from "./middleend/ModuleResolver";
+import { TypeChecker } from "./middleend/TypeChecker";
+
 import type * as AST from "./common/AST";
 
 export interface CompilerOptions {

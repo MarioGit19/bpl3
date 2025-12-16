@@ -1,6 +1,7 @@
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import * as fs from "fs";
 import * as path from "path";
+
 import { Compiler } from "../compiler";
 import { DiagnosticFormatter } from "../compiler/common/DiagnosticFormatter";
 

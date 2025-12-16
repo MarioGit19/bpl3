@@ -10,6 +10,9 @@ struct Array<T> {
     data: *T,
     capacity: i32,
     length: i32,
+    ###
+        creates a new array with the specified initial capacity
+    ###
     frame new(initial_capacity: i32) ret Array<T> {
         local arr: Array<T>;
         arr.capacity = initial_capacity;
@@ -20,6 +23,9 @@ struct Array<T> {
         return arr;
     }
 
+    ###
+        destroys the array and frees memory
+    ###
     frame destroy(this: *Array<T>) {
         if (this.data != null) {
             free(cast<*void>(this.data));
@@ -29,14 +35,34 @@ struct Array<T> {
         this.length = 0;
     }
 
+    ###
+        this returns the current length of the array
+    ###
     frame len(this: *Array<T>) ret i32 {
         return this.length;
     }
 
+    ###
+        this returns a copy of the element at index
+        for primitive types is okay, for complex types consider using getRef()
+        because updating copy will not update primitives in original array element
+    ###
     frame get(this: *Array<T>, index: i32) ret T {
         return this.data[index];
     }
 
+    ###
+        this returns a reference to the element at index
+        useful for complex types to avoid copying
+        updating the returned reference will update the original array element
+    ###
+    frame getRef(this: *Array<T>, index: i32) ret *T {
+        return &this.data[index];
+    }
+
+    ###
+        sets the element at index to value
+    ###
     frame set(this: *Array<T>, index: i32, value: T) {
         this.data[index] = value;
     }
@@ -60,4 +86,19 @@ struct Array<T> {
         this.data[this.length] = value;
         this.length = this.length + 1;
     }
+
+    frame pop(this: *Array<T>) ret T {
+        if (this.length == 0) {
+            # Error: empty array
+            throw ArrayError { code: 1, message: "Pop from empty array" };
+        }
+        this.length = this.length - 1;
+        return this.data[this.length];
+    }
+}
+
+export [ArrayError];
+struct ArrayError {
+    code: int,
+    message: string,
 }
