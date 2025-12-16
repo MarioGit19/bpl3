@@ -133,6 +133,24 @@ Compile and run:
 bpl hello.bpl --run
 ```
 
+### Run code without a file
+
+You can execute snippets or piped input directly:
+
+- Evaluate a snippet from the command line:
+
+  ```bash
+  bpl -e 'frame main() ret int { return 0; }' --run
+  ```
+
+- Compile from stdin (helpful with `cat`/pipes):
+
+  ```bash
+  cat examples/hello-world/main.bpl | bpl --stdin --run
+  ```
+
+`--emit tokens|ast|formatted|llvm` works with both `-e` and `--stdin`; diagnostics show `<eval>`/`<stdin>` in locations.
+
 ### More Examples
 
 **Variables and Types:**

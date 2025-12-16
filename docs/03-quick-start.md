@@ -300,6 +300,22 @@ bpl hello.bpl --emit tokens
 bpl hello.bpl --emit formatted
 ```
 
+### Run code without a file
+
+- Evaluate a snippet passed on the command line:
+
+```bash
+bpl -e 'frame main() ret int { return 0; }' --run
+```
+
+- Compile from stdin (useful with pipes):
+
+```bash
+cat examples/hello-world/main.bpl | bpl --stdin --run
+```
+
+`--emit tokens|ast|formatted|llvm` works with both `-e` and `--stdin`; diagnostics label source locations as `<eval>` or `<stdin>`.
+
 ## Project Structure
 
 For larger programs, organize your code:

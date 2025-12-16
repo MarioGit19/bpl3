@@ -6,5 +6,16 @@ The BPL compiler (`bpl`) supports various flags.
 
 - `-o <file>`: Output file name.
 - `--target <triple>`: Target platform.
-- `-O<level>`: Optimization level (0, 1, 2, 3).
-- `--emit-llvm`: Output LLVM IR.
+- `--emit <type>`: Emit `llvm` (default), `ast`, `tokens`, or `formatted`.
+- `--run`: Compile and run the produced executable.
+- `-v, --verbose`: Verbose compiler output.
+- `-e, --eval <code>`: Compile code passed directly on the command line.
+- `--stdin`: Compile code read from standard input.
+
+```bash
+# Examples
+bpl hello.bpl --emit ast
+bpl hello.bpl --run
+bpl -e 'frame main() ret int { return 0; }' --run
+cat hello.bpl | bpl --stdin --emit tokens
+```

@@ -114,6 +114,12 @@
   - Implementation notes: Reuse the parser/AST to extract doc comments and signatures. Provide templates and command-line options for output formats. Consider output used by IDE tooltips. Similar to JSDoc/Doxygen.
   - Acceptance criteria: Running the doc tool outputs a readable API doc set for the std lib and sample modules.
 
+- [4] Shell Autocomplete for CLI
+
+  - Description: Provide bash/zsh completion scripts for the `bpl` CLI (commands and flags).
+  - Implementation notes: Generate static/dynamic completion scripts; bundle them with releases; document installation for bash and zsh; consider commander completion helpers; optionally complete file paths and target triples.
+  - Acceptance criteria: Users can enable completions in bash and zsh; commands and flags complete correctly; installation steps are documented.
+
 - [6] Allow Structs to Inherit Primitives
 
   - Description: Permit `struct MyInt : int { ... }` so a struct can behave as a primitive type with additional methods/fields.
