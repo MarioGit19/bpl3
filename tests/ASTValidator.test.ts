@@ -142,7 +142,8 @@ describe("AST Validator - Extended Tests", () => {
       const ast = parse(source);
       const struct = ast.statements[0];
       if (struct?.kind === "StructDecl") {
-        expect(struct.parentType).toBeDefined();
+        expect(struct.inheritanceList).toBeDefined();
+        expect(struct.inheritanceList?.length).toBe(1);
       }
     });
 
@@ -151,7 +152,8 @@ describe("AST Validator - Extended Tests", () => {
       const ast = parse(source);
       const struct = ast.statements[0];
       if (struct?.kind === "StructDecl") {
-        expect(struct.parentType).toBeDefined();
+        expect(struct.inheritanceList).toBeDefined();
+        expect(struct.inheritanceList?.length).toBe(1);
       }
     });
 

@@ -45,4 +45,28 @@ describe("Formatter - Extended Tests", () => {
       expect(formatted).toBe(`frame process<T, U: int>(a: T, b: U) {\n}`);
     });
   });
+
+  describe("Spec Declarations", () => {
+    it("should format simple spec", () => {
+      const code = `spec Disposable { frame destroy(this: *Self); }`;
+      const formatted = format(code);
+      expect(formatted).toBe(
+        `spec Disposable {\n    frame destroy(this: *Self);\n}`,
+      );
+    });
+
+    it("should format spec with inheritance", () => {
+      const code = `spec ReadWriter : Reader { frame write(this: *Self, data: string); }`;
+      const formatted = format(code);
+      expect(formatted).toBe(
+        `spec ReadWriter: Reader {\n    frame write(this: *Self, data: string);\n}`,
+      );
+    });
+
+    it("should format spec with generics", () => {
+      const code = `spec Container<T> { frame get() ret T; }`;
+      const formatted = format(code);
+      expect(formatted).toBe(`spec Container<T> {\n    frame get() ret T;\n}`);
+    });
+  });
 });

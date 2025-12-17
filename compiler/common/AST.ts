@@ -169,6 +169,7 @@ export type Statement =
   | VariableDecl
   | FunctionDecl
   | StructDecl
+  | SpecDecl
   | TypeAliasDecl
   | BlockStmt
   | IfStmt
@@ -208,7 +209,7 @@ export interface StructDecl extends ASTNode {
   kind: "StructDecl";
   name: string;
   genericParams: GenericParam[];
-  parentType?: TypeNode; // Inheritance
+  inheritanceList: TypeNode[]; // First element (if struct) is parent, rest are specs
   members: (StructField | FunctionDecl)[];
 }
 
@@ -216,6 +217,22 @@ export interface StructField extends ASTNode {
   kind: "StructField";
   name: string;
   type: TypeNode;
+}
+
+export interface SpecDecl extends ASTNode {
+  kind: "SpecDecl";
+  name: string;
+  genericParams: GenericParam[];
+  extends: TypeNode[]; // Parent specs
+  methods: SpecMethod[];
+}
+
+export interface SpecMethod extends ASTNode {
+  kind: "SpecMethod";
+  name: string;
+  genericParams: GenericParam[];
+  params: { name: string; type: TypeNode }[];
+  returnType?: TypeNode;
 }
 
 export interface TypeAliasDecl extends ASTNode {

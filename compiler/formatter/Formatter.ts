@@ -113,6 +113,8 @@ export class Formatter {
         return this.formatFunctionDecl(stmt as AST.FunctionDecl);
       case "StructDecl":
         return this.formatStructDecl(stmt as AST.StructDecl);
+      case "SpecDecl":
+        return this.formatSpecDecl(stmt as AST.SpecDecl);
       case "TypeAlias":
         return this.formatTypeAlias(stmt as AST.TypeAliasDecl);
       case "Import":
@@ -226,8 +228,8 @@ export class Formatter {
 
     output += this.formatGenericParams(decl.genericParams);
 
-    if (decl.parentType) {
-      output += ` : ${this.formatType(decl.parentType)}`;
+    if (decl.inheritanceList && decl.inheritanceList.length > 0) {
+      output += `: ${decl.inheritanceList.map((t) => this.formatType(t)).join(", ")}`;
     }
 
     output += " {\n";
@@ -262,6 +264,71 @@ export class Formatter {
 
     this.indentLevel--;
     output += `${indent}}`;
+    return output;
+  }
+
+  private formatSpecDecl(decl: AST.SpecDecl): string {
+    const indent = this.getIndent();
+    let output = `${indent}spec ${decl.name}`;
+
+    output += this.formatGenericParams(decl.genericParams);
+
+    if (decl.extends && decl.extends.length > 0) {
+      output += `: ${decl.extends.map((t) => this.formatType(t)).join(", ")}`;
+    }
+
+    output += " {\n";
+    this.indentLevel++;
+
+    this.lastLineProcessed = decl.location.startLine;
+
+    for (const method of decl.methods) {
+      // Print comments before method
+      output += this.printCommentsBefore(method.location.startLine);
+
+      if (
+        this.lastLineProcessed > 0 &&
+        method.location.startLine > this.lastLineProcessed + 1
+      ) {
+        output += "\n";
+      }
+
+      output += this.formatSpecMethod(method) + "\n";
+
+      this.lastLineProcessed = method.location.endLine;
+    }
+
+    // Print comments inside spec (before closing brace)
+    output += this.printCommentsBefore(decl.location.endLine);
+
+    this.indentLevel--;
+    output += `${indent}}`;
+    return output;
+  }
+
+  private formatSpecMethod(method: AST.SpecMethod): string {
+    const indent = this.getIndent();
+    let output = `${indent}frame ${method.name}`;
+
+    output += this.formatGenericParams(method.genericParams);
+
+    output += "(";
+    output += method.params
+      .map((p) => `${p.name}: ${this.formatType(p.type)}`)
+      .join(", ");
+    output += ")";
+
+    if (
+      method.returnType &&
+      (method.returnType.kind !== "BasicType" ||
+        method.returnType.name !== "void" ||
+        (method.returnType.name === "void" &&
+          method.returnType.pointerDepth !== 0))
+    ) {
+      output += ` ret ${this.formatType(method.returnType)}`;
+    }
+
+    output += ";";
     return output;
   }
 

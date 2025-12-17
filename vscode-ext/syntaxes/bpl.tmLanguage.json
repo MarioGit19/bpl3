@@ -37,7 +37,7 @@
     "type-definitions": {
       "patterns": [
         {
-          "match": "\\b(struct|type|class)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+          "match": "\\b(struct|type|class|spec)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
           "captures": {
             "1": { "name": "storage.type.class.bpl" },
             "2": { "name": "entity.name.type.class.bpl" }
@@ -92,6 +92,10 @@
     "variables": {
       "patterns": [
         {
+          "match": "\\b(this)\\b",
+          "name": "variable.language.this.bpl"
+        },
+        {
           "match": "\\b(local|global|const)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
           "captures": {
             "1": { "name": "storage.modifier.bpl" },
@@ -112,7 +116,7 @@
         },
         {
           "name": "storage.type.class.bpl",
-          "match": "\\b(struct|type)\\b"
+          "match": "\\b(struct|type|spec)\\b"
         },
         {
           "name": "storage.modifier.bpl",
@@ -136,7 +140,7 @@
       "patterns": [
         {
           "name": "storage.type.bpl",
-          "match": "\\b(int|uint|float|string|bool|char|void|any|Func)\\b"
+          "match": "\\b(int|uint|float|string|bool|char|void|any|Func|Self)\\b"
         },
         {
           "match": "(:)\\s*([a-zA-Z_][a-zA-Z0-9_]*)",

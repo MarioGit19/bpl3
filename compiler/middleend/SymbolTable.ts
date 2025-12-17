@@ -4,6 +4,7 @@ export type SymbolKind =
   | "Variable"
   | "Function"
   | "Struct"
+  | "Spec"
   | "TypeAlias"
   | "Parameter"
   | "Module";

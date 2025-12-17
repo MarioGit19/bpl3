@@ -5,7 +5,7 @@ struct Base<T> {
     base_id: int,
 }
 
-struct Derived<T> : Base<T> {
+struct Derived<T>: Base<T> {
     extra: int,
 }
 

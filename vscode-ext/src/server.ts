@@ -475,6 +475,7 @@ connection.onCompletion(
       "class",
       "extends",
       "implements",
+      "spec",
     ];
     const types = [
       "int",
@@ -486,6 +487,7 @@ connection.onCompletion(
       "any",
       "Func",
       "string",
+      "Self",
     ];
 
     const items: CompletionItem[] = [];
@@ -531,7 +533,7 @@ function findSymbolDefinition(
 
   // 1. Search in current file
   const definitionRegex = new RegExp(
-    `\\b(frame|struct|local|global|type|extern)\\s+${word}\\b`,
+    `\\b(frame|struct|local|global|type|extern|spec)\\s+${word}\\b`,
     "g",
   );
   let match = definitionRegex.exec(text);
@@ -544,7 +546,11 @@ function findSymbolDefinition(
     const lines = text.split(/\r?\n/);
     let currentLineIdx = startPos.line;
 
-    if (matchType === "struct" || matchType === "class") {
+    if (
+      matchType === "struct" ||
+      matchType === "class" ||
+      matchType === "spec"
+    ) {
       let braceCount = 0;
       let foundStartBrace = false;
       let collectedLines: string[] = [];

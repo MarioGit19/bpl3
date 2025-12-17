@@ -222,7 +222,8 @@ describe("Parser - Extended Tests", () => {
       expect(program.statements.length).toBe(1);
       const structDecl = program.statements[0]!;
       if (structDecl.kind === "StructDecl") {
-        expect(structDecl.parentType).toBeDefined();
+        expect(structDecl.inheritanceList).toBeDefined();
+        expect(structDecl.inheritanceList?.length).toBe(1);
       }
     });
 

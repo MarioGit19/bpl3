@@ -42,6 +42,8 @@ export enum TokenType {
   Nullptr = "Nullptr",
   True = "True",
   False = "False",
+  Spec = "Spec",
+  Self = "Self",
 
   // Comments
   Comment = "Comment",

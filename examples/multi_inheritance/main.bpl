@@ -4,15 +4,15 @@ struct Entity {
     id: int,
     active: int,
 }
-struct LivingEntity : Entity {
+struct LivingEntity: Entity {
     health: int,
     max_health: int,
 }
-struct Character : LivingEntity {
+struct Character: LivingEntity {
     name: string,
     level: int,
 }
-struct Enemy : Character {
+struct Enemy: Character {
     damage: int,
     aggressive: int,
 }

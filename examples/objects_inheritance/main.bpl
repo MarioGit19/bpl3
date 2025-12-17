@@ -16,7 +16,7 @@ struct Animal {
         printf("Animal: %s, Age: %d\n", this.name, this.age);
     }
 }
-struct Dog : Animal {
+struct Dog: Animal {
     breed: string,
     frame new(name: string, age: int, breed: string) ret Dog {
         local d: Dog;
@@ -32,7 +32,7 @@ struct Dog : Animal {
         printf("Dog: %s, Age: %d, Breed: %s\n", this.name, this.age, this.breed);
     }
 }
-struct Cat : Animal {
+struct Cat: Animal {
     color: string,
     frame new(name: string, age: int, color: string) ret Cat {
         local c: Cat;

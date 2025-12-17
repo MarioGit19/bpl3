@@ -215,7 +215,7 @@ export class TypeChecker {
       kind: "StructDecl",
       name: "NullAccessError",
       genericParams: [],
-      parentType: undefined,
+      inheritanceList: [],
       members: [
         {
           kind: "StructField",
@@ -325,6 +325,10 @@ export class TypeChecker {
           location: stmt.location,
         };
         break;
+      case "SpecDecl":
+        this.defineSymbol(stmt.name, "Spec", undefined, stmt);
+        this.registerLinkerSymbol(stmt.name, "type", undefined, stmt);
+        break;
       case "FunctionDecl":
         const functionType: AST.FunctionTypeNode = {
           kind: "FunctionType",
@@ -390,6 +394,9 @@ export class TypeChecker {
       case "StructDecl":
         this.checkStructBody(stmt);
         break; // Changed to check body only
+      case "SpecDecl":
+        this.checkSpecBody(stmt);
+        break;
       case "TypeAlias":
         if (this.currentScope !== this.globalScope) {
           this.defineSymbol(
@@ -749,15 +756,40 @@ export class TypeChecker {
   private checkStructBody(decl: AST.StructDecl): void {
     // Symbol already defined in hoist pass
 
-    if (decl.parentType) {
-      if (decl.parentType.kind === "BasicType") {
-        const parentSymbol = this.currentScope.resolve(decl.parentType.name);
-        if (!parentSymbol) {
-          throw new CompilerError(
-            `Undefined parent struct '${decl.parentType.name}'`,
-            "Ensure the parent struct is defined before inheritance.",
-            decl.parentType.location,
-          );
+    let parentStructCount = 0;
+    if (decl.inheritanceList) {
+      for (const typeNode of decl.inheritanceList) {
+        if (typeNode.kind === "BasicType") {
+          const symbol = this.currentScope.resolve(typeNode.name);
+          if (!symbol) {
+            throw new CompilerError(
+              `Undefined type '${typeNode.name}' in inheritance list`,
+              "Ensure the type is defined before inheritance.",
+              typeNode.location,
+            );
+          }
+          if (symbol.kind === "Struct") {
+            parentStructCount++;
+            if (parentStructCount > 1) {
+              throw new CompilerError(
+                `Multiple inheritance is not supported`,
+                "A struct can only inherit from one parent struct.",
+                typeNode.location,
+              );
+            }
+          } else if (symbol.kind === "Spec") {
+            this.checkSpecImplementation(
+              decl,
+              symbol.declaration as AST.SpecDecl,
+              typeNode,
+            );
+          } else {
+            throw new CompilerError(
+              `Type '${typeNode.name}' is not a struct or spec`,
+              "Only structs and specs can be inherited/implemented.",
+              typeNode.location,
+            );
+          }
         }
       }
     }
@@ -789,6 +821,137 @@ export class TypeChecker {
       }
     }
     this.currentScope = this.currentScope.exitScope();
+  }
+
+  private checkSpecBody(decl: AST.SpecDecl): void {
+    if (decl.extends) {
+      for (const typeNode of decl.extends) {
+        if (typeNode.kind === "BasicType") {
+          const symbol = this.currentScope.resolve(typeNode.name);
+          if (!symbol) {
+            throw new CompilerError(
+              `Undefined spec '${typeNode.name}' in inheritance list`,
+              "Ensure the spec is defined before inheritance.",
+              typeNode.location,
+            );
+          }
+          if (symbol.kind !== "Spec") {
+            throw new CompilerError(
+              `Type '${typeNode.name}' is not a spec`,
+              "Specs can only extend other specs.",
+              typeNode.location,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  private checkSpecImplementation(
+    structDecl: AST.StructDecl,
+    specDecl: AST.SpecDecl,
+    specTypeNode: AST.BasicTypeNode,
+  ): void {
+    const genericMapping = new Map<string, AST.TypeNode>();
+    if (specDecl.genericParams.length > 0) {
+      if (specTypeNode.genericArgs.length !== specDecl.genericParams.length) {
+        throw new CompilerError(
+          `Generic argument count mismatch for spec '${specDecl.name}'`,
+          `Expected ${specDecl.genericParams.length}, got ${specTypeNode.genericArgs.length}`,
+          specTypeNode.location,
+        );
+      }
+      for (let i = 0; i < specDecl.genericParams.length; i++) {
+        genericMapping.set(
+          specDecl.genericParams[i]!.name,
+          specTypeNode.genericArgs[i]!,
+        );
+      }
+    }
+
+    const structType: AST.BasicTypeNode = {
+      kind: "BasicType",
+      name: structDecl.name,
+      genericArgs: structDecl.genericParams.map((p) => ({
+        kind: "BasicType",
+        name: p.name,
+        genericArgs: [],
+        pointerDepth: 0,
+        arrayDimensions: [],
+        location: structDecl.location,
+      })),
+      pointerDepth: 0,
+      arrayDimensions: [],
+      location: structDecl.location,
+    };
+
+    genericMapping.set("Self", structType);
+
+    for (const method of specDecl.methods) {
+      const impl = this.resolveStructMember(structDecl, method.name);
+      if (!impl || impl.kind !== "FunctionDecl") {
+        throw new CompilerError(
+          `Struct '${structDecl.name}' does not implement method '${method.name}' from spec '${specDecl.name}'`,
+          `Missing implementation for: ${this.formatSpecMethod(method)}`,
+          structDecl.location,
+        );
+      }
+
+      if (method.params.length !== impl.params.length) {
+        throw new CompilerError(
+          `Method '${method.name}' implementation has wrong number of parameters`,
+          `Expected ${method.params.length}, got ${impl.params.length}`,
+          impl.location,
+        );
+      }
+
+      for (let i = 0; i < method.params.length; i++) {
+        const specParamType = method.params[i]!.type;
+        const implParamType = impl.params[i]!.type;
+
+        const expectedType = this.substituteType(specParamType, genericMapping);
+        const actualType = this.resolveType(implParamType);
+
+        if (!this.areTypesCompatible(expectedType, actualType)) {
+          throw new CompilerError(
+            `Method '${method.name}' parameter '${method.params[i]!.name}' type mismatch`,
+            `Expected '${this.typeToString(expectedType)}', got '${this.typeToString(actualType)}'`,
+            impl.params[i]!.type.location,
+          );
+        }
+      }
+
+      const specRet = method.returnType || {
+        kind: "BasicType",
+        name: "void",
+        genericArgs: [],
+        pointerDepth: 0,
+        arrayDimensions: [],
+        location: method.location,
+      };
+      const implRet = impl.returnType;
+
+      const expectedRet = this.substituteType(specRet, genericMapping);
+      const actualRet = this.resolveType(implRet);
+
+      if (!this.areTypesCompatible(expectedRet, actualRet)) {
+        throw new CompilerError(
+          `Method '${method.name}' return type mismatch`,
+          `Expected '${this.typeToString(expectedRet)}', got '${this.typeToString(actualRet)}'`,
+          impl.returnType.location,
+        );
+      }
+    }
+  }
+
+  private formatSpecMethod(method: AST.SpecMethod): string {
+    const params = method.params
+      .map((p) => `${p.name}: ${this.typeToString(p.type)}`)
+      .join(", ");
+    const ret = method.returnType
+      ? ` ret ${this.typeToString(method.returnType)}`
+      : "";
+    return `frame ${method.name}(${params})${ret}`;
   }
 
   private checkTypeAlias(decl: AST.TypeAliasDecl): void {
@@ -2764,35 +2927,15 @@ export class TypeChecker {
 
       // Allow bidirectional void* compatibility with all pointer types
       // void* can be assigned to any T* and any T* can be assigned to void*
-      if (rt1.name === "void" && rt1.pointerDepth > 0 && rt2.pointerDepth > 0) {
-        return true;
-      }
-      if (rt2.name === "void" && rt2.pointerDepth > 0 && rt1.pointerDepth > 0) {
-        return true;
-      }
-
       if (
-        (rt1.name === "void" && rt1.pointerDepth === 0) ||
-        (rt2.name === "void" && rt2.pointerDepth === 0)
-      )
-        return false; // Cannot assign void value
-
-      // Normalize names for primitive types
-      const normalize = (name: string) => {
-        if (name === "i32") return "int";
-        if (name === "i64") return "long";
-        if (name === "u32") return "uint";
-        if (name === "u64") return "ulong";
-        if (name === "f32") return "float";
-        if (name === "f64") return "double";
-        return name;
-      };
-
-      const n1 = normalize(rt1.name);
-      const n2 = normalize(rt2.name);
-
+        (rt1.name === "void" || rt2.name === "void") &&
+        rt1.pointerDepth > 0 &&
+        rt2.pointerDepth > 0
+      ) {
+        return true;
+      }
       // Exact name match
-      if (n1 !== n2) {
+      if (rt1.name !== rt2.name) {
         // Check inheritance
         if (
           !this.isSubtype(rt2 as AST.BasicTypeNode, rt1 as AST.BasicTypeNode)
@@ -3190,19 +3333,22 @@ export class TypeChecker {
     if (member) return member;
 
     // Check parent
-    if (structDecl.parentType && structDecl.parentType.kind === "BasicType") {
-      const parentSymbol = this.currentScope.resolve(
-        structDecl.parentType.name,
-      );
-      if (
-        parentSymbol &&
-        parentSymbol.kind === "Struct" &&
-        (parentSymbol.declaration as any).kind === "StructDecl"
-      ) {
-        return this.resolveStructMember(
-          parentSymbol.declaration as AST.StructDecl,
-          memberName,
-        );
+    if (structDecl.inheritanceList) {
+      for (const typeNode of structDecl.inheritanceList) {
+        if (typeNode.kind === "BasicType") {
+          const parentSymbol = this.currentScope.resolve(typeNode.name);
+          if (
+            parentSymbol &&
+            parentSymbol.kind === "Struct" &&
+            (parentSymbol.declaration as any).kind === "StructDecl"
+          ) {
+            const found = this.resolveStructMember(
+              parentSymbol.declaration as AST.StructDecl,
+              memberName,
+            );
+            if (found) return found;
+          }
+        }
       }
     }
     return undefined;
@@ -3250,35 +3396,44 @@ export class TypeChecker {
       if (members.length > 0)
         return { members, contextType: currentType, contextDecl: decl };
 
-      if (decl.parentType) {
-        // Resolve parentType AST node to ensure it's a BasicType and resolve aliases
-        const resolvedParentRaw = this.resolveType(decl.parentType);
+      let foundParent = false;
+      if (decl.inheritanceList) {
+        for (const typeNode of decl.inheritanceList) {
+          if (typeNode.kind === "BasicType") {
+            const symbol = this.currentScope.resolve(typeNode.name);
+            if (symbol && symbol.kind === "Struct") {
+              const resolvedParentRaw = this.resolveType(typeNode);
 
-        if (resolvedParentRaw.kind === "BasicType") {
-          const mapping = new Map<string, AST.TypeNode>();
-          if (
-            decl.genericParams.length > 0 &&
-            currentType.genericArgs.length === decl.genericParams.length
-          ) {
-            for (let i = 0; i < decl.genericParams.length; i++) {
-              mapping.set(
-                decl.genericParams[i]!.name,
-                currentType.genericArgs[i]!,
-              );
+              if (resolvedParentRaw.kind === "BasicType") {
+                const mapping = new Map<string, AST.TypeNode>();
+                if (
+                  decl.genericParams.length > 0 &&
+                  currentType.genericArgs.length === decl.genericParams.length
+                ) {
+                  for (let i = 0; i < decl.genericParams.length; i++) {
+                    mapping.set(
+                      decl.genericParams[i]!.name,
+                      currentType.genericArgs[i]!,
+                    );
+                  }
+                }
+
+                const substitutedParent = this.substituteType(
+                  resolvedParentRaw,
+                  mapping,
+                );
+                if (substitutedParent.kind === "BasicType") {
+                  currentType = substitutedParent;
+                  depth++;
+                  foundParent = true;
+                  break;
+                }
+              }
             }
-          }
-
-          const substitutedParent = this.substituteType(
-            resolvedParentRaw,
-            mapping,
-          );
-          if (substitutedParent.kind === "BasicType") {
-            currentType = substitutedParent;
-            depth++;
-            continue;
           }
         }
       }
+      if (foundParent) continue;
       return undefined;
     }
     return undefined;
@@ -3298,11 +3453,18 @@ export class TypeChecker {
       (symbol.declaration as any).kind === "StructDecl"
     ) {
       const decl = symbol.declaration as AST.StructDecl;
-      if (decl.parentType && decl.parentType.kind === "BasicType") {
-        const parentTypeResolved = this.resolveType(
-          decl.parentType,
-        ) as AST.BasicTypeNode;
-        return this.isSubtype(parentTypeResolved, parent);
+      if (decl.inheritanceList) {
+        for (const typeNode of decl.inheritanceList) {
+          if (typeNode.kind === "BasicType") {
+            const parentTypeResolved = this.resolveType(typeNode);
+            if (
+              parentTypeResolved.kind === "BasicType" &&
+              this.isSubtype(parentTypeResolved, parent)
+            ) {
+              return true;
+            }
+          }
+        }
       }
     }
     return false;

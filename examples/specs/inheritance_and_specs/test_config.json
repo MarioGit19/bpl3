@@ -1,0 +1,8 @@
+{
+  "expectedOutput": [
+    "Base ID: 1",
+    "Derived ID: 1, Value: 100",
+    "Reset value to 0",
+    "Derived ID: 1, Value: 0"
+  ]
+}

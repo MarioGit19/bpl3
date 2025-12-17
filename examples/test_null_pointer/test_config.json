@@ -1,5 +1,5 @@
 {
-  "expectedOutput": "Caught: Attempted to access member of null object through pointer in main (expr: y.a)\n",
+  "expectedOutput": "Caught: Attempted to access member/index of null object\n in main (expr: y.a)\n",
   "args": [],
   "env": {},
   "input": "",

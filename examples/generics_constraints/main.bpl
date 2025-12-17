@@ -38,7 +38,7 @@ struct Parent {
     id: int,
 }
 
-struct Child : Parent {
+struct Child: Parent {
     name: string,
 }
 

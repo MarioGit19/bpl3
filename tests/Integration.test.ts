@@ -77,7 +77,7 @@ describe("Integration Tests", () => {
         // The user's hello world prints "Hello, World!\n"
         // cmp.sh prints "Program exited with code 0\n"
 
-        const output = result.stdout;
+        const output = result.stdout + result.stderr;
         if (config.expectedOutput) {
           if (Array.isArray(config.expectedOutput)) {
             config.expectedOutput.forEach((expectedLine: string) => {

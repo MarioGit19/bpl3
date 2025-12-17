@@ -46,7 +46,7 @@ struct Box<T> {
 struct Parent<S> {
     s_val: S,
 }
-struct Child<T> : Parent<T> {
+struct Child<T>: Parent<T> {
     t_val: T,
 }
 frame main() ret int {

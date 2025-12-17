@@ -115,8 +115,12 @@
     return { kind: "FunctionDecl", isFrame, isStatic, name, genericParams, params, returnType, body, location: makeLoc(loc) };
   }
 
-  function structDecl(name, genericParams, parentType, members, loc) {
-    return { kind: "StructDecl", name, genericParams, parentType, members, location: makeLoc(loc) };
+  function structDecl(name, genericParams, inheritanceList, members, loc) {
+    return { kind: "StructDecl", name, genericParams, inheritanceList, members, location: makeLoc(loc) };
+  }
+
+  function specDecl(name, genericParams, extendsList, methods, loc) {
+    return { kind: "SpecDecl", name, genericParams, extends: extendsList, methods, location: makeLoc(loc) };
   }
 
   function typeAlias(name, genericParams, typeNode, loc) {
@@ -304,6 +308,7 @@ Statement
   = VariableDeclaration
   / FunctionDeclaration
   / StructDeclaration
+  / SpecDeclaration
   / TypeAlias
   / ImportStatement
   / ExportStatement
@@ -355,11 +360,32 @@ FunctionDeclaration
     }
 
 StructDeclaration
-  = K_struct _ name:Identifier _ gen:GenericParamList? _ parent:(_ ":" _ Type)? _ "{" _ members:StructMemberList? _ "}" {
+  = K_struct _ name:Identifier _ gen:GenericParamList? _ inheritance:(_ ":" _ TypeList)? _ "{" _ members:StructMemberList? _ "}" {
       const genericParams = gen ? gen : [];
-      const parentType = parent ? parent[3] : undefined;
+      const inheritanceList = inheritance ? inheritance[3] : [];
       const memberList = members ? members : [];
-      return structDecl(name.name, genericParams, parentType, memberList, location());
+      return structDecl(name.name, genericParams, inheritanceList, memberList, location());
+    }
+
+SpecDeclaration
+  = K_spec _ name:Identifier _ gen:GenericParamList? _ ext:(_ ":" _ TypeList)? _ "{" _ methods:SpecMethodList? _ "}" {
+      const genericParams = gen ? gen : [];
+      const extendsList = ext ? ext[3] : [];
+      const methodList = methods ? methods : [];
+      return specDecl(name.name, genericParams, extendsList, methodList, location());
+    }
+
+SpecMethodList
+  = head:SpecMethod tail:(_ SpecMethod)* {
+      return [head, ...tail.map(t => t[1])];
+    }
+
+SpecMethod
+  = K_frame _ name:Identifier _ gen:GenericParamList? _ "(" _ params:ParameterList? _ ")" _ ret:(_ K_ret _ Type)? _ ";" {
+      const genericParams = gen ? gen : [];
+      const paramList = params ? params : [];
+      const returnType = ret ? ret[3] : undefined;
+      return { kind: "SpecMethod", name: name.name, genericParams, params: paramList, returnType, location: location() };
     }
 
 StructMemberList
@@ -798,12 +824,15 @@ TupleType
     }
 
 BasicType
-  = ptrs:PointerPrefix? name:QualifiedIdentifier gen:GenericArgs? arr:ArraySuffix* {
+  = ptrs:PointerPrefix? name:(SelfKeyword / QualifiedIdentifier) gen:GenericArgs? arr:ArraySuffix* {
       const pointerDepth = ptrs ? ptrs.length : 0;
       const genericArgs = gen ? gen : [];
       const arrayDimensions = arr.length ? arr.map(a => a) : [];
       return basicType(name, genericArgs, pointerDepth, arrayDimensions, location());
     }
+
+SelfKeyword
+  = $("Self") IdBoundary { return "Self"; }
 
 PointerPrefix
   = "*"+
@@ -843,6 +872,9 @@ K_ret
 
 K_struct
   = $("struct") IdBoundary
+
+K_spec
+  = $("spec") IdBoundary
 
 K_import
   = $("import") IdBoundary
@@ -934,6 +966,8 @@ KeywordReserved
   / "static" IdBoundary
   / "ret" IdBoundary
   / "struct" IdBoundary
+  / "spec" IdBoundary
+  / "Self" IdBoundary
   / "import" IdBoundary
   / "from" IdBoundary
   / "as" IdBoundary

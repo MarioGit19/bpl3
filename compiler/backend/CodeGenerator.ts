@@ -56,7 +56,7 @@ export class CodeGenerator {
       kind: "StructDecl",
       name: "NullAccessError",
       genericParams: [],
-      parentType: undefined,
+      inheritanceList: [],
       members: [
         {
           kind: "StructField",
@@ -116,6 +116,9 @@ export class CodeGenerator {
           (stmt as AST.StructDecl).name,
           stmt as AST.StructDecl,
         );
+      } else if (stmt.kind === "SpecDecl") {
+        const spec = stmt as AST.SpecDecl;
+        this.emitDeclaration(`%struct.${spec.name} = type opaque`);
       }
     }
 
@@ -276,10 +279,15 @@ export class CodeGenerator {
 
   private getAllStructFields(decl: AST.StructDecl): AST.StructField[] {
     let fields: AST.StructField[] = [];
-    if (decl.parentType && decl.parentType.kind === "BasicType") {
-      const parent = this.structMap.get(decl.parentType.name);
-      if (parent) {
-        fields = this.getAllStructFields(parent);
+    if (decl.inheritanceList) {
+      for (const typeNode of decl.inheritanceList) {
+        if (typeNode.kind === "BasicType") {
+          const parent = this.structMap.get(typeNode.name);
+          if (parent) {
+            fields = this.getAllStructFields(parent);
+            break; // Only one parent struct
+          }
+        }
       }
     }
     const currentFields = decl.members.filter(
@@ -337,6 +345,14 @@ export class CodeGenerator {
         break;
       case "Export":
         // Exports are metadata for module resolution and don't generate code directly
+        break;
+      case "SpecDecl":
+        const spec = node as AST.SpecDecl;
+        for (const method of spec.methods) {
+          this.emitDeclaration(
+            `define void @${spec.name}_${method.name}(%struct.${spec.name}* %this) { ret void }`,
+          );
+        }
         break;
       default:
         console.warn(`Unhandled top-level node kind: ${node.kind}`);
@@ -518,38 +534,36 @@ export class CodeGenerator {
     });
 
     // Handle generic inheritance
-    let instantiatedParentType = baseStruct.parentType;
-    if (baseStruct.parentType) {
-      // Substitute generics in parent type
-      instantiatedParentType = this.substituteType(
-        baseStruct.parentType,
-        typeMap,
-      );
+    let instantiatedInheritanceList: AST.TypeNode[] = [];
+    if (baseStruct.inheritanceList) {
+      instantiatedInheritanceList = baseStruct.inheritanceList.map((t) => {
+        let instantiatedType = this.substituteType(t, typeMap);
 
-      // Force resolution of parent to ensure it exists and we get the concrete name
-      const parentLlvmType = this.resolveType(instantiatedParentType);
-
-      // Update name in BasicType to match the mangled parent name
-      if (instantiatedParentType.kind === "BasicType") {
-        let parentName = parentLlvmType;
-        if (parentName.startsWith("%struct.")) {
-          parentName = parentName.substring(8);
-          // remove pointers if any
-          while (parentName.endsWith("*")) parentName = parentName.slice(0, -1);
+        // Force resolution of parent to ensure it exists and we get the concrete name
+        // Only for BasicType (structs/specs)
+        if (instantiatedType.kind === "BasicType") {
+          const parentLlvmType = this.resolveType(instantiatedType);
+          let parentName = parentLlvmType;
+          if (parentName.startsWith("%struct.")) {
+            parentName = parentName.substring(8);
+            while (parentName.endsWith("*"))
+              parentName = parentName.slice(0, -1);
+          }
+          instantiatedType = {
+            ...instantiatedType,
+            name: parentName,
+            genericArgs: [], // Cleared because name is now concrete
+          };
         }
-        instantiatedParentType = {
-          ...instantiatedParentType,
-          name: parentName,
-          genericArgs: [], // Cleared because name is now concrete
-        };
-      }
+        return instantiatedType;
+      });
     }
 
     const instantiatedStruct: AST.StructDecl = {
       ...baseStruct,
       name: mangledName, // Update name
       genericParams: [], // Concrete now
-      parentType: instantiatedParentType,
+      inheritanceList: instantiatedInheritanceList,
       members: instantiatedMembers.filter((m) => m.kind === "StructField"), // Only fields in struct def
     };
 
@@ -718,10 +732,20 @@ export class CodeGenerator {
     this.pointerToLocal.clear();
 
     // Setup destructor chaining
+    let parentStructType: AST.TypeNode | undefined;
+    if (parentStruct && parentStruct.inheritanceList) {
+      for (const t of parentStruct.inheritanceList) {
+        if (t.kind === "BasicType" && this.structMap.has(t.name)) {
+          parentStructType = t;
+          break;
+        }
+      }
+    }
+
     if (
       parentStruct &&
       decl.name === `${parentStruct.name}_destroy` &&
-      parentStruct.parentType
+      parentStructType
     ) {
       this.onReturn = () => {
         this.emitParentDestroy(parentStruct, decl);
@@ -2147,6 +2171,19 @@ export class CodeGenerator {
       throw new Error(`Function call '${funcName}' has no resolved type`);
     }
 
+    if (
+      funcType.declaration &&
+      (funcType.declaration as any).kind === "SpecMethod"
+    ) {
+      if (isInstanceCall) {
+        const memberExpr = callee as AST.MemberExpr;
+        const objType = memberExpr.object.resolvedType;
+        if (objType) {
+          callSubstitutionMap.set("Self", objType);
+        }
+      }
+    }
+
     const args = argsToGenerate
       .map((arg, i) => {
         let targetTypeNode: AST.TypeNode | undefined;
@@ -2327,7 +2364,6 @@ export class CodeGenerator {
         // strip pointers
         while (structName.endsWith("*")) structName = structName.slice(0, -1);
       }
-
       let layout = this.structLayouts.get(structName);
       if (!layout && structName.includes(".")) {
         const shortName = structName.split(".").pop()!;
@@ -2383,8 +2419,7 @@ export class CodeGenerator {
 
             const funcName = this.currentFunctionName || "unknown";
             const exprStr = `${ptrName}.${memberExpr.property}`;
-            const msg =
-              "Attempted to access member of null object through pointer";
+            const msg = "Attempted to access member/index of null object\n";
 
             // Create string literals for the error struct fields
             if (!this.stringLiterals.has(msg)) {
@@ -3166,7 +3201,10 @@ export class CodeGenerator {
     // Print error message to stderr using fprintf
     const msg = `\n*** NULL OBJECT ACCESS ***\nFunction: ${funcName}\nExpression: ${accessExpr}\nAttempted to access member/index of null object\n\n`;
     if (!this.stringLiterals.has(msg)) {
-      this.stringLiterals.set(msg, `@.err.null.${this.stringLiterals.size}`);
+      this.stringLiterals.set(
+        msg,
+        `@.null_err_msg.${this.stringLiterals.size}`,
+      );
     }
     const msgVar = this.stringLiterals.get(msg)!;
     const msgLen = msg.length + 1;
@@ -3683,15 +3721,19 @@ export class CodeGenerator {
     structDecl: AST.StructDecl,
     funcDecl: AST.FunctionDecl,
   ) {
-    if (!structDecl.parentType) return;
-
-    let parentName = "";
-    if (structDecl.parentType.kind === "BasicType") {
-      parentName = structDecl.parentType.name;
-    } else {
-      return;
+    let parentTypeNode: AST.BasicTypeNode | undefined;
+    if (structDecl.inheritanceList) {
+      for (const t of structDecl.inheritanceList) {
+        if (t.kind === "BasicType" && this.structMap.has(t.name)) {
+          parentTypeNode = t;
+          break;
+        }
+      }
     }
 
+    if (!parentTypeNode) return;
+
+    let parentName = parentTypeNode.name;
     const parentDestroy = `${parentName}_destroy`;
 
     const thisParam = funcDecl.params.find((p) => p.name === "this");
@@ -3703,7 +3745,7 @@ export class CodeGenerator {
     const thisVal = this.newRegister();
     this.emit(`  ${thisVal} = load ${thisType}, ${thisType}* ${thisPtr}`);
 
-    const parentTypeStr = this.resolveType(structDecl.parentType);
+    const parentTypeStr = this.resolveType(parentTypeNode);
     const parentPtrType = `${parentTypeStr}*`;
 
     const parentPtr = this.newRegister();
