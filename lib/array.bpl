@@ -95,6 +95,19 @@ struct Array<T> {
         this.length = this.length - 1;
         return this.data[this.length];
     }
+
+    # Removes the element at index by shifting items left.
+    frame removeAt(this: *Array<T>, index: i32) {
+        if ((index < 0) || (index >= this.length)) {
+            throw ArrayError { code: 2, message: "Index out of bounds" };
+        }
+        local i: i32 = index;
+        loop (i < (this.length - 1)) {
+            this.data[i] = this.data[i + 1];
+            i = i + 1;
+        }
+        this.length = this.length - 1;
+    }
 }
 
 export [ArrayError];

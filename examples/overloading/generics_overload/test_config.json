@@ -1,3 +1,16 @@
 {
-  "expectedOutput": "Generic process\nInt two args: 10, 20\nGeneric two args\nNon-generic process\nInt process: 42\nLong process: 100\nGeneric process\nStruct generic process\nStruct int process: 123\nStruct non-generic process (instance)\nStruct non-generic process (instance)\nStruct non-generic process no args\n"
+  "expectedOutput": [
+    "Generic process",
+    "Int two args: 10, 20",
+    "Generic two args",
+    "Non-generic process",
+    "Int process: 42",
+    "Long process: 100",
+    "Generic process",
+    "Struct generic process",
+    "Struct int process: 123",
+    "Struct non-generic process (instance)",
+    "Struct non-generic process (instance)",
+    "Struct non-generic process no args"
+  ]
 }

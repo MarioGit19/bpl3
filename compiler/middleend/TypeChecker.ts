@@ -209,6 +209,70 @@ export class TypeChecker {
         },
       } as any,
     });
+
+    // Register NullAccessError struct type
+    const nullAccessErrorDecl: AST.StructDecl = {
+      kind: "StructDecl",
+      name: "NullAccessError",
+      genericParams: [],
+      parentType: undefined,
+      members: [
+        {
+          kind: "StructField",
+          name: "message",
+          type: {
+            kind: "BasicType",
+            name: "i8",
+            genericArgs: [],
+            pointerDepth: 1,
+            arrayDimensions: [],
+            location: internalLoc,
+          },
+          location: internalLoc,
+        },
+        {
+          kind: "StructField",
+          name: "function",
+          type: {
+            kind: "BasicType",
+            name: "i8",
+            genericArgs: [],
+            pointerDepth: 1,
+            arrayDimensions: [],
+            location: internalLoc,
+          },
+          location: internalLoc,
+        },
+        {
+          kind: "StructField",
+          name: "expression",
+          type: {
+            kind: "BasicType",
+            name: "i8",
+            genericArgs: [],
+            pointerDepth: 1,
+            arrayDimensions: [],
+            location: internalLoc,
+          },
+          location: internalLoc,
+        },
+      ],
+      location: internalLoc,
+    };
+
+    scope.define({
+      name: "NullAccessError",
+      kind: "Struct",
+      type: {
+        kind: "BasicType",
+        name: "NullAccessError",
+        genericArgs: [],
+        pointerDepth: 0,
+        arrayDimensions: [],
+        location: internalLoc,
+      },
+      declaration: nullAccessErrorDecl,
+    });
   }
 
   public checkProgram(program: AST.Program, modulePath?: string): void {
@@ -507,6 +571,7 @@ export class TypeChecker {
             decl.typeAnnotation,
             initType,
           );
+
           if (!compatible) {
             const val = this.getIntegerConstantValue(decl.initializer);
             if (val !== undefined) {
@@ -548,15 +613,28 @@ export class TypeChecker {
           }
 
           if (!compatible) {
-            throw new CompilerError(
-              `Type mismatch in variable declaration: expected ${this.typeToString(
-                decl.typeAnnotation,
-              )}, got ${this.typeToString(initType)}`,
-              `Variable '${
-                decl.name as string
-              }' cannot be assigned a value of incompatible type.`,
-              decl.location,
-            );
+            const initTypeStr = this.typeToString(initType);
+            const isNullLiteral =
+              initType.kind === "BasicType" &&
+              (initType.name === "nullptr" || initType.name === "null");
+
+            const message = isNullLiteral
+              ? `Cannot assign null/nullptr to non-pointer type ${this.typeToString(
+                  decl.typeAnnotation,
+                )}`
+              : `Type mismatch in variable declaration: expected ${this.typeToString(
+                  decl.typeAnnotation,
+                )}, got ${initTypeStr}`;
+
+            const hint = isNullLiteral
+              ? `null/nullptr can only be assigned to pointer types, or used as a null object for struct types. Did you mean *${this.typeToString(
+                  decl.typeAnnotation,
+                )} if you intended a pointer?`
+              : `Variable '${
+                  decl.name as string
+                }' cannot be assigned a value of incompatible type.`;
+
+            throw new CompilerError(message, hint, decl.location);
           }
         }
       }
@@ -1173,8 +1251,10 @@ export class TypeChecker {
       name = "bool";
     } else if (expr.type === "char") {
       name = "char";
-    } else if (expr.type === "null" || expr.type === "nullptr") {
-      name = "nullptr"; // Special type
+    } else if (expr.type === "nullptr") {
+      name = "nullptr"; // Special pointer-null literal
+    } else if (expr.type === "null") {
+      name = "null"; // Special object-null literal
     }
 
     return {
@@ -1582,18 +1662,70 @@ export class TypeChecker {
       };
     });
 
-    const matched = substitutedCandidates.filter((c) => {
+    // Categorize matches by specificity for better overload resolution
+    const exactMatches: typeof substitutedCandidates = [];
+    const wideningMatches: typeof substitutedCandidates = [];
+    const compatibleMatches: typeof substitutedCandidates = [];
+
+    for (const c of substitutedCandidates) {
       const ft = c.type;
+      let isExact = true;
+      let needsWidening = false;
+      let allCompatible = true;
+
       for (let i = 0; i < ft.paramTypes.length; i++) {
-        if (
-          !argTypes[i] ||
-          !this.areTypesCompatible(ft.paramTypes[i]!, argTypes[i]!)
-        ) {
-          return false;
+        if (!argTypes[i]) {
+          allCompatible = false;
+          break;
+        }
+
+        const exactMatch = this.areTypesExactMatch(
+          ft.paramTypes[i]!,
+          argTypes[i]!,
+        );
+        if (exactMatch) {
+          continue;
+        }
+
+        isExact = false;
+
+        const widening = this.isImplicitWideningAllowed(
+          argTypes[i]!,
+          ft.paramTypes[i]!,
+        );
+        if (widening) {
+          needsWidening = true;
+          continue;
+        }
+
+        const compatible = this.areTypesCompatible(
+          ft.paramTypes[i]!,
+          argTypes[i]!,
+        );
+        if (!compatible) {
+          allCompatible = false;
+          break;
         }
       }
-      return true;
-    });
+
+      if (!allCompatible) continue;
+
+      if (isExact) {
+        exactMatches.push(c);
+      } else if (needsWidening) {
+        wideningMatches.push(c);
+      } else {
+        compatibleMatches.push(c);
+      }
+    }
+
+    // Prefer exact matches, then widening, then compatible
+    const matched =
+      exactMatches.length > 0
+        ? exactMatches
+        : wideningMatches.length > 0
+          ? wideningMatches
+          : compatibleMatches;
 
     if (matched.length === 0) {
       throw new CompilerError(
@@ -1723,6 +1855,17 @@ export class TypeChecker {
   }
 
   private checkMember(expr: AST.MemberExpr): AST.TypeNode | undefined {
+    // Disallow direct null object member access
+    if (
+      expr.object.kind === "Literal" &&
+      (expr.object as AST.LiteralExpr).type === "null"
+    ) {
+      throw new CompilerError(
+        "Null object dereference",
+        "You are accessing a member on a null object. Initialize the struct or check 'x == null' before use.",
+        expr.object.location,
+      );
+    }
     const objectType = this.checkExpression(expr.object);
 
     if (objectType && (objectType as any).kind === "ModuleType") {
@@ -1993,6 +2136,17 @@ export class TypeChecker {
   }
 
   private checkIndex(expr: AST.IndexExpr): AST.TypeNode | undefined {
+    // Disallow direct null object indexing access
+    if (
+      expr.object.kind === "Literal" &&
+      (expr.object as AST.LiteralExpr).type === "null"
+    ) {
+      throw new CompilerError(
+        "Null object dereference",
+        "You are indexing into a null object. Initialize the value or check 'x == null' before use.",
+        expr.object.location,
+      );
+    }
     const objectType = this.checkExpression(expr.object);
     const indexType = this.checkExpression(expr.index);
 
@@ -2399,6 +2553,69 @@ export class TypeChecker {
     return "unknown";
   }
 
+  // Helper: determine if a basic type name refers to a declared struct
+  private isStructType(typeName: string): boolean {
+    const symbol = this.currentScope.resolve(typeName);
+    return (
+      symbol !== undefined &&
+      symbol.kind === "Struct" &&
+      (symbol.declaration as any).kind === "StructDecl"
+    );
+  }
+
+  /**
+   * Check if two types are exactly the same without any implicit conversions.
+   * Used for overload resolution to prefer exact matches.
+   */
+  private areTypesExactMatch(t1: AST.TypeNode, t2: AST.TypeNode): boolean {
+    const rt1 = this.resolveType(t1);
+    const rt2 = this.resolveType(t2);
+
+    if (rt1.kind !== rt2.kind) return false;
+
+    if (rt1.kind === "BasicType" && rt2.kind === "BasicType") {
+      // Exact name match (no normalization)
+      if (rt1.name !== rt2.name) return false;
+
+      // Exact pointer depth match
+      if (rt1.pointerDepth !== rt2.pointerDepth) return false;
+
+      // Exact array dimensions match
+      if (rt1.arrayDimensions.length !== rt2.arrayDimensions.length)
+        return false;
+      for (let i = 0; i < rt1.arrayDimensions.length; i++) {
+        if (rt1.arrayDimensions[i] !== rt2.arrayDimensions[i]) return false;
+      }
+
+      // Exact generic args match
+      if (rt1.genericArgs.length !== rt2.genericArgs.length) return false;
+      for (let i = 0; i < rt1.genericArgs.length; i++) {
+        if (!this.areTypesExactMatch(rt1.genericArgs[i]!, rt2.genericArgs[i]!))
+          return false;
+      }
+
+      return true;
+    } else if (rt1.kind === "FunctionType" && rt2.kind === "FunctionType") {
+      if (!this.areTypesExactMatch(rt1.returnType, rt2.returnType))
+        return false;
+      if (rt1.paramTypes.length !== rt2.paramTypes.length) return false;
+      for (let i = 0; i < rt1.paramTypes.length; i++) {
+        if (!this.areTypesExactMatch(rt1.paramTypes[i]!, rt2.paramTypes[i]!))
+          return false;
+      }
+      return true;
+    } else if (rt1.kind === "TupleType" && rt2.kind === "TupleType") {
+      if (rt1.types.length !== rt2.types.length) return false;
+      for (let i = 0; i < rt1.types.length; i++) {
+        if (!this.areTypesExactMatch(rt1.types[i]!, rt2.types[i]!))
+          return false;
+      }
+      return true;
+    }
+
+    return false;
+  }
+
   private areTypesCompatible(t1: AST.TypeNode, t2: AST.TypeNode): boolean {
     const rt1 = this.resolveType(t1);
     const rt2 = this.resolveType(t2);
@@ -2408,26 +2625,33 @@ export class TypeChecker {
 
     // 2. Handle BasicType
     if (rt1.kind === "BasicType" && rt2.kind === "BasicType") {
-      // Nullptr handling
+      // nullptr handling - compatible with any pointer type
       if (rt1.name === "nullptr" && rt2.name === "nullptr") return true;
-      if (rt1.name === "nullptr") {
-        // nullptr is compatible with any pointer type
-        return rt2.pointerDepth > 0;
-      }
       if (rt2.name === "nullptr") {
         return rt1.pointerDepth > 0;
+      }
+      if (rt1.name === "nullptr") {
+        return rt2.pointerDepth > 0;
+      }
+
+      // null handling - compatible with any pointer type or struct/object values (non-pointers)
+      if (rt1.name === "null" || rt2.name === "null") {
+        const other = rt1.name === "null" ? rt2 : rt1;
+        if (other.pointerDepth > 0) return true;
+        return other.pointerDepth === 0 && this.isStructType(other.name);
       }
 
       // Void handling
       if (rt1.name === "void" && rt2.name === "void") return true;
 
-      // Allow void* assignment (T* -> void*)
+      // Allow bidirectional void* compatibility with all pointer types
+      // void* can be assigned to any T* and any T* can be assigned to void*
       if (rt1.name === "void" && rt1.pointerDepth > 0 && rt2.pointerDepth > 0) {
         return true;
       }
-      // Allow void* -> T* (unsafe but allowed in C, maybe restricted here? Test says "pointer to *void assignment")
-      // The test case is: local vp: *void = p; (int* -> void*)
-      // So the above rule covers it.
+      if (rt2.name === "void" && rt2.pointerDepth > 0 && rt1.pointerDepth > 0) {
+        return true;
+      }
 
       if (
         (rt1.name === "void" && rt1.pointerDepth === 0) ||

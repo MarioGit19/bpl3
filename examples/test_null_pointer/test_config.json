@@ -1,0 +1,7 @@
+{
+  "expectedOutput": "Caught: Attempted to access member of null object through pointer in main (expr: y.a)\n",
+  "args": [],
+  "env": {},
+  "input": "",
+  "skip_compilation": false
+}

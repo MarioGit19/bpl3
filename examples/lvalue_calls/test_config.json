@@ -1,0 +1,7 @@
+{
+  "expectedOutput": "-- lvalue call tests --\nptr assign: x=42\nptr chain assign: inner.value=7\nval read compare (==7): 1\ninnerPtr assign: value=99\nptr read compare (==99): 1\narr ref assign: 5\narr get compare (==5): 1\n",
+  "args": [],
+  "env": {},
+  "input": "",
+  "skip_compilation": false
+}

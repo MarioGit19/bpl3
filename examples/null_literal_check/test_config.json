@@ -1,0 +1,6 @@
+{
+  "expectedOutput": "Created struct p\np == null: false\n",
+  "args": [],
+  "env": {},
+  "input": ""
+}

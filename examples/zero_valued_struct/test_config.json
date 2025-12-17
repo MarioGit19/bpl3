@@ -1,0 +1,7 @@
+{
+  "expectedOutput": "=== Test Zero-Valued Struct ===\n\nCreating Point { x: 5, y: 10 }\nAccessing p.x (should be 5): 5\nAccessing p.y (should be 10): 10\n\nSetting p to null\n",
+  "args": [],
+  "env": {},
+  "input": "",
+  "exitCode": 1
+}

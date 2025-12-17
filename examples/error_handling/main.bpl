@@ -44,15 +44,11 @@ frame process_number(n: int) {
 frame test_struct_throw(value: int) {
     try {
         if (value < 0) {
-            local err: MathError;
-            err.code = -1;
-            err.message = "Negative value error";
+            local err: MathError = MathError { code: -1, message: "Negative value error" };
             throw err;
         }
         if (value > 100) {
-            local err: MathError;
-            err.code = 100;
-            err.message = "Value too large";
+            local err: MathError = MathError { code: 100, message: "Value too large" };
             throw err;
         }
         printf("Value %d is valid\n", value);
@@ -71,9 +67,7 @@ frame test_multiple_catch(value: int) {
             # Throw bool
         }
         if (value > 100) {
-            local err: MathError;
-            err.code = 500;
-            err.message = "Overflow error";
+            local err: MathError = MathError { code: 500, message: "Overflow error" };
             throw err;
             # Throw struct
         }

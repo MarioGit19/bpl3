@@ -210,7 +210,9 @@ export class Formatter {
 
     if (
       decl.returnType &&
-      (decl.returnType.kind !== "BasicType" || decl.returnType.name !== "void")
+      (decl.returnType.kind !== "BasicType" ||
+        decl.returnType.name !== "void" ||
+        (decl.returnType.name === "void" && decl.returnType.pointerDepth !== 0))
     ) {
       output += ` ret ${this.formatType(decl.returnType)}`;
     }

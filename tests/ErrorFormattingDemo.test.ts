@@ -81,9 +81,9 @@ describe("Error Formatting Demo", () => {
       console.log(formatted);
 
       // Verify error has location info
-      expect(errors[0].location.file).toContain("unknown_token.bpl");
-      expect(errors[0].location.startLine).toBeGreaterThan(0);
-      expect(errors[0].location.startColumn).toBeGreaterThan(0);
+      expect(errors[0]!.location.file).toContain("unknown_token.bpl");
+      expect(errors[0]!.location.startLine).toBeGreaterThan(0);
+      expect(errors[0]!.location.startColumn).toBeGreaterThan(0);
       expect(formatted).toContain("unknown_token.bpl");
     }
 
@@ -396,7 +396,7 @@ fn main() {
 
     if (errors.length > 0) {
       // Create error with hint
-      const error = errors[0];
+      const error = errors[0]!;
       error.hint =
         "Consider casting the value using 'cast<string>(x)' or using string conversion";
 

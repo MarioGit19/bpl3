@@ -1,0 +1,6 @@
+{
+  "expectedOutput": "Test 1: Zero-valued struct\np1.x = 0, p1.y = 0\n\nTest 2: Normal struct\np2.x = 10, p2.y = 20\n\nTest 3: Null struct (should trap)\nAbout to access p3.x...\nCaught: Attempted to access member of null object in main (expr: p3.x)\n\nAll tests passed!\n",
+  "args": [],
+  "env": {},
+  "input": ""
+}

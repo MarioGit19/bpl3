@@ -12,6 +12,18 @@ extern fclose(file: *void) ret int;
 extern strlen(s: *char) ret i32;
 extern strstr(haystack: *char, needle: *char) ret *char;
 
+# Input limits
+global MAX_TITLE_LEN: int = 255;
+global MAX_DESC_LEN: int = 511;
+global MAX_PATH_LEN: int = 511;
+
+# Screens
+global SCREEN_MAIN: int = 0;
+global SCREEN_ADD: int = 1;
+global SCREEN_LIST: int = 2;
+global SCREEN_EXPORT: int = 3;
+global SCREEN_IMPORT: int = 4;
+
 export [TODO];
 struct TODO {
     id: int,
@@ -25,9 +37,7 @@ struct TODO {
     }
 
     frame updateCompleted(this: *TODO, completed: bool) {
-        printf("Updating 2 completed to: %d\n", completed);
-        this.completed = *&completed;
-        printf("Updated completed to: %d\n", this.completed);
+        this.completed = completed;
     }
 
     frame updateTitle(this: *TODO, title: String) {
@@ -41,7 +51,6 @@ struct TODO {
     frame update(this: *TODO, title: String, description: String, completed: bool) {
         this.updateTitle(title);
         this.updateDescription(description);
-        printf("Updating completed to: %d\n", completed);
         this.updateCompleted(completed);
     }
 
@@ -49,7 +58,6 @@ struct TODO {
         printf("ID: %d\n", this.id);
         printf("Title: %s\n", this.title.cstr());
         printf("Description: %s\n", this.description.cstr());
-        printf("Completed value: %d\n", this.completed);
         printf("Completed: %s\n", this.completed != false ? "Yes" : "No");
         printf("------------------\n");
     }
@@ -66,24 +74,204 @@ struct MainTODO {
         return mainTodo;
     }
 
+    frame resetView(this: *MainTODO) {
+        this.currentScreen = SCREEN_MAIN;
+    }
+
+    frame findById(this: *MainTODO, id: int) ret *TODO {
+        local i: int = 0;
+        loop (i < this.items.len()) {
+            local item: *TODO = this.items.getRef(i);
+            if (item.id == id) {
+                return item;
+            }
+            i = i + 1;
+        }
+        return cast<*TODO>(0);
+    }
+
+    frame promptChar(this: *MainTODO, prompt: *char) ret char {
+        printf("%s", prompt);
+        local buf: char;
+        scanf(" %c", &buf);
+        return buf;
+    }
+
+    frame promptTitle(this: *MainTODO) ret String {
+        local raw: string = cast<string>(malloc(MAX_TITLE_LEN + 1));
+        printf("Enter TODO Title: ");
+        scanf("%255s", raw);
+        local out: String = String.new(raw);
+        free(cast<*void>(raw));
+        return out;
+    }
+
+    frame promptDescription(this: *MainTODO) ret String {
+        local raw: string = cast<string>(malloc(MAX_DESC_LEN + 1));
+        printf("Enter TODO Description: ");
+        scanf("%511s", raw);
+        local out: String = String.new(raw);
+        free(cast<*void>(raw));
+        return out;
+    }
+
+    frame promptPath(this: *MainTODO, label: *char) ret string {
+        local raw: string = cast<string>(malloc(MAX_PATH_LEN + 1));
+        printf("%s", label);
+        scanf("%511s", raw);
+        return raw;
+    }
+
+    frame promptSearch(this: *MainTODO) ret String {
+        local raw: string = cast<string>(malloc(MAX_TITLE_LEN + 1));
+        printf("Enter search term: ");
+        scanf("%255s", raw);
+        local out: String = String.new(raw);
+        free(cast<*void>(raw));
+        return out;
+    }
+
+    frame promptBool(this: *MainTODO, label: *char) ret bool {
+        local value: int = 0;
+        printf("%s", label);
+        scanf("%d", &value);
+        return value != 0;
+    }
+
     frame addTodo(this: *MainTODO, title: String, description: String) {
         local todo: TODO = TODO.new(this.count + 1, title, description);
         this.items.push(todo);
         this.count = this.count + 1;
     }
 
-    frame deleteTodo(this: *MainTODO, id: int) {
-        local newItems: Array<TODO> = Array<TODO>.new(0);
+    frame addTodoInteractive(this: *MainTODO) {
+        local title: String = this.promptTitle();
+        local description: String = this.promptDescription();
+        this.addTodo(title, description);
+        printf("TODO added successfully!\n");
+        this.resetView();
+    }
+
+    frame updateTodo(this: *MainTODO, id: int, newTitle: String, newDescription: String) {
+        local item: *TODO = this.findById(id);
+        if (item == cast<*TODO>(0)) {
+            printf("ID not found.\n");
+            return;
+        }
+        item.title.destroy();
+        item.description.destroy();
+        item.title = newTitle;
+        item.description = newDescription;
+        printf("TODO updated successfully!\n");
+        this.resetView();
+    }
+
+    frame updateTodoInteractive(this: *MainTODO) {
+        local id: int;
+        printf("Enter TODO ID to update: ");
+        scanf("%d", &id);
+        local title: String = this.promptTitle();
+        local description: String = this.promptDescription();
+        this.updateTodo(id, title, description);
+    }
+
+    frame updateCompletionStatus(this: *MainTODO, id: int, completed: bool) {
+        local item: *TODO = this.findById(id);
+        if (item == cast<*TODO>(0)) {
+            printf("ID not found.\n");
+            return;
+        }
+        item.completed = completed;
+        printf("TODO completion status updated successfully!\n");
+        this.resetView();
+    }
+
+    frame toggleCompletionInteractive(this: *MainTODO) {
+        local id: int;
+        printf("Enter TODO ID to update completion status: ");
+        scanf("%d", &id);
+        local completed: bool = this.promptBool("Set completed? (1 = yes, 0 = no): ");
+        this.updateCompletionStatus(id, completed);
+    }
+
+    frame searchTodo(this: *MainTODO, searchTerm: String) {
+        printf("\n--- Search Results ---\n");
+        local found: int = 0;
         local i: int = 0;
         loop (i < this.items.len()) {
             local item: TODO = this.items.get(i);
-            if (item.id != id) {
-                newItems.push(item);
+            local titleMatch: *char = strstr(item.title.cstr(), searchTerm.cstr());
+            local descMatch: *char = strstr(item.description.cstr(), searchTerm.cstr());
+            if ((titleMatch != cast<*char>(0)) || (descMatch != cast<*char>(0))) {
+                item.print();
+                found = found + 1;
             }
             i = i + 1;
         }
-        this.items.destroy();
-        this.items = newItems;
+        if (found == 0) {
+            printf("No matching todos found.\n");
+        } else {
+            printf("Found %d matching todos.\n", found);
+        }
+        this.resetView();
+    }
+
+    frame searchInteractive(this: *MainTODO) {
+        local term: String = this.promptSearch();
+        this.searchTodo(term);
+    }
+
+    frame clearCompleted(this: *MainTODO) {
+        local idx: int = 0;
+        local removed: int = 0;
+        loop (idx < this.items.len()) {
+            local item: TODO = this.items.get(idx);
+            if (item.completed) {
+                this.items.removeAt(idx);
+                removed = removed + 1;
+                continue;
+            }
+            idx = idx + 1;
+        }
+        printf("=> Removed %d completed todos.\n", removed);
+        this.resetView();
+    }
+
+    frame deleteTodo(this: *MainTODO, id: int) {
+        local idx: int = 0;
+        local found: bool = false;
+        loop (idx < this.items.len()) {
+            # local item: TODO = this.items.get(idx);
+            if (this.items.getRef(idx).id == id) {
+                this.items.removeAt(idx);
+                found = true;
+                break;
+            }
+            idx = idx + 1;
+        }
+        if (!found) {
+            printf("ID not found.\n");
+            return;
+        }
+        printf("=> Deleted TODO %d\n", id);
+    }
+
+    frame exportInteractive(this: *MainTODO) {
+        printf("\n--- Export TODOs ---\n");
+        printf("Current todos: %d\n", this.count);
+        local path: string = this.promptPath("Enter file path: ");
+        this.exportToBinary(path);
+        free(cast<*void>(path));
+        this.resetView();
+    }
+
+    frame importInteractive(this: *MainTODO) {
+        printf("\n--- Import TODOs ---\n");
+        printf("WARNING: This will REPLACE current todos (%d items)\n", this.count);
+        local path: string = this.promptPath("Enter file path: ");
+        this.importFromBinary(path);
+        free(cast<*void>(path));
+        this.resetView();
     }
 
     frame exportToBinary(this: *MainTODO, path: *char) ret bool {
@@ -136,6 +324,17 @@ struct MainTODO {
         local magic: string = cast<string>(malloc(8));
         fread(cast<*void>(magic), 1, 7, file);
         magic[7] = '\0';
+        local expected: string = "TODOBIN";
+        local idx: int = 0;
+        loop (idx < 7) {
+            if (magic[idx] != expected[idx]) {
+                printf("Error: Invalid todo file format.\n");
+                free(cast<*void>(magic));
+                fclose(file);
+                return false;
+            }
+            idx = idx + 1;
+        }
         # Read version
         local version: i32;
         fread(cast<*void>(&version), 4, 1, file);
@@ -145,6 +344,7 @@ struct MainTODO {
         printf("Found %d todos. Replace current %d items? (y/n): ", count32, this.count);
         local confirm: char;
         scanf(" %c", &confirm);
+        free(cast<*void>(magic));
         if ((confirm != 'y') && (confirm != 'Y')) {
             fclose(file);
             printf("Import cancelled.\n");
@@ -184,27 +384,9 @@ struct MainTODO {
         return true;
     }
 
-    frame clearCompleted(this: *MainTODO) {
-        local newItems: Array<TODO> = Array<TODO>.new(0);
-        local i: int = 0;
-        local removed: int = 0;
-        loop (i < this.items.len()) {
-            local item: TODO = this.items.get(i);
-            if (!item.completed) {
-                newItems.push(item);
-            } else {
-                removed = removed + 1;
-            }
-            i = i + 1;
-        }
-        this.items.destroy();
-        this.items = newItems;
-        printf("=> Removed %d completed todos.\n", removed);
-    }
-
-    # 0: Main Menu, 1: Add TODO, 2: View TODOs, 3: Export TODOs, 4: Import TODOs
+    # 0: Main Menu, 2: View TODOs
     frame printMenu(this: *MainTODO) {
-        if (this.currentScreen == 0) {
+        if (this.currentScreen == SCREEN_MAIN) {
             printf("\n--- TODO Application Menu ---\n");
             printf("1. Add TODO\n");
             printf("2. View TODOs\n");
@@ -213,11 +395,7 @@ struct MainTODO {
             printf("5. Exit\n");
             return;
         }
-        if (this.currentScreen == 1) {
-            # Don't print anything for Add TODO screen
-            return;
-        }
-        if (this.currentScreen == 2) {
+        if (this.currentScreen == SCREEN_LIST) {
             printf("\n--- TODO List ---\n");
             local i: int = 0;
             loop (i < this.items.len()) {
@@ -236,157 +414,60 @@ struct MainTODO {
         }
     }
 
-    frame readChar(this: *MainTODO) ret char {
-        local buf: char;
-        scanf(" %c", &buf);
-        return buf;
-    }
-
-    frame readLine(this: *MainTODO, prompt: *char, bufSize: int) ret String {
-        printf("%s", prompt);
-        local raw: string = cast<string>(malloc(bufSize));
-        scanf("%[^\n]", &raw);
-        return String.new(raw);
-    }
-
     frame handleInput(this: *MainTODO, input: char) ret bool {
-        if (this.currentScreen == 0) {
+        if (this.currentScreen == SCREEN_MAIN) {
             if (input == '1') {
-                this.currentScreen = 1;
-                local titleBuf: string = cast<string>(malloc(256));
-                local descBuf: string = cast<string>(malloc(512));
-
-                printf("Enter TODO Title: ");
-                scanf("%255s", titleBuf);
-                printf("Enter TODO Description: ");
-                scanf("%511s", descBuf);
-
-                this.addTodo(String.new(titleBuf), String.new(descBuf));
-                printf("TODO added successfully!\n");
-                this.currentScreen = 0;
-                return false;
-            } else if (input == '2') {
-                this.currentScreen = 2;
-                return false;
-            } else if (input == '3') {
-                this.currentScreen = 3;
-                printf("\n--- Export TODOs ---\n");
-                printf("Current todos: %d\n", this.count);
-                printf("Enter file path: ");
-                local pathBuf: string = cast<string>(malloc(512));
-                scanf("%511s", pathBuf);
-                this.exportToBinary(pathBuf);
-                this.currentScreen = 0;
-                return false;
-            } else if (input == '4') {
-                this.currentScreen = 4;
-                printf("\n--- Import TODOs ---\n");
-                printf("WARNING: This will REPLACE current todos (%d items)\n", this.count);
-                printf("Enter file path: ");
-                local pathBuf: string = cast<string>(malloc(512));
-                scanf("%511s", pathBuf);
-                this.importFromBinary(pathBuf);
-                this.currentScreen = 0;
-                return false;
-            } else if (input == '5') {
-                return true;
-            } else {
-                printf("Invalid option. Please try again.\n");
+                this.addTodoInteractive();
                 return false;
             }
-            return false;
-        }
-        if (this.currentScreen == 1) {
-            # This screen is handled immediately after selecting option 1 in main menu
-            return false;
-        }
-        if (this.currentScreen == 2) {
-            if (input == '1') {
-                local id: int;
-                printf("Enter TODO ID to update: ");
-                scanf("%d", &id);
-                local titleBuf: string = cast<string>(malloc(256));
-                local descBuf: string = cast<string>(malloc(512));
-                local completedInt: int = 0;
-
-                printf("Enter new Title: ");
-                scanf("%255s", titleBuf);
-                printf("Enter new Description: ");
-                scanf("%511s", descBuf);
-                printf("Is it completed? (1 for Yes, 0 for No): ");
-                scanf("%d", &completedInt);
-                printf("VALUE FOR COMPLETED: %d\n", completedInt);
-                local completed: bool = completedInt != 0;
-                printf("COMPLETED BOOL VALUE: %d\n", completed);
-
-                local i: int = 0;
-                loop (i < this.items.len()) {
-                    local item: *TODO = this.items.getRef(i);
-                    if (item.id == id) {
-                        item.update(String.new(titleBuf), String.new(descBuf), completed);
-                        break;
-                    }
-                    i = i + 1;
-                }
+            if (input == '2') {
+                this.currentScreen = SCREEN_LIST;
                 return false;
-            } else if (input == '2') {
+            }
+            if (input == '3') {
+                this.exportInteractive();
+                return false;
+            }
+            if (input == '4') {
+                this.importInteractive();
+                return false;
+            }
+            if (input == '5') {
+                return true;
+            }
+            printf("Invalid option. Please try again.\n");
+            return false;
+        }
+        if (this.currentScreen == SCREEN_LIST) {
+            if (input == '1') {
+                this.updateTodoInteractive();
+                return false;
+            }
+            if (input == '2') {
                 local id: int;
                 printf("Enter TODO ID to delete: ");
                 scanf("%d", &id);
                 this.deleteTodo(id);
                 return false;
-            } else if (input == '4') {
-                local id: int;
-                printf("Enter TODO ID to toggle completed: ");
-                scanf("%d", &id);
-                local i: int = 0;
-                local found: bool = false;
-                loop (i < this.items.len()) {
-                    local item: *TODO = this.items.getRef(i);
-                    if (item.id == id) {
-                        item.updateCompleted(!item.completed);
-                        found = true;
-                        break;
-                    }
-                    i = i + 1;
-                }
-                if (!found) {
-                    printf("ID not found.\n");
-                }
-                return false;
-            } else if (input == '5') {
-                local searchBuf: string = cast<string>(malloc(256));
-                printf("Enter search term: ");
-                scanf("%255s", searchBuf);
-                printf("\n--- Search Results ---\n");
-                local found: int = 0;
-                local i: int = 0;
-                loop (i < this.items.len()) {
-                    local item: TODO = this.items.get(i);
-                    local titleMatch: *char = strstr(item.title.cstr(), searchBuf);
-                    local descMatch: *char = strstr(item.description.cstr(), searchBuf);
-                    if ((titleMatch != cast<*char>(0)) || (descMatch != cast<*char>(0))) {
-                        item.print();
-                        found = found + 1;
-                    }
-                    i = i + 1;
-                }
-                if (found == 0) {
-                    printf("No matching todos found.\n");
-                } else {
-                    printf("Found %d matching todos.\n", found);
-                }
-                return false;
-            } else if (input == '6') {
-                this.clearCompleted();
-                return false;
-            } else if (input == '3') {
-                this.currentScreen = 0;
-                return false;
-            } else {
-                printf("Invalid option. Please try again.\n");
+            }
+            if (input == '3') {
+                this.resetView();
                 return false;
             }
+            if (input == '4') {
+                this.toggleCompletionInteractive();
+                return false;
+            }
+            if (input == '5') {
+                this.searchInteractive();
+                return false;
+            }
+            if (input == '6') {
+                this.clearCompleted();
+                return false;
+            }
+            printf("Invalid option. Please try again.\n");
+            return false;
         }
         return false;
     }

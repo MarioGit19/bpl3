@@ -1,0 +1,13 @@
+{
+  "expectedOutput": [
+    "=== Null Object Debug Info Test ===",
+    "About to access p.x (should trap with error)...",
+    "Caught Test 1: Attempted to access member of null object in testMemberAccess (expr: p.x)",
+    "About to access c.items[0] (should trap with error)...",
+    "Caught Test 2: Attempted to access member of null object in testIndexAccess (expr: c.items)",
+    "All tests passed!"
+  ],
+  "args": [],
+  "env": {},
+  "input": ""
+}

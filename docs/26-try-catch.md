@@ -27,4 +27,22 @@ try {
 } catch {
     printf("Caught something\n");
 }
+
+## Null Access Exceptions
+
+The runtime automatically throws `NullAccessError` when code touches a null object (member access, pointer deref to a struct, or array element that is null-tracked). This error carries three string fields:
+
+- `message`: human-friendly description (e.g., "Attempted to access member of null object")
+- `function`: the function where the access happened
+- `expression`: the expression that triggered the fault (e.g., `arr[1].data`)
+
+You can catch it explicitly to recover:
+
+```bpl
+try {
+    local p: Point = null;
+    local v: int = p.x; # throws NullAccessError
+} catch (e: NullAccessError) {
+    printf("Null access: %s in %s (expr: %s)\n", e.message, e.function, e.expression);
+}
 ```

@@ -289,6 +289,12 @@ function processCodeInternal(content: string, filePath: string, options: any) {
   const typeChecker = new TypeChecker();
   typeChecker.checkProgram(ast);
 
+  const typeErrors = typeChecker.getErrors();
+  if (typeErrors.length > 0) {
+    console.error(diagnosticFormatter.formatErrors(typeErrors));
+    process.exit(1);
+  }
+
   if (options.verbose) {
     console.log("Semantic analysis completed successfully.");
   }

@@ -1,0 +1,6 @@
+{
+  "expectedOutput": "=== Null Return Values Test ===\n\nTest 1: Returning null from function\nTest 2: Using returned null value\nCaught: Attempted to access member of null object in processData (expr: d.value)\nTest completed successfully\n",
+  "args": [],
+  "env": {},
+  "input": ""
+}

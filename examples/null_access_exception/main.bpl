@@ -1,0 +1,23 @@
+extern printf(fmt: string, ...);
+
+struct Point {
+    x: int,
+    y: int,
+}
+
+frame main() ret int {
+    printf("Testing null access exception handling\n");
+
+    try {
+        local p: Point = null;
+        local value: int = p.x; # Should throw NullAccessError
+        printf("Should not reach here\n");
+    } catch (e: NullAccessError) {
+        printf("Caught null access exception!\n");
+        printf("Message: %s\n", e.message);
+        printf("Function: %s\n", e.function);
+        printf("Expression: %s\n", e.expression);
+    }
+    printf("Program continues after catching exception\n");
+    return 0;
+}

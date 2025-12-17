@@ -1,0 +1,6 @@
+{
+  "expectedOutput": "sizeof(P): 12\np == null: true\n",
+  "args": [],
+  "env": {},
+  "input": ""
+}

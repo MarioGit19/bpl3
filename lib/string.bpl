@@ -43,6 +43,19 @@ struct String {
         this.length = newStr.length;
     }
 
+    # Returns true when the string has no characters.
+    frame isEmpty(this: String) ret bool {
+        return this.length == 0;
+    }
+
+    # Create a deep copy of this string.
+    frame clone(this: String) ret String {
+        if (this.data == null) {
+            return String.new(null);
+        }
+        return String.new(this.data);
+    }
+
     frame includes(this: *String, substr: *char) ret bool {
         if ((this.data == null) || (substr == null)) {
             return false;

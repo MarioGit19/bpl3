@@ -10,15 +10,15 @@ if [ $? -ne 0 ]; then
     exit 1;
 fi
 
-# Compile LLVM IR to executable using clang
-clang -Wno-override-module "$SCRIPT_DIR/$FILENAME" -o "$SCRIPT_DIR/$EXEC_NAME" 2>/dev/null
-if [ $? -ne 0 ]; then
-    echo "Failed to compile LLVM IR with clang";
-    exit 1;
-fi
+# # Compile LLVM IR to executable using clang
+# clang -Wno-override-module "$SCRIPT_DIR/$FILENAME" -o "$SCRIPT_DIR/$EXEC_NAME" 2>/dev/null
+# if [ $? -ne 0 ]; then
+#     echo "Failed to compile LLVM IR with clang";
+#     exit 1;
+# fi
 
 # Run the executable
-"$SCRIPT_DIR/$EXEC_NAME" ${@:2}
+"$SCRIPT_DIR/$EXEC_NAME" ${@:2} 2>&1
 EXIT_CODE=$?;
 
 # Clean up executable

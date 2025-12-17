@@ -18,3 +18,7 @@ frame divide(a: int, b: int) ret int {
 ## Propagation
 
 Exceptions propagate up the call stack until they are caught by a `try-catch` block. If an exception is not caught, the program terminates.
+
+## Runtime-Generated Exceptions
+
+The compiler/runtime will throw `NullAccessError` automatically when you access a null object. The error includes `message`, `function`, and `expression` fields so you can inspect what went wrong when catching it.
