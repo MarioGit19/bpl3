@@ -1,5 +1,5 @@
-import { readFileSync } from "fs";
-import { resolve } from "path";
+import { existsSync, readFileSync } from "fs";
+import { dirname, resolve } from "path";
 import * as peggy from "peggy";
 
 import * as AST from "../common/AST";
@@ -9,7 +9,37 @@ let cachedParser: peggy.Parser | null = null;
 
 function loadParser(): peggy.Parser {
   if (cachedParser) return cachedParser;
-  const grammarPath = resolve(__dirname, "../../grammar/bpl.peggy");
+
+  // Try multiple paths to find bpl.peggy
+  // 1. Relative to current module (for normal execution)
+  let grammarPath = resolve(__dirname, "../../grammar/bpl.peggy");
+
+  // 2. Relative to process.cwd() (for compiled binary)
+  if (!existsSync(grammarPath)) {
+    grammarPath = resolve(process.cwd(), "grammar/bpl.peggy");
+  }
+
+  // 3. Relative to the executable directory (for installed binary)
+  if (!existsSync(grammarPath)) {
+    const execDir = dirname(process.argv[1] || process.execPath);
+    grammarPath = resolve(execDir, "grammar/bpl.peggy");
+  }
+
+  // 4. Try looking in common install locations
+  if (!existsSync(grammarPath)) {
+    grammarPath = resolve("/usr/local/lib/bpl/grammar/bpl.peggy");
+  }
+
+  if (!existsSync(grammarPath)) {
+    throw new Error(
+      `Could not find bpl.peggy grammar file. Searched in:\n` +
+        `  - ${resolve(__dirname, "../../grammar/bpl.peggy")}\n` +
+        `  - ${resolve(process.cwd(), "grammar/bpl.peggy")}\n` +
+        `  - ${resolve(dirname(process.argv[1] || process.execPath), "grammar/bpl.peggy")}\n` +
+        `Please ensure the grammar directory is present.`,
+    );
+  }
+
   const source = readFileSync(grammarPath, "utf-8");
   cachedParser = peggy.generate(source, {
     output: "parser",

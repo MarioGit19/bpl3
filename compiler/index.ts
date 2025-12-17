@@ -124,7 +124,7 @@ export class Compiler {
         console.log("[Backend] Code Generation...");
       }
       const codeGenerator = new CodeGenerator();
-      const llvmIR = codeGenerator.generate(ast);
+      const llvmIR = codeGenerator.generate(ast, this.options.filePath);
 
       // 5. Linking (if object files provided)
       if (
@@ -302,7 +302,7 @@ export class Compiler {
 
       const codeGenerator = new CodeGenerator();
 
-      const llvmIR = codeGenerator.generate(combinedAST);
+      const llvmIR = codeGenerator.generate(combinedAST, this.options.filePath);
 
       return {
         success: true,
@@ -401,7 +401,7 @@ export class Compiler {
       }
 
       const codeGenerator = new CodeGenerator();
-      const llvmIR = codeGenerator.generate(combinedAST);
+      const llvmIR = codeGenerator.generate(combinedAST, entryModule.path);
 
       const objectFile = cache.compileModule(
         entryModule.path,

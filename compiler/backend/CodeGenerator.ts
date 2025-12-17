@@ -1,10 +1,12 @@
 import * as AST from "../common/AST";
+import { CompilerError } from "../common/CompilerError";
 import { Token } from "../frontend/Token";
 import { TokenType } from "../frontend/TokenType";
 
 export class CodeGenerator {
   private output: string[] = [];
   private declarationsOutput: string[] = []; // declarations like struct definitions
+  private currentFilePath: string = "unknown"; // Track current file for error reporting
   private registerCount: number = 0;
   private labelCount: number = 0;
   private stackAllocCount: number = 0;
@@ -29,7 +31,29 @@ export class CodeGenerator {
   private pendingGenerations: (() => void)[] = [];
   private emittedMemIsZero: boolean = false;
 
-  generate(program: AST.Program): string {
+  /**
+   * Create a CompilerError with proper location information
+   */
+  private createError(
+    message: string,
+    node?: AST.ASTNode,
+    hint?: string,
+  ): CompilerError {
+    const location = node?.location || {
+      file: this.currentFilePath,
+      startLine: 0,
+      startColumn: 0,
+      endLine: 0,
+      endColumn: 0,
+    };
+
+    return new CompilerError(message, hint || "", location);
+  }
+
+  generate(program: AST.Program, filePath?: string): string {
+    if (filePath) {
+      this.currentFilePath = filePath;
+    }
     this.output = [];
     this.declarationsOutput = [];
     this.stringLiterals.clear();
@@ -513,7 +537,11 @@ export class CodeGenerator {
     // Create a map of generic param names to concrete argument types
     const typeMap = new Map<string, AST.TypeNode>();
     if (baseStruct.genericParams.length !== genericArgs.length) {
-      throw new Error(`Generic argument mismatch for ${baseStruct.name}`);
+      throw this.createError(
+        `Generic argument mismatch for struct '${baseStruct.name}'`,
+        undefined,
+        `Expected ${baseStruct.genericParams.length} generic arguments, but got ${genericArgs.length}`,
+      );
     }
     for (let i = 0; i < baseStruct.genericParams.length; i++) {
       typeMap.set(baseStruct.genericParams[i]!.name, genericArgs[i]!);
@@ -619,7 +647,11 @@ export class CodeGenerator {
       }
     }
     if (decl.genericParams.length !== concreteArgs.length) {
-      throw new Error(`Generic argument mismatch for function ${decl.name}`);
+      throw this.createError(
+        `Generic argument mismatch for function '${decl.name}'`,
+        decl,
+        `Expected ${decl.genericParams.length} generic arguments, but got ${concreteArgs.length}`,
+      );
     }
     for (let i = 0; i < decl.genericParams.length; i++) {
       instanceMap.set(decl.genericParams[i]!.name, concreteArgs[i]!);
@@ -1132,7 +1164,11 @@ export class CodeGenerator {
     // 1. Evaluate
     const val = this.generateExpression(stmt.expression);
     if (!stmt.expression.resolvedType) {
-      throw new Error("Throw expression has no resolved type");
+      throw this.createError(
+        "Throw expression has no resolved type",
+        stmt.expression,
+        "This is likely an internal compiler error - type checking should have caught this",
+      );
     }
     const type = stmt.expression.resolvedType;
     const typeStr = this.resolveType(type);
@@ -1216,7 +1252,11 @@ export class CodeGenerator {
 
   private generateBreak(stmt: AST.BreakStmt) {
     if (this.loopStack.length === 0) {
-      throw new Error("Break statement outside of loop");
+      throw this.createError(
+        "Break statement outside of loop",
+        stmt,
+        "Break statements can only be used inside loops (for, while, do-while)",
+      );
     }
     const { breakLabel } = this.loopStack[this.loopStack.length - 1]!;
     this.emit(`  br label %${breakLabel}`);
@@ -1224,7 +1264,11 @@ export class CodeGenerator {
 
   private generateContinue(stmt: AST.ContinueStmt) {
     if (this.loopStack.length === 0) {
-      throw new Error("Continue statement outside of loop");
+      throw this.createError(
+        "Continue statement outside of loop",
+        stmt,
+        "Continue statements can only be used inside loops (for, while, do-while)",
+      );
     }
     const { continueLabel } = this.loopStack[this.loopStack.length - 1]!;
     this.emit(`  br label %${continueLabel}`);
@@ -1238,7 +1282,11 @@ export class CodeGenerator {
         | any[];
 
       if (!decl.initializer) {
-        throw new Error("Tuple destructuring requires an initializer");
+        throw this.createError(
+          "Tuple destructuring requires an initializer",
+          decl,
+          "Provide a value to destructure, e.g.: let (a, b) = getTuple();",
+        );
       }
 
       // Generate the tuple value

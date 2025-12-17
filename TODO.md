@@ -40,6 +40,9 @@
 - [x] Robust Import/Export & Linking
 - [x] Function Overloading by Parameter Types
 - [x] Standard Library Module
+- [x] Interfaces/Traits
+- [x] Enhanced Error Messages with Location Information
+- [x] Shell Autocomplete for CLI
 
 ## Pending Features (expanded)
 
@@ -52,11 +55,6 @@
   - Description: Implement enum types (including tagged unions) with exhaustive pattern matching support.
   - Implementation notes: Add enum syntax, implement tag-based value storage, add match expression with exhaustiveness checking.
   - Acceptance criteria: Enums compile and match expressions validate all cases are handled; errors on non-exhaustive patterns.
-
-- [2] Interfaces/Traits
-  - Description: Add interface definitions and allow structs to implement multiple interfaces with polymorphic dispatch.
-  - Implementation notes: Define interface syntax with method signatures, implement trait bounds checking, support v-tables or monomorphization for dispatch.
-  - Acceptance criteria: Structs can implement interfaces, interface methods are callable on interface types, type checking validates implementations.
 
 - [3] Root Global `Type` Struct
   - Description: Define a root `Type` struct that every user-defined struct implicitly inherits from, providing methods like `getTypeName()`, `getSize()`, `toString()`, and basic equality.
@@ -148,12 +146,17 @@
   - Implementation notes: Create input loop, reuse parser/compiler, use JIT or interpreter for immediate execution.
   - Acceptance criteria: REPL accepts expressions and statements, displays results, maintains state across lines.
 
+- [9] Source Code Display for Eval/Stdin Errors
+  - Description: Fix error message code snippets when compiling from stdin or eval, which currently show binary data or fail to display source.
+  - Implementation notes: Modify CompilerError to optionally accept source lines directly in constructor instead of always reading from file. When using --stdin or -e flags, pass the source code to the error reporting system. May need to thread source through the compilation pipeline or store it in a global context.
+  - Acceptance criteria: Errors from stdin/eval display the actual source code line with proper column indicators, not binary data or blank lines.
+
 - [9] Reflection API
   - Description: Provide runtime type inspection and manipulation capabilities.
   - Implementation notes: Generate type metadata during compilation, expose reflection APIs in stdlib (getType, getFields, getMembers).
   - Acceptance criteria: Runtime type information available for inspection, can iterate fields, get method signatures at runtime.
 
-- [9] Result&lt;T, E&gt; Type and Error Propagation
+- [9] Result<T, E> Type and Error Propagation
   - Description: Implement Result enum and ? operator for error propagation.
   - Implementation notes: Define Result in stdlib, implement ? operator that unwraps Ok or returns Err, support try-like semantics.
   - Acceptance criteria: Result type works like Rust's Result, ? operator propagates errors, functions returning Result integrate smoothly.

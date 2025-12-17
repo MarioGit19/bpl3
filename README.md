@@ -399,6 +399,30 @@ bpl uninstall package-name
 
 See the [Package Management Guide](docs/25-package-management.md) for details.
 
+### Shell Completion
+
+BPL provides command-line completion for Bash and Zsh shells:
+
+```bash
+# Generate Bash completion script
+bpl completion bash > ~/.local/share/bash-completion/completions/bpl
+
+# Or add to your ~/.bashrc:
+source <(bpl completion bash)
+
+# Generate Zsh completion script
+mkdir -p ~/.local/share/zsh/completions
+bpl completion zsh > ~/.local/share/zsh/completions/_bpl
+
+# Add to ~/.zshrc:
+fpath=(~/.local/share/zsh/completions $fpath)
+
+# Reload completions
+rm -f ~/.zcompdump; compinit
+```
+
+After installation, you can use Tab to complete commands, flags, and file paths!
+
 ## 🌟 Language Highlights
 
 ### Type System

@@ -6,28 +6,6 @@ Priority levels: 0 = Highest Priority, 9 = Lowest Priority
 
 ---
 
-## [1] Advanced Generics (Constraints, Inference)
-
-**Description:** Add generic constraints (e.g., `T: Comparable`) and local inference so generic functions can deduce type parameters from call-sites where possible. This feature enables developers to write more restrictive and reusable generic code by specifying what capabilities a type parameter must have. Generic type inference allows developers to omit explicit type arguments in many cases where they can be determined from context, reducing boilerplate.
-
-**Implementation Notes:**
-
-- Extend type parameter structures to include bounds/constraints
-- Implement constraint checking during type inference and resolution
-- Add unification and constraint propagation algorithm to TypeChecker
-- Build a trait/interface system that constraints can reference
-- Implement bidirectional type inference to deduce type arguments from usage
-- Create error messages that explain why a type doesn't satisfy a constraint
-
-**Acceptance Criteria:**
-
-- Constrained generics accept only types satisfying bounds and reject invalid types with clear errors
-- Generic functions without explicit type args can be called with types that infer correctly
-- Constraint violations are reported with helpful diagnostics
-- Examples demonstrate practical use cases (e.g., sorting with Comparable constraint)
-
----
-
 ## [1] Operator Overloading for User Types
 
 **Description:** Let user-defined types implement special methods (dunder-style like `__add__`, `__eq__`) that override built-in operator behavior for instances. This makes custom types (like Vector, Complex, BigInt) feel like first-class citizens by allowing them to be used with familiar operators. Operators become syntactic sugar for method calls, making code more intuitive and readable.
@@ -382,32 +360,6 @@ Priority levels: 0 = Highest Priority, 9 = Lowest Priority
 
 ---
 
-## [2] Interfaces/Traits
-
-**Description:** Add interface (or trait) definitions that describe method contracts, enabling polymorphism and code reuse. Structs can implement multiple interfaces, providing type-safe generic programming and dynamic dispatch capabilities.
-
-**Implementation Notes:**
-
-- Define interface syntax with method signatures (no implementation)
-- Implement semantic checking to validate struct implementations
-- Support trait bounds in generic parameters (e.g., `T: Comparable`)
-- Implement dispatch mechanism (v-tables for dynamic, monomorphization for static)
-- Handle interface inheritance and method conflicts
-- Implement interface casting and type checks
-- Generate vtable code during codegen
-- Support default implementations in future enhancement
-
-**Acceptance Criteria:**
-
-- Structs can implement one or more interfaces
-- Interface methods are callable on interface types
-- Type checking validates that implementations match interface signatures
-- Generic code can use trait bounds to constrain types
-- Dispatch works correctly (both static and dynamic)
-- Examples show polymorphic behavior and code reuse
-
----
-
 ## [4] Shell Autocomplete for CLI
 
 **Description:** Provide command and flag autocomplete for the `bpl` CLI in bash and zsh, improving discoverability and ergonomics.
@@ -636,3 +588,50 @@ Priority levels: 0 = Highest Priority, 9 = Lowest Priority
 - Generated code is semantically correct
 - Hygiene prevents accidental variable capture
 - Examples demonstrate practical macro use cases (derive, builders, DSLs)
+
+---
+
+## [9] Source Code Display for Eval/Stdin Errors
+
+**Description:** Fix error message code snippets when compiling from stdin (`--stdin`) or eval mode (`-e`). Currently, when an error occurs in code compiled from these sources, the error formatter attempts to read the source from a file that doesn't exist or accidentally reads binary data from compiled executables with similar names (e.g., `stdin-42069`), resulting in garbled output.
+
+**The Problem:**
+
+When using `--stdin` or `-e`, the compiler assigns fake file paths like `stdin-42069` or `eval-42069` to track the source. However, the `CompilerError` class tries to read these as real files to display code snippets. This causes:
+
+1. Binary data display when a compiled executable with that name exists
+2. Empty/missing code snippets when no file exists
+3. Poor user experience for interactive/piped compilation
+
+**Implementation Notes:**
+
+There are several approaches to fix this:
+
+**Option 1: Thread source through CompilerError (Preferred)**
+
+- Modify `CompilerError` constructor to accept optional `sourceLines: string[]` parameter
+- When compiling from stdin/eval, capture the source and pass it to error constructors
+- Store source in a global context or thread it through the compilation pipeline
+- Modify all places that create `CompilerError` to optionally provide source
+
+**Option 2: Source cache by file path**
+
+- Create a global `SourceCache` that maps file paths to source content
+- When compiling stdin/eval, register the source in the cache with the fake path
+- Modify `CompilerError.loadSourceLines()` to check the cache before reading from disk
+- Clear cache after compilation to avoid memory leaks
+
+**Option 3: Virtual file system**
+
+- Create an abstraction layer for file reading that supports "virtual" files
+- Register stdin/eval sources as virtual files in this system
+- Update all file reading throughout the compiler to use this abstraction
+
+**Acceptance Criteria:**
+
+- Errors from `bpl --stdin` display the actual source code line with proper highlighting
+- Errors from `bpl -e "code"` show the code that was passed
+- No binary data or garbled text appears in error messages
+- Column indicators (^^^) correctly point to error locations
+- Solution doesn't significantly complicate the codebase
+- Memory usage remains reasonable (no unbounded caching)

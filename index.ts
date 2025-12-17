@@ -45,6 +45,253 @@ function getHostDefaults() {
   return { target };
 }
 
+// Embedded completion scripts for when running as compiled binary
+function getBashCompletion(): string {
+  // Try to load from file first (development mode)
+  const devPath = path.join(process.cwd(), "completions/bpl-completion.bash");
+  if (fs.existsSync(devPath)) {
+    return fs.readFileSync(devPath, "utf-8");
+  }
+
+  // Fallback: embedded script
+  return `#!/usr/bin/env bash
+# Bash completion script for bpl CLI
+# Installation:
+#   1. Copy this file to /etc/bash_completion.d/bpl or ~/.local/share/bash-completion/completions/bpl
+#   2. Or source it in your ~/.bashrc: source /path/to/bpl-completion.bash
+#   3. Reload your shell or run: source ~/.bashrc
+
+_bpl_completion() {
+    local cur prev opts base
+    COMPREPLY=()
+    cur="\${COMP_WORDS[COMP_CWORD]}"
+    prev="\${COMP_WORDS[COMP_CWORD-1]}"
+
+    # Main commands
+    local commands="format init pack install list uninstall completion help"
+    
+    # Global options (work with file arguments and commands)
+    local global_opts="-e --eval --stdin -o --output --emit --target --sysroot --cpu --march --clang-flag -l --lib -L --lib-path --object --run -v --verbose --cache --write -h --help -V --version"
+    
+    # Emit types
+    local emit_types="llvm ast tokens formatted"
+
+    # If current word starts with ./ or ../ or /, always complete files
+    if [[ "$cur" == ./* ]] || [[ "$cur" == ../* ]] || [[ "$cur" == /* ]]; then
+        COMPREPLY=( $(compgen -f -X '!*.bpl' -- "\${cur}") )
+        return 0
+    fi
+
+    # Check if we're after a specific option that needs a value
+    case "\${prev}" in
+        -o|--output)
+            COMPREPLY=( $(compgen -f -- "\${cur}") )
+            return 0
+            ;;
+        --emit)
+            COMPREPLY=( $(compgen -W "\${emit_types}" -- "\${cur}") )
+            return 0
+            ;;
+        --target)
+            local targets="x86_64-pc-linux-gnu aarch64-unknown-linux-gnu arm64-apple-darwin x86_64-apple-darwin x86_64-pc-windows-gnu"
+            COMPREPLY=( $(compgen -W "\${targets}" -- "\${cur}") )
+            return 0
+            ;;
+        --sysroot|--lib-path|-L)
+            COMPREPLY=( $(compgen -d -- "\${cur}") )
+            return 0
+            ;;
+        --object)
+            COMPREPLY=( $(compgen -f -X '!*.@(o|ll|bc)' -- "\${cur}") )
+            return 0
+            ;;
+        -l|--lib|--cpu|--march|--clang-flag|-e|--eval)
+            return 0
+            ;;
+    esac
+
+    # Determine which command we're in (if any)
+    local command=""
+    local i
+    for ((i=1; i<COMP_CWORD; i++)); do
+        local word="\${COMP_WORDS[i]}"
+        if [[ " $commands " =~ " $word " ]]; then
+            command="$word"
+            break
+        fi
+    done
+
+    # If we have a command, complete based on that command
+    if [[ -n "$command" ]]; then
+        case "$command" in
+            format)
+                if [[ "$cur" == -* ]]; then
+                    COMPREPLY=( $(compgen -W "-w --write -v --verbose" -- "\${cur}") )
+                else
+                    COMPREPLY=( $(compgen -f -X '!*.bpl' -- "\${cur}") )
+                fi
+                return 0
+                ;;
+            init|pack|list)
+                COMPREPLY=( $(compgen -W "-v --verbose" -- "\${cur}") )
+                return 0
+                ;;
+            install)
+                if [[ "$cur" == -* ]]; then
+                    COMPREPLY=( $(compgen -W "-v --verbose" -- "\${cur}") )
+                else
+                    COMPREPLY=( $(compgen -f -- "\${cur}") )
+                fi
+                return 0
+                ;;
+            uninstall)
+                if [[ "$cur" == -* ]]; then
+                    COMPREPLY=( $(compgen -W "-v --verbose" -- "\${cur}") )
+                fi
+                return 0
+                ;;
+            completion)
+                COMPREPLY=( $(compgen -W "bash zsh" -- "\${cur}") )
+                return 0
+                ;;
+            help)
+                COMPREPLY=( $(compgen -W "\${commands}" -- "\${cur}") )
+                return 0
+                ;;
+        esac
+    fi
+
+    # No command yet, complete with commands or options or files
+    if [[ "$cur" == -* ]]; then
+        COMPREPLY=( $(compgen -W "\${global_opts}" -- "\${cur}") )
+    else
+        # Complete with both commands and .bpl files
+        COMPREPLY=( $(compgen -W "\${commands}" -- "\${cur}") )
+        COMPREPLY+=( $(compgen -f -X '!*.bpl' -- "\${cur}") )
+        # Also add directories for navigation
+        COMPREPLY+=( $(compgen -d -- "\${cur}") )
+    fi
+
+    return 0
+}
+
+complete -F _bpl_completion bpl
+`;
+}
+
+function getZshCompletion(): string {
+  // Try to load from file first (development mode)
+  const devPath = path.join(process.cwd(), "completions/_bpl");
+  if (fs.existsSync(devPath)) {
+    return fs.readFileSync(devPath, "utf-8");
+  }
+
+  // Fallback: embedded script
+  return `#compdef bpl
+# Zsh completion script for bpl CLI
+
+_bpl() {
+    local curcontext="$curcontext" state line
+    typeset -A opt_args
+
+    local -a commands
+    commands=(
+        'format:Format BPL source files'
+        'init:Initialize a new BPL package'
+        'pack:Package a BPL project'
+        'install:Install a BPL package'
+        'list:List installed BPL packages'
+        'uninstall:Uninstall a BPL package'
+        'completion:Generate shell completion scripts'
+        'help:Display help information'
+    )
+
+    local -a global_options
+    global_options=(
+        '-e[Evaluate BPL code]:code'
+        '--eval[Evaluate BPL code]:code'
+        '--stdin[Read BPL code from stdin]'
+        '-o[Output file]:file:_files'
+        '--output[Output file]:file:_files'
+        '--emit[Emit type]:type:(llvm ast tokens formatted)'
+        '--target[Target triple]:triple:(x86_64-pc-linux-gnu aarch64-unknown-linux-gnu arm64-apple-darwin x86_64-apple-darwin x86_64-pc-windows-gnu)'
+        '--sysroot[Sysroot path]:path:_directories'
+        '--cpu[Target CPU]:cpu'
+        '--march[Target arch]:arch'
+        '--clang-flag[Clang flags]:flag'
+        '-l[Libraries]:library'
+        '--lib[Libraries]:library'
+        '-L[Library paths]:path:_directories'
+        '--lib-path[Library paths]:path:_directories'
+        '--object[Object files]:file:_files -g "*.{o,ll,bc}"'
+        '--run[Run the code]'
+        '-v[Verbose output]'
+        '--verbose[Verbose output]'
+        '--cache[Enable caching]'
+        '--write[Write to file]'
+        '-h[Help]'
+        '--help[Help]'
+        '-V[Version]'
+        '--version[Version]'
+    )
+
+    _arguments -C \\
+        '1: :->command' \\
+        '*::arg:->args' \\
+        $global_options
+
+    case $state in
+        command)
+            _alternative \\
+                'commands:command:_describe "command" commands' \\
+                'files:BPL file:_files -g "*.bpl"'
+            ;;
+        args)
+            case $words[1] in
+                format)
+                    _arguments \\
+                        '-w[Write to file]' \\
+                        '--write[Write to file]' \\
+                        '-v[Verbose]' \\
+                        '--verbose[Verbose]' \\
+                        '*:file:_files -g "*.bpl"'
+                    ;;
+                init|pack|list)
+                    _arguments \\
+                        '-v[Verbose]' \\
+                        '--verbose[Verbose]'
+                    ;;
+                install)
+                    _arguments \\
+                        '-v[Verbose]' \\
+                        '--verbose[Verbose]' \\
+                        '1:package:_files'
+                    ;;
+                uninstall)
+                    _arguments \\
+                        '-v[Verbose]' \\
+                        '--verbose[Verbose]' \\
+                        '1:package:'
+                    ;;
+                completion)
+                    _arguments \\
+                        '1:shell:(bash zsh)'
+                    ;;
+                help)
+                    _describe 'command' commands
+                    ;;
+                *)
+                    _files -g "*.bpl"
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_bpl "$@"
+`;
+}
+
 program
   .name("bpl")
   .description(packageJson.description ?? "BPL3 Compiler")
@@ -301,7 +548,7 @@ function processCodeInternal(content: string, filePath: string, options: any) {
 
   // 4. Code Generation
   const generator = new CodeGenerator();
-  const ir = generator.generate(ast);
+  const ir = generator.generate(ast, filePath);
 
   if (options.emit === "llvm" && !options.output && !options.run) {
     // If no output file and not running, maybe print to stdout?
@@ -582,6 +829,43 @@ program
       const pm = new PackageManager();
       pm.uninstall(pkg, options);
       console.log(`Uninstalled ${pkg}`);
+    } catch (e) {
+      console.error(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("completion [shell]")
+  .description("Generate shell completion script (bash or zsh)")
+  .action((shell) => {
+    try {
+      // Default to bash if no shell specified
+      const targetShell = shell || "bash";
+
+      if (targetShell !== "bash" && targetShell !== "zsh") {
+        console.error("Error: Unsupported shell. Use 'bash' or 'zsh'.");
+        process.exit(1);
+      }
+
+      // Try to read from file first (for development)
+      const completionsDir = path.join(__dirname, "completions");
+      const completionFile =
+        targetShell === "bash"
+          ? path.join(completionsDir, "bpl-completion.bash")
+          : path.join(completionsDir, "_bpl");
+
+      let content: string;
+
+      if (fs.existsSync(completionFile)) {
+        content = fs.readFileSync(completionFile, "utf-8");
+      } else {
+        // Use embedded completion scripts for compiled binary
+        content =
+          targetShell === "bash" ? getBashCompletion() : getZshCompletion();
+      }
+
+      console.log(content);
     } catch (e) {
       console.error(`Error: ${e instanceof Error ? e.message : String(e)}`);
       process.exit(1);

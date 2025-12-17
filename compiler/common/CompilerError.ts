@@ -56,6 +56,16 @@ export class CompilerError extends Error {
    */
   private loadSourceLines(): void {
     try {
+      // Skip reading for special file names (stdin, eval)
+      // Check the full path, not just basename, as these are fake file identifiers
+      if (
+        this.location.file.includes("stdin-") ||
+        this.location.file.includes("eval-")
+      ) {
+        this.sourceLines = null;
+        return;
+      }
+
       if (fs.existsSync(this.location.file)) {
         const content = fs.readFileSync(this.location.file, "utf-8");
         this.sourceLines = content.split("\n");
