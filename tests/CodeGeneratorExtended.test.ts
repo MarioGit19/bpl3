@@ -551,8 +551,8 @@ describe("CodeGenerator - Extended Tests", () => {
         }
       `;
       const ir = generate(source);
-      expect(ir).toContain("identity_int");
-      expect(ir).toContain("identity_float");
+      expect(ir).toContain("identity_i32_i32");
+      expect(ir).toContain("identity_double_double");
     });
 
     it("should not duplicate monomorphized functions", () => {
@@ -568,7 +568,7 @@ describe("CodeGenerator - Extended Tests", () => {
       `;
       const ir = generate(source);
       // Should only have one monomorphized version
-      const matches = ir.match(/define.*identity_int/g);
+      const matches = ir.match(/define.*identity_i32_i32/g);
       expect(matches?.length).toBe(1);
     });
   });

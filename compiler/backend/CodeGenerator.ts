@@ -249,9 +249,14 @@ export class CodeGenerator {
     name: string,
     type: AST.FunctionTypeNode,
     isExtern: boolean = false,
+    genericArgs: AST.TypeNode[] = [],
   ): string {
     if (name === "main" || isExtern) return name;
-    return `${name}_${type.paramTypes.map((t) => this.mangleType(t)).join("_")}`;
+    let mangled = `${name}_${type.paramTypes.map((t) => this.mangleType(t)).join("_")}`;
+    if (genericArgs.length > 0) {
+      mangled += "_" + genericArgs.map((t) => this.mangleType(t)).join("_");
+    }
+    return mangled;
   }
 
   private getTypeIdFromNode(type: AST.TypeNode): number {
@@ -409,6 +414,41 @@ export class CodeGenerator {
   private mangleType(type: AST.TypeNode): string {
     if (type.kind === "BasicType") {
       let name = type.name;
+
+      // Normalize aliases to match TypeChecker and ensure consistent mangling
+      switch (name) {
+        case "int":
+          name = "i32";
+          break;
+        case "uint":
+          name = "u32";
+          break;
+        case "float":
+          name = "double";
+          break;
+        case "bool":
+          name = "i1";
+          break;
+        case "char":
+          name = "i8";
+          break;
+        case "uchar":
+          name = "u8";
+          break;
+        case "short":
+          name = "i16";
+          break;
+        case "ushort":
+          name = "u16";
+          break;
+        case "long":
+          name = "i64";
+          break;
+        case "ulong":
+          name = "u64";
+          break;
+      }
+
       // Handle generic args in mangling
       if (type.genericArgs.length > 0) {
         const args = type.genericArgs.map((t) => this.mangleType(t)).join("_");
@@ -460,7 +500,7 @@ export class CodeGenerator {
       throw new Error(`Generic argument mismatch for ${baseStruct.name}`);
     }
     for (let i = 0; i < baseStruct.genericParams.length; i++) {
-      typeMap.set(baseStruct.genericParams[i]!, genericArgs[i]!);
+      typeMap.set(baseStruct.genericParams[i]!.name, genericArgs[i]!);
     }
 
     // Clone and substitute fields
@@ -568,7 +608,7 @@ export class CodeGenerator {
       throw new Error(`Generic argument mismatch for function ${decl.name}`);
     }
     for (let i = 0; i < decl.genericParams.length; i++) {
-      instanceMap.set(decl.genericParams[i]!, concreteArgs[i]!);
+      instanceMap.set(decl.genericParams[i]!.name, concreteArgs[i]!);
     }
 
     // 3. Substitute Function Type to get correct mangled name
@@ -578,9 +618,14 @@ export class CodeGenerator {
     ) as AST.FunctionTypeNode;
 
     // 4. Calculate Mangled Name
-    let mangledName = this.getMangledName(decl.name, substitutedType);
+    let mangledName = this.getMangledName(
+      decl.name,
+      substitutedType,
+      false,
+      concreteArgs,
+    );
     if (namePrefix) {
-      mangledName = `${namePrefix}_${this.getMangledName(decl.name, substitutedType)}`;
+      mangledName = `${namePrefix}_${this.getMangledName(decl.name, substitutedType, false, concreteArgs)}`;
     }
 
     // 5. Check Cache
@@ -657,7 +702,7 @@ export class CodeGenerator {
     // Skip generic templates unless we are instantiating them (map is populated)
     if (decl.genericParams.length > 0) {
       const isInstantiating = decl.genericParams.every((p) =>
-        this.currentTypeMap.has(p),
+        this.currentTypeMap.has(p.name),
       );
       if (!isInstantiating) return;
     }
@@ -688,9 +733,17 @@ export class CodeGenerator {
     let name = decl.name;
     const funcType = decl.resolvedType as AST.FunctionTypeNode;
     if (decl.resolvedType && decl.resolvedType.kind === "FunctionType") {
+      let genericArgs: AST.TypeNode[] = [];
+      if (decl.genericParams.length > 0) {
+        genericArgs = decl.genericParams.map(
+          (p) => this.currentTypeMap.get(p.name)!,
+        );
+      }
       name = this.getMangledName(
         decl.name,
         decl.resolvedType as AST.FunctionTypeNode,
+        false,
+        genericArgs,
       );
     }
     let retType = this.resolveType(funcType.returnType);
@@ -1208,9 +1261,9 @@ export class CodeGenerator {
             const targetType = target.type
               ? this.resolveType(target.type)
               : this.getTargetTypeFromTuple(decl.initializer!.resolvedType!, [
-                ...indexPath,
-                i,
-              ]);
+                  ...indexPath,
+                  i,
+                ]);
 
             const addr = this.allocateStack(target.name, targetType);
 
@@ -1257,8 +1310,8 @@ export class CodeGenerator {
         destType,
         decl.initializer.resolvedType!,
         decl.resolvedType ||
-        decl.typeAnnotation ||
-        decl.initializer.resolvedType!,
+          decl.typeAnnotation ||
+          decl.initializer.resolvedType!,
       );
       this.emit(`  store ${type} ${castVal}, ${type}* ${addr}`);
 
@@ -1294,7 +1347,7 @@ export class CodeGenerator {
       if (
         decl.initializer.kind === "Unary" &&
         (decl.initializer as AST.UnaryExpr).operator.type ===
-        TokenType.Ampersand
+          TokenType.Ampersand
       ) {
         const unaryExpr = decl.initializer as AST.UnaryExpr;
         if (unaryExpr.operand.kind === "Identifier") {
@@ -1853,7 +1906,7 @@ export class CodeGenerator {
           ) {
             for (let k = 0; k < genericArgs.length; k++) {
               callSubstitutionMap.set(
-                funcType.declaration.genericParams[k]!,
+                funcType.declaration.genericParams[k]!.name,
                 genericArgs[k]!,
               );
             }
@@ -1936,11 +1989,11 @@ export class CodeGenerator {
             for (let i = 0; i < structDecl.genericParams.length; i++) {
               if (i < objType.genericArgs.length) {
                 contextMap.set(
-                  structDecl.genericParams[i]!,
+                  structDecl.genericParams[i]!.name,
                   objType.genericArgs[i]!,
                 );
                 callSubstitutionMap.set(
-                  structDecl.genericParams[i]!,
+                  structDecl.genericParams[i]!.name,
                   objType.genericArgs[i]!,
                 );
               }
@@ -1961,11 +2014,11 @@ export class CodeGenerator {
                 for (let i = 0; i < structDecl.genericParams.length; i++) {
                   if (i < inner.genericArgs.length) {
                     contextMap.set(
-                      structDecl.genericParams[i]!,
+                      structDecl.genericParams[i]!.name,
                       inner.genericArgs[i]!,
                     );
                     callSubstitutionMap.set(
-                      structDecl.genericParams[i]!,
+                      structDecl.genericParams[i]!.name,
                       inner.genericArgs[i]!,
                     );
                   }
@@ -2019,7 +2072,7 @@ export class CodeGenerator {
             ) {
               for (let k = 0; k < genericArgs.length; k++) {
                 callSubstitutionMap.set(
-                  funcType.declaration.genericParams[k]!,
+                  funcType.declaration.genericParams[k]!.name,
                   genericArgs[k]!,
                 );
               }
@@ -2280,7 +2333,6 @@ export class CodeGenerator {
         const shortName = structName.split(".").pop()!;
         layout = this.structLayouts.get(shortName);
       }
-
       if (!layout) {
         throw new Error(`Unknown struct type: ${structName}`);
       }
@@ -3114,8 +3166,7 @@ export class CodeGenerator {
     // Print error message to stderr using fprintf
     const msg = `\n*** NULL OBJECT ACCESS ***\nFunction: ${funcName}\nExpression: ${accessExpr}\nAttempted to access member/index of null object\n\n`;
     if (!this.stringLiterals.has(msg)) {
-      const varName = `@.err.null.${this.stringLiterals.size}`;
-      this.stringLiterals.set(msg, varName);
+      this.stringLiterals.set(msg, `@.err.null.${this.stringLiterals.size}`);
     }
     const msgVar = this.stringLiterals.get(msg)!;
     const msgLen = msg.length + 1;
@@ -3223,7 +3274,7 @@ export class CodeGenerator {
           this.emit(`  store i1 ${flagVal}, i1* ${flagPtr}`);
         }
 
-        // Track pointer-to-local assignments: e.g., local y: *X = &x;
+        // Track pointer-to-local in variable declarations: e.g., local y: *X = &x;
         // This allows us to check the null flag when dereferencing the pointer
         if (
           expr.value.kind === "Unary" &&

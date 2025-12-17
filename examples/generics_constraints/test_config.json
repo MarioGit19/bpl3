@@ -1,0 +1,11 @@
+{
+  "expectedOutput": [
+    "Processing box with value: 42",
+    "Inferred constraint: 42",
+    "Processing int: 10",
+    "Processing int: 20",
+    "Processing two: 100, 42",
+    "Processing parent id: 1",
+    "Processing parent id: 2"
+  ]
+}

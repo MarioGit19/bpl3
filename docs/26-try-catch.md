@@ -21,7 +21,7 @@ try {
 
 You can use a catch block without a type to catch any exception (implementation dependent).
 
-```bpl
+````bpl
 try {
     # ...
 } catch {
@@ -45,4 +45,4 @@ try {
 } catch (e: NullAccessError) {
     printf("Null access: %s in %s (expr: %s)\n", e.message, e.function, e.expression);
 }
-```
+````

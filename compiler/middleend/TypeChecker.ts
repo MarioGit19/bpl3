@@ -662,6 +662,17 @@ export class TypeChecker {
     this.currentScope = this.currentScope.enterScope();
 
     if (parentStruct) {
+      // Check for shadowing of generic parameters
+      for (const gp of decl.genericParams) {
+        if (parentStruct.genericParams.some((p) => p.name === gp.name)) {
+          throw new CompilerError(
+            `Shadowing of generic parameter '${gp.name}'`,
+            `The generic parameter '${gp.name}' is already defined in the parent struct '${parentStruct.name}'. Please use a different name.`,
+            decl.location,
+          );
+        }
+      }
+
       // Define 'this'
       this.defineSymbol(
         "this",
@@ -671,7 +682,7 @@ export class TypeChecker {
           name: parentStruct.name,
           genericArgs: parentStruct.genericParams.map((p) => ({
             kind: "BasicType",
-            name: p,
+            name: p.name,
             genericArgs: [],
             pointerDepth: 0,
             arrayDimensions: [],
@@ -685,6 +696,27 @@ export class TypeChecker {
           location: decl.location,
         },
         decl,
+      );
+    }
+
+    // Define generic parameters in scope
+    for (const gp of decl.genericParams) {
+      this.defineSymbol(
+        gp.name,
+        "TypeAlias",
+        {
+          kind: "BasicType",
+          name: gp.name,
+          genericArgs: [],
+          pointerDepth: 0,
+          arrayDimensions: [],
+          location: decl.location,
+        },
+        {
+          kind: "GenericParam",
+          location: decl.location,
+          ...gp,
+        } as any,
       );
     }
 
@@ -1610,27 +1642,47 @@ export class TypeChecker {
     argTypes: (AST.TypeNode | undefined)[],
     genericArgs: AST.TypeNode[],
     location: SourceLocation,
-  ): { symbol: Symbol; type: AST.FunctionTypeNode; declaration: AST.ASTNode } {
-    let viable = candidates.filter((c) => {
+  ): {
+    symbol: Symbol;
+    type: AST.FunctionTypeNode;
+    declaration: AST.ASTNode;
+    genericArgs?: AST.TypeNode[];
+  } {
+    const viableCandidates: {
+      symbol: Symbol;
+      inferredArgs?: AST.TypeNode[];
+    }[] = [];
+
+    for (const c of candidates) {
       const ft = c.type as AST.FunctionTypeNode;
       const decl = c.declaration as AST.FunctionDecl | AST.ExternDecl;
 
-      // Check generic params count
-      if (genericArgs.length > 0) {
-        if (decl.kind !== "FunctionDecl") return false;
-        if (decl.genericParams.length !== genericArgs.length) return false;
+      // Check param count
+      if (ft.isVariadic) {
+        if (ft.paramTypes.length > argTypes.length) continue;
       } else {
-        // If no generic args provided, we only match non-generic functions for now
-        // (Inference not implemented)
-        if (decl.kind === "FunctionDecl" && decl.genericParams.length > 0)
-          return false;
+        if (ft.paramTypes.length !== argTypes.length) continue;
       }
 
-      if (ft.isVariadic) return ft.paramTypes.length <= argTypes.length;
-      return ft.paramTypes.length === argTypes.length;
-    });
+      if (genericArgs.length > 0) {
+        // Explicit generics
+        if (decl.kind !== "FunctionDecl") continue;
+        if (decl.genericParams.length !== genericArgs.length) continue;
+        viableCandidates.push({ symbol: c });
+      } else {
+        // No explicit generics
+        if (decl.kind === "FunctionDecl" && decl.genericParams.length > 0) {
+          // Generic inference is disabled by user request.
+          // Only explicit generic arguments are allowed.
+          continue;
+        } else {
+          // Non-generic
+          viableCandidates.push({ symbol: c });
+        }
+      }
+    }
 
-    if (viable.length === 0) {
+    if (viableCandidates.length === 0) {
       throw new CompilerError(
         `No matching function for call to '${name}' with ${argTypes.length} arguments${genericArgs.length > 0 ? ` and ${genericArgs.length} generic arguments` : ""}.`,
         `Available overloads:\n${candidates
@@ -1641,24 +1693,29 @@ export class TypeChecker {
     }
 
     // Create a list of candidates with substituted types if generic
-    const substitutedCandidates = viable.map((c) => {
+    const substitutedCandidates = viableCandidates.map((vc) => {
+      const c = vc.symbol;
       const decl = c.declaration as AST.FunctionDecl | AST.ExternDecl;
-      if (genericArgs.length > 0 && decl.kind === "FunctionDecl") {
+      const args = genericArgs.length > 0 ? genericArgs : vc.inferredArgs;
+
+      if (args && decl.kind === "FunctionDecl") {
         const map = new Map<string, AST.TypeNode>();
         for (let i = 0; i < decl.genericParams.length; i++) {
-          map.set(decl.genericParams[i]!, genericArgs[i]!);
+          map.set(decl.genericParams[i]!.name, args[i]!);
         }
         const sub = this.substituteType(c.type!, map) as AST.FunctionTypeNode;
         return {
           symbol: c,
           type: sub,
           declaration: decl,
+          genericArgs: args,
         };
       }
       return {
         symbol: c,
         type: c.type as AST.FunctionTypeNode,
         declaration: decl,
+        genericArgs: undefined,
       };
     });
 
@@ -1727,6 +1784,16 @@ export class TypeChecker {
           ? wideningMatches
           : compatibleMatches;
 
+    if (matched.length > 1) {
+      // Sort to prefer non-generic functions
+      matched.sort((a, b) => {
+        const aIsGeneric = !!a.genericArgs;
+        const bIsGeneric = !!b.genericArgs;
+        if (aIsGeneric === bIsGeneric) return 0;
+        return aIsGeneric ? 1 : -1; // Non-generic first
+      });
+    }
+
     if (matched.length === 0) {
       throw new CompilerError(
         `No matching function for call to '${name}' with provided argument types.`,
@@ -1761,6 +1828,10 @@ export class TypeChecker {
           | AST.FunctionDecl
           | AST.ExternDecl;
         expr.callee.resolvedType = match.type;
+
+        if (match.genericArgs) {
+          expr.genericArgs = match.genericArgs;
+        }
 
         return (match.type as AST.FunctionTypeNode).returnType;
       }
@@ -1809,7 +1880,6 @@ export class TypeChecker {
       // We don't have isVariadic on FunctionType.
       // But we can check the declaration if available.
       const decl = (calleeType as any).declaration; // Could be FunctionDecl or undefined (Extern)
-      // ExternDecl is not stored in declaration field of FunctionTypeNode in my previous edit.
 
       // If we want to support variadic, we need to know.
       // For now, let's just check count if we have params.
@@ -1866,7 +1936,7 @@ export class TypeChecker {
         expr.object.location,
       );
     }
-    const objectType = this.checkExpression(expr.object);
+    let objectType = this.checkExpression(expr.object);
 
     if (objectType && (objectType as any).kind === "ModuleType") {
       const moduleScope = (objectType as any).moduleScope as SymbolTable;
@@ -1934,7 +2004,10 @@ export class TypeChecker {
                 ) {
                   const mapping = new Map<string, AST.TypeNode>();
                   for (let i = 0; i < decl.genericParams.length; i++) {
-                    mapping.set(decl.genericParams[i]!, inner.genericArgs[i]!);
+                    mapping.set(
+                      decl.genericParams[i]!.name,
+                      inner.genericArgs[i]!,
+                    );
                   }
                   memberType = this.substituteType(
                     memberType,
@@ -1980,6 +2053,23 @@ export class TypeChecker {
         }
       }
       let structDecl: AST.StructDecl | undefined;
+
+      // Handle Generic Params with Constraints
+      if (
+        symbol &&
+        symbol.kind === "TypeAlias" &&
+        (symbol.declaration as any).kind === "GenericParam"
+      ) {
+        const gp = symbol.declaration as any;
+        if (gp.constraint && gp.constraint.kind === "BasicType") {
+          const constraintType = this.resolveType(
+            gp.constraint,
+          ) as AST.BasicTypeNode;
+          objectType = constraintType;
+          symbol = this.currentScope.resolve(objectType.name);
+        }
+      }
+
       if (objectType.resolvedDeclaration) {
         structDecl = objectType.resolvedDeclaration;
       } else if (
@@ -2005,7 +2095,7 @@ export class TypeChecker {
           ) {
             for (let i = 0; i < contextDecl.genericParams.length; i++) {
               mapping.set(
-                contextDecl.genericParams[i]!,
+                contextDecl.genericParams[i]!.name,
                 contextType.genericArgs[i]!,
               );
             }
@@ -2130,6 +2220,12 @@ export class TypeChecker {
             expr.location,
           );
         }
+      } else {
+        throw new CompilerError(
+          `Could not resolve struct declaration for type '${objectType.name}'`,
+          "Ensure the struct is defined and visible.",
+          expr.location,
+        );
       }
     }
     return undefined;
@@ -2430,7 +2526,20 @@ export class TypeChecker {
 
         const mapping = new Map<string, AST.TypeNode>();
         for (let i = 0; i < targetDecl.genericParams.length; i++) {
-          mapping.set(targetDecl.genericParams[i]!, expr.genericArgs[i]!);
+          const param = targetDecl.genericParams[i]!;
+          const arg = expr.genericArgs[i]!;
+
+          if (param.constraint) {
+            if (!this.areTypesCompatible(param.constraint, arg)) {
+              throw new CompilerError(
+                `Type '${this.typeToString(arg)}' does not satisfy constraint '${this.typeToString(param.constraint)}'`,
+                `Ensure the type argument satisfies the constraint.`,
+                expr.location,
+              );
+            }
+          }
+
+          mapping.set(param.name, arg);
         }
 
         const result = this.substituteType(targetType, mapping);
@@ -2474,6 +2583,11 @@ export class TypeChecker {
         ...type,
         returnType: this.substituteType(type.returnType, mapping),
         paramTypes: type.paramTypes.map((p) => this.substituteType(p, mapping)),
+      };
+    } else if (type.kind === "TupleType") {
+      return {
+        ...type,
+        types: type.types.map((t) => this.substituteType(t, mapping)),
       };
     }
     return type;
@@ -2616,9 +2730,13 @@ export class TypeChecker {
     return false;
   }
 
-  private areTypesCompatible(t1: AST.TypeNode, t2: AST.TypeNode): boolean {
-    const rt1 = this.resolveType(t1);
-    const rt2 = this.resolveType(t2);
+  private areTypesCompatible(
+    t1: AST.TypeNode,
+    t2: AST.TypeNode,
+    checkConstraints: boolean = true,
+  ): boolean {
+    const rt1 = this.resolveType(t1, checkConstraints);
+    const rt2 = this.resolveType(t2, checkConstraints);
 
     // 1. Check basic kind
     if (rt1.kind !== rt2.kind) return false;
@@ -2683,6 +2801,20 @@ export class TypeChecker {
         }
       }
 
+      // Check generic arguments compatibility
+      // If rt1 (target/constraint) has NO generic args, but the type definition DOES have generic params,
+      // treat it as a wildcard match (e.g. T: Box matches Box<int>).
+      const symbol1 = this.currentScope.resolve(rt1.name);
+      let isWildcard = false;
+      if (
+        symbol1 &&
+        symbol1.kind === "Struct" &&
+        (symbol1.declaration as AST.StructDecl).genericParams.length > 0 &&
+        rt1.genericArgs.length === 0
+      ) {
+        isWildcard = true;
+      }
+
       // Pointer depth match or array decay
       if (rt1.pointerDepth !== rt2.pointerDepth) {
         // ...
@@ -2708,14 +2840,16 @@ export class TypeChecker {
       }
 
       // Generic args match
-      if (rt1.genericArgs.length !== rt2.genericArgs.length) {
-        return false;
-      }
-      for (let i = 0; i < rt1.genericArgs.length; i++) {
-        if (
-          !this.areTypesCompatible(rt1.genericArgs[i]!, rt2.genericArgs[i]!)
-        ) {
+      if (!isWildcard) {
+        if (rt1.genericArgs.length !== rt2.genericArgs.length) {
           return false;
+        }
+        for (let i = 0; i < rt1.genericArgs.length; i++) {
+          if (
+            !this.areTypesCompatible(rt1.genericArgs[i]!, rt2.genericArgs[i]!)
+          ) {
+            return false;
+          }
         }
       }
 
@@ -2931,13 +3065,73 @@ export class TypeChecker {
     }
   }
 
-  private resolveType(type: AST.TypeNode): AST.TypeNode {
+  private resolveType(
+    type: AST.TypeNode,
+    checkConstraints: boolean = true,
+  ): AST.TypeNode {
     if (type.kind === "BasicType") {
       const symbol = this.currentScope.resolve(type.name);
 
+      if (
+        checkConstraints &&
+        symbol &&
+        (symbol.kind === "Struct" || symbol.kind === "TypeAlias")
+      ) {
+        const decl = symbol.declaration as AST.StructDecl | AST.TypeAliasDecl;
+        if (
+          decl &&
+          (decl as any).genericParams &&
+          (decl as any).genericParams.length > 0
+        ) {
+          const genericParams = (decl as any)
+            .genericParams as AST.GenericParam[];
+          if (type.genericArgs.length === genericParams.length) {
+            const resolvedArgs = type.genericArgs.map((t) =>
+              this.resolveType(t, true),
+            );
+
+            const mapping = new Map<string, AST.TypeNode>();
+            for (let i = 0; i < genericParams.length; i++) {
+              mapping.set(genericParams[i]!.name, resolvedArgs[i]!);
+            }
+
+            for (let i = 0; i < genericParams.length; i++) {
+              const param = genericParams[i]!;
+              const arg = resolvedArgs[i]!;
+              if (param.constraint) {
+                const substitutedConstraint = this.substituteType(
+                  param.constraint,
+                  mapping,
+                );
+                if (
+                  !this.areTypesCompatible(substitutedConstraint, arg, false)
+                ) {
+                  throw new CompilerError(
+                    `Type '${this.typeToString(
+                      arg,
+                    )}' does not satisfy constraint '${this.typeToString(
+                      substitutedConstraint,
+                    )}'`,
+                    `Ensure the type argument satisfies the constraint.`,
+                    type.location,
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+
       if (symbol && symbol.kind === "Struct") {
-        (type as AST.BasicTypeNode).resolvedDeclaration =
-          symbol.declaration as AST.StructDecl;
+        const resolvedArgs = type.genericArgs.map((t) =>
+          this.resolveType(t, checkConstraints),
+        );
+
+        const basicType = type as AST.BasicTypeNode;
+        basicType.resolvedDeclaration = symbol.declaration as AST.StructDecl;
+        basicType.genericArgs = resolvedArgs;
+
+        return basicType;
       }
 
       if (symbol && symbol.kind === "TypeAlias" && symbol.type) {
@@ -2949,14 +3143,16 @@ export class TypeChecker {
           return type;
         }
 
-        const resolvedBase = this.resolveType(symbol.type);
+        const resolvedBase = this.resolveType(symbol.type, checkConstraints);
 
         if (resolvedBase.kind === "BasicType") {
           return {
             ...resolvedBase,
             genericArgs: [
               ...resolvedBase.genericArgs,
-              ...type.genericArgs.map((t) => this.resolveType(t)),
+              ...type.genericArgs.map((t) =>
+                this.resolveType(t, checkConstraints),
+              ),
             ],
             pointerDepth: resolvedBase.pointerDepth + type.pointerDepth,
             arrayDimensions: [
@@ -2971,13 +3167,15 @@ export class TypeChecker {
     } else if (type.kind === "FunctionType") {
       return {
         ...type,
-        returnType: this.resolveType(type.returnType),
-        paramTypes: type.paramTypes.map((p) => this.resolveType(p)),
+        returnType: this.resolveType(type.returnType, checkConstraints),
+        paramTypes: type.paramTypes.map((p) =>
+          this.resolveType(p, checkConstraints),
+        ),
       };
     } else if (type.kind === "TupleType") {
       return {
         ...type,
-        types: type.types.map((t) => this.resolveType(t)),
+        types: type.types.map((t) => this.resolveType(t, checkConstraints)),
       };
     }
     return type;
@@ -3063,7 +3261,10 @@ export class TypeChecker {
             currentType.genericArgs.length === decl.genericParams.length
           ) {
             for (let i = 0; i < decl.genericParams.length; i++) {
-              mapping.set(decl.genericParams[i]!, currentType.genericArgs[i]!);
+              mapping.set(
+                decl.genericParams[i]!.name,
+                currentType.genericArgs[i]!,
+              );
             }
           }
 

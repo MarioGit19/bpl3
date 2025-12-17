@@ -82,7 +82,7 @@ describe("AST Validator - Extended Tests", () => {
       if (func?.kind === "FunctionDecl") {
         expect(func.genericParams).toBeDefined();
         expect(func.genericParams.length).toBe(1);
-        expect(func.genericParams[0]).toBe("T");
+        expect(func.genericParams[0]!.name).toBe("T");
       }
     });
 
@@ -181,7 +181,7 @@ describe("AST Validator - Extended Tests", () => {
       if (struct?.kind === "StructDecl") {
         expect(struct.genericParams).toBeDefined();
         expect(struct.genericParams.length).toBe(1);
-        expect(struct.genericParams[0]).toBe("T");
+        expect(struct.genericParams[0]!.name).toBe("T");
       }
     });
   });

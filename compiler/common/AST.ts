@@ -8,6 +8,11 @@ export interface ASTNode {
   resolvedType?: TypeNode;
 }
 
+export interface GenericParam {
+  name: string;
+  constraint?: TypeNode;
+}
+
 // --- Types ---
 
 export type TypeNode =
@@ -193,7 +198,7 @@ export interface FunctionDecl extends ASTNode {
   isFrame: boolean; // frame vs static
   isStatic: boolean;
   name: string;
-  genericParams: string[];
+  genericParams: GenericParam[];
   params: { name: string; type: TypeNode }[];
   returnType: TypeNode;
   body: BlockStmt;
@@ -202,7 +207,7 @@ export interface FunctionDecl extends ASTNode {
 export interface StructDecl extends ASTNode {
   kind: "StructDecl";
   name: string;
-  genericParams: string[];
+  genericParams: GenericParam[];
   parentType?: TypeNode; // Inheritance
   members: (StructField | FunctionDecl)[];
 }
@@ -216,7 +221,7 @@ export interface StructField extends ASTNode {
 export interface TypeAliasDecl extends ASTNode {
   kind: "TypeAlias";
   name: string;
-  genericParams: string[];
+  genericParams: GenericParam[];
   type: TypeNode;
 }
 

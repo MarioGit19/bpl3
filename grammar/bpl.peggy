@@ -763,8 +763,13 @@ Parameter
   = name:Identifier _ ":" _ type:Type { return { name: name.name, type }; }
 
 GenericParamList
-  = "<" _ head:Identifier tail:(_ "," _ Identifier)* _ ">" {
-      return [head.name, ...tail.map(t => t[3].name)];
+  = "<" _ head:GenericParam tail:(_ "," _ GenericParam)* _ ">" {
+      return [head, ...tail.map(t => t[3])];
+    }
+
+GenericParam
+  = name:Identifier constraint:(_ ":" _ Type)? {
+      return { name: name.name, constraint: constraint ? constraint[3] : undefined };
     }
 
 GenericArgs

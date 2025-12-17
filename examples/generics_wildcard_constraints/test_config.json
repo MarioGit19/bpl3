@@ -1,0 +1,4 @@
+{
+  "description": "Test wildcard generic constraints (e.g. T: Box)",
+  "expectedOutput": "Box ID: 1\nBox ID: 2\n"
+}

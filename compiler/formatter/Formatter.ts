@@ -198,9 +198,7 @@ export class Formatter {
     const indent = this.getIndent();
     let output = `${indent}frame ${decl.name}`;
 
-    if (decl.genericParams.length > 0) {
-      output += `<${decl.genericParams.join(", ")}>`;
-    }
+    output += this.formatGenericParams(decl.genericParams);
 
     output += "(";
     output += decl.params
@@ -226,9 +224,7 @@ export class Formatter {
     const indent = this.getIndent();
     let output = `${indent}struct ${decl.name}`;
 
-    if (decl.genericParams.length > 0) {
-      output += `<${decl.genericParams.join(", ")}>`;
-    }
+    output += this.formatGenericParams(decl.genericParams);
 
     if (decl.parentType) {
       output += ` : ${this.formatType(decl.parentType)}`;
@@ -273,9 +269,7 @@ export class Formatter {
     const indent = this.getIndent();
     let output = `${indent}type ${decl.name}`;
 
-    if (decl.genericParams.length > 0) {
-      output += `<${decl.genericParams.join(", ")}>`;
-    }
+    output += this.formatGenericParams(decl.genericParams);
 
     output += ` = ${this.formatType(decl.type)};`;
     return output;
@@ -768,5 +762,17 @@ export class Formatter {
     const comparisons = ["==", "!=", "<", "<=", ">", ">="];
     const bitwise = ["|", "^", "&", "<<", ">>"];
     return comparisons.includes(parentOp) && bitwise.includes(childOp);
+  }
+
+  private formatGenericParams(params: AST.GenericParam[]): string {
+    if (params.length === 0) return "";
+    return `<${params
+      .map((p) => {
+        if (p.constraint) {
+          return `${p.name}: ${this.formatType(p.constraint)}`;
+        }
+        return p.name;
+      })
+      .join(", ")}>`;
   }
 }
