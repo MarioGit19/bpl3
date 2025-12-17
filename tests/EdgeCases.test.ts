@@ -49,7 +49,6 @@ describe("Edge Cases and Error Handling", () => {
     });
 
     it("should handle null in ternary operator", () => {
-      // TODO: Should allow casting to and from *void to any type, should make nullptr compatible with any pointer
       const source = `
         frame test() ret *int {
           return true ? nullptr : nullptr;

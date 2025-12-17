@@ -91,7 +91,6 @@ describe("Lexer - Extended Tests", () => {
     });
 
     it("should tokenize 'as' keyword", () => {
-      // TODO: Should tokenize "as" as separate token instead of Identifier
       const tokens = tokenize("as");
       expect(tokens[0]!.type).toBe(TokenType.As);
     });

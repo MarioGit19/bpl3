@@ -21,6 +21,7 @@ export class TypeChecker {
   private currentModulePath: string = "unknown";
   private errors: CompilerError[] = [];
   private collectAllErrors: boolean = true;
+  private loopDepth: number = 0; // Track nesting depth for break/continue validation
 
   constructor(
     options: {
@@ -426,15 +427,29 @@ export class TypeChecker {
       case "Import":
         break; // Already hoisted
       case "Export":
-        break; // TODO
+        break; // No runtime type checking needed for exports
       case "Extern":
         break; // Already hoisted
       case "Asm":
         break; // Unsafe
       case "Break":
-        break; // TODO: Check if inside loop
+        if (this.loopDepth === 0) {
+          throw new CompilerError(
+            "Break statement outside of loop",
+            "Break can only be used inside a loop or switch statement.",
+            stmt.location,
+          );
+        }
+        break;
       case "Continue":
-        break; // TODO: Check if inside loop
+        if (this.loopDepth === 0) {
+          throw new CompilerError(
+            "Continue statement outside of loop",
+            "Continue can only be used inside a loop statement.",
+            stmt.location,
+          );
+        }
+        break;
       case "Try":
         this.checkTry(stmt);
         break;
@@ -566,8 +581,60 @@ export class TypeChecker {
         this.defineSymbol(target.name, "Variable", target.type, decl);
       }
       if (decl.initializer) {
-        this.checkExpression(decl.initializer);
-        // TODO: Check if initializer type matches destructuring
+        const initType = this.checkExpression(decl.initializer);
+
+        // Helper to recursively check tuple destructuring structure
+        const checkDestructuringMatch = (
+          targets: any[],
+          tupleType: AST.TypeNode,
+          path: string = "root",
+        ): void => {
+          if (!tupleType || tupleType.kind !== "TupleType") {
+            throw new CompilerError(
+              `Cannot destructure non-tuple type: ${this.typeToString(tupleType)}`,
+              "Tuple destructuring requires a tuple value.",
+              decl.location,
+            );
+          }
+
+          const tt = tupleType as AST.TupleTypeNode;
+          if (tt.types.length !== targets.length) {
+            throw new CompilerError(
+              `Tuple destructuring arity mismatch at ${path}: expected ${targets.length} elements, got ${tt.types.length}`,
+              "The number of variables must match the tuple size.",
+              decl.location,
+            );
+          }
+
+          for (let i = 0; i < targets.length; i++) {
+            const target = targets[i];
+            const elemType = tt.types[i]!;
+
+            if (Array.isArray(target)) {
+              // Nested destructuring
+              checkDestructuringMatch(target, elemType, `${path}[${i}]`);
+            } else if (target.type) {
+              // Check type compatibility
+              if (!this.areTypesCompatible(target.type, elemType)) {
+                throw new CompilerError(
+                  `Type mismatch in tuple destructuring: variable '${target.name}' expects ${this.typeToString(target.type)}, got ${this.typeToString(elemType)}`,
+                  "Ensure the tuple element types match the declared variable types.",
+                  decl.location,
+                );
+              }
+            }
+          }
+        };
+
+        if (initType && initType.kind === "TupleType") {
+          checkDestructuringMatch(decl.name, initType);
+        } else if (initType) {
+          throw new CompilerError(
+            `Cannot destructure non-tuple type: ${this.typeToString(initType)}`,
+            "Tuple destructuring requires a tuple value on the right-hand side.",
+            decl.location,
+          );
+        }
       }
     } else {
       // Simple declaration
@@ -1298,7 +1365,9 @@ export class TypeChecker {
 
   private checkLoop(stmt: AST.LoopStmt): void {
     if (stmt.condition) this.checkExpression(stmt.condition);
+    this.loopDepth++;
     this.checkBlock(stmt.body);
+    this.loopDepth--;
   }
 
   private checkReturn(stmt: AST.ReturnStmt): void {
@@ -1352,11 +1421,13 @@ export class TypeChecker {
 
   private checkSwitch(stmt: AST.SwitchStmt): void {
     this.checkExpression(stmt.expression);
+    this.loopDepth++; // Break is valid in switch
     for (const c of stmt.cases) {
       this.checkExpression(c.value);
       this.checkBlock(c.body);
     }
     if (stmt.defaultCase) this.checkBlock(stmt.defaultCase);
+    this.loopDepth--;
   }
 
   // --- Expressions ---
@@ -2547,8 +2618,18 @@ export class TypeChecker {
     if (expr.elements.length === 0) return undefined; // Cannot infer type of empty array without context
     const firstType = this.checkExpression(expr.elements[0]!);
     for (let i = 1; i < expr.elements.length; i++) {
-      this.checkExpression(expr.elements[i]!);
-      // TODO: Check consistency
+      const elemType = this.checkExpression(expr.elements[i]!);
+      if (
+        firstType &&
+        elemType &&
+        !this.areTypesCompatible(firstType, elemType)
+      ) {
+        throw new CompilerError(
+          `Array literal has inconsistent element types: ${this.typeToString(firstType)} vs ${this.typeToString(elemType)}`,
+          "All elements in an array literal must have the same type.",
+          expr.elements[i]!.location,
+        );
+      }
     }
     if (firstType && firstType.kind === "BasicType") {
       return {

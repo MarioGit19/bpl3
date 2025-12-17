@@ -43,7 +43,6 @@ describe("TypeChecker - Extended Tests", () => {
     });
 
     it("should allow pointer to *void assignment", () => {
-      // TODO: Should allow casting to and from *void to any type, should make nullptr compatible with any pointer
       const source = `
         frame test() ret *void {
           local p: *int = nullptr;
@@ -279,7 +278,6 @@ describe("TypeChecker - Extended Tests", () => {
     });
 
     it("should fail on pointer arithmetic with non-integer", () => {
-      // TODO: Should fail in Type Checker phase
       const source = `
         frame main() ret int {
           local p: *int;
@@ -366,7 +364,6 @@ describe("TypeChecker - Extended Tests", () => {
     });
 
     it("should reject arithmetic on incompatible types", () => {
-      // TODO: Should handle this in type checked phase
       const source = `
         frame main() ret int {
           local a: int = 10;
@@ -425,7 +422,6 @@ describe("TypeChecker - Extended Tests", () => {
     });
 
     it("should reject accessing non-existent members", () => {
-      // TODO: Should catch this in TypeChecking phase instead of CodeGen phase
       const source = `
         struct Point { x: int, y: int, }
         frame main() ret int {
@@ -468,7 +464,6 @@ describe("TypeChecker - Extended Tests", () => {
     });
 
     it("should allow pointer casts", () => {
-      // TODO: Should allow casting to and from *void to any type, should make nullptr compatible with any pointer
       const source = `
         frame main() ret int {
           local p: *void = nullptr;
