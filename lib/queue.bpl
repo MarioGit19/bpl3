@@ -57,4 +57,11 @@ struct Queue<T> {
     frame clear(this: *Queue<T>) {
         this.inner.length = 0;
     }
+
+    # Operator overloading: Enqueue with << operator
+    # Usage: queue << value
+    frame __lshift__(this: *Queue<T>, value: T) ret Queue<T> {
+        this.enqueue(value);
+        return *this;
+    }
 }

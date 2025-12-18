@@ -6,11 +6,89 @@ Priority levels: 0 = Highest Priority, 9 = Lowest Priority
 
 ---
 
+## 🎯 RECOMMENDED NEXT STEPS (December 2025)
+
+After successfully completing **Operator Overloading** and **Generic-Aware Operator Resolution**, the following features are recommended for implementation next:
+
+### 1. **Enum Types and Pattern Matching** [Priority 2] ⭐ HIGHEST PRIORITY
+
+- **Why:** Natural extension of the type system; enables algebraic data types (ADTs)
+- **Impact:** Makes Result<T,E> and Option<T> more powerful with associated data
+- **Use cases:** Error handling, state machines, variant types
+- **Complexity:** Medium-High (parser, type system, exhaustiveness checking)
+
+### 2. **Root Global `Type` Struct** [Priority 3] 🔧 FOUNDATION
+
+- **Why:** Provides runtime type information (RTTI) and common object methods
+- **Impact:** Enables reflection, better debugging, toString() on all types
+- **Use cases:** Debugging, serialization, generic algorithms
+- **Complexity:** Medium (requires inheritance system enhancement)
+
+### 3. **Primitive Types as Structs** [Priority 3] 🎨 TYPE SYSTEM UNIFICATION
+
+- **Why:** Unifies type system, allows methods on primitives
+- **Impact:** More consistent language design, enables `42.toString()`, `3.14.abs()`
+- **Use cases:** Method chaining, uniform type handling
+- **Complexity:** Medium (requires careful performance optimization)
+
+**Recommendation:** Start with **Enum Types and Pattern Matching** as it's the highest priority pending feature and would significantly enhance the language's expressiveness.
+
+---
+
+## 📋 COMPLETED FEATURES
+
+---
+
 ## [1] ✅ Operator Overloading for User Types (COMPLETED)
 
 **Description:** Let user-defined types implement special methods (dunder-style like `__add__`, `__eq__`) that override built-in operator behavior for instances. This makes custom types (like Vector, Complex, BigInt) feel like first-class citizens by allowing them to be used with familiar operators. Operators become syntactic sugar for method calls, making code more intuitive and readable.
 
 **Implementation Status:** ✅ Fully Implemented
+
+---
+
+## [2] ✅ Generic-Aware Operator Resolution (COMPLETED)
+
+**Description:** Enable operator overloading to work with generic types by making operator resolution happen after generic type substitution. Generic structs like `Array<T>`, `Stack<T>`, `Queue<T>`, etc. can now use operator overloading with full type parameter substitution support.
+
+**Implementation Status:** ✅ Fully Implemented (December 2025)
+
+**What Was Implemented:**
+
+- ✅ TypeChecker enhancement: Generic type substitution for operator methods
+- ✅ CodeGenerator enhancement: Correct monomorphized method name generation
+- ✅ Fixed nested generic type resolution (e.g., `Array<Pair<K,V>>`)
+- ✅ All stdlib generic types updated with operators:
+  - Array<T>: `<<` (push), `>>` (pop)
+  - Stack<T>: `<<` (push)
+  - Queue<T>: `<<` (enqueue)
+  - Map<K,V>: `==`, `!=`
+  - Set<T>: `|` (union), `&` (intersection), `-` (difference), `==`, `!=`
+  - Option<T>: `==`, `!=`
+  - Result<T,E>: `==`, `!=`
+  - Vec2/Vec3: Full arithmetic operators
+
+**Examples:**
+
+- `examples/operator_overloading_generic/` - Generic operator overloading tests
+- `examples/operator_overloading_minimal/` - Minimal generic test
+- `examples/operator_overloading_simple/` - Multiple operators and types
+- `examples/stdlib_operator_overloading/` - Comprehensive stdlib operators test
+
+**Tests:**
+
+- All 139 integration tests passing
+- Operators work correctly with concrete generic instantiations
+- Nested generics properly resolved
+
+**Documentation:**
+
+- `docs/generic-operator-implementation-complete.md` - Implementation details
+- `docs/STDLIB_OPERATORS.md` - Complete operator reference for stdlib
+
+---
+
+## [1] ✅ Operator Overloading for User Types (COMPLETED)
 
 **What Was Implemented:**
 

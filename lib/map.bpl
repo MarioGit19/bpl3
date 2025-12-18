@@ -9,6 +9,7 @@ struct Pair<K, V> {
     key: K,
     value: V,
 }
+export [Pair];
 
 struct Map<K, V> {
     items: Array<Pair<K, V>>,
@@ -105,5 +106,38 @@ struct Map<K, V> {
     frame getValue(this: *Map<K, V>, index: i32) ret V {
         local p: Pair<K, V> = this.items.get(index);
         return p.value;
+    }
+
+    # Operator overloading: Equality comparison
+    # Two maps are equal if they have the same size and all key-value pairs match
+    frame __eq__(this: *Map<K, V>, other: Map<K, V>) ret bool {
+        if (this.size() != other.size()) {
+            return false;
+        }
+        # Check if all key-value pairs in this map exist in other
+        local i: i32 = 0;
+        local n: i32 = this.size();
+        loop (i < n) {
+            local thisKey: K = this.getKey(i);
+            local thisValue: V = this.getValue(i);
+            local otherVal: Option<V> = other.get(thisKey);
+
+            # Key doesn't exist in other map
+            if (otherVal.isNone()) {
+                return false;
+            }
+            # Values don't match
+            if (otherVal.unwrap() != thisValue) {
+                return false;
+            }
+            i = i + 1;
+        }
+
+        return true;
+    }
+
+    # Operator overloading: Inequality comparison
+    frame __ne__(this: *Map<K, V>, other: Map<K, V>) ret bool {
+        return !this.__eq__(other);
     }
 }

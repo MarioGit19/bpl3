@@ -55,8 +55,7 @@ struct Stack<T> {
     }
 
     # Operator overloading: Push with << operator
-    # Note: Due to generic limitation, this won't work at runtime
-    # Keeping for documentation/future support
+    # Usage: stack << value
     frame __lshift__(this: *Stack<T>, value: T) ret Stack<T> {
         this.push(value);
         return *this;

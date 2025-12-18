@@ -1,0 +1,7 @@
+{
+  "expectedOutput": "=== Array<T> Operators ===\nArray length: 3\nArray[0]: 10\nArray[1]: 20\nArray[2]: 30\nPopped value: 30\nArray length after pop: 2\n\n=== Stack<T> Operators ===\nStack size: 3\nStack top: 300\n\n=== Queue<T> Operators ===\nQueue size: 3\nQueue front: 1\n\n=== Option<T> Operators ===\nopt1 == opt2: true\nopt1 != opt3: true\n\n=== Result<T,E> Operators ===\nres1 == res2: true\nres1 != res3: true\n\n=== Map<K,V> Operators ===\nmap1 == map2: true\nmap1 != map3: true\n\n=== Set<T> Operators ===\nUnion size: 4\nIntersection size: 2\nDifference size: 1\nset1 == set3: true\n\n=== All operator overloading tests passed! ===\n",
+  "args": [],
+  "env": {},
+  "input": "",
+  "description": "Comprehensive test of operator overloading in stdlib generic types (Array, Stack, Queue, Map, Set, Option, Result)"
+}

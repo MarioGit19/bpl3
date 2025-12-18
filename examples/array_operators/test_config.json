@@ -1,0 +1,6 @@
+{
+  "expectedOutput": "Testing push with << operator:\nArray length after pushes: 3\nElements: 10, 20, 30\n\nTesting pop with >> operator:\nPopped value: 30\nArray length after pop: 2\nPopped value: 20\nArray length after pop: 1\n\n=== Array operator test passed! ===\n",
+  "args": [],
+  "env": {},
+  "input": ""
+}

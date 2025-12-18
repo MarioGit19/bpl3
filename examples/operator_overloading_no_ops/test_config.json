@@ -1,0 +1,7 @@
+{
+  "expectedOutput": "value: 10\n",
+  "args": [],
+  "env": {},
+  "input": "",
+  "description": "Test generic Box without operator overloading"
+}

@@ -44,28 +44,29 @@
 - [x] Enhanced Error Messages with Location Information
 - [x] Shell Autocomplete for CLI
 - [x] Operator Overloading for User Types (24 operators: arithmetic, bitwise, comparison, unary, indexing, callable)
+- [x] Generic-Aware Operator Resolution (Operators work with generic types like Array<T>, Stack<T>, etc.)
 
 ## Pending Features (expanded)
 
-- [2] Generic-Aware Operator Resolution
-  - Description: Enable operator overloading to work with generic types by making operator resolution happen after generic type substitution. Currently, operators don't work with generic structs like Array<T> because the compiler looks up operators before substituting the generic type parameter.
-  - Implementation notes: Modify the compiler's operator resolution phase to be "generic-aware": delay operator lookup until after generic type parameters are substituted with concrete types. This requires tracking whether a type is generic during operator resolution and deferring the lookup. May need to refactor the order of compilation phases or add a separate pass for generic operator instantiation. See docs/operator-overloading-generics-limitation.md for detailed technical analysis.
-  - Acceptance criteria: Generic structs like Array<T> can define operator methods (**lshift**, **rshift**, etc.) that work correctly when instantiated with concrete types (Array<i32> << 10 compiles and runs). Operator resolution correctly finds methods on instantiated generic types. Error messages clearly indicate when operator overloading fails due to missing method on the concrete type.
+### RECOMMENDED NEXT PRIORITIES
 
-- [2] Enum Types and Pattern Matching
-  - Description: Implement enum types (including tagged unions) with exhaustive pattern matching support.
-  - Implementation notes: Add enum syntax, implement tag-based value storage, add match expression with exhaustiveness checking.
+- [2] Enum Types and Pattern Matching (HIGHEST PRIORITY - RECOMMENDED NEXT)
+  - Description: Implement enum types (including tagged unions) with exhaustive pattern matching support. This would enable algebraic data types and safe handling of multiple variants (e.g., Result, Option enums with associated data).
+  - Implementation notes: Add enum syntax (Rust-style), implement tag-based value storage, add match expression with exhaustiveness checking. Support enums with associated data per variant.
   - Acceptance criteria: Enums compile and match expressions validate all cases are handled; errors on non-exhaustive patterns.
+  - **Why next:** Natural extension of type system after completing generics and operators; highly requested feature for functional programming patterns; enables safer error handling and state machines.
 
-- [3] Root Global `Type` Struct
+- [3] Root Global `Type` Struct (RECOMMENDED FOR EARLY IMPLEMENTATION)
   - Description: Define a root `Type` struct that every user-defined struct implicitly inherits from, providing methods like `getTypeName()`, `getSize()`, `toString()`, and basic equality.
   - Implementation notes: Add injection of implicit base for every struct during parsing/semantic analysis. Implement common methods as part of the runtime/stdlib. Ensure virtual dispatch works (method overriding) if language supports it.
   - Acceptance criteria: Any struct can call `getTypeName()`; common operations are available without explicit inheritance in source.
+  - **Why important:** Provides foundation for reflection, debugging, and polymorphic code; enables runtime type information (RTTI).
 
-- [3] Primitive Types as Structs Inheriting `Primitive`
+- [3] Primitive Types as Structs Inheriting `Primitive` (COMPLEMENTS TYPE SYSTEM)
   - Description: Model primitive types (int, float, bool, char) as structs inheriting from a `Primitive` base, exposing operations as methods to unify the type system.
   - Implementation notes: Represent primitives specially in the type system but provide method dispatch wrappers so code like `int_val.toString()` is valid. Balance performance (inlined primitives) with uniformity (object-like methods).
   - Acceptance criteria: Primitive methods are callable and interoperate with language operators; performance-sensitive paths remain efficient.
+  - **Why important:** Unifies type system, allows calling methods on primitives (42.toString()), eliminates special cases in language design.
 
 - [3] Multi-Target Support
   - Description: Add support for targeting multiple platforms and architectures (x86/x64/ARM) and provide conditional std lib methods for platform differences.

@@ -1,0 +1,7 @@
+{
+  "expectedOutput": "value: 15\n",
+  "args": [],
+  "env": {},
+  "input": "",
+  "description": "Minimal test for generic operator overloading"
+}

@@ -1,0 +1,7 @@
+{
+  "expectedOutput": "b.val = 10\nb2.val = 15\nSuccess: Generic methods work!\n",
+  "args": [],
+  "env": {},
+  "input": "",
+  "description": "Workaround test for generic methods with Box<T>"
+}

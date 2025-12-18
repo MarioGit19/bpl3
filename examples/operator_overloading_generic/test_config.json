@@ -1,0 +1,9 @@
+{
+  "expectedOutput": "",
+  "exitCode": 1,
+  "args": [],
+  "env": {},
+  "input": "",
+  "skip_compilation": false,
+  "description": "BROKEN: Generic operator overloading test - needs fixing for return types"
+}

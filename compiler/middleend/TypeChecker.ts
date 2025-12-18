@@ -1670,6 +1670,20 @@ export class TypeChecker {
       ]);
 
       if (method) {
+        // Build type substitution map for return type resolution (for generics)
+        const typeSubstitutionMap = new Map<string, AST.TypeNode>();
+        if (leftType.kind === "BasicType" && leftType.genericArgs.length > 0) {
+          const decl = leftType.resolvedDeclaration;
+          if (decl && decl.genericParams && decl.genericParams.length > 0) {
+            for (let i = 0; i < decl.genericParams.length; i++) {
+              typeSubstitutionMap.set(
+                decl.genericParams[i]!.name,
+                leftType.genericArgs[i]!,
+              );
+            }
+          }
+        }
+
         // Found operator overload! Annotate the node
         expr.operatorOverload = {
           methodName,
@@ -1677,8 +1691,13 @@ export class TypeChecker {
           methodDeclaration: method,
         };
 
-        // Return the method's return type
-        return this.resolveType(method.returnType);
+        // Substitute and resolve return type (handles generic return types like Array<T>)
+        const returnType =
+          typeSubstitutionMap.size > 0
+            ? this.substituteType(method.returnType, typeSubstitutionMap)
+            : method.returnType;
+
+        return this.resolveType(returnType);
       }
     }
 
@@ -1893,6 +1912,23 @@ export class TypeChecker {
         const method = this.findOperatorOverload(operandType, methodName, []);
 
         if (method) {
+          // Build type substitution map for return type resolution (for generics)
+          const typeSubstitutionMap = new Map<string, AST.TypeNode>();
+          if (
+            operandType.kind === "BasicType" &&
+            operandType.genericArgs.length > 0
+          ) {
+            const decl = operandType.resolvedDeclaration;
+            if (decl && decl.genericParams && decl.genericParams.length > 0) {
+              for (let i = 0; i < decl.genericParams.length; i++) {
+                typeSubstitutionMap.set(
+                  decl.genericParams[i]!.name,
+                  operandType.genericArgs[i]!,
+                );
+              }
+            }
+          }
+
           // Found operator overload! Annotate the node
           expr.operatorOverload = {
             methodName,
@@ -1900,8 +1936,13 @@ export class TypeChecker {
             methodDeclaration: method,
           };
 
-          // Return the method's return type
-          return this.resolveType(method.returnType);
+          // Substitute and resolve return type (handles generic return types)
+          const returnType =
+            typeSubstitutionMap.size > 0
+              ? this.substituteType(method.returnType, typeSubstitutionMap)
+              : method.returnType;
+
+          return this.resolveType(returnType);
         }
       }
     }
@@ -3647,6 +3688,7 @@ export class TypeChecker {
   /**
    * Find an operator overload method on a type
    * Returns the method declaration if found, otherwise undefined
+   * Now supports generic types by substituting type parameters
    */
   private findOperatorOverload(
     targetType: AST.TypeNode,
@@ -3655,15 +3697,20 @@ export class TypeChecker {
   ): AST.FunctionDecl | undefined {
     // Only structs can have operator overloads
     if (targetType.kind !== "BasicType") return undefined;
-    if (targetType.pointerDepth > 0) return undefined;
+    // Allow operator overloads on both values and pointers (e.g., Array<T> or *Array<T>)
+    // The method signature will specify whether it expects pointer or value
     if (targetType.arrayDimensions.length > 0) return undefined;
+
+    const basicType = targetType as AST.BasicTypeNode;
 
     // Find the struct declaration
     let decl: AST.StructDecl | undefined;
-    if (targetType.resolvedDeclaration) {
-      decl = targetType.resolvedDeclaration;
+    if (basicType.resolvedDeclaration) {
+      decl = basicType.resolvedDeclaration;
     } else {
-      const symbol = this.currentScope.resolve(targetType.name);
+      // Look up by base name (works for both "Array" and "Array<T>")
+      const baseName = basicType.name;
+      const symbol = this.currentScope.resolve(baseName);
       if (
         symbol &&
         symbol.kind === "Struct" &&
@@ -3675,8 +3722,24 @@ export class TypeChecker {
 
     if (!decl) return undefined;
 
+    // Build type substitution map for generic parameters
+    const typeSubstitutionMap = new Map<string, AST.TypeNode>();
+    if (basicType.genericArgs.length > 0 && decl.genericParams.length > 0) {
+      if (basicType.genericArgs.length !== decl.genericParams.length) {
+        // Generic argument count mismatch - should have been caught earlier
+        return undefined;
+      }
+
+      for (let i = 0; i < decl.genericParams.length; i++) {
+        typeSubstitutionMap.set(
+          decl.genericParams[i]!.name,
+          basicType.genericArgs[i]!,
+        );
+      }
+    }
+
     // Look for the method (including in parent structs)
-    const memberContext = this.resolveMemberWithContext(targetType, methodName);
+    const memberContext = this.resolveMemberWithContext(basicType, methodName);
     if (!memberContext) return undefined;
 
     const { members } = memberContext;
@@ -3691,17 +3754,79 @@ export class TypeChecker {
       // Skip static methods - operator overloads must be instance methods
       if (funcDecl.isStatic) continue;
 
+      // Check that 'this' parameter type matches the target type
+      // Allow both exact matches and pointer-to-value matches (e.g., IntArray vs *IntArray)
+      if (funcDecl.params.length > 0) {
+        const thisParam = funcDecl.params[0]!;
+        const declaredThisType =
+          typeSubstitutionMap.size > 0
+            ? this.substituteType(thisParam.type, typeSubstitutionMap)
+            : thisParam.type;
+
+        const resolvedThisType = this.resolveType(declaredThisType);
+        const resolvedTargetType = this.resolveType(targetType);
+
+        // Check if 'this' type matches target type exactly
+        const exactMatch = this.areTypesCompatible(
+          resolvedThisType,
+          resolvedTargetType,
+        );
+
+        // Also allow if 'this' is a pointer to target type (e.g., *IntArray matches IntArray)
+        // This allows calling methods with pointer 'this' on value operands
+        let pointerMatch = false;
+        if (
+          declaredThisType.kind === "BasicType" &&
+          targetType.kind === "BasicType"
+        ) {
+          const sameName = declaredThisType.name === targetType.name;
+          const pointerDiff =
+            declaredThisType.pointerDepth === targetType.pointerDepth + 1;
+          const sameGenericCount =
+            declaredThisType.genericArgs.length ===
+            targetType.genericArgs.length;
+
+          if (sameName && pointerDiff && sameGenericCount) {
+            // Check generic args match
+            let argsMatch = true;
+            for (let i = 0; i < declaredThisType.genericArgs.length; i++) {
+              const thisArg = this.resolveType(
+                declaredThisType.genericArgs[i]!,
+              );
+              const targetArg = this.resolveType(targetType.genericArgs[i]!);
+              if (!this.areTypesCompatible(thisArg, targetArg)) {
+                argsMatch = false;
+                break;
+              }
+            }
+            pointerMatch = argsMatch;
+          }
+        }
+
+        if (!exactMatch && !pointerMatch) {
+          continue; // Skip this overload, 'this' type doesn't match
+        }
+      }
+
       // Check parameter count (excluding 'this')
       const expectedParams = funcDecl.params.slice(1); // Skip 'this'
       if (expectedParams.length !== paramTypes.length) continue;
 
-      // Check parameter types match
+      // Check parameter types match with generic substitution
       let allMatch = true;
       for (let i = 0; i < paramTypes.length; i++) {
-        const expectedType = this.resolveType(expectedParams[i]!.type);
-        const actualType = this.resolveType(paramTypes[i]!);
+        const declaredParamType = expectedParams[i]!.type;
 
-        if (!this.areTypesCompatible(expectedType, actualType)) {
+        // Substitute generic type parameters if present
+        const expectedType =
+          typeSubstitutionMap.size > 0
+            ? this.substituteType(declaredParamType, typeSubstitutionMap)
+            : declaredParamType;
+
+        const resolvedExpected = this.resolveType(expectedType);
+        const resolvedActual = this.resolveType(paramTypes[i]!);
+
+        if (!this.areTypesCompatible(resolvedExpected, resolvedActual)) {
           allMatch = false;
           break;
         }

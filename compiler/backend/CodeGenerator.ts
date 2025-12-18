@@ -30,6 +30,9 @@ export class CodeGenerator {
   private currentTypeMap: Map<string, AST.TypeNode> = new Map(); // For generic function instantiation
   private pendingGenerations: (() => void)[] = [];
   private emittedMemIsZero: boolean = false;
+  private generatingFunctionBody: boolean = false; // Track if we're currently generating a function body
+  private deferMethodGeneration: boolean = false; // Defer method generation to avoid recursion
+  private resolvingMonomorphizedTypes: Set<string> = new Set(); // Track types currently being resolved to prevent re-entry
 
   /**
    * Create a CompilerError with proper location information
@@ -436,8 +439,9 @@ export class CodeGenerator {
 
     // Generate methods
     // Only generate methods for non-generic structs (standard structs).
-    // Generic struct methods require substitution which is not yet implemented.
-    if (decl.genericParams.length === 0) {
+    // For monomorphized structs (when mangledName is provided), methods are queued
+    // separately in resolveMonomorphizedType() with proper type substitution.
+    if (decl.genericParams.length === 0 && !mangledName) {
       const methods = decl.members.filter(
         (m) => m.kind === "FunctionDecl",
       ) as AST.FunctionDecl[];
@@ -533,99 +537,118 @@ export class CodeGenerator {
       return `%struct.${mangledName}`;
     }
 
-    // 3. Instantiate
-    // Create a map of generic param names to concrete argument types
-    const typeMap = new Map<string, AST.TypeNode>();
-    if (baseStruct.genericParams.length !== genericArgs.length) {
-      throw this.createError(
-        `Generic argument mismatch for struct '${baseStruct.name}'`,
-        undefined,
-        `Expected ${baseStruct.genericParams.length} generic arguments, but got ${genericArgs.length}`,
-      );
-    }
-    for (let i = 0; i < baseStruct.genericParams.length; i++) {
-      typeMap.set(baseStruct.genericParams[i]!.name, genericArgs[i]!);
+    // 3. Check if we're already resolving this type (prevent re-entry during method generation)
+    if (this.resolvingMonomorphizedTypes.has(mangledName)) {
+      // We're already resolving this type - just return the struct name
+      // The struct definition and methods will be completed by the outer call
+      return `%struct.${mangledName}`;
     }
 
-    // Clone and substitute fields
-    const instantiatedMembers = baseStruct.members.map((m) => {
-      if (m.kind === "StructField") {
-        const field = m as AST.StructField;
-        return {
-          ...field,
-          type: this.substituteType(field.type, typeMap),
-          resolvedType: undefined, // Force re-resolution
-          typeMap,
-        } as AST.StructField;
+    // 4. Mark that we're resolving this type to prevent re-entry
+    this.resolvingMonomorphizedTypes.add(mangledName);
+
+    try {
+      // 5. Instantiate
+      // Create a map of generic param names to concrete argument types
+      const typeMap = new Map<string, AST.TypeNode>();
+      if (baseStruct.genericParams.length !== genericArgs.length) {
+        throw this.createError(
+          `Generic argument mismatch for struct '${baseStruct.name}'`,
+          undefined,
+          `Expected ${baseStruct.genericParams.length} generic arguments, but got ${genericArgs.length}`,
+        );
       }
-      return m;
-    });
+      for (let i = 0; i < baseStruct.genericParams.length; i++) {
+        typeMap.set(baseStruct.genericParams[i]!.name, genericArgs[i]!);
+      }
 
-    // Handle generic inheritance
-    let instantiatedInheritanceList: AST.TypeNode[] = [];
-    if (baseStruct.inheritanceList) {
-      instantiatedInheritanceList = baseStruct.inheritanceList.map((t) => {
-        let instantiatedType = this.substituteType(t, typeMap);
-
-        // Force resolution of parent to ensure it exists and we get the concrete name
-        // Only for BasicType (structs/specs)
-        if (instantiatedType.kind === "BasicType") {
-          const parentLlvmType = this.resolveType(instantiatedType);
-          let parentName = parentLlvmType;
-          if (parentName.startsWith("%struct.")) {
-            parentName = parentName.substring(8);
-            while (parentName.endsWith("*"))
-              parentName = parentName.slice(0, -1);
-          }
-          instantiatedType = {
-            ...instantiatedType,
-            name: parentName,
-            genericArgs: [], // Cleared because name is now concrete
-          };
+      // Clone and substitute fields
+      const instantiatedMembers = baseStruct.members.map((m) => {
+        if (m.kind === "StructField") {
+          const field = m as AST.StructField;
+          return {
+            ...field,
+            type: this.substituteType(field.type, typeMap),
+            resolvedType: undefined, // Force re-resolution
+            typeMap,
+          } as AST.StructField;
         }
-        return instantiatedType;
+        return m;
       });
-    }
 
-    const instantiatedStruct: AST.StructDecl = {
-      ...baseStruct,
-      name: mangledName, // Update name
-      genericParams: [], // Concrete now
-      inheritanceList: instantiatedInheritanceList,
-      members: instantiatedMembers.filter((m) => m.kind === "StructField"), // Only fields in struct def
-    };
+      // Handle generic inheritance
+      let instantiatedInheritanceList: AST.TypeNode[] = [];
+      if (baseStruct.inheritanceList) {
+        instantiatedInheritanceList = baseStruct.inheritanceList.map((t) => {
+          let instantiatedType = this.substituteType(t, typeMap);
 
-    // Register in structMap so it can be looked up by name (for inheritance etc)
-    this.structMap.set(mangledName, instantiatedStruct);
-
-    this.generateStruct(instantiatedStruct, mangledName);
-
-    // Queue generation of methods
-    const methods = baseStruct.members.filter(
-      (m) => m.kind === "FunctionDecl",
-    ) as AST.FunctionDecl[];
-    for (const method of methods) {
-      // If method is not generic, generate it now (monomorphized)
-      if (method.genericParams.length === 0) {
-        this.pendingGenerations.push(() => {
-          const oldName = method.name;
-          method.name = `${mangledName}_${method.name}`;
-          const prevMap = this.currentTypeMap;
-          this.currentTypeMap = typeMap;
-
-          // We pass instantiatedStruct as parent to generateFunction
-          // This correctly sets up "this" type and destructor chaining
-          this.generateFunction(method, instantiatedStruct);
-
-          this.currentTypeMap = prevMap;
-          method.name = oldName;
+          // Force resolution of parent to ensure it exists and we get the concrete name
+          // Only for BasicType (structs/specs)
+          if (instantiatedType.kind === "BasicType") {
+            const parentLlvmType = this.resolveType(instantiatedType);
+            let parentName = parentLlvmType;
+            if (parentName.startsWith("%struct.")) {
+              parentName = parentName.substring(8);
+              while (parentName.endsWith("*"))
+                parentName = parentName.slice(0, -1);
+            }
+            instantiatedType = {
+              ...instantiatedType,
+              name: parentName,
+              genericArgs: [], // Cleared because name is now concrete
+            };
+          }
+          return instantiatedType;
         });
       }
-      // If method IS generic, we don't generate it here.
-      // It will be generated when called, via resolveMonomorphizedFunction.
-    }
 
-    return `%struct.${mangledName}`;
+      const instantiatedStruct: AST.StructDecl = {
+        ...baseStruct,
+        name: mangledName, // Update name
+        genericParams: [], // Concrete now
+        inheritanceList: instantiatedInheritanceList,
+        members: instantiatedMembers.filter((m) => m.kind === "StructField"), // Only fields in struct def
+      };
+
+      // Register in structMap so it can be looked up by name (for inheritance etc)
+      this.structMap.set(mangledName, instantiatedStruct);
+
+      this.generateStruct(instantiatedStruct, mangledName);
+
+      // Queue generation of methods
+      const methods = baseStruct.members.filter(
+        (m) => m.kind === "FunctionDecl",
+      ) as AST.FunctionDecl[];
+      for (const method of methods) {
+        // If method is not generic, generate it now (monomorphized)
+        if (method.genericParams.length === 0) {
+          this.pendingGenerations.push(() => {
+            const oldName = method.name;
+            method.name = `${mangledName}_${method.name}`;
+            const prevMap = this.currentTypeMap;
+            this.currentTypeMap = typeMap;
+
+            // We pass instantiatedStruct as parent to generateFunction
+            // This correctly sets up "this" type and destructor chaining
+            this.generateFunction(method, instantiatedStruct);
+
+            this.currentTypeMap = prevMap;
+            method.name = oldName;
+          });
+        }
+        // If method IS generic, we don't generate it here.
+        // It will be generated when called, via resolveMonomorphizedFunction.
+      }
+
+      // Mark as generated (even though methods are pending) to prevent re-entry
+      // The struct definition itself is complete, methods will be generated from pendingGenerations
+      this.generatedStructs.add(mangledName);
+
+      return `%struct.${mangledName}`;
+    } finally {
+      // Always remove from tracking set when done
+      this.resolvingMonomorphizedTypes.delete(mangledName);
+    }
   }
 
   private resolveMonomorphizedFunction(
@@ -795,9 +818,14 @@ export class CodeGenerator {
           (p) => this.currentTypeMap.get(p.name)!,
         );
       }
+      // Substitute generic types in function signature before mangling
+      const substitutedFuncType = this.substituteType(
+        funcType,
+        this.currentTypeMap,
+      ) as AST.FunctionTypeNode;
       name = this.getMangledName(
         decl.name,
-        decl.resolvedType as AST.FunctionTypeNode,
+        substitutedFuncType,
         false,
         genericArgs,
       );
@@ -1710,38 +1738,94 @@ export class CodeGenerator {
       const leftRaw = this.generateExpression(expr.left);
       const rightRaw = this.generateExpression(expr.right);
 
-      // Get the struct name from the target type
       const targetType = overload.targetType as AST.BasicTypeNode;
-      const structName = targetType.name;
 
-      // Build the method name with struct prefix
-      const methodType = method.resolvedType as AST.FunctionTypeNode;
-      const fullMethodName = `${structName}_${method.name}`;
-      const mangledName = this.getMangledName(fullMethodName, methodType);
+      // Handle generic struct method calls
+      let mangledName: string;
+      if (targetType.genericArgs && targetType.genericArgs.length > 0) {
+        // Generic struct - need monomorphized method name
+        const structDecl = this.structMap.get(targetType.name);
+        if (structDecl && structDecl.genericParams.length > 0) {
+          // Build context map for generic substitution
+          const contextMap = new Map<string, AST.TypeNode>();
+          for (let i = 0; i < structDecl.genericParams.length; i++) {
+            contextMap.set(
+              structDecl.genericParams[i]!.name,
+              targetType.genericArgs[i]!,
+            );
+          }
+
+          // Build monomorphized struct name using mangleType (avoids recursion)
+          const argNames = targetType.genericArgs
+            .map((arg) => this.mangleType(arg))
+            .join("_");
+          const structName = `${targetType.name}_${argNames}`;
+
+          // Build method name
+          const methodType = method.resolvedType as AST.FunctionTypeNode;
+          const fullMethodName = `${structName}_${method.name}`;
+
+          // Get mangled name with substituted types
+          const substitutedMethodType = this.substituteType(
+            methodType,
+            contextMap,
+          ) as AST.FunctionTypeNode;
+
+          mangledName = this.getMangledName(
+            fullMethodName,
+            substitutedMethodType,
+          );
+        } else {
+          // Fallback: non-generic or already concrete
+          const structName = targetType.name;
+          const methodType = method.resolvedType as AST.FunctionTypeNode;
+          const fullMethodName = `${structName}_${method.name}`;
+          mangledName = this.getMangledName(fullMethodName, methodType);
+        }
+      } else {
+        // Non-generic struct
+        const structName = targetType.name;
+        const methodType = method.resolvedType as AST.FunctionTypeNode;
+        const fullMethodName = `${structName}_${method.name}`;
+        mangledName = this.getMangledName(fullMethodName, methodType);
+      }
 
       // Prepare arguments: this (left) + right
       const leftType = this.resolveType(expr.left.resolvedType!);
       const rightType = this.resolveType(expr.right.resolvedType!);
 
-      // Get address of left operand (this pointer)
-      let thisPtr: string;
-      try {
-        thisPtr = this.generateAddress(expr.left);
-      } catch {
-        // If we can't get address, spill to stack
-        const spillAddr = this.allocateStack(
-          `op_spill_${this.labelCount++}`,
-          leftType,
-        );
-        this.emit(`  store ${leftType} ${leftRaw}, ${leftType}* ${spillAddr}`);
-        thisPtr = spillAddr;
+      // For operator overloads on pointers (like &arr << value), pass the pointer value directly
+      // The left expression type should match the method's first parameter type
+      let thisArg: string;
+      if (leftType.endsWith("*")) {
+        // Left is a pointer - pass it directly as the 'this' parameter
+        thisArg = `${leftType} ${leftRaw}`;
+      } else {
+        // Left is a value - need to get its address
+        let thisPtr: string;
+        try {
+          thisPtr = this.generateAddress(expr.left);
+        } catch {
+          // If we can't get address, spill to stack
+          const spillAddr = this.allocateStack(
+            `op_spill_${this.labelCount++}`,
+            leftType,
+          );
+          this.emit(
+            `  store ${leftType} ${leftRaw}, ${leftType}* ${spillAddr}`,
+          );
+          thisPtr = spillAddr;
+        }
+        thisArg = `${leftType}* ${thisPtr}`;
       }
 
       // Call the operator method
-      const returnType = this.resolveType(method.returnType);
+      // Use the expression's resolved type instead of the method's return type
+      // because the expression type has generic parameters already substituted by TypeChecker
+      const returnType = this.resolveType(expr.resolvedType!);
       const resultReg = this.newRegister();
       this.emit(
-        `  ${resultReg} = call ${returnType} @${mangledName}(${leftType}* ${thisPtr}, ${rightType} ${rightRaw})`,
+        `  ${resultReg} = call ${returnType} @${mangledName}(${thisArg}, ${rightType} ${rightRaw})`,
       );
       return resultReg;
     }
@@ -2160,13 +2244,19 @@ export class CodeGenerator {
             contextMap = new Map();
             for (let i = 0; i < structDecl.genericParams.length; i++) {
               if (i < objType.genericArgs.length) {
-                contextMap.set(
-                  structDecl.genericParams[i]!.name,
-                  objType.genericArgs[i]!,
-                );
+                let genericArg = objType.genericArgs[i]!;
+                // Substitute any generic parameters in the argument using currentTypeMap
+                // This handles cases like Array<Pair<K, V>> where K, V need to be resolved
+                if (this.currentTypeMap.size > 0) {
+                  genericArg = this.substituteType(
+                    genericArg,
+                    this.currentTypeMap,
+                  );
+                }
+                contextMap.set(structDecl.genericParams[i]!.name, genericArg);
                 callSubstitutionMap.set(
                   structDecl.genericParams[i]!.name,
-                  objType.genericArgs[i]!,
+                  genericArg,
                 );
               }
             }
@@ -2185,13 +2275,22 @@ export class CodeGenerator {
                 contextMap = new Map();
                 for (let i = 0; i < structDecl.genericParams.length; i++) {
                   if (i < inner.genericArgs.length) {
+                    let genericArg = inner.genericArgs[i]!;
+                    // Substitute any generic parameters in the argument using currentTypeMap
+                    // This handles cases like Option<V> where V needs to be resolved to concrete type
+                    if (this.currentTypeMap.size > 0) {
+                      genericArg = this.substituteType(
+                        genericArg,
+                        this.currentTypeMap,
+                      );
+                    }
                     contextMap.set(
                       structDecl.genericParams[i]!.name,
-                      inner.genericArgs[i]!,
+                      genericArg,
                     );
                     callSubstitutionMap.set(
                       structDecl.genericParams[i]!.name,
-                      inner.genericArgs[i]!,
+                      genericArg,
                     );
                   }
                 }
@@ -2222,10 +2321,29 @@ export class CodeGenerator {
         if (expr.resolvedDeclaration) {
           const decl = expr.resolvedDeclaration;
           if (decl.resolvedType && decl.resolvedType.kind === "FunctionType") {
-            funcName = this.getMangledName(
-              funcName,
-              decl.resolvedType as AST.FunctionTypeNode,
-            );
+            let funcTypeToMangle = decl.resolvedType as AST.FunctionTypeNode;
+            // Substitute generic types before mangling
+            // Merge currentTypeMap and contextMap to handle nested generics
+            // e.g., calling Array<Pair<K, V>>.destroy() needs both T->Pair and K,V mappings
+            const substitutionMap = new Map<string, AST.TypeNode>();
+            if (this.currentTypeMap.size > 0) {
+              for (const [k, v] of this.currentTypeMap) {
+                substitutionMap.set(k, v);
+              }
+            }
+            if (contextMap) {
+              for (const [k, v] of contextMap) {
+                // contextMap takes precedence for the target type's generics
+                substitutionMap.set(k, v);
+              }
+            }
+            if (substitutionMap.size > 0) {
+              funcTypeToMangle = this.substituteType(
+                funcTypeToMangle,
+                substitutionMap,
+              ) as AST.FunctionTypeNode;
+            }
+            funcName = this.getMangledName(funcName, funcTypeToMangle);
           }
         }
 
@@ -3780,14 +3898,57 @@ export class CodeGenerator {
       const method = overload.methodDeclaration;
       const operandRaw = this.generateExpression(expr.operand);
 
-      // Get the struct name from the target type
       const targetType = overload.targetType as AST.BasicTypeNode;
-      const structName = targetType.name;
 
-      // Build the method name with struct prefix
-      const methodType = method.resolvedType as AST.FunctionTypeNode;
-      const fullMethodName = `${structName}_${method.name}`;
-      const mangledName = this.getMangledName(fullMethodName, methodType);
+      // Handle generic struct method calls
+      let mangledName: string;
+      if (targetType.genericArgs && targetType.genericArgs.length > 0) {
+        // Generic struct - need monomorphized method name
+        const structDecl = this.structMap.get(targetType.name);
+        if (structDecl && structDecl.genericParams.length > 0) {
+          // Build context map for generic substitution
+          const contextMap = new Map<string, AST.TypeNode>();
+          for (let i = 0; i < structDecl.genericParams.length; i++) {
+            contextMap.set(
+              structDecl.genericParams[i]!.name,
+              targetType.genericArgs[i]!,
+            );
+          }
+
+          // Build monomorphized struct name using mangleType (avoids recursion)
+          const argNames = targetType.genericArgs
+            .map((arg) => this.mangleType(arg))
+            .join("_");
+          const structName = `${targetType.name}_${argNames}`;
+
+          // Build method name
+          const methodType = method.resolvedType as AST.FunctionTypeNode;
+          const fullMethodName = `${structName}_${method.name}`;
+
+          // Get mangled name with substituted types
+          const substitutedMethodType = this.substituteType(
+            methodType,
+            contextMap,
+          ) as AST.FunctionTypeNode;
+
+          mangledName = this.getMangledName(
+            fullMethodName,
+            substitutedMethodType,
+          );
+        } else {
+          // Fallback: non-generic or already concrete
+          const structName = targetType.name;
+          const methodType = method.resolvedType as AST.FunctionTypeNode;
+          const fullMethodName = `${structName}_${method.name}`;
+          mangledName = this.getMangledName(fullMethodName, methodType);
+        }
+      } else {
+        // Non-generic struct
+        const structName = targetType.name;
+        const methodType = method.resolvedType as AST.FunctionTypeNode;
+        const fullMethodName = `${structName}_${method.name}`;
+        mangledName = this.getMangledName(fullMethodName, methodType);
+      }
 
       // Get address of operand (this pointer)
       const operandType = this.resolveType(expr.operand.resolvedType!);

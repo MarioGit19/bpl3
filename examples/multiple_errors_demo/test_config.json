@@ -1,0 +1,8 @@
+{
+  "expectedOutput": "",
+  "exitCode": 1,
+  "args": [],
+  "env": {},
+  "input": "",
+  "description": "Demo file with multiple errors for testing error collection"
+}
