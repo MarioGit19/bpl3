@@ -57,3 +57,10 @@ export [Assert];
 # Algorithms
 import [Algorithm] from "std/algorithm.bpl";
 export [Algorithm];
+
+# Additional Utilities
+import [Range] from "std/range.bpl";
+export [Range];
+
+import [StringBuilder] from "std/string_builder.bpl";
+export [StringBuilder];

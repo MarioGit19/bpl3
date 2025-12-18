@@ -52,4 +52,24 @@ struct Result<T, E> {
     frame unwrapErr(this: *Result<T, E>) ret E {
         return this.error;
     }
+
+    # Operator overloading: Equality comparison
+    # Two Results are equal if both Ok with equal values or both Err with equal errors
+    frame __eq__(this: *Result<T, E>, other: Result<T, E>) ret bool {
+        if (this.ok && other.ok) {
+            # Both Ok - compare values
+            return this.value == other.value;
+        }
+        if (!this.ok && !other.ok) {
+            # Both Err - compare errors
+            return this.error == other.error;
+        }
+        # One Ok, one Err
+        return false;
+    }
+
+    # Operator overloading: Inequality comparison
+    frame __ne__(this: *Result<T, E>, other: Result<T, E>) ret bool {
+        return !this.__eq__(other);
+    }
 }

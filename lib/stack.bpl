@@ -37,4 +37,28 @@ struct Stack<T> {
     frame size(this: *Stack<T>) ret i32 {
         return this.inner.len();
     }
+
+    frame isEmpty(this: *Stack<T>) ret bool {
+        return this.inner.len() == 0;
+    }
+
+    frame peek(this: *Stack<T>) ret Option<T> {
+        local len: i32 = this.inner.len();
+        if (len <= 0) {
+            return Option<T>.none();
+        }
+        return Option<T>.some(this.inner.get(len - 1));
+    }
+
+    frame clear(this: *Stack<T>) {
+        this.inner.length = 0;
+    }
+
+    # Operator overloading: Push with << operator
+    # Note: Due to generic limitation, this won't work at runtime
+    # Keeping for documentation/future support
+    frame __lshift__(this: *Stack<T>, value: T) ret Stack<T> {
+        this.push(value);
+        return *this;
+    }
 }

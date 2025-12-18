@@ -41,4 +41,20 @@ struct Queue<T> {
     frame size(this: *Queue<T>) ret i32 {
         return this.inner.len();
     }
+
+    frame isEmpty(this: *Queue<T>) ret bool {
+        return this.inner.len() == 0;
+    }
+
+    frame peek(this: *Queue<T>) ret Option<T> {
+        local len: i32 = this.inner.len();
+        if (len <= 0) {
+            return Option<T>.none();
+        }
+        return Option<T>.some(this.inner.get(0));
+    }
+
+    frame clear(this: *Queue<T>) {
+        this.inner.length = 0;
+    }
 }

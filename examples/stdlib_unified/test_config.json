@@ -1,9 +1,6 @@
 {
-  "expectedOutput": [
-    "--- Unified Standard Library Demo ---",
-    "String: Hello from std!",
-    "Array size: 3",
-    "Map get(1): 100",
-    "Math.minInt(5, 10): 5"
-  ]
+  "expectedOutput": "=== Unified Standard Library Demo ===\n--- String Operators ---\nConcatenation: Hello World\nApple < Banana: true\nIn-place concat: Builder text\n--- StringBuilder (NEW) ---\nResult: Efficient  with 123\n--- Range (NEW) ---\nRange elements: 1\n 2\n 3\n 4\n 5\n Range equality works!\n--- Option Operators ---\nSome(42) == Some(42): true\nSome(42) != None: true\n--- Result Operators ---\nOk(100) == Ok(100): true\nOk(100) != Err(1): true\n--- Set Operators ---\nUnion size: 4\nIntersection size: 2\nDifference size: 1\n--- Vec2 Operators ---\nVector addition: (4.0, 6.0)\nVector subtraction: (2.0, 2.0)\nVector scaling: (2.0, 4.0)\nVector negation: (-1.0, -2.0)\nVec2 comparison works!\n--- Traditional Features ---\nArray size: 3\nMap get(1): 100\nMath.minInt(5, 10): 5\n=== Demo Complete ===\n",
+  "args": [],
+  "env": {},
+  "input": ""
 }

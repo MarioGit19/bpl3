@@ -31,4 +31,106 @@ struct Set<T> {
     frame size(this: *Set<T>) ret i32 {
         return this.inner.size();
     }
+
+    frame clear(this: *Set<T>) {
+        this.inner.clear();
+    }
+
+    # Returns a new set containing elements from both sets (union)
+    frame union(this: *Set<T>, other: *Set<T>) ret Set<T> {
+        local result: Set<T> = Set<T>.new(this.size() + other.size());
+
+        # Add all elements from this set
+        local i: i32 = 0;
+        local n: i32 = this.inner.size();
+        loop (i < n) {
+            local key: T = this.inner.getKey(i);
+            result.add(key);
+            i = i + 1;
+        }
+
+        # Add all elements from other set
+        i = 0;
+        local m: i32 = other.inner.size();
+        loop (i < m) {
+            local key: T = other.inner.getKey(i);
+            result.add(key);
+            i = i + 1;
+        }
+
+        return result;
+    }
+
+    # Returns a new set containing elements in this but not in other (difference)
+    frame difference(this: *Set<T>, other: *Set<T>) ret Set<T> {
+        local result: Set<T> = Set<T>.new(this.size());
+
+        local i: i32 = 0;
+        local n: i32 = this.inner.size();
+        loop (i < n) {
+            local key: T = this.inner.getKey(i);
+            if (!other.has(key)) {
+                result.add(key);
+            }
+            i = i + 1;
+        }
+
+        return result;
+    }
+
+    # Returns a new set containing elements in both sets (intersection)
+    frame intersection(this: *Set<T>, other: *Set<T>) ret Set<T> {
+        local result: Set<T> = Set<T>.new(this.size());
+
+        local i: i32 = 0;
+        local n: i32 = this.inner.size();
+        loop (i < n) {
+            local key: T = this.inner.getKey(i);
+            if (other.has(key)) {
+                result.add(key);
+            }
+            i = i + 1;
+        }
+
+        return result;
+    }
+
+    # Operator overloading: Union with | operator
+    frame __or__(this: *Set<T>, other: Set<T>) ret Set<T> {
+        return this.union(&other);
+    }
+
+    # Operator overloading: Difference with - operator
+    frame __sub__(this: *Set<T>, other: Set<T>) ret Set<T> {
+        return this.difference(&other);
+    }
+
+    # Operator overloading: Intersection with & operator  
+    frame __and__(this: *Set<T>, other: Set<T>) ret Set<T> {
+        return this.intersection(&other);
+    }
+
+    # Operator overloading: Equality comparison
+    frame __eq__(this: *Set<T>, other: Set<T>) ret bool {
+        if (this.size() != other.size()) {
+            return false;
+        }
+        # Check if all elements in this are in other
+        local i: i32 = 0;
+        local n: i32 = this.inner.size();
+        loop (i < n) {
+            local key: T = this.inner.getKey(i);
+            if (!other.has(key)) {
+                return false;
+            }
+            i = i + 1;
+        }
+
+        return true;
+    }
+
+    # Operator overloading: Inequality comparison
+    frame __ne__(this: *Set<T>, other: Set<T>) ret bool {
+        return !this.__eq__(other);
+    }
 }

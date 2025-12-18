@@ -46,4 +46,29 @@ struct Option<T> {
         }
         return defaultValue;
     }
+
+    # Maps Option<T> to Option<U> by applying a function
+    # Note: Cannot implement as generic function pointer in current BPL3
+    # Users should call this manually with their mapping logic
+
+    # Operator overloading: Equality comparison
+    # Two Options are equal if both are None or both are Some with equal values
+    # Note: Requires T to have __eq__ or be primitive
+    frame __eq__(this: *Option<T>, other: Option<T>) ret bool {
+        if (this.has && other.has) {
+            # Both Some - compare values (works for primitives)
+            return this.value == other.value;
+        }
+        if (!this.has && !other.has) {
+            # Both None
+            return true;
+        }
+        # One Some, one None
+        return false;
+    }
+
+    # Operator overloading: Inequality comparison
+    frame __ne__(this: *Option<T>, other: Option<T>) ret bool {
+        return !this.__eq__(other);
+    }
 }

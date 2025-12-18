@@ -92,4 +92,18 @@ struct Map<K, V> {
         }
         return false;
     }
+
+    frame clear(this: *Map<K, V>) {
+        this.items.length = 0;
+    }
+
+    frame getKey(this: *Map<K, V>, index: i32) ret K {
+        local p: Pair<K, V> = this.items.get(index);
+        return p.key;
+    }
+
+    frame getValue(this: *Map<K, V>, index: i32) ret V {
+        local p: Pair<K, V> = this.items.get(index);
+        return p.value;
+    }
 }
