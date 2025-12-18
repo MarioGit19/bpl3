@@ -1,0 +1,6 @@
+{
+  "expectedOutput": ["Multiple externs OK"],
+  "args": [],
+  "env": {},
+  "input": ""
+}

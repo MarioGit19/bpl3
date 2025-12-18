@@ -43,13 +43,12 @@
 - [x] Interfaces/Traits
 - [x] Enhanced Error Messages with Location Information
 - [x] Shell Autocomplete for CLI
+- [x] Operator Overloading for User Types (24 operators: arithmetic, bitwise, comparison, unary, indexing, callable)
 
 ## Pending Features (expanded)
 
-- [1] Operator Overloading for User Types
-  - Description: Let user-defined types implement special methods (dunder-style like `__add__`, `__eq__`) that override built-in operator behavior for instances.
-  - Implementation notes: Define mapping between operators and method names; during type-checking, if an operand type has the corresponding method, resolve to that method; otherwise fall back to builtin semantics. Disallow assignment operators overloading. Ensure overload resolution supports left/right operand dispatch and coercions.
-  - Acceptance criteria: Defining `__add__` on a struct causes `a + b` to call that method; operator resolution respects type conversions and produces helpful errors when ambiguous.
+- Implementation notes: Define mapping between operators and method names; during type-checking, if an operand type has the corresponding method, resolve to that method; otherwise fall back to builtin semantics. Disallow assignment operators overloading. Ensure overload resolution supports left/right operand dispatch and coercions.
+- Acceptance criteria: Defining `__add__` on a struct causes `a + b` to call that method; operator resolution respects type conversions and produces helpful errors when ambiguous.
 
 - [2] Enum Types and Pattern Matching
   - Description: Implement enum types (including tagged unions) with exhaustive pattern matching support.

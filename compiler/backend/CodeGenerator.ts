@@ -1703,6 +1703,49 @@ export class CodeGenerator {
   }
 
   private generateBinary(expr: AST.BinaryExpr): string {
+    // Check for operator overload
+    if (expr.operatorOverload) {
+      const overload = expr.operatorOverload;
+      const method = overload.methodDeclaration;
+      const leftRaw = this.generateExpression(expr.left);
+      const rightRaw = this.generateExpression(expr.right);
+
+      // Get the struct name from the target type
+      const targetType = overload.targetType as AST.BasicTypeNode;
+      const structName = targetType.name;
+
+      // Build the method name with struct prefix
+      const methodType = method.resolvedType as AST.FunctionTypeNode;
+      const fullMethodName = `${structName}_${method.name}`;
+      const mangledName = this.getMangledName(fullMethodName, methodType);
+
+      // Prepare arguments: this (left) + right
+      const leftType = this.resolveType(expr.left.resolvedType!);
+      const rightType = this.resolveType(expr.right.resolvedType!);
+
+      // Get address of left operand (this pointer)
+      let thisPtr: string;
+      try {
+        thisPtr = this.generateAddress(expr.left);
+      } catch {
+        // If we can't get address, spill to stack
+        const spillAddr = this.allocateStack(
+          `op_spill_${this.labelCount++}`,
+          leftType,
+        );
+        this.emit(`  store ${leftType} ${leftRaw}, ${leftType}* ${spillAddr}`);
+        thisPtr = spillAddr;
+      }
+
+      // Call the operator method
+      const returnType = this.resolveType(method.returnType);
+      const resultReg = this.newRegister();
+      this.emit(
+        `  ${resultReg} = call ${returnType} @${mangledName}(${leftType}* ${thisPtr}, ${rightType} ${rightRaw})`,
+      );
+      return resultReg;
+    }
+
     const leftRaw = this.generateExpression(expr.left);
     const rightRaw = this.generateExpression(expr.right);
     const leftType = this.resolveType(expr.left.resolvedType!);
@@ -1944,6 +1987,63 @@ export class CodeGenerator {
   }
 
   private generateCall(expr: AST.CallExpr): string {
+    // Check for operator overload (__call__)
+    if (expr.operatorOverload) {
+      const overload = expr.operatorOverload;
+      const method = overload.methodDeclaration;
+      const calleeRaw = this.generateExpression(expr.callee);
+
+      // Get the struct name from the target type
+      const targetType = overload.targetType as AST.BasicTypeNode;
+      const structName = targetType.name;
+
+      // Build the method name with struct prefix
+      const methodType = method.resolvedType as AST.FunctionTypeNode;
+      const fullMethodName = `${structName}_${method.name}`;
+      const mangledName = this.getMangledName(fullMethodName, methodType);
+
+      // Get address of callee (this pointer)
+      const calleeType = this.resolveType(expr.callee.resolvedType!);
+      let thisPtr: string;
+      try {
+        thisPtr = this.generateAddress(expr.callee);
+      } catch {
+        // If we can't get address, spill to stack
+        const spillAddr = this.allocateStack(
+          `op_spill_${this.labelCount++}`,
+          calleeType,
+        );
+        this.emit(
+          `  store ${calleeType} ${calleeRaw}, ${calleeType}* ${spillAddr}`,
+        );
+        thisPtr = spillAddr;
+      }
+
+      // Generate arguments
+      const argRegs: string[] = [];
+      const argTypes: string[] = [];
+      for (const arg of expr.args) {
+        const argVal = this.generateExpression(arg);
+        const argType = this.resolveType(arg.resolvedType!);
+        argRegs.push(argVal);
+        argTypes.push(argType);
+      }
+
+      // Build argument list for call: this pointer + actual args
+      const callArgs = [`${calleeType}* ${thisPtr}`];
+      for (let i = 0; i < argRegs.length; i++) {
+        callArgs.push(`${argTypes[i]} ${argRegs[i]}`);
+      }
+
+      // Call the __call__ method
+      const returnType = this.resolveType(method.returnType);
+      const resultReg = this.newRegister();
+      this.emit(
+        `  ${resultReg} = call ${returnType} @${mangledName}(${callArgs.join(", ")})`,
+      );
+      return resultReg;
+    }
+
     let funcName = "";
     let argsToGenerate = expr.args;
     let isInstanceCall = false;
@@ -3289,6 +3389,76 @@ export class CodeGenerator {
   }
 
   private generateAssignment(expr: AST.AssignmentExpr): string {
+    // Check for index assignment with __set__ operator overload
+    if (expr.assignee.kind === "Index") {
+      const indexExpr = expr.assignee as AST.IndexExpr;
+      // Check if there's a __set__ operator overload
+      // We need to find the __set__ method in the TypeChecker annotations
+      // For now, look up the method from the object's type
+      if (
+        indexExpr.object.resolvedType &&
+        indexExpr.object.resolvedType.kind === "BasicType"
+      ) {
+        const objectType = indexExpr.object.resolvedType as AST.BasicTypeNode;
+        const structDecl = this.structMap.get(objectType.name);
+
+        if (structDecl) {
+          // Look for __set__ method in struct members
+          const setMethod = structDecl.members.find(
+            (m): m is AST.FunctionDecl =>
+              m.kind === "FunctionDecl" && m.name === "__set__",
+          );
+          if (setMethod && expr.operator.type === TokenType.Equal) {
+            // Generate __set__ call: object.__set__(index, value)
+            const objectRaw = this.generateExpression(indexExpr.object);
+            const indexRaw = this.generateExpression(indexExpr.index);
+            const valueRaw = this.generateExpression(expr.value);
+
+            // Get the struct name and build full method name
+            const structName = objectType.name;
+            const methodType = setMethod.resolvedType as AST.FunctionTypeNode;
+            const fullMethodName = `${structName}_${setMethod.name}`;
+            const mangledName = this.getMangledName(fullMethodName, methodType);
+
+            // Get address of object (this pointer)
+            const objectTypeStr = this.resolveType(objectType);
+            const indexType = this.resolveType(indexExpr.index.resolvedType!);
+            const valueType = this.resolveType(expr.value.resolvedType!);
+
+            let thisPtr: string;
+            try {
+              thisPtr = this.generateAddress(indexExpr.object);
+            } catch {
+              // If we can't get address, spill to stack
+              const spillAddr = this.allocateStack(
+                `op_spill_${this.labelCount++}`,
+                objectTypeStr,
+              );
+              this.emit(
+                `  store ${objectTypeStr} ${objectRaw}, ${objectTypeStr}* ${spillAddr}`,
+              );
+              thisPtr = spillAddr;
+            }
+
+            // Call __set__ method: returns void typically
+            const returnType = this.resolveType(setMethod.returnType);
+            if (returnType !== "void") {
+              const resultReg = this.newRegister();
+              this.emit(
+                `  ${resultReg} = call ${returnType} @${mangledName}(${objectTypeStr}* ${thisPtr}, ${indexType} ${indexRaw}, ${valueType} ${valueRaw})`,
+              );
+              return resultReg;
+            } else {
+              this.emit(
+                `  call void @${mangledName}(${objectTypeStr}* ${thisPtr}, ${indexType} ${indexRaw}, ${valueType} ${valueRaw})`,
+              );
+              return valueRaw; // Return the assigned value
+            }
+          }
+        }
+      }
+    }
+
     // Handle tuple destructuring assignment: (a, b) = expr
     if (expr.assignee.kind === "TupleLiteral") {
       const tupleLit = expr.assignee as AST.TupleLiteralExpr;
@@ -3551,6 +3721,51 @@ export class CodeGenerator {
   }
 
   private generateIndex(expr: AST.IndexExpr): string {
+    // Check for operator overload (__get__)
+    if (expr.operatorOverload) {
+      const overload = expr.operatorOverload;
+      const method = overload.methodDeclaration;
+      const objectRaw = this.generateExpression(expr.object);
+      const indexRaw = this.generateExpression(expr.index);
+
+      // Get the struct name from the target type
+      const targetType = overload.targetType as AST.BasicTypeNode;
+      const structName = targetType.name;
+
+      // Build the method name with struct prefix
+      const methodType = method.resolvedType as AST.FunctionTypeNode;
+      const fullMethodName = `${structName}_${method.name}`;
+      const mangledName = this.getMangledName(fullMethodName, methodType);
+
+      // Prepare arguments: this (object) + index
+      const objectType = this.resolveType(expr.object.resolvedType!);
+      const indexType = this.resolveType(expr.index.resolvedType!);
+
+      // Get address of object (this pointer)
+      let thisPtr: string;
+      try {
+        thisPtr = this.generateAddress(expr.object);
+      } catch {
+        // If we can't get address, spill to stack
+        const spillAddr = this.allocateStack(
+          `op_spill_${this.labelCount++}`,
+          objectType,
+        );
+        this.emit(
+          `  store ${objectType} ${objectRaw}, ${objectType}* ${spillAddr}`,
+        );
+        thisPtr = spillAddr;
+      }
+
+      // Call the __get__ method
+      const returnType = this.resolveType(method.returnType);
+      const resultReg = this.newRegister();
+      this.emit(
+        `  ${resultReg} = call ${returnType} @${mangledName}(${objectType}* ${thisPtr}, ${indexType} ${indexRaw})`,
+      );
+      return resultReg;
+    }
+
     const addr = this.generateAddress(expr);
     const type = this.resolveType(expr.resolvedType!);
     const reg = this.newRegister();
@@ -3559,6 +3774,47 @@ export class CodeGenerator {
   }
 
   private generateUnary(expr: AST.UnaryExpr): string {
+    // Check for operator overload (only for prefix operators)
+    if (expr.operatorOverload && expr.isPrefix) {
+      const overload = expr.operatorOverload;
+      const method = overload.methodDeclaration;
+      const operandRaw = this.generateExpression(expr.operand);
+
+      // Get the struct name from the target type
+      const targetType = overload.targetType as AST.BasicTypeNode;
+      const structName = targetType.name;
+
+      // Build the method name with struct prefix
+      const methodType = method.resolvedType as AST.FunctionTypeNode;
+      const fullMethodName = `${structName}_${method.name}`;
+      const mangledName = this.getMangledName(fullMethodName, methodType);
+
+      // Get address of operand (this pointer)
+      const operandType = this.resolveType(expr.operand.resolvedType!);
+      let thisPtr: string;
+      try {
+        thisPtr = this.generateAddress(expr.operand);
+      } catch {
+        // If we can't get address, spill to stack
+        const spillAddr = this.allocateStack(
+          `op_spill_${this.labelCount++}`,
+          operandType,
+        );
+        this.emit(
+          `  store ${operandType} ${operandRaw}, ${operandType}* ${spillAddr}`,
+        );
+        thisPtr = spillAddr;
+      }
+
+      // Call the operator method
+      const returnType = this.resolveType(method.returnType);
+      const resultReg = this.newRegister();
+      this.emit(
+        `  ${resultReg} = call ${returnType} @${mangledName}(${operandType}* ${thisPtr})`,
+      );
+      return resultReg;
+    }
+
     if (
       expr.operator.type === TokenType.PlusPlus ||
       expr.operator.type === TokenType.MinusMinus

@@ -1,0 +1,6 @@
+{
+  "expectedOutput": ["Extern with type OK"],
+  "args": [],
+  "env": {},
+  "input": ""
+}

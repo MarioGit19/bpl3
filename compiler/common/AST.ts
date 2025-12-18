@@ -81,6 +81,11 @@ export interface BinaryExpr extends ASTNode {
   left: Expression;
   operator: Token;
   right: Expression;
+  operatorOverload?: {
+    methodName: string;
+    targetType: TypeNode;
+    methodDeclaration: FunctionDecl;
+  };
 }
 
 export interface UnaryExpr extends ASTNode {
@@ -88,6 +93,11 @@ export interface UnaryExpr extends ASTNode {
   operator: Token;
   operand: Expression;
   isPrefix: boolean;
+  operatorOverload?: {
+    methodName: string;
+    targetType: TypeNode;
+    methodDeclaration: FunctionDecl;
+  };
 }
 
 export interface CallExpr extends ASTNode {
@@ -96,6 +106,11 @@ export interface CallExpr extends ASTNode {
   args: Expression[];
   genericArgs: TypeNode[];
   resolvedDeclaration?: FunctionDecl | ExternDecl;
+  operatorOverload?: {
+    methodName: string; // "__call__"
+    targetType: TypeNode;
+    methodDeclaration: FunctionDecl;
+  };
 }
 
 export interface MemberExpr extends ASTNode {
@@ -108,6 +123,11 @@ export interface IndexExpr extends ASTNode {
   kind: "Index";
   object: Expression;
   index: Expression;
+  operatorOverload?: {
+    methodName: string; // "__get__" or "__set__"
+    targetType: TypeNode;
+    methodDeclaration: FunctionDecl;
+  };
 }
 
 export interface ArrayLiteralExpr extends ASTNode {

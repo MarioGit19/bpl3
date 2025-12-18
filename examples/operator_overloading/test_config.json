@@ -1,0 +1,24 @@
+{
+  "expectedOutput": [
+    "=== Testing Vector2D operators ===",
+    "v1 = Vector2D(3.00, 4.00)",
+    "v2 = Vector2D(1.00, 2.00)",
+    "v1 + v2 = Vector2D(4.00, 6.00)",
+    "v1 - v2 = Vector2D(2.00, 2.00)",
+    "v1 * 2.0 = Vector2D(6.00, 8.00)",
+    "-v1 = Vector2D(-3.00, -4.00)",
+    "v1 == v3: true",
+    "=== Testing Complex operators ===",
+    "c1 = 2.00 + 3.00i",
+    "c2 = 1.00 - 1.00i",
+    "c1 + c2 = 3.00 + 2.00i",
+    "c1 * c2 = 5.00 + 1.00i",
+    "=== Testing Callable struct ===",
+    "mult(10.0) = 50.00",
+    "mult(3.5) = 17.50",
+    "=== All tests completed ==="
+  ],
+  "args": [],
+  "env": {},
+  "input": ""
+}

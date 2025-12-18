@@ -1,0 +1,6 @@
+{
+  "expectedOutput": ["Variadic extern test"],
+  "args": [],
+  "env": {},
+  "input": ""
+}

@@ -1,0 +1,6 @@
+{
+  "expectedOutput": ["Hello from lib", "Multi-file extern OK"],
+  "args": [],
+  "env": {},
+  "input": ""
+}

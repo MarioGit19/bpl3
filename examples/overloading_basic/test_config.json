@@ -1,0 +1,12 @@
+{
+  "expectedOutput": [
+    "int: 42",
+    "double: 3.140000",
+    "bool: true",
+    "sum2: 30",
+    "sum3: 60"
+  ],
+  "args": [],
+  "env": {},
+  "input": ""
+}

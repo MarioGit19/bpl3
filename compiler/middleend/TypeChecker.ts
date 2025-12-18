@@ -23,6 +23,36 @@ export class TypeChecker {
   private collectAllErrors: boolean = true;
   private loopDepth: number = 0; // Track nesting depth for break/continue validation
 
+  // Operator overloading: mapping from operator to method name
+  private readonly OPERATOR_METHOD_MAP: Record<string, string> = {
+    // Binary Arithmetic
+    "+": "__add__",
+    "-": "__sub__",
+    "*": "__mul__",
+    "/": "__div__",
+    "%": "__mod__",
+
+    // Binary Bitwise
+    "&": "__and__",
+    "|": "__or__",
+    "^": "__xor__",
+    "<<": "__lshift__",
+    ">>": "__rshift__",
+
+    // Comparison
+    "==": "__eq__",
+    "!=": "__ne__",
+    "<": "__lt__",
+    ">": "__gt__",
+    "<=": "__le__",
+    ">=": "__ge__",
+
+    // Unary (prefixed with "unary" to distinguish from binary)
+    "unary-": "__neg__",
+    "unary~": "__not__",
+    "unary+": "__pos__",
+  };
+
   constructor(
     options: {
       skipImportResolution?: boolean;
@@ -1619,6 +1649,26 @@ export class TypeChecker {
 
     const op = expr.operator.type;
 
+    // Try operator overload first (for user-defined types)
+    const methodName = this.OPERATOR_METHOD_MAP[expr.operator.lexeme];
+    if (methodName) {
+      const method = this.findOperatorOverload(leftType, methodName, [
+        rightType,
+      ]);
+
+      if (method) {
+        // Found operator overload! Annotate the node
+        expr.operatorOverload = {
+          methodName,
+          targetType: leftType,
+          methodDeclaration: method,
+        };
+
+        // Return the method's return type
+        return this.resolveType(method.returnType);
+      }
+    }
+
     // Pointer Arithmetic
     const isLeftPtr =
       leftType.kind === "BasicType" && leftType.pointerDepth > 0;
@@ -1798,6 +1848,7 @@ export class TypeChecker {
     const operandType = this.checkExpression(expr.operand);
     if (!operandType) return undefined;
 
+    // Special handling for pointer operations (not overloadable)
     if (expr.operator.type === TokenType.Star) {
       // Dereference
       if (operandType.kind === "BasicType") {
@@ -1823,6 +1874,28 @@ export class TypeChecker {
           ...operandType,
           pointerDepth: operandType.pointerDepth + 1,
         };
+      }
+    }
+
+    // Try operator overload for prefix unary operators
+    if (expr.isPrefix) {
+      const operatorKey = `unary${expr.operator.lexeme}`;
+      const methodName = this.OPERATOR_METHOD_MAP[operatorKey];
+
+      if (methodName) {
+        const method = this.findOperatorOverload(operandType, methodName, []);
+
+        if (method) {
+          // Found operator overload! Annotate the node
+          expr.operatorOverload = {
+            methodName,
+            targetType: operandType,
+            methodDeclaration: method,
+          };
+
+          // Return the method's return type
+          return this.resolveType(method.returnType);
+        }
       }
     }
 
@@ -2075,6 +2148,34 @@ export class TypeChecker {
 
     // Always check arguments to ensure they are valid expressions and resolve their types
     const argTypes = expr.args.map((arg) => this.checkExpression(arg));
+
+    // If callee is not a function type, try __call__ operator overload
+    if (calleeType && calleeType.kind !== "FunctionType") {
+      const method = this.findOperatorOverload(
+        calleeType,
+        "__call__",
+        argTypes.filter((t): t is AST.TypeNode => t !== undefined),
+      );
+
+      if (method) {
+        // Found __call__ operator overload! Annotate the node
+        expr.operatorOverload = {
+          methodName: "__call__",
+          targetType: calleeType,
+          methodDeclaration: method,
+        };
+
+        // Return the method's return type
+        return this.resolveType(method.returnType);
+      }
+
+      // If no __call__ found and not a function, error
+      throw new CompilerError(
+        `Type '${this.typeToString(calleeType)}' is not callable`,
+        "Only functions or types with __call__ operator can be called.",
+        expr.location,
+      );
+    }
 
     if (calleeType && (calleeType as any).overloads) {
       const overloads = (calleeType as any).overloads as AST.FunctionTypeNode[];
@@ -2480,6 +2581,26 @@ export class TypeChecker {
     const objectType = this.checkExpression(expr.object);
     const indexType = this.checkExpression(expr.index);
 
+    if (!objectType || !indexType) return undefined;
+
+    // Try operator overload first (for user-defined types)
+    const method = this.findOperatorOverload(objectType, "__get__", [
+      indexType,
+    ]);
+
+    if (method) {
+      // Found __get__ operator overload! Annotate the node
+      expr.operatorOverload = {
+        methodName: "__get__",
+        targetType: objectType,
+        methodDeclaration: method,
+      };
+
+      // Return the method's return type
+      return this.resolveType(method.returnType);
+    }
+
+    // Fall back to built-in array/pointer indexing
     const integerTypes = [
       "i8",
       "u8",
@@ -3517,6 +3638,77 @@ export class TypeChecker {
       if (foundParent) continue;
       return undefined;
     }
+    return undefined;
+  }
+
+  /**
+   * Find an operator overload method on a type
+   * Returns the method declaration if found, otherwise undefined
+   */
+  private findOperatorOverload(
+    targetType: AST.TypeNode,
+    methodName: string,
+    paramTypes: AST.TypeNode[],
+  ): AST.FunctionDecl | undefined {
+    // Only structs can have operator overloads
+    if (targetType.kind !== "BasicType") return undefined;
+    if (targetType.pointerDepth > 0) return undefined;
+    if (targetType.arrayDimensions.length > 0) return undefined;
+
+    // Find the struct declaration
+    let decl: AST.StructDecl | undefined;
+    if (targetType.resolvedDeclaration) {
+      decl = targetType.resolvedDeclaration;
+    } else {
+      const symbol = this.currentScope.resolve(targetType.name);
+      if (
+        symbol &&
+        symbol.kind === "Struct" &&
+        (symbol.declaration as any).kind === "StructDecl"
+      ) {
+        decl = symbol.declaration as AST.StructDecl;
+      }
+    }
+
+    if (!decl) return undefined;
+
+    // Look for the method (including in parent structs)
+    const memberContext = this.resolveMemberWithContext(targetType, methodName);
+    if (!memberContext) return undefined;
+
+    const { members } = memberContext;
+    const methods = members.filter((m) => m.kind === "FunctionDecl");
+
+    if (methods.length === 0) return undefined;
+
+    // Find matching overload by checking parameter types
+    for (const method of methods) {
+      const funcDecl = method as AST.FunctionDecl;
+
+      // Skip static methods - operator overloads must be instance methods
+      if (funcDecl.isStatic) continue;
+
+      // Check parameter count (excluding 'this')
+      const expectedParams = funcDecl.params.slice(1); // Skip 'this'
+      if (expectedParams.length !== paramTypes.length) continue;
+
+      // Check parameter types match
+      let allMatch = true;
+      for (let i = 0; i < paramTypes.length; i++) {
+        const expectedType = this.resolveType(expectedParams[i]!.type);
+        const actualType = this.resolveType(paramTypes[i]!);
+
+        if (!this.areTypesCompatible(expectedType, actualType)) {
+          allMatch = false;
+          break;
+        }
+      }
+
+      if (allMatch) {
+        return funcDecl;
+      }
+    }
+
     return undefined;
   }
 

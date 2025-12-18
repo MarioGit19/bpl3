@@ -1,0 +1,30 @@
+{
+  "expectedOutput": [
+    "=== Testing BitSet bitwise operators ===",
+    "set1 = BitSet(0x0000000f)",
+    "set2 = BitSet(0x00000033)",
+    "set3 = BitSet(0x00000055)",
+    "set1 & set2 = BitSet(0x00000003)",
+    "set1 | set2 = BitSet(0x0000003f)",
+    "set1 ^ set2 = BitSet(0x0000003c)",
+    "~set1 = BitSet(0xfffffff0)",
+    "set1 << 4 = BitSet(0x000000f0)",
+    "set2 >> 2 = BitSet(0x0000000c)",
+    "set1 == set4: true",
+    "set1 != set2: true",
+    "=== Testing Integer comparison operators ===",
+    "a.value = 10",
+    "b.value = 20",
+    "c.value = 10",
+    "a < b: true",
+    "a <= c: true",
+    "b > a: true",
+    "a >= c: true",
+    "a == c: true",
+    "a != b: true",
+    "=== All tests completed ==="
+  ],
+  "args": [],
+  "env": {},
+  "input": ""
+}
