@@ -342,6 +342,79 @@ Priority levels: 0 = Highest Priority, 9 = Lowest Priority
 
 ---
 
+## [2] Generic-Aware Operator Resolution
+
+**Description:** Enable operator overloading to work with generic types by making operator resolution happen after generic type substitution. Currently, operators don't work with generic structs like `Array<T>` because the compiler looks up operators before substituting the generic type parameter. This limitation prevents ergonomic APIs for generic containers (e.g., `arr << value` for push).
+
+**Implementation Status:** ❌ Not Started (Documented limitation)
+
+**The Problem:**
+
+When you write `arr << 10` where `arr` is `Array<i32>`, the compiler:
+
+1. Sees operator `<<` with left operand type `Array<i32>`
+2. Looks up `__lshift__` method on the struct named `Array<i32>`
+3. Fails because the struct is actually named `Array` with generic parameter `T`
+4. Never finds the `__lshift__(this: *Array<T>, value: T)` method
+
+The operator resolution happens before generic type substitution, so it never sees the concrete instantiated type.
+
+**Implementation Notes:**
+
+**Phase 1: Analysis and Design**
+
+- Review current operator resolution algorithm in TypeChecker
+- Identify where generic type substitution happens relative to operator lookup
+- Design new "generic-aware" operator resolution that delays lookup
+- Consider performance implications of deferred operator resolution
+
+**Phase 2: Core Changes**
+
+- Modify operator resolution to detect when operand type is a generic instantiation
+- Add tracking for generic type parameters during operator lookup
+- Implement deferred operator resolution that happens after type substitution
+- May need to add a separate compilation pass for generic operator instantiation
+
+**Phase 3: Type System Integration**
+
+- Ensure operator methods on generic types are properly indexed
+- Handle method lookup with substituted type parameters
+- Support operator overload resolution with type inference
+- Maintain backward compatibility with non-generic operator overloads
+
+**Phase 4: Error Handling**
+
+- Generate clear error messages when operator method is missing on concrete type
+- Distinguish between "no operator method defined" vs "wrong type parameters"
+- Provide helpful suggestions for fixing operator overload issues
+
+**Technical Challenges:**
+
+- Operator resolution currently happens early in TypeChecker for performance
+- Generic type substitution happens later during monomorphization
+- Need to either: (a) delay all operator resolution, or (b) re-resolve operators after substitution
+- Must maintain type safety and prevent ambiguous overload situations
+
+**References:**
+
+- See `docs/operator-overloading-generics-limitation.md` for detailed technical analysis
+- Current workaround: Use concrete types (e.g., `IntArray`) instead of generics
+- Alternative workaround: Use explicit method calls (`arr.push(value)`) instead of operators
+
+**Acceptance Criteria:**
+
+- Generic structs can define operator methods that work with type parameters
+- `Array<T>` can implement `__lshift__(this: *Array<T>, value: T)` successfully
+- Code like `arr << 10` where `arr: Array<i32>` compiles and calls the correct method
+- Operator resolution correctly finds methods on instantiated generic types
+- Error messages clearly indicate when operator overloading fails on generic types
+- Type inference works correctly with generic operator overloads
+- Performance remains acceptable (no significant compilation slowdown)
+- All existing operator overloading tests continue to pass
+- New integration tests demonstrate generic operators working with Array<T>, Vec<T>, etc.
+
+---
+
 ## [2] Enum Types and Pattern Matching
 
 **Description:** Implement enum types (including tagged unions with associated data) with exhaustive pattern matching support. This enables type-safe state representation and powerful control flow based on data variants, replacing many use cases for conditionals with cleaner pattern matching.

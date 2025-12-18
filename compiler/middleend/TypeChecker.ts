@@ -10,6 +10,19 @@ import { LinkerSymbolTable } from "./LinkerSymbolTable";
 import type { Symbol, SymbolKind } from "./SymbolTable";
 import { SymbolTable } from "./SymbolTable";
 
+/**
+ * Get the standard library path, using BPL_HOME environment variable if available
+ * Falls back to relative path for development mode
+ */
+function getStdLibPath(): string {
+  const bplHome = process.env.BPL_HOME;
+  if (bplHome) {
+    return path.join(bplHome, "lib");
+  }
+  // Fallback to relative path (development mode)
+  return path.join(__dirname, "../../lib");
+}
+
 export class TypeChecker {
   private globalScope: SymbolTable;
   private currentScope: SymbolTable;
@@ -647,7 +660,9 @@ export class TypeChecker {
               // Check type compatibility
               if (!this.areTypesCompatible(target.type, elemType)) {
                 throw new CompilerError(
-                  `Type mismatch in tuple destructuring: variable '${target.name}' expects ${this.typeToString(target.type)}, got ${this.typeToString(elemType)}`,
+                  `Type mismatch in tuple destructuring: variable '${
+                    target.name
+                  }' expects ${this.typeToString(target.type)}, got ${this.typeToString(elemType)}`,
                   "Ensure the tuple element types match the declared variable types.",
                   decl.location,
                 );
@@ -1117,7 +1132,7 @@ export class TypeChecker {
       let resolvedImportPath: string | undefined;
 
       if (stmt.source.startsWith("std/")) {
-        const stdLibPath = path.join(__dirname, "../../lib");
+        const stdLibPath = getStdLibPath();
         resolvedImportPath = path.join(stdLibPath, stmt.source.substring(4));
       } else if (path.isAbsolute(stmt.source)) {
         resolvedImportPath = stmt.source;
@@ -1170,7 +1185,7 @@ export class TypeChecker {
     } else {
       // Handle std/ prefix
       if (stmt.source.startsWith("std/")) {
-        const stdLibPath = path.join(__dirname, "../../lib");
+        const stdLibPath = getStdLibPath();
         const relativePath = stmt.source.substring(4);
         importPath = path.join(stdLibPath, relativePath);
       } else {
@@ -1424,9 +1439,7 @@ export class TypeChecker {
         this.currentFunctionReturnType.name !== "void"
       ) {
         throw new CompilerError(
-          `Missing return value: expected ${this.typeToString(
-            this.currentFunctionReturnType,
-          )}`,
+          `Missing return value: expected ${this.typeToString(this.currentFunctionReturnType)}`,
           "Functions with non-void return types must return a value.",
           stmt.location,
         );
@@ -1705,9 +1718,7 @@ export class TypeChecker {
         if (isLeftPtr) {
           if (!this.isIntegerType(rightType)) {
             throw new CompilerError(
-              `Pointer arithmetic requires integer operand, got ${this.typeToString(
-                rightType,
-              )}`,
+              `Pointer arithmetic requires integer operand, got ${this.typeToString(rightType)}`,
               "Ensure the offset is an integer.",
               expr.right.location,
             );
@@ -1723,9 +1734,7 @@ export class TypeChecker {
             );
           if (!this.isIntegerType(leftType)) {
             throw new CompilerError(
-              `Pointer arithmetic requires integer operand, got ${this.typeToString(
-                leftType,
-              )}`,
+              `Pointer arithmetic requires integer operand, got ${this.typeToString(leftType)}`,
               "Ensure the offset is an integer.",
               expr.left.location,
             );
@@ -1859,9 +1868,7 @@ export class TypeChecker {
           };
         } else {
           throw new CompilerError(
-            `Cannot dereference non-pointer type ${this.typeToString(
-              operandType,
-            )}`,
+            `Cannot dereference non-pointer type ${this.typeToString(operandType)}`,
             "Ensure the operand is a pointer.",
             expr.location,
           );
@@ -1991,10 +1998,12 @@ export class TypeChecker {
 
     if (viableCandidates.length === 0) {
       throw new CompilerError(
-        `No matching function for call to '${name}' with ${argTypes.length} arguments${genericArgs.length > 0 ? ` and ${genericArgs.length} generic arguments` : ""}.`,
-        `Available overloads:\n${candidates
-          .map((c) => this.typeToString(c.type!))
-          .join("\n")}`,
+        `No matching function for call to '${name}' with ${argTypes.length} arguments${
+          genericArgs.length > 0
+            ? ` and ${genericArgs.length} generic arguments`
+            : ""
+        }.`,
+        `Available overloads:\n${candidates.map((c) => this.typeToString(c.type!)).join("\n")}`,
         location,
       );
     }
@@ -2104,9 +2113,7 @@ export class TypeChecker {
     if (matched.length === 0) {
       throw new CompilerError(
         `No matching function for call to '${name}' with provided argument types.`,
-        `Available overloads:\n${candidates
-          .map((c) => this.typeToString(c.type!))
-          .join("\n")}`,
+        `Available overloads:\n${candidates.map((c) => this.typeToString(c.type!)).join("\n")}`,
         location,
       );
     }
@@ -2244,9 +2251,7 @@ export class TypeChecker {
           !this.areTypesCompatible(paramType, argType)
         ) {
           throw new CompilerError(
-            `Function argument type mismatch at position ${
-              i + 1
-            }: expected ${this.typeToString(
+            `Function argument type mismatch at position ${i + 1}: expected ${this.typeToString(
               paramType,
             )}, got ${this.typeToString(argType)}`,
             "The argument type does not match the parameter type.",
@@ -2278,9 +2283,7 @@ export class TypeChecker {
       const symbol = moduleScope.resolve(expr.property);
       if (!symbol) {
         throw new CompilerError(
-          `Module '${(objectType as any).name}' has no exported member '${
-            expr.property
-          }'`,
+          `Module '${(objectType as any).name}' has no exported member '${expr.property}'`,
           "Check the module exports.",
           expr.location,
         );
@@ -2693,9 +2696,9 @@ export class TypeChecker {
 
     if (sourceType && !this.isCastAllowed(sourceType, expr.targetType)) {
       throw new CompilerError(
-        `Unsafe cast: cannot cast ${this.typeToString(
-          sourceType,
-        )} to ${this.typeToString(expr.targetType)}`,
+        `Unsafe cast: cannot cast ${this.typeToString(sourceType)} to ${this.typeToString(
+          expr.targetType,
+        )}`,
         "This cast is not allowed. Check pointer depths, numeric types, or struct compatibility.",
         expr.location,
       );
@@ -2746,7 +2749,9 @@ export class TypeChecker {
         !this.areTypesCompatible(firstType, elemType)
       ) {
         throw new CompilerError(
-          `Array literal has inconsistent element types: ${this.typeToString(firstType)} vs ${this.typeToString(elemType)}`,
+          `Array literal has inconsistent element types: ${this.typeToString(
+            firstType,
+          )} vs ${this.typeToString(elemType)}`,
           "All elements in an array literal must have the same type.",
           expr.elements[i]!.location,
         );
@@ -2794,9 +2799,7 @@ export class TypeChecker {
 
         if (!this.areTypesCompatible(resolvedMemberType, resolvedValueType)) {
           throw new CompilerError(
-            `Type mismatch for field '${
-              field.name
-            }': expected ${this.typeToString(
+            `Type mismatch for field '${field.name}': expected ${this.typeToString(
               member.type,
             )}, got ${this.typeToString(valueType)}`,
             "Field value must match the declared type.",
@@ -2897,7 +2900,9 @@ export class TypeChecker {
           if (param.constraint) {
             if (!this.areTypesCompatible(param.constraint, arg)) {
               throw new CompilerError(
-                `Type '${this.typeToString(arg)}' does not satisfy constraint '${this.typeToString(param.constraint)}'`,
+                `Type '${this.typeToString(arg)}' does not satisfy constraint '${this.typeToString(
+                  param.constraint,
+                )}'`,
                 `Ensure the type argument satisfies the constraint.`,
                 expr.location,
               );
@@ -3454,9 +3459,7 @@ export class TypeChecker {
                   throw new CompilerError(
                     `Type '${this.typeToString(
                       arg,
-                    )}' does not satisfy constraint '${this.typeToString(
-                      substitutedConstraint,
-                    )}'`,
+                    )}' does not satisfy constraint '${this.typeToString(substitutedConstraint)}'`,
                     `Ensure the type argument satisfies the constraint.`,
                     type.location,
                   );

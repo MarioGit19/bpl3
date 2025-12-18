@@ -61,4 +61,48 @@ struct Vec2 {
     frame print(this: *Vec2) {
         printf("Vec2(%.2f, %.2f)\n", this.x, this.y);
     }
+
+    # Operator overloading: Vector addition with +
+    frame __add__(this: *Vec2, other: Vec2) ret Vec2 {
+        return this.add(other);
+    }
+
+    # Operator overloading: Vector subtraction with -
+    frame __sub__(this: *Vec2, other: Vec2) ret Vec2 {
+        return this.sub(other);
+    }
+
+    # Operator overloading: Scalar multiplication with *
+    frame __mul__(this: *Vec2, scalar: float) ret Vec2 {
+        local r: Vec2;
+        r.x = this.x * scalar;
+        r.y = this.y * scalar;
+        return r;
+    }
+
+    # Operator overloading: Scalar division with /
+    frame __div__(this: *Vec2, scalar: float) ret Vec2 {
+        local r: Vec2;
+        r.x = this.x / scalar;
+        r.y = this.y / scalar;
+        return r;
+    }
+
+    # Operator overloading: Vector equality with ==
+    frame __eq__(this: *Vec2, other: Vec2) ret bool {
+        return (this.x == other.x) && (this.y == other.y);
+    }
+
+    # Operator overloading: Vector inequality with !=
+    frame __ne__(this: *Vec2, other: Vec2) ret bool {
+        return (this.x != other.x) || (this.y != other.y);
+    }
+
+    # Operator overloading: Unary negation with -
+    frame __neg__(this: *Vec2) ret Vec2 {
+        local r: Vec2;
+        r.x = -this.x;
+        r.y = -this.y;
+        return r;
+    }
 }

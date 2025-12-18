@@ -1,0 +1,25 @@
+{
+  "expectedOutput": [
+    "=== String Literal Operator Demo ===",
+    "",
+    "--- Old way (verbose) ---",
+    "Result: 'Hello World'",
+    "",
+    "--- New way (concise) ---",
+    "Result: 'Hello World'",
+    "",
+    "--- In-place with literals ---",
+    "Result: 'Building a sentence easily!'",
+    "",
+    "--- Building a file path ---",
+    "Path: '/home/user/documents/file.txt'",
+    "",
+    "--- Expression building ---",
+    "Greeting: 'Hello, Alice! Welcome to BPL3.'",
+    "",
+    "=== Demo Complete ==="
+  ],
+  "args": [],
+  "env": {},
+  "input": ""
+}

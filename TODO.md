@@ -47,8 +47,10 @@
 
 ## Pending Features (expanded)
 
-- Implementation notes: Define mapping between operators and method names; during type-checking, if an operand type has the corresponding method, resolve to that method; otherwise fall back to builtin semantics. Disallow assignment operators overloading. Ensure overload resolution supports left/right operand dispatch and coercions.
-- Acceptance criteria: Defining `__add__` on a struct causes `a + b` to call that method; operator resolution respects type conversions and produces helpful errors when ambiguous.
+- [2] Generic-Aware Operator Resolution
+  - Description: Enable operator overloading to work with generic types by making operator resolution happen after generic type substitution. Currently, operators don't work with generic structs like Array<T> because the compiler looks up operators before substituting the generic type parameter.
+  - Implementation notes: Modify the compiler's operator resolution phase to be "generic-aware": delay operator lookup until after generic type parameters are substituted with concrete types. This requires tracking whether a type is generic during operator resolution and deferring the lookup. May need to refactor the order of compilation phases or add a separate pass for generic operator instantiation. See docs/operator-overloading-generics-limitation.md for detailed technical analysis.
+  - Acceptance criteria: Generic structs like Array<T> can define operator methods (**lshift**, **rshift**, etc.) that work correctly when instantiated with concrete types (Array<i32> << 10 compiles and runs). Operator resolution correctly finds methods on instantiated generic types. Error messages clearly indicate when operator overloading fails due to missing method on the concrete type.
 
 - [2] Enum Types and Pattern Matching
   - Description: Implement enum types (including tagged unions) with exhaustive pattern matching support.

@@ -73,4 +73,51 @@ struct Vec3 {
     frame print(this: *Vec3) {
         printf("Vec3(%.2f, %.2f, %.2f)\n", this.x, this.y, this.z);
     }
+
+    # Operator overloading: Vector addition with +
+    frame __add__(this: *Vec3, other: Vec3) ret Vec3 {
+        return this.add(other);
+    }
+
+    # Operator overloading: Vector subtraction with -
+    frame __sub__(this: *Vec3, other: Vec3) ret Vec3 {
+        return this.sub(other);
+    }
+
+    # Operator overloading: Scalar multiplication with *
+    frame __mul__(this: *Vec3, scalar: float) ret Vec3 {
+        local r: Vec3;
+        r.x = this.x * scalar;
+        r.y = this.y * scalar;
+        r.z = this.z * scalar;
+        return r;
+    }
+
+    # Operator overloading: Scalar division with /
+    frame __div__(this: *Vec3, scalar: float) ret Vec3 {
+        local r: Vec3;
+        r.x = this.x / scalar;
+        r.y = this.y / scalar;
+        r.z = this.z / scalar;
+        return r;
+    }
+
+    # Operator overloading: Vector equality with ==
+    frame __eq__(this: *Vec3, other: Vec3) ret bool {
+        return (this.x == other.x) && (this.y == other.y) && (this.z == other.z);
+    }
+
+    # Operator overloading: Vector inequality with !=
+    frame __ne__(this: *Vec3, other: Vec3) ret bool {
+        return (this.x != other.x) || (this.y != other.y) || (this.z != other.z);
+    }
+
+    # Operator overloading: Unary negation with -
+    frame __neg__(this: *Vec3) ret Vec3 {
+        local r: Vec3;
+        r.x = -this.x;
+        r.y = -this.y;
+        r.z = -this.z;
+        return r;
+    }
 }

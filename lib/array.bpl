@@ -108,6 +108,21 @@ struct Array<T> {
         }
         this.length = this.length - 1;
     }
+
+    # Operator overloading: Push element with << (left shift)
+    # Usage: arr << value
+    frame __lshift__(this: *Array<T>, value: T) ret Array<T> {
+        this.push(value);
+        return *this;
+    }
+
+    # Operator overloading: Pop element with >> (right shift)
+    # Usage: arr >> destination_ptr
+    # This pops an element and stores it at the pointer location
+    frame __rshift__(this: *Array<T>, dest: *T) ret Array<T> {
+        *dest = this.pop();
+        return *this;
+    }
 }
 
 export [ArrayError];

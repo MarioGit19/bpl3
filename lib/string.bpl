@@ -4,6 +4,8 @@ export [String];
 
 extern strlen(s: *char) ret int;
 extern strcpy(dst: *char, src: *char) ret *char;
+extern strcmp(s1: *char, s2: *char) ret int;
+extern strcat(dst: *char, src: *char) ret *char;
 extern malloc(size: i64) ret *char;
 extern free(ptr: *char) ret void;
 
@@ -81,5 +83,114 @@ struct String {
             i = i + 1;
         }
         return false;
+    }
+
+    # Operator overloading: String concatenation with +
+    frame __add__(this: *String, other: String) ret String {
+        if (this.data == null) {
+            return other.clone();
+        }
+        if (other.data == null) {
+            return this.clone();
+        }
+        local newLen: int = this.length + other.length;
+        local newData: *char = malloc(cast<i64>(newLen + 1));
+        strcpy(newData, this.data);
+        strcat(newData, other.data);
+        local result: String;
+        result.data = newData;
+        result.length = newLen;
+        return result;
+    }
+
+    # Operator overloading: String concatenation with + (string literal overload)
+    # Allows: str + "literal" without needing String.new()
+    frame __add__(this: *String, other: string) ret String {
+        local otherStr: String = String.new(other);
+        local result: String = this.__add__(otherStr);
+        otherStr.destroy();
+        return result;
+    }
+
+    # Operator overloading: String equality with ==
+    frame __eq__(this: *String, other: String) ret bool {
+        if ((this.data == null) && (other.data == null)) {
+            return true;
+        }
+        if ((this.data == null) || (other.data == null)) {
+            return false;
+        }
+        if (this.length != other.length) {
+            return false;
+        }
+        return strcmp(this.data, other.data) == 0;
+    }
+
+    # Operator overloading: String inequality with !=
+    frame __ne__(this: *String, other: String) ret bool {
+        return !this.__eq__(other);
+    }
+
+    # Operator overloading: String less than with <
+    frame __lt__(this: *String, other: String) ret bool {
+        if ((this.data == null) || (other.data == null)) {
+            return false;
+        }
+        return strcmp(this.data, other.data) < 0;
+    }
+
+    # Operator overloading: String less than or equal with <=
+    frame __le__(this: *String, other: String) ret bool {
+        if ((this.data == null) || (other.data == null)) {
+            return false;
+        }
+        return strcmp(this.data, other.data) <= 0;
+    }
+
+    # Operator overloading: String greater than with >
+    frame __gt__(this: *String, other: String) ret bool {
+        if ((this.data == null) || (other.data == null)) {
+            return false;
+        }
+        return strcmp(this.data, other.data) > 0;
+    }
+
+    # Operator overloading: String greater than or equal with >=
+    frame __ge__(this: *String, other: String) ret bool {
+        if ((this.data == null) || (other.data == null)) {
+            return false;
+        }
+        return strcmp(this.data, other.data) >= 0;
+    }
+
+    # Operator overloading: In-place concatenation with <<
+    # Usage: str << "text" modifies str in place and returns it
+    frame __lshift__(this: *String, other: String) ret String {
+        if (other.data == null) {
+            return *this;
+        }
+        if (this.data == null) {
+            local newStr: String = other.clone();
+            this.data = newStr.data;
+            this.length = newStr.length;
+            return *this;
+        }
+        local newLen: int = this.length + other.length;
+        local newData: *char = malloc(cast<i64>(newLen + 1));
+        strcpy(newData, this.data);
+        strcat(newData, other.data);
+        free(this.data);
+        this.data = newData;
+        this.length = newLen;
+        return *this;
+    }
+
+    # Operator overloading: In-place concatenation with << (string literal overload)
+    # Allows: str << "literal" without needing String.new()
+    frame __lshift__(this: *String, other: string) ret String {
+        local otherStr: String = String.new(other);
+        local result: String = this.__lshift__(otherStr);
+        otherStr.destroy();
+        return result;
     }
 }

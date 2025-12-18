@@ -53,7 +53,11 @@ describe("Integration Tests", () => {
           CMP_SCRIPT,
           [relativeMainFile, ...(config.args || [])],
           {
-            env: { ...process.env, ...(config.env || {}) },
+            env: {
+              ...process.env,
+              BPL_HOME: process.cwd(), // Set BPL_HOME to current directory for stdlib resolution
+              ...(config.env || {}),
+            },
             input: config.input || "",
             encoding: "utf-8",
           },
