@@ -369,6 +369,18 @@ export class TypeChecker {
           location: stmt.location,
         };
         break;
+      case "EnumDecl":
+        this.defineSymbol(stmt.name, "Enum", undefined, stmt);
+        this.registerLinkerSymbol(stmt.name, "type", undefined, stmt);
+        stmt.resolvedType = {
+          kind: "BasicType",
+          name: stmt.name,
+          genericArgs: [],
+          pointerDepth: 0,
+          arrayDimensions: [],
+          location: stmt.location,
+        };
+        break;
       case "SpecDecl":
         this.defineSymbol(stmt.name, "Spec", undefined, stmt);
         this.registerLinkerSymbol(stmt.name, "type", undefined, stmt);
@@ -438,6 +450,9 @@ export class TypeChecker {
       case "StructDecl":
         this.checkStructBody(stmt);
         break; // Changed to check body only
+      case "EnumDecl":
+        this.checkEnumBody(stmt);
+        break;
       case "SpecDecl":
         this.checkSpecBody(stmt);
         break;
@@ -933,6 +948,36 @@ export class TypeChecker {
       }
     }
     this.currentScope = this.currentScope.exitScope();
+  }
+
+  private checkEnumBody(decl: AST.EnumDecl): void {
+    // Symbol already defined in hoist pass
+
+    // Check for duplicate variant names
+    const variantNames = new Set<string>();
+    for (const variant of decl.variants) {
+      if (variantNames.has(variant.name)) {
+        throw new CompilerError(
+          `Duplicate variant name '${variant.name}' in enum '${decl.name}'`,
+          "Each variant must have a unique name within the enum.",
+          variant.location,
+        );
+      }
+      variantNames.add(variant.name);
+
+      // Type check variant data
+      if (variant.dataType) {
+        if (variant.dataType.kind === "EnumVariantTuple") {
+          for (const type of variant.dataType.types) {
+            this.resolveType(type);
+          }
+        } else if (variant.dataType.kind === "EnumVariantStruct") {
+          for (const field of variant.dataType.fields) {
+            this.resolveType(field.type);
+          }
+        }
+      }
+    }
   }
 
   private checkSpecBody(decl: AST.SpecDecl): void {
@@ -1511,8 +1556,11 @@ export class TypeChecker {
       case "Sizeof":
         type = this.checkSizeof(expr);
         break;
+      case "TypeMatch":
+        type = this.checkTypeMatch(expr);
+        break;
       case "Match":
-        type = this.checkMatch(expr);
+        type = this.checkMatchExpr(expr);
         break;
       case "ArrayLiteral":
         type = this.checkArrayLiteral(expr);
@@ -1523,14 +1571,19 @@ export class TypeChecker {
       case "TupleLiteral":
         type = this.checkTupleLiteral(expr);
         break;
+      case "EnumStructVariant":
+        type = this.checkEnumStructVariant(expr as AST.EnumStructVariantExpr);
+        break;
       case "GenericInstantiation":
         type = this.checkGenericInstantiation(expr);
         break;
     }
     if (type) {
-      expr.resolvedType = this.resolveType(type);
+      const resolved = this.resolveType(type);
+      expr.resolvedType = resolved;
     }
-    return type;
+    const returnValue = type;
+    return returnValue;
   }
 
   private checkLiteral(expr: AST.LiteralExpr): AST.TypeNode {
@@ -1603,6 +1656,20 @@ export class TypeChecker {
       } as any;
     }
     if (symbol.kind === "Struct") {
+      return {
+        kind: "MetaType",
+        type: {
+          kind: "BasicType",
+          name: expr.name,
+          genericArgs: [],
+          pointerDepth: 0,
+          arrayDimensions: [],
+          location: expr.location,
+        },
+        location: expr.location,
+      } as any;
+    }
+    if (symbol.kind === "Enum") {
       return {
         kind: "MetaType",
         type: {
@@ -2194,6 +2261,109 @@ export class TypeChecker {
 
     const calleeType = this.checkExpression(expr.callee);
 
+    // Check if this is an enum variant constructor call BEFORE checking arguments
+    // This allows us to handle it specially and return early
+    if (expr.callee.kind === "Member") {
+      const memberExpr = expr.callee as AST.MemberExpr;
+      const enumVariantInfo = (memberExpr as any).enumVariantInfo;
+
+      if (enumVariantInfo) {
+        // This is an enum variant constructor - handle it specially
+        const variant = enumVariantInfo.variant as AST.EnumVariant;
+
+        // Check arguments
+        const argTypes = expr.args.map((arg) => this.checkExpression(arg));
+
+        // Build type substitution map for generic enums
+        const typeMap = new Map<string, AST.TypeNode>();
+        const enumDecl = enumVariantInfo.enumDecl as AST.EnumDecl;
+        const genericArgs = enumVariantInfo.genericArgs || [];
+
+        if (enumDecl.genericParams && genericArgs.length > 0) {
+          for (
+            let i = 0;
+            i < enumDecl.genericParams.length && i < genericArgs.length;
+            i++
+          ) {
+            typeMap.set(enumDecl.genericParams[i]!.name, genericArgs[i]!);
+          }
+        }
+
+        // Validate argument count and types for tuple variants
+        if (variant.dataType) {
+          if (variant.dataType.kind === "EnumVariantTuple") {
+            const expectedTypes = variant.dataType.types;
+
+            if (argTypes.length !== expectedTypes.length) {
+              throw new CompilerError(
+                `Enum variant '${variant.name}' expects ${expectedTypes.length} arguments, but got ${argTypes.length}`,
+                `Usage: ${enumVariantInfo.enumDecl.name}.${variant.name}(${expectedTypes
+                  .map((t: AST.TypeNode) => this.typeToString(t))
+                  .join(", ")})`,
+                expr.location,
+              );
+            }
+
+            // Check each argument type (with generic substitution)
+            for (let i = 0; i < expectedTypes.length; i++) {
+              let expectedType = expectedTypes[i]!;
+
+              // Apply generic substitution if needed
+              if (typeMap.size > 0) {
+                expectedType = this.substituteType(expectedType, typeMap);
+              }
+
+              expectedType = this.resolveType(expectedType);
+              const actualType = argTypes[i];
+              if (
+                actualType &&
+                !this.areTypesCompatible(expectedType, actualType)
+              ) {
+                throw new CompilerError(
+                  `Type mismatch for argument ${i + 1} of '${
+                    variant.name
+                  }': expected ${this.typeToString(expectedType)}, got ${this.typeToString(
+                    actualType,
+                  )}`,
+                  "Check the variant definition and argument types.",
+                  expr.location,
+                );
+              }
+            }
+          } else {
+            // Struct variant - not yet supported with this syntax
+            throw new CompilerError(
+              `Struct variant construction requires struct literal syntax`,
+              `Use: ${enumVariantInfo.enumDecl.name}.${variant.name} { field: value }`,
+              expr.location,
+            );
+          }
+        } else {
+          // Unit variant should not have arguments
+          if (argTypes.length > 0) {
+            throw new CompilerError(
+              `Unit variant '${variant.name}' does not take any arguments`,
+              `Use: ${enumVariantInfo.enumDecl.name}.${variant.name}`,
+              expr.location,
+            );
+          }
+        }
+
+        // Store variant info in the call expression for code generation
+        (expr as any).enumVariantInfo = enumVariantInfo;
+
+        // Return the enum type - this is what the expression evaluates to
+        if (!calleeType) {
+          throw new CompilerError(
+            "Internal error: calleeType is undefined for enum variant",
+            "",
+            expr.location,
+          );
+        }
+        return calleeType;
+      }
+    }
+
     // Always check arguments to ensure they are valid expressions and resolve their types
     const argTypes = expr.args.map((arg) => this.checkExpression(arg));
 
@@ -2273,7 +2443,9 @@ export class TypeChecker {
       // Let's assume strict check unless we know it's variadic.
       // But I set params to [] for variadic externs.
 
-      if (calleeType.paramTypes.length !== expr.args.length) {
+      const funcType = calleeType as AST.FunctionTypeNode;
+
+      if (funcType.paramTypes.length !== expr.args.length) {
         // If it's an extern with empty params, maybe it's variadic?
         // But normal functions can have empty params.
         // I need to store isVariadic in FunctionType.
@@ -2281,11 +2453,11 @@ export class TypeChecker {
 
       for (
         let i = 0;
-        i < Math.min(calleeType.paramTypes.length, expr.args.length);
+        i < Math.min(funcType.paramTypes.length, expr.args.length);
         i++
       ) {
         const argType = argTypes[i];
-        const paramType = calleeType.paramTypes[i];
+        const paramType = funcType.paramTypes[i];
         if (
           argType &&
           paramType &&
@@ -2360,6 +2532,41 @@ export class TypeChecker {
       const inner = (objectType as any).type;
       if (inner.kind === "BasicType") {
         const symbol = this.currentScope.resolve(inner.name);
+
+        // Handle enum variant access (e.g., Color.Red or Option<int>.Some)
+        if (symbol && symbol.kind === "Enum") {
+          const enumDecl = symbol.declaration as AST.EnumDecl;
+          const variant = enumDecl.variants.find(
+            (v) => v.name === expr.property,
+          );
+
+          if (!variant) {
+            throw new CompilerError(
+              `Enum '${enumDecl.name}' has no variant '${expr.property}'`,
+              `Available variants: ${enumDecl.variants.map((v) => v.name).join(", ")}`,
+              expr.location,
+            );
+          }
+
+          // Store the variant information for code generation
+          (expr as any).enumVariantInfo = {
+            enumDecl,
+            variant,
+            variantIndex: enumDecl.variants.indexOf(variant),
+            genericArgs: inner.genericArgs, // Pass generic args to codegen
+          };
+
+          // Return the enum type (the variant constructs a value of the enum type)
+          return {
+            kind: "BasicType",
+            name: enumDecl.name,
+            genericArgs: inner.genericArgs,
+            pointerDepth: 0,
+            arrayDimensions: [],
+            location: expr.location,
+          };
+        }
+
         if (symbol && symbol.kind === "Struct") {
           const decl = symbol.declaration as AST.StructDecl;
           const members = decl.members.filter((m) => m.name === expr.property);
@@ -2763,7 +2970,7 @@ export class TypeChecker {
     };
   }
 
-  private checkMatch(expr: AST.MatchExpr): AST.TypeNode {
+  private checkTypeMatch(expr: AST.TypeMatchExpr): AST.TypeNode {
     if ("kind" in expr.value && (expr.value.kind as string) !== "BasicType") {
       this.checkExpression(expr.value as AST.Expression);
     }
@@ -2774,6 +2981,289 @@ export class TypeChecker {
       pointerDepth: 0,
       arrayDimensions: [],
       location: expr.location,
+    };
+  }
+
+  private checkMatchExpr(expr: AST.MatchExpr): AST.TypeNode {
+    // Type check the value being matched
+    const valueType = this.checkExpression(expr.value);
+    if (!valueType) {
+      throw new CompilerError(
+        "Match value has no type",
+        "Cannot match on values without a type.",
+        expr.value.location,
+      );
+    }
+
+    // Ensure value type is an enum - use the original valueType to preserve generic args
+    if (valueType.kind !== "BasicType") {
+      throw new CompilerError(
+        `Match value must be an enum type, got ${this.typeToString(valueType)}`,
+        "Match expressions are currently only supported on enum types.",
+        expr.value.location,
+      );
+    }
+
+    const symbol = this.currentScope.resolve(valueType.name);
+    if (!symbol) {
+      throw new CompilerError(
+        `Cannot find type '${valueType.name}'`,
+        "Ensure the enum is declared before use.",
+        expr.value.location,
+      );
+    }
+    if (symbol.kind !== "Enum") {
+      throw new CompilerError(
+        `Cannot match on non-enum type '${valueType.name}' (found ${symbol.kind})`,
+        "Match expressions are currently only supported on enum types.",
+        expr.value.location,
+      );
+    }
+
+    const enumDecl = symbol.declaration as AST.EnumDecl;
+
+    // Check exhaustiveness
+    this.checkMatchExhaustiveness(expr, enumDecl);
+
+    // Type check all arms
+    let resultType: AST.TypeNode | undefined;
+    for (const arm of expr.arms) {
+      // Enter new scope for pattern bindings
+      this.currentScope = this.currentScope.enterScope();
+
+      // Check pattern and bind variables (pass the original valueType with generic args)
+      this.checkPattern(arm.pattern, valueType, enumDecl);
+
+      if (arm.guard) {
+        const guardType = this.checkExpression(arm.guard);
+        if (guardType && !this.isBoolType(guardType)) {
+          throw new CompilerError(
+            `Match guard must be a boolean expression, got ${this.typeToString(guardType)}`,
+            "Guards must evaluate to bool.",
+            arm.guard.location,
+          );
+        }
+      }
+
+      const armType = this.checkMatchArmBody(arm.body);
+
+      // Exit scope after arm body
+      this.currentScope = this.currentScope.exitScope();
+
+      if (!resultType) {
+        resultType = armType;
+      } else if (armType && !this.areTypesCompatible(resultType, armType)) {
+        throw new CompilerError(
+          `Match arms must have compatible types: ${this.typeToString(
+            resultType,
+          )} vs ${this.typeToString(armType)}`,
+          "All match arms must return the same type.",
+          arm.location,
+        );
+      }
+    }
+
+    return resultType || this.makeVoidType();
+  }
+
+  private checkMatchExhaustiveness(
+    expr: AST.MatchExpr,
+    enumDecl: AST.EnumDecl,
+  ): void {
+    const coveredVariants = new Set<string>();
+    let hasWildcard = false;
+
+    for (const arm of expr.arms) {
+      if (arm.pattern.kind === "PatternWildcard") {
+        hasWildcard = true;
+        break;
+      } else if (
+        arm.pattern.kind === "PatternEnum" ||
+        arm.pattern.kind === "PatternEnumTuple" ||
+        arm.pattern.kind === "PatternEnumStruct"
+      ) {
+        coveredVariants.add(arm.pattern.variantName);
+      }
+    }
+
+    if (!hasWildcard) {
+      const allVariants = new Set(enumDecl.variants.map((v) => v.name));
+      const missingVariants = [...allVariants].filter(
+        (v) => !coveredVariants.has(v),
+      );
+
+      if (missingVariants.length > 0) {
+        throw new CompilerError(
+          `Non-exhaustive match: missing variants: ${missingVariants.join(", ")}`,
+          "Match expressions must handle all enum variants or include a wildcard (_) pattern.",
+          expr.location,
+        );
+      }
+    }
+  }
+
+  private checkPattern(
+    pattern: AST.Pattern,
+    enumType: AST.TypeNode,
+    enumDecl: AST.EnumDecl,
+  ): void {
+    if (pattern.kind === "PatternWildcard") {
+      // Wildcard matches anything
+      return;
+    }
+
+    if (pattern.kind === "PatternEnum") {
+      const variant = enumDecl.variants.find(
+        (v) => v.name === pattern.variantName,
+      );
+      if (!variant) {
+        throw new CompilerError(
+          `Unknown variant '${pattern.variantName}' in enum '${enumDecl.name}'`,
+          "Check the enum definition for valid variants.",
+          pattern.location,
+        );
+      }
+      if (variant.dataType) {
+        throw new CompilerError(
+          `Variant '${pattern.variantName}' has associated data, use tuple or struct pattern`,
+          "This variant requires destructuring its data.",
+          pattern.location,
+        );
+      }
+    }
+
+    if (pattern.kind === "PatternEnumTuple") {
+      const variant = enumDecl.variants.find(
+        (v) => v.name === pattern.variantName,
+      );
+      if (!variant || variant.dataType?.kind !== "EnumVariantTuple") {
+        throw new CompilerError(
+          `Variant '${pattern.variantName}' is not a tuple variant`,
+          "This pattern expects a tuple variant with associated data.",
+          pattern.location,
+        );
+      }
+      const expectedCount = variant.dataType.types.length;
+      const actualCount = pattern.bindings.length;
+      if (expectedCount !== actualCount) {
+        throw new CompilerError(
+          `Expected ${expectedCount} bindings, got ${actualCount}`,
+          `Variant '${pattern.variantName}' requires ${expectedCount} values.`,
+          pattern.location,
+        );
+      }
+
+      // Build type substitution map for generic enums
+      const typeMap = new Map<string, AST.TypeNode>();
+      if (enumType.kind === "BasicType" && enumDecl.genericParams) {
+        const genericArgs = enumType.genericArgs || [];
+        for (
+          let i = 0;
+          i < enumDecl.genericParams.length && i < genericArgs.length;
+          i++
+        ) {
+          typeMap.set(enumDecl.genericParams[i]!.name, genericArgs[i]!);
+        }
+      }
+
+      // Bind variables in scope for arm body
+      for (let i = 0; i < pattern.bindings.length; i++) {
+        const bindingName = pattern.bindings[i]!;
+        let bindingType = variant.dataType.types[i]!;
+
+        // Apply generic substitution if needed
+        if (typeMap.size > 0) {
+          bindingType = this.substituteType(bindingType, typeMap);
+        }
+
+        // Skip wildcard bindings
+        if (bindingName === "_") {
+          continue;
+        }
+
+        this.currentScope.define({
+          kind: "Variable",
+          name: bindingName,
+          type: bindingType,
+          declaration: pattern as any, // Store the pattern for reference
+        });
+      }
+    }
+
+    if (pattern.kind === "PatternEnumStruct") {
+      const variant = enumDecl.variants.find(
+        (v) => v.name === pattern.variantName,
+      );
+      if (!variant || variant.dataType?.kind !== "EnumVariantStruct") {
+        throw new CompilerError(
+          `Variant '${pattern.variantName}' is not a struct variant`,
+          "This pattern expects a struct variant with named fields.",
+          pattern.location,
+        );
+      }
+      // Validate field names match
+      const expectedFields = new Map(
+        variant.dataType.fields.map((f) => [f.name, f.type]),
+      );
+      for (const field of pattern.fields) {
+        if (!expectedFields.has(field.fieldName)) {
+          throw new CompilerError(
+            `Unknown field '${field.fieldName}' in variant '${pattern.variantName}'`,
+            "Check the variant definition for valid fields.",
+            pattern.location,
+          );
+        }
+
+        // Bind variables in scope for arm body
+        const bindingName = field.binding;
+        const bindingType = expectedFields.get(field.fieldName)!;
+
+        // Skip wildcard bindings
+        if (bindingName === "_") {
+          continue;
+        }
+
+        this.currentScope.define({
+          kind: "Variable",
+          name: bindingName,
+          type: bindingType,
+          declaration: pattern as any,
+        });
+      }
+    }
+  }
+
+  private checkMatchArmBody(
+    body: AST.Expression | AST.BlockStmt,
+  ): AST.TypeNode | undefined {
+    if (body.kind === "Block") {
+      this.checkBlock(body);
+      // Infer return type from return statements in block
+      // For now, just return void
+      return this.makeVoidType();
+    } else {
+      return this.checkExpression(body);
+    }
+  }
+
+  private isBoolType(type: AST.TypeNode): boolean {
+    return type.kind === "BasicType" && type.name === "bool";
+  }
+
+  private makeVoidType(): AST.TypeNode {
+    return {
+      kind: "BasicType",
+      name: "void",
+      genericArgs: [],
+      pointerDepth: 0,
+      arrayDimensions: [],
+      location: {
+        file: "unknown",
+        startLine: 0,
+        startColumn: 0,
+        endLine: 0,
+        endColumn: 0,
+      },
     };
   }
 
@@ -2853,6 +3343,88 @@ export class TypeChecker {
     return {
       kind: "BasicType",
       name: expr.structName,
+      genericArgs: [],
+      pointerDepth: 0,
+      arrayDimensions: [],
+      location: expr.location,
+    };
+  }
+
+  private checkEnumStructVariant(
+    expr: AST.EnumStructVariantExpr,
+  ): AST.TypeNode | undefined {
+    const symbol = this.currentScope.resolve(expr.enumName);
+    if (!symbol || symbol.kind !== "Enum") {
+      throw new CompilerError(
+        `Unknown enum '${expr.enumName}'`,
+        "Ensure the enum is defined.",
+        expr.location,
+      );
+    }
+
+    const enumDecl = symbol.declaration as AST.EnumDecl;
+    const variant = enumDecl.variants.find((v) => v.name === expr.variantName);
+
+    if (!variant) {
+      throw new CompilerError(
+        `Enum '${expr.enumName}' has no variant '${expr.variantName}'`,
+        `Available variants: ${enumDecl.variants.map((v) => v.name).join(", ")}`,
+        expr.location,
+      );
+    }
+
+    // Check that this is a struct variant
+    if (!variant.dataType || variant.dataType.kind !== "EnumVariantStruct") {
+      throw new CompilerError(
+        `Variant '${expr.variantName}' is not a struct variant`,
+        `Use appropriate construction syntax for the variant type`,
+        expr.location,
+      );
+    }
+
+    const structVariant = variant.dataType as AST.EnumVariantStruct;
+
+    // Check that all provided fields exist and have correct types
+    for (const field of expr.fields) {
+      const variantField = structVariant.fields.find(
+        (f) => f.name === field.name,
+      );
+      if (!variantField) {
+        throw new CompilerError(
+          `Unknown field '${field.name}' in struct variant '${expr.variantName}'`,
+          `Available fields: ${structVariant.fields.map((f) => f.name).join(", ")}`,
+          expr.location,
+        );
+      }
+
+      const valueType = this.checkExpression(field.value);
+      if (valueType) {
+        const resolvedFieldType = this.resolveType(variantField.type);
+        const resolvedValueType = this.resolveType(valueType);
+
+        if (!this.areTypesCompatible(resolvedFieldType, resolvedValueType)) {
+          throw new CompilerError(
+            `Type mismatch for field '${field.name}': expected ${this.typeToString(
+              variantField.type,
+            )}, got ${this.typeToString(valueType)}`,
+            "Field value must match the declared type.",
+            field.value.location,
+          );
+        }
+      }
+    }
+
+    // Store variant info for code generation
+    (expr as any).enumVariantInfo = {
+      enumDecl,
+      variant,
+      variantIndex: enumDecl.variants.indexOf(variant),
+    };
+
+    // Return the enum type
+    return {
+      kind: "BasicType",
+      name: expr.enumName,
       genericArgs: [],
       pointerDepth: 0,
       arrayDimensions: [],
@@ -2964,43 +3536,51 @@ export class TypeChecker {
 
   private substituteType(
     type: AST.TypeNode,
-    mapping: Map<string, AST.TypeNode>,
+    map: Map<string, AST.TypeNode>,
   ): AST.TypeNode {
     if (type.kind === "BasicType") {
-      if (mapping.has(type.name)) {
-        const sub = mapping.get(type.name)!;
-        if (sub.kind === "BasicType") {
+      if (map.has(type.name)) {
+        const subst = map.get(type.name)!;
+        if (subst.kind === "BasicType") {
           return {
-            ...sub,
-            pointerDepth: sub.pointerDepth + type.pointerDepth,
-            arrayDimensions: [...sub.arrayDimensions, ...type.arrayDimensions],
+            ...subst,
+            pointerDepth: subst.pointerDepth + type.pointerDepth,
+            arrayDimensions: [
+              ...subst.arrayDimensions,
+              ...type.arrayDimensions,
+            ],
             location: type.location,
           };
         }
-        if (type.pointerDepth > 0 || type.arrayDimensions.length > 0) {
-          // Fallback or error
-          return sub;
-        }
-        return sub;
+        return subst;
       }
+
+      if (type.genericArgs.length > 0) {
+        return {
+          ...type,
+          genericArgs: type.genericArgs.map((arg) =>
+            this.substituteType(arg, map),
+          ),
+        };
+      }
+    } else if (type.kind === "TupleType") {
       return {
         ...type,
-        genericArgs: type.genericArgs.map((arg) =>
-          this.substituteType(arg, mapping),
-        ),
+        types: type.types.map((t) => this.substituteType(t, map)),
       };
     } else if (type.kind === "FunctionType") {
       return {
         ...type,
-        returnType: this.substituteType(type.returnType, mapping),
-        paramTypes: type.paramTypes.map((p) => this.substituteType(p, mapping)),
+        returnType: this.substituteType(type.returnType, map),
+        paramTypes: type.paramTypes.map((t) => this.substituteType(t, map)),
       };
-    } else if (type.kind === "TupleType") {
+    } else if (type.kind === "MetaType") {
       return {
         ...type,
-        types: type.types.map((t) => this.substituteType(t, mapping)),
-      };
+        type: this.substituteType((type as any).type, map),
+      } as any;
     }
+
     return type;
   }
 
@@ -3150,7 +3730,9 @@ export class TypeChecker {
     const rt2 = this.resolveType(t2, checkConstraints);
 
     // 1. Check basic kind
-    if (rt1.kind !== rt2.kind) return false;
+    if (rt1.kind !== rt2.kind) {
+      return false;
+    }
 
     // 2. Handle BasicType
     if (rt1.kind === "BasicType" && rt2.kind === "BasicType") {
@@ -3858,6 +4440,7 @@ export class TypeChecker {
         for (const typeNode of decl.inheritanceList) {
           if (typeNode.kind === "BasicType") {
             const parentTypeResolved = this.resolveType(typeNode);
+
             if (
               parentTypeResolved.kind === "BasicType" &&
               this.isSubtype(parentTypeResolved, parent)

@@ -209,9 +209,6 @@ describe("BPL Playground Examples", () => {
   });
 
   examples.forEach((example) => {
-    // Only test examples 1-40 for now as they are the ones updated
-    if (example.order > 40) return;
-
     it(`Example ${example.order}: ${example.title}`, async () => {
       const testName = `${example.order}. ${example.title}`;
 

@@ -87,6 +87,10 @@
     return { kind: "TupleLiteral", elements, location: makeLoc(loc) };
   }
 
+  function enumStructVariant(enumName, variantName, fields, loc) {
+    return { kind: "EnumStructVariant", enumName, variantName, fields: fields || [], location: makeLoc(loc) };
+  }
+
   function castNode(targetType, expression, loc) {
     return { kind: "Cast", targetType, expression, location: makeLoc(loc) };
   }
@@ -96,11 +100,51 @@
   }
 
   function matchNode(targetType, value, loc) {
-    return { kind: "Match", targetType, value, location: makeLoc(loc) };
+    return { kind: "TypeMatch", targetType, value, location: makeLoc(loc) };
   }
 
   function genericInstantiation(base, genericArgs, loc) {
     return { kind: "GenericInstantiation", base, genericArgs, location: makeLoc(loc) };
+  }
+
+  function enumDecl(name, genericParams, variants, loc) {
+    return { kind: "EnumDecl", name, genericParams, variants, location: makeLoc(loc) };
+  }
+
+  function enumVariant(name, dataType, loc) {
+    return { kind: "EnumVariant", name, dataType, location: makeLoc(loc) };
+  }
+
+  function matchExpr(value, arms, loc) {
+    return { kind: "Match", value, arms, location: makeLoc(loc) };
+  }
+
+  function matchArm(pattern, guard, body, loc) {
+    return { kind: "MatchArm", pattern, guard, body, location: makeLoc(loc) };
+  }
+
+  function patternWildcard(loc) {
+    return { kind: "PatternWildcard", location: makeLoc(loc) };
+  }
+
+  function patternLiteral(value, loc) {
+    return { kind: "PatternLiteral", value, location: makeLoc(loc) };
+  }
+
+  function patternIdentifier(name, loc) {
+    return { kind: "PatternIdentifier", name, location: makeLoc(loc) };
+  }
+
+  function patternEnum(enumName, genericArgs, variantName, loc) {
+    return { kind: "PatternEnum", enumName, variantName, genericArgs, location: makeLoc(loc) };
+  }
+
+  function patternEnumTuple(enumName, genericArgs, variantName, bindings, loc) {
+    return { kind: "PatternEnumTuple", enumName, variantName, bindings, genericArgs, location: makeLoc(loc) };
+  }
+
+  function patternEnumStruct(enumName, genericArgs, variantName, fields, loc) {
+    return { kind: "PatternEnumStruct", enumName, variantName, fields, genericArgs, location: makeLoc(loc) };
   }
 
   function block(statements, loc) {
@@ -308,6 +352,7 @@ Statement
   = VariableDeclaration
   / FunctionDeclaration
   / StructDeclaration
+  / EnumDeclaration
   / SpecDeclaration
   / TypeAlias
   / ImportStatement
@@ -365,6 +410,41 @@ StructDeclaration
       const inheritanceList = inheritance ? inheritance[3] : [];
       const memberList = members ? members : [];
       return structDecl(name.name, genericParams, inheritanceList, memberList, location());
+    }
+
+EnumDeclaration
+  = K_enum _ name:Identifier _ gen:GenericParamList? _ "{" _ variants:EnumVariantList? _ "}" {
+      const genericParams = gen ? gen : [];
+      const variantList = variants ? variants : [];
+      return enumDecl(name.name, genericParams, variantList, location());
+    }
+
+EnumVariantList
+  = head:EnumVariant tail:(_ "," _ EnumVariant)* _ ","? {
+      return [head, ...tail.map(t => t[3])];
+    }
+
+EnumVariant
+  = name:Identifier _ data:EnumVariantData? {
+      return enumVariant(name.name, data, location());
+    }
+
+EnumVariantData
+  = "(" _ types:TypeList _ ")" { 
+      return { kind: "EnumVariantTuple", types, location: makeLoc(location()) };
+    }
+  / "{" _ fields:StructFieldList _ "}" { 
+      return { kind: "EnumVariantStruct", fields, location: makeLoc(location()) };
+    }
+
+StructFieldList
+  = head:StructField tail:(_ "," _ StructField)* _ ","? {
+      return [head, ...tail.map(t => t[3])];
+    }
+
+StructField
+  = name:Identifier _ ":" _ type:Type { 
+      return { name: name.name, type }; 
     }
 
 SpecDeclaration
@@ -637,6 +717,14 @@ Postfix
           expr = index(expr, post.index, makeLoc(mergeLoc(expr.location, post.loc)));
         } else if (post.type === "member") {
           expr = member(expr, post.property, makeLoc(mergeLoc(expr.location, post.loc)));
+        } else if (post.type === "enumStructVariant") {
+          // For enum struct variant like Shape.Circle { radius: 5.0 }
+          // expr should be an Identifier (enum name)
+          if (expr.kind === "Identifier") {
+            expr = enumStructVariant(expr.name, post.property, post.fields, makeLoc(mergeLoc(expr.location, post.loc)));
+          } else {
+            throw new Error("Enum struct variant construction requires an identifier before '.'");
+          }
         } else if (post.type === "generic") {
           expr = genericInstantiation(expr, post.genericArgs, makeLoc(mergeLoc(expr.location, post.loc)));
         } else if (post.type === "postfixUnary") {
@@ -659,6 +747,10 @@ PostfixTail
   / _ "[" _ idx:Expression _ "]" {
       const loc = location();
       return { type: "index", index: idx, loc: loc };
+    }
+  / _ "." _ prop:Identifier _ "{" _ fields:StructLiteralFields? _ "}" {
+      const loc = location();
+      return { type: "enumStructVariant", property: prop.name, fields: fields || [], loc: loc };
     }
   / _ "." _ prop:Identifier {
       const loc = location();
@@ -691,7 +783,8 @@ Primary
   / TupleOrGrouped
   / CastExpression
   / SizeofExpression
-  / MatchExpression
+  / PatternMatchExpression
+  / TypeMatchExpression
   / ArrayLiteral
 
 TupleOrGrouped
@@ -722,8 +815,86 @@ SizeofExpression
   = K_sizeof _ "<" _ type:Type _ ">" _ "(" _ ")" { return sizeofNode(type, location()); }
   / K_sizeof _ "(" _ expr:Expression _ ")" { return sizeofNode(expr, location()); }
 
-MatchExpression
+TypeMatchExpression
   = K_match _ "<" _ type:Type _ ">" _ "(" _ val:(Expression / Type) _ ")" { return matchNode(type, val, location()); }
+
+PatternMatchExpression
+  = K_match _ "(" _ value:Expression _ ")" _ "{" _ arms:MatchArmList? _ "}" {
+      return matchExpr(value, arms || [], location());
+    }
+
+MatchArmList
+  = head:MatchArm tail:(_ "," _ MatchArm)* _ ","? {
+      return [head, ...tail.map(t => t[3])];
+    }
+
+MatchArm
+  = pattern:Pattern _ guard:(_ K_if _ "(" _ Expression _ ")")? _ "=>" _ body:MatchArmBody {
+      const guardExpr = guard ? guard[5] : undefined;
+      return matchArm(pattern, guardExpr, body, location());
+    }
+
+MatchArmBody
+  = Block
+  / Expression
+
+Pattern
+  = PatternEnumStruct
+  / PatternEnumTuple
+  / PatternEnum
+  / PatternWildcard
+  / PatternLiteral
+  / PatternIdentifier
+
+PatternWildcard
+  = "_" { return patternWildcard(location()); }
+
+PatternLiteral
+  = lit:(BoolLiteral / NumberLiteral / StringLiteral / CharLiteral / NullLiteral / NullptrLiteral) { 
+      return patternLiteral(lit, location()); 
+    }
+
+PatternIdentifier
+  = name:Identifier { return patternIdentifier(name.name, location()); }
+
+EnumName
+  = name:Identifier gen:GenericArgs? {
+      return { name: name.name, genericArgs: gen || [] };
+    }
+
+PatternEnum
+  = enumName:EnumName _ "." _ variantName:Identifier !(_ ("(" / "{")) {
+      return patternEnum(enumName.name, enumName.genericArgs, variantName.name, location());
+    }
+
+PatternEnumTuple
+  = enumName:EnumName _ "." _ variantName:Identifier _ "(" _ bindings:PatternBindingList? _ ")" {
+      return patternEnumTuple(enumName.name, enumName.genericArgs, variantName.name, bindings || [], location());
+    }
+
+PatternEnumStruct
+  = enumName:EnumName _ "." _ variantName:Identifier _ "{" _ fields:PatternFieldList? _ "}" {
+      return patternEnumStruct(enumName.name, enumName.genericArgs, variantName.name, fields || [], location());
+    }
+
+PatternBindingList
+  = head:PatternBinding tail:(_ "," _ PatternBinding)* {
+      return [head, ...tail.map(t => t[3])];
+    }
+
+PatternBinding
+  = "_" { return "_"; }
+  / name:Identifier { return name.name; }
+
+PatternFieldList
+  = head:PatternField tail:(_ "," _ PatternField)* _ ","? {
+      return [head, ...tail.map(t => t[3])];
+    }
+
+PatternField
+  = fieldName:Identifier _ ":" _ binding:Identifier {
+      return { fieldName: fieldName.name, binding: binding.name };
+    }
 
 ArrayLiteral
   = "[" _ elems:ArrayElements? _ "]" {
@@ -873,6 +1044,9 @@ K_ret
 K_struct
   = $("struct") IdBoundary
 
+K_enum
+  = $("enum") IdBoundary
+
 K_spec
   = $("spec") IdBoundary
 
@@ -966,6 +1140,7 @@ KeywordReserved
   / "static" IdBoundary
   / "ret" IdBoundary
   / "struct" IdBoundary
+  / "enum" IdBoundary
   / "spec" IdBoundary
   / "Self" IdBoundary
   / "import" IdBoundary

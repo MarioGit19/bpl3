@@ -1,0 +1,5 @@
+{
+  "name": "data_variants",
+  "description": "Test enum with multiple variant types: unit (Quit), tuple (Move, Write)",
+  "expectedExitCode": 0
+}

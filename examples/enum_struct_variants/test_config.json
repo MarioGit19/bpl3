@@ -1,0 +1,5 @@
+{
+  "name": "enum_struct_variants",
+  "description": "Comprehensive test of enum struct variant construction, pattern matching, and exhaustiveness checking",
+  "exitCode": 58
+}

@@ -1,0 +1,5 @@
+{
+  "name": "enum_with_methods",
+  "description": "Using enums as parameters in struct methods",
+  "exitCode": 6
+}

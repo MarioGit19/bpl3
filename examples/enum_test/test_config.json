@@ -1,0 +1,36 @@
+{
+  "name": "enum_tests",
+  "description": "Comprehensive enum tests for BPL3",
+  "tests": [
+    {
+      "name": "main",
+      "description": "Test basic enum parsing with Color, Message, Shape and Option",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "simple_tuple",
+      "description": "Test enum with single tuple variant Move(int, int)",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "data_variants",
+      "description": "Test enum with multiple variant types: unit (Quit), tuple (Move, Write)",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "enum_return",
+      "description": "Test enum as function return type with match expression",
+      "expectedExitCode": 2
+    },
+    {
+      "name": "unit_only",
+      "description": "Test enum with only unit variant (Quit)",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "all_variants",
+      "description": "Test all Color enum variants with multiple test functions",
+      "expectedExitCode": 6
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "enum_imports_destructuring",
+  "description": "Test pattern destructuring with tuple variant data - extracting values from enum variants",
+  "exitCode": 41,
+  "note": "Tests arithmetic operations on destructured values: addition (15), multiplication (21), and subtraction (5)"
+}

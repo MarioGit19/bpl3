@@ -1,0 +1,5 @@
+{
+  "name": "enum_imports_simple",
+  "description": "Simple enum import test with unit variants only",
+  "exitCode": 33
+}

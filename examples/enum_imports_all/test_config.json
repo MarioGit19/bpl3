@@ -1,0 +1,5 @@
+{
+  "name": "enum_imports_all",
+  "description": "Test import all enums using wildcard import syntax",
+  "exitCode": 22
+}

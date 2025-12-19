@@ -113,6 +113,8 @@ export class Formatter {
         return this.formatFunctionDecl(stmt as AST.FunctionDecl);
       case "StructDecl":
         return this.formatStructDecl(stmt as AST.StructDecl);
+      case "EnumDecl":
+        return this.formatEnumDecl(stmt as AST.EnumDecl);
       case "SpecDecl":
         return this.formatSpecDecl(stmt as AST.SpecDecl);
       case "TypeAlias":
@@ -144,9 +146,7 @@ export class Formatter {
       case "Switch":
         return this.formatSwitch(stmt as AST.SwitchStmt);
       case "ExpressionStmt":
-        return `${indent}${this.formatExpression(
-          (stmt as AST.ExpressionStmt).expression,
-        )};`;
+        return `${indent}${this.formatExpression((stmt as AST.ExpressionStmt).expression)};`;
       default:
         return `${indent}// Unknown statement kind: ${(stmt as any).kind}`;
     }
@@ -185,9 +185,7 @@ export class Formatter {
             return this.formatDestructPattern(item);
           } else if (typeof item === "object" && item.name) {
             // Single target
-            return `${item.name}${
-              item.type ? `: ${this.formatType(item.type)}` : ""
-            }`;
+            return `${item.name}${item.type ? `: ${this.formatType(item.type)}` : ""}`;
           }
           return "";
         })
@@ -249,9 +247,7 @@ export class Formatter {
       }
 
       if (member.kind === "StructField") {
-        output += `${this.getIndent()}${member.name}: ${this.formatType(
-          member.type,
-        )},\n`;
+        output += `${this.getIndent()}${member.name}: ${this.formatType(member.type)},\n`;
       } else if (member.kind === "FunctionDecl") {
         output += this.formatFunctionDecl(member as AST.FunctionDecl) + "\n";
       }
@@ -260,6 +256,62 @@ export class Formatter {
     }
 
     // Print comments inside struct (before closing brace)
+    output += this.printCommentsBefore(decl.location.endLine);
+
+    this.indentLevel--;
+    output += `${indent}}`;
+    return output;
+  }
+
+  private formatEnumDecl(decl: AST.EnumDecl): string {
+    const indent = this.getIndent();
+    let output = `${indent}enum ${decl.name}`;
+
+    output += this.formatGenericParams(decl.genericParams);
+
+    output += " {\n";
+    this.indentLevel++;
+
+    this.lastLineProcessed = decl.location.startLine;
+
+    for (let i = 0; i < decl.variants.length; i++) {
+      const variant = decl.variants[i]!;
+
+      // Print comments before variant
+      output += this.printCommentsBefore(variant.location.startLine);
+
+      if (
+        this.lastLineProcessed > 0 &&
+        variant.location.startLine > this.lastLineProcessed + 1
+      ) {
+        output += "\n";
+      }
+
+      output += `${this.getIndent()}${variant.name}`;
+
+      // Format variant data if present
+      if (variant.dataType) {
+        if (variant.dataType.kind === "EnumVariantTuple") {
+          const tupleData = variant.dataType as AST.EnumVariantTuple;
+          output += "(";
+          output += tupleData.types.map((t) => this.formatType(t)).join(", ");
+          output += ")";
+        } else if (variant.dataType.kind === "EnumVariantStruct") {
+          const structData = variant.dataType as AST.EnumVariantStruct;
+          output += " { ";
+          output += structData.fields
+            .map((f) => `${f.name}: ${this.formatType(f.type)}`)
+            .join(", ");
+          output += " }";
+        }
+      }
+
+      output += ",\n";
+
+      this.lastLineProcessed = variant.location.endLine;
+    }
+
+    // Print comments inside enum (before closing brace)
     output += this.printCommentsBefore(decl.location.endLine);
 
     this.indentLevel--;
@@ -498,9 +550,7 @@ export class Formatter {
 
   private formatSwitch(stmt: AST.SwitchStmt): string {
     const indent = this.getIndent();
-    let output = `${indent}switch (${this.formatExpression(
-      stmt.expression,
-    )}) {\n`;
+    let output = `${indent}switch (${this.formatExpression(stmt.expression)}) {\n`;
     this.indentLevel++;
 
     this.lastLineProcessed = stmt.location.startLine;
@@ -515,9 +565,7 @@ export class Formatter {
         output += "\n";
       }
 
-      output += `${this.getIndent()}case ${this.formatExpression(
-        kase.value,
-      )}: `;
+      output += `${this.getIndent()}case ${this.formatExpression(kase.value)}: `;
       output += this.formatBlock(kase.body, false);
       output += "\n";
 
@@ -576,13 +624,17 @@ export class Formatter {
       case "Sizeof":
         return this.formatSizeof(expr as AST.SizeofExpr);
       case "Match":
-        return this.formatMatch(expr as AST.MatchExpr);
+        return this.formatMatchExpr(expr as AST.MatchExpr);
+      case "TypeMatch":
+        return this.formatTypeMatch(expr as AST.TypeMatchExpr);
       case "ArrayLiteral":
         return this.formatArrayLiteral(expr as AST.ArrayLiteralExpr);
       case "StructLiteral":
         return this.formatStructLiteral(expr as AST.StructLiteralExpr);
       case "TupleLiteral":
         return this.formatTupleLiteral(expr as AST.TupleLiteralExpr);
+      case "EnumStructVariant":
+        return this.formatEnumStructVariant(expr as AST.EnumStructVariantExpr);
       case "GenericInstantiation":
         return this.formatGenericInstantiation(
           expr as AST.GenericInstantiationExpr,
@@ -654,9 +706,7 @@ export class Formatter {
   private formatCall(expr: AST.CallExpr): string {
     let output = this.formatExpression(expr.callee);
     if (expr.genericArgs.length > 0) {
-      output += `<${expr.genericArgs
-        .map((t) => this.formatType(t))
-        .join(", ")}>`;
+      output += `<${expr.genericArgs.map((t) => this.formatType(t)).join(", ")}>`;
     }
     output += "(";
     output += expr.args.map((a) => this.formatExpression(a)).join(", ");
@@ -669,15 +719,13 @@ export class Formatter {
   }
 
   private formatIndex(expr: AST.IndexExpr): string {
-    return `${this.formatExpression(expr.object)}[${this.formatExpression(
-      expr.index,
-    )}]`;
+    return `${this.formatExpression(expr.object)}[${this.formatExpression(expr.index)}]`;
   }
 
   private formatAssignment(expr: AST.AssignmentExpr): string {
-    return `${this.formatExpression(expr.assignee)} ${
-      expr.operator.lexeme
-    } ${this.formatExpression(expr.value)}`;
+    return `${this.formatExpression(expr.assignee)} ${expr.operator.lexeme} ${this.formatExpression(
+      expr.value,
+    )}`;
   }
 
   private formatTernary(expr: AST.TernaryExpr): string {
@@ -687,9 +735,7 @@ export class Formatter {
   }
 
   private formatCast(expr: AST.CastExpr): string {
-    return `cast<${this.formatType(expr.targetType)}>(${this.formatExpression(
-      expr.expression,
-    )})`;
+    return `cast<${this.formatType(expr.targetType)}>(${this.formatExpression(expr.expression)})`;
   }
 
   private formatSizeof(expr: AST.SizeofExpr): string {
@@ -700,10 +746,85 @@ export class Formatter {
     }
   }
 
-  private formatMatch(expr: AST.MatchExpr): string {
+  private formatTypeMatch(expr: AST.TypeMatchExpr): string {
     return `match<${this.formatType(expr.targetType)}>(${this.formatExpression(
       expr.value as AST.Expression,
     )})`;
+  }
+
+  private formatMatchExpr(expr: AST.MatchExpr): string {
+    let output = `match (${this.formatExpression(expr.value)}) {\n`;
+    this.indentLevel++;
+
+    for (let i = 0; i < expr.arms.length; i++) {
+      const arm = expr.arms[i]!;
+      output += `${this.getIndent()}${this.formatPattern(arm.pattern)}`;
+
+      if (arm.guard) {
+        output += ` if ${this.formatExpression(arm.guard)}`;
+      }
+
+      output += " => ";
+
+      // Format the body
+      if (arm.body.kind === "Block") {
+        output += this.formatBlock(arm.body as AST.BlockStmt, false);
+      } else {
+        output += this.formatExpression(arm.body as AST.Expression);
+      }
+
+      output += ",\n";
+    }
+
+    this.indentLevel--;
+    output += `${this.getIndent()}}`;
+    return output;
+  }
+
+  private formatPattern(pattern: AST.Pattern): string {
+    switch (pattern.kind) {
+      case "PatternWildcard":
+        return "_";
+
+      case "PatternLiteral":
+        return this.formatLiteral((pattern as AST.PatternLiteral).value);
+
+      case "PatternIdentifier":
+        return (pattern as AST.PatternIdentifier).name;
+
+      case "PatternEnum": {
+        const p = pattern as AST.PatternEnum;
+        let enumName = p.enumName;
+        if (p.genericArgs && p.genericArgs.length > 0) {
+          enumName += `<${p.genericArgs.map((t) => this.formatType(t)).join(", ")}>`;
+        }
+        return `${enumName}.${p.variantName}`;
+      }
+
+      case "PatternEnumTuple": {
+        const p = pattern as AST.PatternEnumTuple;
+        let enumName = p.enumName;
+        if (p.genericArgs && p.genericArgs.length > 0) {
+          enumName += `<${p.genericArgs.map((t) => this.formatType(t)).join(", ")}>`;
+        }
+        return `${enumName}.${p.variantName}(${p.bindings.join(", ")})`;
+      }
+
+      case "PatternEnumStruct": {
+        const p = pattern as AST.PatternEnumStruct;
+        let enumName = p.enumName;
+        if (p.genericArgs && p.genericArgs.length > 0) {
+          enumName += `<${p.genericArgs.map((t) => this.formatType(t)).join(", ")}>`;
+        }
+        const fields = p.fields
+          .map((f) => `${f.fieldName}: ${f.binding}`)
+          .join(", ");
+        return `${enumName}.${p.variantName} { ${fields} }`;
+      }
+
+      default:
+        return "/* unknown pattern */";
+    }
   }
 
   private formatArrayLiteral(expr: AST.ArrayLiteralExpr): string {
@@ -727,6 +848,19 @@ export class Formatter {
     return `(${expr.elements.map((e) => this.formatExpression(e)).join(", ")})`;
   }
 
+  private formatEnumStructVariant(expr: AST.EnumStructVariantExpr): string {
+    let output = `${expr.enumName}.${expr.variantName} {`;
+    if (expr.fields.length > 0) {
+      output += " ";
+      output += expr.fields
+        .map((f) => `${f.name}: ${this.formatExpression(f.value)}`)
+        .join(", ");
+      output += " ";
+    }
+    output += "}";
+    return output;
+  }
+
   private formatGenericInstantiation(
     expr: AST.GenericInstantiationExpr,
   ): string {
@@ -744,9 +878,7 @@ export class Formatter {
         for (let i = 0; i < type.pointerDepth; i++) output += "*";
         output += type.name;
         if (type.genericArgs.length > 0) {
-          output += `<${type.genericArgs
-            .map((t) => this.formatType(t))
-            .join(", ")}>`;
+          output += `<${type.genericArgs.map((t) => this.formatType(t)).join(", ")}>`;
         }
         for (const dim of type.arrayDimensions) {
           output += `[${dim !== null ? dim : ""}]`;

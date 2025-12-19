@@ -56,8 +56,10 @@ export type Expression =
   | ArrayLiteralExpr
   | StructLiteralExpr
   | TupleLiteralExpr
+  | EnumStructVariantExpr
   | CastExpr
   | SizeofExpr
+  | TypeMatchExpr
   | MatchExpr
   | AssignmentExpr
   | TernaryExpr
@@ -146,6 +148,13 @@ export interface TupleLiteralExpr extends ASTNode {
   elements: Expression[];
 }
 
+export interface EnumStructVariantExpr extends ASTNode {
+  kind: "EnumStructVariant";
+  enumName: string;
+  variantName: string;
+  fields: { name: string; value: Expression }[];
+}
+
 export interface CastExpr extends ASTNode {
   kind: "Cast";
   targetType: TypeNode;
@@ -157,10 +166,72 @@ export interface SizeofExpr extends ASTNode {
   target: Expression | TypeNode;
 }
 
-export interface MatchExpr extends ASTNode {
-  kind: "Match";
+// Type match expression: match<Type>(value)
+export interface TypeMatchExpr extends ASTNode {
+  kind: "TypeMatch";
   targetType: TypeNode;
   value: Expression | TypeNode;
+}
+
+// Pattern matching expression: match (value) { Pattern => Expr, ... }
+export interface MatchExpr extends ASTNode {
+  kind: "Match";
+  value: Expression;
+  arms: MatchArm[];
+}
+
+export interface MatchArm extends ASTNode {
+  kind: "MatchArm";
+  pattern: Pattern;
+  guard?: Expression;
+  body: Expression | BlockStmt;
+}
+
+// Pattern types for pattern matching
+export type Pattern =
+  | PatternWildcard
+  | PatternLiteral
+  | PatternIdentifier
+  | PatternEnum
+  | PatternEnumTuple
+  | PatternEnumStruct;
+
+export interface PatternWildcard extends ASTNode {
+  kind: "PatternWildcard";
+}
+
+export interface PatternLiteral extends ASTNode {
+  kind: "PatternLiteral";
+  value: LiteralExpr;
+}
+
+export interface PatternIdentifier extends ASTNode {
+  kind: "PatternIdentifier";
+  name: string;
+  type?: TypeNode;
+}
+
+export interface PatternEnum extends ASTNode {
+  kind: "PatternEnum";
+  enumName: string;
+  variantName: string;
+  genericArgs?: TypeNode[];
+}
+
+export interface PatternEnumTuple extends ASTNode {
+  kind: "PatternEnumTuple";
+  enumName: string;
+  variantName: string;
+  bindings: string[];
+  genericArgs?: TypeNode[];
+}
+
+export interface PatternEnumStruct extends ASTNode {
+  kind: "PatternEnumStruct";
+  enumName: string;
+  variantName: string;
+  fields: { fieldName: string; binding: string }[];
+  genericArgs?: TypeNode[];
 }
 
 export interface AssignmentExpr extends ASTNode {
@@ -190,6 +261,7 @@ export type Statement =
   | FunctionDecl
   | StructDecl
   | SpecDecl
+  | EnumDecl
   | TypeAliasDecl
   | BlockStmt
   | IfStmt
@@ -253,6 +325,38 @@ export interface SpecMethod extends ASTNode {
   genericParams: GenericParam[];
   params: { name: string; type: TypeNode }[];
   returnType?: TypeNode;
+}
+
+export interface EnumDecl extends ASTNode {
+  kind: "EnumDecl";
+  name: string;
+  genericParams: GenericParam[];
+  variants: EnumVariant[];
+}
+
+export interface EnumVariant extends ASTNode {
+  kind: "EnumVariant";
+  name: string;
+  dataType?: EnumVariantData;
+}
+
+export type EnumVariantData =
+  | EnumVariantUnit
+  | EnumVariantTuple
+  | EnumVariantStruct;
+
+export interface EnumVariantUnit extends ASTNode {
+  kind: "EnumVariantUnit";
+}
+
+export interface EnumVariantTuple extends ASTNode {
+  kind: "EnumVariantTuple";
+  types: TypeNode[];
+}
+
+export interface EnumVariantStruct extends ASTNode {
+  kind: "EnumVariantStruct";
+  fields: { name: string; type: TypeNode }[];
 }
 
 export interface TypeAliasDecl extends ASTNode {

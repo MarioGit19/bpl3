@@ -1,0 +1,5 @@
+{
+  "name": "enum_nested_match",
+  "description": "Nested match expressions with enum values",
+  "exitCode": 2
+}

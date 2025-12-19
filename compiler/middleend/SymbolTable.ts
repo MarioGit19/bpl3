@@ -4,6 +4,7 @@ export type SymbolKind =
   | "Variable"
   | "Function"
   | "Struct"
+  | "Enum"
   | "Spec"
   | "TypeAlias"
   | "Parameter"

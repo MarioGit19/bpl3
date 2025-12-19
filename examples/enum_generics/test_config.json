@@ -1,0 +1,5 @@
+{
+  "name": "enum_generics",
+  "description": "Generic enum instantiation - demonstrates Option<int> with type-safe pattern matching",
+  "exitCode": 42
+}

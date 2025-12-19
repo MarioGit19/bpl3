@@ -1,0 +1,5 @@
+{
+  "name": "all_variants",
+  "description": "Test all Color enum variants with multiple test functions and match expressions",
+  "exitCode": 6
+}

@@ -33,6 +33,12 @@ export class CodeGenerator {
   private generatingFunctionBody: boolean = false; // Track if we're currently generating a function body
   private deferMethodGeneration: boolean = false; // Defer method generation to avoid recursion
   private resolvingMonomorphizedTypes: Set<string> = new Set(); // Track types currently being resolved to prevent re-entry
+  private enumVariants: Map<
+    string,
+    Map<string, { index: number; dataType?: AST.EnumVariantData }>
+  > = new Map(); // Track enum variant info
+  private generatedEnums: Set<string> = new Set(); // Track generated monomorphized enums
+  private enumDeclMap: Map<string, AST.EnumDecl> = new Map(); // Track enum declarations
 
   /**
    * Create a CompilerError with proper location information
@@ -70,6 +76,7 @@ export class CodeGenerator {
     this.typeIdMap.clear();
     this.nextTypeId = 10; // Start from 10 to avoid conflicts
     this.emittedMemIsZero = false;
+    this.enumVariants.clear();
 
     // Register built-in NullAccessError struct
     const internalLoc = {
@@ -358,6 +365,16 @@ export class CodeGenerator {
           this.generateStruct(structDecl);
         }
         break;
+      case "EnumDecl":
+        const enumDecl = node as AST.EnumDecl;
+        // Store enum declaration for later use
+        this.enumDeclMap.set(enumDecl.name, enumDecl);
+        // Only generate enum if it is NOT generic.
+        // Generic enums are templates and generated on-demand.
+        if (enumDecl.genericParams.length === 0) {
+          this.generateEnum(enumDecl);
+        }
+        break;
       case "Extern":
         this.generateExtern(node as AST.ExternDecl);
         break;
@@ -453,6 +470,218 @@ export class CodeGenerator {
         method.name = originalName;
       }
     }
+  }
+
+  private generateEnum(decl: AST.EnumDecl, mangledName?: string) {
+    const enumName = mangledName || decl.name;
+
+    // Avoid re-emitting
+    if (this.generatedStructs.has(enumName)) return;
+    this.generatedStructs.add(enumName);
+
+    // Calculate maximum variant data size
+    let maxSize = 0;
+    for (const variant of decl.variants) {
+      let variantSize = 0;
+
+      if (variant.dataType) {
+        if (variant.dataType.kind === "EnumVariantTuple") {
+          // Tuple variant: sum of all field sizes
+          for (const fieldType of variant.dataType.types) {
+            const llvmType = this.resolveType(fieldType);
+            variantSize += this.getTypeSize(llvmType);
+          }
+        } else if (variant.dataType.kind === "EnumVariantStruct") {
+          // Struct variant: sum of all field sizes
+          for (const field of variant.dataType.fields) {
+            const llvmType = this.resolveType(field.type);
+            variantSize += this.getTypeSize(llvmType);
+          }
+        }
+      }
+      // Unit variants have size 0
+
+      if (variantSize > maxSize) {
+        maxSize = variantSize;
+      }
+    }
+
+    // Generate enum as: { i32 tag, [maxSize x i8] data }
+    // If maxSize is 0 (all unit variants), just use { i32 }
+    const enumType =
+      maxSize > 0
+        ? `%enum.${enumName} = type { i32, [${maxSize} x i8] }`
+        : `%enum.${enumName} = type { i32 }`;
+
+    this.emitDeclaration(enumType);
+    this.emitDeclaration("");
+
+    // Register layout for later use
+    const layout = new Map<string, number>();
+    layout.set("__tag__", 0); // Discriminant is always at index 0
+    if (maxSize > 0) {
+      layout.set("__data__", 1); // Data union is at index 1
+    }
+    this.structLayouts.set(enumName, layout);
+
+    // Store variant information for later use in pattern matching
+    const variantInfo = new Map<
+      string,
+      { index: number; dataType?: AST.EnumVariantData }
+    >();
+    decl.variants.forEach((v, i) => {
+      variantInfo.set(v.name, { index: i, dataType: v.dataType });
+    });
+    this.enumVariants.set(enumName, variantInfo);
+  }
+
+  private instantiateGenericEnum(
+    enumName: string,
+    genericArgs: AST.TypeNode[],
+  ): string {
+    // Create mangled name for the instantiated enum
+    const mangledName = this.mangleGenericTypeName(enumName, genericArgs);
+
+    // Check if already generated
+    if (this.generatedEnums.has(mangledName)) {
+      return mangledName;
+    }
+    this.generatedEnums.add(mangledName);
+
+    // Get the generic enum declaration
+    const decl = this.enumDeclMap.get(enumName);
+    if (!decl) {
+      throw new Error(`Generic enum ${enumName} not found`);
+    }
+
+    // Build type substitution map
+    const typeMap = new Map<string, AST.TypeNode>();
+    if (decl.genericParams) {
+      for (
+        let i = 0;
+        i < decl.genericParams.length && i < genericArgs.length;
+        i++
+      ) {
+        typeMap.set(decl.genericParams[i]!.name, genericArgs[i]!);
+      }
+    }
+
+    // Create a copy of the enum with substituted types
+    const instantiatedDecl: AST.EnumDecl = {
+      ...decl,
+      name: mangledName,
+      genericParams: [], // Instantiated enums have no generic params
+      variants: decl.variants.map((v) => ({
+        ...v,
+        dataType: v.dataType
+          ? v.dataType.kind === "EnumVariantTuple"
+            ? {
+                ...v.dataType,
+                types: v.dataType.types.map((t) =>
+                  this.substituteType(t, typeMap),
+                ),
+              }
+            : v.dataType.kind === "EnumVariantStruct"
+              ? {
+                  ...v.dataType,
+                  fields: v.dataType.fields.map((f) => ({
+                    name: f.name,
+                    type: this.substituteType(f.type, typeMap),
+                  })),
+                }
+              : v.dataType
+          : undefined,
+      })),
+    };
+
+    // Generate the instantiated enum
+    this.generateEnum(instantiatedDecl, mangledName);
+
+    return mangledName;
+  }
+
+  private mangleGenericTypeName(
+    baseName: string,
+    genericArgs: AST.TypeNode[],
+  ): string {
+    if (genericArgs.length === 0) return baseName;
+
+    const argNames = genericArgs.map((arg) => {
+      if (arg.kind === "BasicType") {
+        let name = arg.name;
+        if (arg.genericArgs && arg.genericArgs.length > 0) {
+          name = this.mangleGenericTypeName(name, arg.genericArgs);
+        }
+        if (arg.pointerDepth > 0) {
+          name += "_ptr".repeat(arg.pointerDepth);
+        }
+        return name;
+      }
+      return "unknown";
+    });
+
+    return `${baseName}_${argNames.join("_")}`;
+  }
+
+  private getTypeSize(llvmType: string): number {
+    // Estimate size in bytes for common LLVM types
+    // This is a simplification - actual sizes may vary
+    if (llvmType === "i1") return 1;
+    if (llvmType === "i8") return 1;
+    if (llvmType === "i16") return 2;
+    if (llvmType === "i32") return 4;
+    if (llvmType === "i64") return 8;
+    if (llvmType === "double") return 8;
+    if (llvmType === "float") return 4;
+    if (llvmType.endsWith("*")) return 8; // Pointers are 8 bytes
+    if (llvmType.startsWith("%struct.")) return 8; // Approximate struct size
+    if (llvmType.startsWith("%enum.")) return 8; // Approximate enum size
+    return 8; // Default fallback
+  }
+
+  private generateEnumVariantConstruction(
+    enumDecl: AST.EnumDecl,
+    variant: AST.EnumVariant,
+    variantIndex: number,
+    genericArgs?: AST.TypeNode[],
+  ): string {
+    let enumName = enumDecl.name;
+
+    // If generic args are provided, instantiate the generic enum
+    if (genericArgs && genericArgs.length > 0) {
+      enumName = this.instantiateGenericEnum(enumDecl.name, genericArgs);
+    }
+
+    const enumType = `%enum.${enumName}`;
+
+    // For now, only handle unit variants (no associated data)
+    // TODO: Handle tuple and struct variants with data
+    if (variant.dataType) {
+      throw this.createError(
+        `Enum variants with associated data are not yet supported in code generation`,
+        variant,
+        `Variant '${variant.name}' has associated data. Only unit variants are currently supported.`,
+      );
+    }
+
+    // Allocate space for the enum value
+    const enumPtr = this.newRegister();
+    this.emit(`  ${enumPtr} = alloca ${enumType}`);
+
+    // Get pointer to tag field (index 0)
+    const tagPtr = this.newRegister();
+    this.emit(
+      `  ${tagPtr} = getelementptr inbounds ${enumType}, ${enumType}* ${enumPtr}, i32 0, i32 0`,
+    );
+
+    // Store the variant index as the discriminant
+    this.emit(`  store i32 ${variantIndex}, i32* ${tagPtr}`);
+
+    // Load and return the enum value
+    const result = this.newRegister();
+    this.emit(`  ${result} = load ${enumType}, ${enumType}* ${enumPtr}`);
+
+    return result;
   }
 
   private mangleType(type: AST.TypeNode): string {
@@ -694,7 +923,12 @@ export class CodeGenerator {
       concreteArgs,
     );
     if (namePrefix) {
-      mangledName = `${namePrefix}_${this.getMangledName(decl.name, substitutedType, false, concreteArgs)}`;
+      mangledName = `${namePrefix}_${this.getMangledName(
+        decl.name,
+        substitutedType,
+        false,
+        concreteArgs,
+      )}`;
     }
 
     // 5. Check Cache
@@ -1608,13 +1842,317 @@ export class CodeGenerator {
         return this.generateStructLiteral(expr as AST.StructLiteralExpr);
       case "TupleLiteral":
         return this.generateTupleLiteral(expr as AST.TupleLiteralExpr);
+      case "EnumStructVariant":
+        return this.generateEnumStructVariant(
+          expr as AST.EnumStructVariantExpr,
+        );
       case "Sizeof":
         return this.generateSizeof(expr as AST.SizeofExpr);
       case "Ternary":
         return this.generateTernary(expr as AST.TernaryExpr);
+      case "Match":
+        return this.generateMatchExpr(expr as AST.MatchExpr);
       default:
         console.warn(`Unhandled expression kind: ${expr.kind}`);
         return "0"; // Placeholder
+    }
+  }
+
+  private generateMatchExpr(expr: AST.MatchExpr): string {
+    // Generate the value to match on
+    const matchValue = this.generateExpression(expr.value);
+    const matchType = expr.value.resolvedType as AST.BasicTypeNode;
+
+    if (!matchType || matchType.kind !== "BasicType") {
+      throw this.createError(
+        "Match expression value must have a basic type",
+        expr.value,
+      );
+    }
+
+    // Get enum information - handle generic instantiation
+    let enumName = matchType.name;
+
+    // If this is a generic enum, instantiate it
+    if (matchType.genericArgs && matchType.genericArgs.length > 0) {
+      enumName = this.instantiateGenericEnum(
+        matchType.name,
+        matchType.genericArgs,
+      );
+    }
+
+    const variantInfo = this.enumVariants.get(enumName);
+
+    if (!variantInfo) {
+      throw this.createError(
+        `Cannot match on non-enum type '${matchType.name}'`,
+        expr.value,
+      );
+    }
+
+    // Allocate space for match value and extract discriminant
+    const enumType = `%enum.${enumName}`;
+    const matchPtr = this.newRegister();
+    this.emit(`  ${matchPtr} = alloca ${enumType}`);
+    this.emit(`  store ${enumType} ${matchValue}, ${enumType}* ${matchPtr}`);
+
+    const tagPtr = this.newRegister();
+    this.emit(
+      `  ${tagPtr} = getelementptr inbounds ${enumType}, ${enumType}* ${matchPtr}, i32 0, i32 0`,
+    );
+    const tag = this.newRegister();
+    this.emit(`  ${tag} = load i32, i32* ${tagPtr}`);
+
+    // Create labels for each arm and merge point
+    const armLabels: string[] = [];
+    const mergeLabel = this.newLabel("match_merge");
+    const defaultLabel = this.newLabel("match_default");
+
+    for (let i = 0; i < expr.arms.length; i++) {
+      armLabels.push(this.newLabel(`match_arm${i}`));
+    }
+
+    // Generate switch statement
+    const cases: string[] = [];
+    for (let i = 0; i < expr.arms.length; i++) {
+      const arm = expr.arms[i]!;
+      const pattern = arm.pattern;
+
+      // Handle enum patterns
+      if (
+        pattern.kind === "PatternEnum" ||
+        pattern.kind === "PatternEnumTuple" ||
+        pattern.kind === "PatternEnumStruct"
+      ) {
+        const enumPattern = pattern as
+          | AST.PatternEnum
+          | AST.PatternEnumTuple
+          | AST.PatternEnumStruct;
+        const variant = variantInfo.get(enumPattern.variantName);
+        if (variant) {
+          cases.push(`i32 ${variant.index}, label %${armLabels[i]}`);
+        }
+      } else if (pattern.kind === "PatternWildcard") {
+        // Wildcard handled as default case
+      }
+    }
+
+    // Emit switch
+    this.emit(
+      `  switch i32 ${tag}, label %${defaultLabel} [${cases.join("\n    ")}]`,
+    );
+
+    // Generate code for each arm
+    const armResults: Array<{ value: string; label: string; type: string }> =
+      [];
+    const resultType = this.resolveType(expr.resolvedType!);
+
+    for (let i = 0; i < expr.arms.length; i++) {
+      const arm = expr.arms[i]!;
+      this.emit(`${armLabels[i]}:`);
+
+      // Extract pattern bindings if this is a tuple or struct pattern
+      if (arm.pattern.kind === "PatternEnumTuple") {
+        this.generatePatternTupleBindings(
+          arm.pattern as AST.PatternEnumTuple,
+          matchPtr,
+          enumType,
+          variantInfo,
+        );
+      } else if (arm.pattern.kind === "PatternEnumStruct") {
+        this.generatePatternStructBindings(
+          arm.pattern as AST.PatternEnumStruct,
+          matchPtr,
+          enumType,
+          variantInfo,
+        );
+      }
+
+      // Generate arm body
+      const armValue = this.generateMatchArmBody(arm.body);
+      const currentLabel = this.getCurrentLabel();
+      armResults.push({
+        value: armValue,
+        label: currentLabel,
+        type: resultType,
+      });
+
+      this.emit(`  br label %${mergeLabel}`);
+    }
+
+    // Default case (should not be reached if exhaustive)
+    this.emit(`${defaultLabel}:`);
+    this.emit(`  br label %${mergeLabel}`);
+    armResults.push({ value: "0", label: defaultLabel, type: resultType });
+
+    // Merge point with phi node
+    this.emit(`${mergeLabel}:`);
+    const result = this.newRegister();
+    const phiEntries = armResults
+      .map((r) => `[ ${r.value}, %${r.label} ]`)
+      .join(", ");
+    this.emit(`  ${result} = phi ${resultType} ${phiEntries}`);
+
+    return result;
+  }
+
+  private generateMatchArmBody(body: AST.Expression | AST.BlockStmt): string {
+    if (body.kind === "Block") {
+      // Generate block and return the result
+      const blockStmt = body as AST.BlockStmt;
+      this.generateBlock(blockStmt);
+      // For now, blocks in match arms must end with a return
+      // TODO: Handle implicit return from last expression
+      return "0";
+    } else {
+      // Expression - generate and return
+      return this.generateExpression(body as AST.Expression);
+    }
+  }
+
+  private generatePatternTupleBindings(
+    pattern: AST.PatternEnumTuple,
+    matchPtr: string,
+    enumType: string,
+    variantInfo: Map<string, { index: number; dataType?: AST.EnumVariantData }>,
+  ): void {
+    const variant = variantInfo.get(pattern.variantName);
+    if (
+      !variant ||
+      !variant.dataType ||
+      variant.dataType.kind !== "EnumVariantTuple"
+    ) {
+      return; // No data to extract
+    }
+
+    // Get pointer to data field (index 1) - this is an array of bytes
+    const dataPtr = this.newRegister();
+    this.emit(
+      `  ${dataPtr} = getelementptr inbounds ${enumType}, ${enumType}* ${matchPtr}, i32 0, i32 1`,
+    );
+
+    // Cast to i8* for easier manipulation
+    const bytePtr = this.newRegister();
+    const dataArraySize = 64; // TODO: Get actual size from enum layout
+    this.emit(
+      `  ${bytePtr} = bitcast [${dataArraySize} x i8]* ${dataPtr} to i8*`,
+    );
+
+    // For each binding, extract the value from the data array
+    let currentOffset = 0;
+    for (let i = 0; i < pattern.bindings.length; i++) {
+      const bindingName = pattern.bindings[i]!;
+
+      // Skip wildcard bindings
+      if (bindingName === "_") {
+        continue;
+      }
+
+      const bindingType = variant.dataType.types[i]!;
+      const llvmType = this.resolveType(bindingType);
+
+      // Cast the byte pointer to the binding type pointer
+      const typedPtr = this.newRegister();
+      this.emit(`  ${typedPtr} = bitcast i8* ${bytePtr} to ${llvmType}*`);
+
+      // If this is not the first element, offset the pointer
+      let elementPtr = typedPtr;
+      if (i > 0) {
+        elementPtr = this.newRegister();
+        this.emit(
+          `  ${elementPtr} = getelementptr ${llvmType}, ${llvmType}* ${typedPtr}, i32 ${i}`,
+        );
+      }
+
+      // Load the value
+      const value = this.newRegister();
+      this.emit(`  ${value} = load ${llvmType}, ${llvmType}* ${elementPtr}`);
+
+      // Allocate stack space and store the value
+      const ptr = `%pattern_${bindingName}_${this.stackAllocCount++}`;
+      this.emit(`  ${ptr} = alloca ${llvmType}`);
+      this.emit(`  store ${llvmType} ${value}, ${llvmType}* ${ptr}`);
+
+      // Register the binding so it can be used in the arm body
+      this.locals.add(bindingName);
+      this.localPointers.set(bindingName, ptr);
+    }
+  }
+
+  private generatePatternStructBindings(
+    pattern: AST.PatternEnumStruct,
+    matchPtr: string,
+    enumType: string,
+    variantInfo: Map<string, { index: number; dataType?: AST.EnumVariantData }>,
+  ): void {
+    const variant = variantInfo.get(pattern.variantName);
+    if (
+      !variant ||
+      !variant.dataType ||
+      variant.dataType.kind !== "EnumVariantStruct"
+    ) {
+      return; // No data to extract
+    }
+
+    // Get pointer to data field (index 1)
+    const dataPtr = this.newRegister();
+    this.emit(
+      `  ${dataPtr} = getelementptr inbounds ${enumType}, ${enumType}* ${matchPtr}, i32 0, i32 1`,
+    );
+
+    // For each field binding, extract the value
+    for (const field of pattern.fields) {
+      const bindingName = field.binding;
+
+      // Skip wildcard bindings
+      if (bindingName === "_") {
+        continue;
+      }
+
+      // Find the field in the variant
+      const fieldIndex = variant.dataType.fields.findIndex(
+        (f) => f.name === field.fieldName,
+      );
+      if (fieldIndex === -1) {
+        continue;
+      }
+
+      const fieldType = variant.dataType.fields[fieldIndex]!.type;
+      const llvmType = this.resolveType(fieldType);
+
+      // Cast the data pointer to i8* to work with byte offsets
+      const bytePtr = this.newRegister();
+      this.emit(
+        `  ${bytePtr} = bitcast [${
+          this.structLayouts.get(enumType.substring(6))?.get("__data__") || 0
+        } x i8]* ${dataPtr} to i8*`,
+      );
+
+      // Cast to the field type pointer
+      const fieldPtr = this.newRegister();
+      this.emit(`  ${fieldPtr} = bitcast i8* ${bytePtr} to ${llvmType}*`);
+
+      // If this is not the first field, offset the pointer
+      let targetPtr = fieldPtr;
+      if (fieldIndex > 0) {
+        targetPtr = this.newRegister();
+        this.emit(
+          `  ${targetPtr} = getelementptr ${llvmType}, ${llvmType}* ${fieldPtr}, i32 ${fieldIndex}`,
+        );
+      }
+
+      // Load the value
+      const value = this.newRegister();
+      this.emit(`  ${value} = load ${llvmType}, ${llvmType}* ${targetPtr}`);
+
+      // Allocate stack space and store the value
+      const ptr = `%pattern_${bindingName}_${this.stackAllocCount++}`;
+      this.emit(`  ${ptr} = alloca ${llvmType}`);
+      this.emit(`  store ${llvmType} ${value}, ${llvmType}* ${ptr}`);
+
+      // Register the binding so it can be used in the arm body
+      this.locals.add(bindingName);
+      this.localPointers.set(bindingName, ptr);
     }
   }
 
@@ -2071,6 +2609,76 @@ export class CodeGenerator {
   }
 
   private generateCall(expr: AST.CallExpr): string {
+    // Check for enum variant constructor
+    const enumVariantInfo = (expr as any).enumVariantInfo;
+    if (enumVariantInfo) {
+      // This is an enum variant constructor call
+      const enumDecl = enumVariantInfo.enumDecl as AST.EnumDecl;
+      const variant = enumVariantInfo.variant as AST.EnumVariant;
+      const variantIndex = enumVariantInfo.variantIndex as number;
+
+      // Generate code to construct the enum value
+      const enumType = this.resolveType(expr.callee.resolvedType!);
+
+      // Allocate space on stack to build the enum value
+      const enumPtr = this.newRegister();
+      this.emit(`  ${enumPtr} = alloca ${enumType}`);
+
+      // Get pointer to tag field and store the discriminant
+      const tagPtr = this.newRegister();
+      this.emit(
+        `  ${tagPtr} = getelementptr inbounds ${enumType}, ${enumType}* ${enumPtr}, i32 0, i32 0`,
+      );
+      this.emit(`  store i32 ${variantIndex}, i32* ${tagPtr}`);
+
+      // Handle tuple/struct data if present
+      if (variant.dataType && expr.args.length > 0) {
+        // Get pointer to data field
+        const dataPtr = this.newRegister();
+        this.emit(
+          `  ${dataPtr} = getelementptr inbounds ${enumType}, ${enumType}* ${enumPtr}, i32 0, i32 1`,
+        );
+
+        if (variant.dataType.kind === "EnumVariantTuple") {
+          // Store each argument in sequence in the data array
+          let offset = 0;
+          for (let i = 0; i < expr.args.length; i++) {
+            const argValue = this.generateExpression(expr.args[i]!);
+            const argType = this.resolveType(expr.args[i]!.resolvedType!);
+
+            // Cast data pointer to the argument type
+            const typedPtr = this.newRegister();
+            this.emit(
+              `  ${typedPtr} = bitcast [${this.getTypeSize(
+                argType,
+              )} x i8]* ${dataPtr} to ${argType}*`,
+            );
+
+            // If there are multiple args, we need to offset the pointer
+            let storePtr = typedPtr;
+            if (i > 0) {
+              storePtr = this.newRegister();
+              this.emit(
+                `  ${storePtr} = getelementptr ${argType}, ${argType}* ${typedPtr}, i32 ${i}`,
+              );
+            }
+
+            // Store the value
+            this.emit(
+              `  store ${argType} ${argValue}, ${argType}* ${storePtr}`,
+            );
+          }
+        }
+        // TODO: Handle EnumVariantStruct similarly
+      }
+
+      // Load the constructed enum value
+      const result = this.newRegister();
+      this.emit(`  ${result} = load ${enumType}, ${enumType}* ${enumPtr}`);
+
+      return result;
+    }
+
     // Check for operator overload (__call__)
     if (expr.operatorOverload) {
       const overload = expr.operatorOverload;
@@ -2723,13 +3331,19 @@ export class CodeGenerator {
             const funcLen = funcName.length + 1;
             const exprLen = exprStr.length + 1;
             this.emit(
-              `  ${errorStruct} = insertvalue %struct.NullAccessError undef, i8* getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(msg)}, i64 0, i64 0), 0`,
+              `  ${errorStruct} = insertvalue %struct.NullAccessError undef, i8* getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(
+                msg,
+              )}, i64 0, i64 0), 0`,
             );
             this.emit(
-              `  ${errorWithMsg} = insertvalue %struct.NullAccessError ${errorStruct}, i8* getelementptr inbounds ([${funcLen} x i8], [${funcLen} x i8]* ${this.stringLiterals.get(funcName)}, i64 0, i64 0), 1`,
+              `  ${errorWithMsg} = insertvalue %struct.NullAccessError ${errorStruct}, i8* getelementptr inbounds ([${funcLen} x i8], [${funcLen} x i8]* ${this.stringLiterals.get(
+                funcName,
+              )}, i64 0, i64 0), 1`,
             );
             this.emit(
-              `  ${errorWithExpr} = insertvalue %struct.NullAccessError ${errorWithMsg}, i8* getelementptr inbounds ([${exprLen} x i8], [${exprLen} x i8]* ${this.stringLiterals.get(exprStr)}, i64 0, i64 0), 2`,
+              `  ${errorWithExpr} = insertvalue %struct.NullAccessError ${errorWithMsg}, i8* getelementptr inbounds ([${exprLen} x i8], [${exprLen} x i8]* ${this.stringLiterals.get(
+                exprStr,
+              )}, i64 0, i64 0), 2`,
             );
             this.emitThrow(errorWithExpr, "%struct.NullAccessError");
 
@@ -2795,13 +3409,19 @@ export class CodeGenerator {
           const funcLen = funcName.length + 1;
           const exprLen = exprStr.length + 1;
           this.emit(
-            `  ${errorStruct} = insertvalue %struct.NullAccessError undef, i8* getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(msg)}, i64 0, i64 0), 0`,
+            `  ${errorStruct} = insertvalue %struct.NullAccessError undef, i8* getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(
+              msg,
+            )}, i64 0, i64 0), 0`,
           );
           this.emit(
-            `  ${errorWithMsg} = insertvalue %struct.NullAccessError ${errorStruct}, i8* getelementptr inbounds ([${funcLen} x i8], [${funcLen} x i8]* ${this.stringLiterals.get(funcName)}, i64 0, i64 0), 1`,
+            `  ${errorWithMsg} = insertvalue %struct.NullAccessError ${errorStruct}, i8* getelementptr inbounds ([${funcLen} x i8], [${funcLen} x i8]* ${this.stringLiterals.get(
+              funcName,
+            )}, i64 0, i64 0), 1`,
           );
           this.emit(
-            `  ${errorWithExpr} = insertvalue %struct.NullAccessError ${errorWithMsg}, i8* getelementptr inbounds ([${exprLen} x i8], [${exprLen} x i8]* ${this.stringLiterals.get(exprStr)}, i64 0, i64 0), 2`,
+            `  ${errorWithExpr} = insertvalue %struct.NullAccessError ${errorWithMsg}, i8* getelementptr inbounds ([${exprLen} x i8], [${exprLen} x i8]* ${this.stringLiterals.get(
+              exprStr,
+            )}, i64 0, i64 0), 2`,
           );
           this.emitThrow(errorWithExpr, "%struct.NullAccessError");
 
@@ -2878,13 +3498,19 @@ export class CodeGenerator {
         const funcLen = funcName.length + 1;
         const exprLen = exprStr.length + 1;
         this.emit(
-          `  ${errorStruct} = insertvalue %struct.NullAccessError undef, i8* getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(msg)}, i64 0, i64 0), 0`,
+          `  ${errorStruct} = insertvalue %struct.NullAccessError undef, i8* getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(
+            msg,
+          )}, i64 0, i64 0), 0`,
         );
         this.emit(
-          `  ${errorWithMsg} = insertvalue %struct.NullAccessError ${errorStruct}, i8* getelementptr inbounds ([${funcLen} x i8], [${funcLen} x i8]* ${this.stringLiterals.get(funcName)}, i64 0, i64 0), 1`,
+          `  ${errorWithMsg} = insertvalue %struct.NullAccessError ${errorStruct}, i8* getelementptr inbounds ([${funcLen} x i8], [${funcLen} x i8]* ${this.stringLiterals.get(
+            funcName,
+          )}, i64 0, i64 0), 1`,
         );
         this.emit(
-          `  ${errorWithExpr} = insertvalue %struct.NullAccessError ${errorWithMsg}, i8* getelementptr inbounds ([${exprLen} x i8], [${exprLen} x i8]* ${this.stringLiterals.get(exprStr)}, i64 0, i64 0), 2`,
+          `  ${errorWithExpr} = insertvalue %struct.NullAccessError ${errorWithMsg}, i8* getelementptr inbounds ([${exprLen} x i8], [${exprLen} x i8]* ${this.stringLiterals.get(
+            exprStr,
+          )}, i64 0, i64 0), 2`,
         );
         this.emitThrow(errorWithExpr, "%struct.NullAccessError");
 
@@ -3009,13 +3635,19 @@ export class CodeGenerator {
           const funcLen = funcName.length + 1;
           const exprLen = exprStr.length + 1;
           this.emit(
-            `  ${errorStruct} = insertvalue %struct.NullAccessError undef, i8* getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(msg)}, i64 0, i64 0), 0`,
+            `  ${errorStruct} = insertvalue %struct.NullAccessError undef, i8* getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(
+              msg,
+            )}, i64 0, i64 0), 0`,
           );
           this.emit(
-            `  ${errorWithMsg} = insertvalue %struct.NullAccessError ${errorStruct}, i8* getelementptr inbounds ([${funcLen} x i8], [${funcLen} x i8]* ${this.stringLiterals.get(funcName)}, i64 0, i64 0), 1`,
+            `  ${errorWithMsg} = insertvalue %struct.NullAccessError ${errorStruct}, i8* getelementptr inbounds ([${funcLen} x i8], [${funcLen} x i8]* ${this.stringLiterals.get(
+              funcName,
+            )}, i64 0, i64 0), 1`,
           );
           this.emit(
-            `  ${errorWithExpr} = insertvalue %struct.NullAccessError ${errorWithMsg}, i8* getelementptr inbounds ([${exprLen} x i8], [${exprLen} x i8]* ${this.stringLiterals.get(exprStr)}, i64 0, i64 0), 2`,
+            `  ${errorWithExpr} = insertvalue %struct.NullAccessError ${errorWithMsg}, i8* getelementptr inbounds ([${exprLen} x i8], [${exprLen} x i8]* ${this.stringLiterals.get(
+              exprStr,
+            )}, i64 0, i64 0), 2`,
           );
           this.emitThrow(errorWithExpr, "%struct.NullAccessError");
 
@@ -3338,12 +3970,21 @@ export class CodeGenerator {
           this.substituteType(arg, this.currentTypeMap),
         );
         const structDecl = this.structMap.get(basicType.name);
+        const enumDecl = this.enumDeclMap.get(basicType.name);
+
         if (structDecl) {
-          // Instantiate generic!
+          // Instantiate generic struct
           llvmType = this.resolveMonomorphizedType(
             structDecl,
             instantiatedArgs,
           );
+        } else if (enumDecl) {
+          // Instantiate generic enum
+          const mangledName = this.instantiateGenericEnum(
+            basicType.name,
+            instantiatedArgs,
+          );
+          llvmType = `%enum.${mangledName}`;
         } else {
           // Maybe a primitive like int<T>? Should not happen.
           llvmType = `%struct.${basicType.name}`; // Fallback
@@ -3393,7 +4034,12 @@ export class CodeGenerator {
             llvmType = "i8*"; // Generic pointer type
             break;
           default:
-            llvmType = `%struct.${basicType.name}`;
+            // Check if it's an enum type
+            if (this.enumVariants.has(basicType.name)) {
+              llvmType = `%enum.${basicType.name}`;
+            } else {
+              llvmType = `%struct.${basicType.name}`;
+            }
             break;
         }
       }
@@ -3436,7 +4082,9 @@ export class CodeGenerator {
       return (expr as AST.IdentifierExpr).name;
     } else if (expr.kind === "Index") {
       const indexExpr = expr as AST.IndexExpr;
-      return `${this.expressionToString(indexExpr.object)}[${this.expressionToString(indexExpr.index)}]`;
+      return `${this.expressionToString(indexExpr.object)}[${this.expressionToString(
+        indexExpr.index,
+      )}]`;
     } else if (expr.kind === "Member") {
       const memberExpr = expr as AST.MemberExpr;
       return `${this.expressionToString(memberExpr.object)}.${memberExpr.property}`;
@@ -3770,6 +4418,17 @@ export class CodeGenerator {
   }
 
   private generateMember(expr: AST.MemberExpr): string {
+    // Handle enum variant construction (e.g., Color.Red or Option<int>.Some)
+    const enumVariantInfo = (expr as any).enumVariantInfo;
+    if (enumVariantInfo) {
+      return this.generateEnumVariantConstruction(
+        enumVariantInfo.enumDecl,
+        enumVariantInfo.variant,
+        enumVariantInfo.variantIndex,
+        enumVariantInfo.genericArgs, // Pass generic args if present
+      );
+    }
+
     if (expr.object.kind === "Call") {
       const callType = expr.object.resolvedType as
         | AST.BasicTypeNode
@@ -4142,6 +4801,94 @@ export class CodeGenerator {
     }
 
     return tupleVal;
+  }
+
+  private generateEnumStructVariant(expr: AST.EnumStructVariantExpr): string {
+    // Get the enum variant info from type checker
+    const enumVariantInfo = (expr as any).enumVariantInfo;
+    if (!enumVariantInfo) {
+      throw new Error(
+        "Missing enum variant info for struct variant construction",
+      );
+    }
+
+    const enumDecl = enumVariantInfo.enumDecl as AST.EnumDecl;
+    const variant = enumVariantInfo.variant as AST.EnumVariant;
+    const variantIndex = enumVariantInfo.variantIndex as number;
+
+    // Generate code to construct the enum value
+    const enumType = this.resolveType(expr.resolvedType!);
+
+    // Allocate space on stack to build the enum value
+    const enumPtr = this.newRegister();
+    this.emit(`  ${enumPtr} = alloca ${enumType}`);
+
+    // Get pointer to tag field and store the discriminant
+    const tagPtr = this.newRegister();
+    this.emit(
+      `  ${tagPtr} = getelementptr inbounds ${enumType}, ${enumType}* ${enumPtr}, i32 0, i32 0`,
+    );
+    this.emit(`  store i32 ${variantIndex}, i32* ${tagPtr}`);
+
+    // Handle struct data if present
+    if (
+      variant.dataType &&
+      variant.dataType.kind === "EnumVariantStruct" &&
+      expr.fields.length > 0
+    ) {
+      // Get pointer to data field
+      const dataPtr = this.newRegister();
+      this.emit(
+        `  ${dataPtr} = getelementptr inbounds ${enumType}, ${enumType}* ${enumPtr}, i32 0, i32 1`,
+      );
+
+      const structVariant = variant.dataType as AST.EnumVariantStruct;
+
+      // Store each field in sequence in the data array
+      for (let i = 0; i < expr.fields.length; i++) {
+        const field = expr.fields[i]!;
+        const fieldValue = this.generateExpression(field.value);
+        const fieldType = this.resolveType(field.value.resolvedType!);
+
+        // Find the field index in the variant definition
+        const fieldIndex = structVariant.fields.findIndex(
+          (f) => f.name === field.name,
+        );
+        if (fieldIndex === -1) {
+          throw new Error(
+            `Field ${field.name} not found in variant ${variant.name}`,
+          );
+        }
+
+        // Cast data pointer to the field type
+        const typedPtr = this.newRegister();
+        this.emit(
+          `  ${typedPtr} = bitcast [${this.getTypeSize(
+            fieldType,
+          )} x i8]* ${dataPtr} to ${fieldType}*`,
+        );
+
+        // If there are multiple fields, we need to offset the pointer
+        let storePtr = typedPtr;
+        if (fieldIndex > 0) {
+          storePtr = this.newRegister();
+          this.emit(
+            `  ${storePtr} = getelementptr ${fieldType}, ${fieldType}* ${typedPtr}, i32 ${fieldIndex}`,
+          );
+        }
+
+        // Store the value
+        this.emit(
+          `  store ${fieldType} ${fieldValue}, ${fieldType}* ${storePtr}`,
+        );
+      }
+    }
+
+    // Load the constructed enum value
+    const result = this.newRegister();
+    this.emit(`  ${result} = load ${enumType}, ${enumType}* ${enumPtr}`);
+
+    return result;
   }
 
   private escapeString(str: string): string {

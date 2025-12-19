@@ -45,16 +45,59 @@
 - [x] Shell Autocomplete for CLI
 - [x] Operator Overloading for User Types (24 operators: arithmetic, bitwise, comparison, unary, indexing, callable)
 - [x] Generic-Aware Operator Resolution (Operators work with generic types like Array<T>, Stack<T>, etc.)
+- [x] Enum Types - Basic Implementation (Unit variants, tuple variants, match expressions, parser, type checker)
+  - ✅ Enum declaration parsing (unit, tuple, struct variants)
+  - ✅ Generic enum support (parsing)
+  - ✅ Type checking for enum variants
+  - ✅ Unit variant construction (e.g., `Color.Red`)
+  - ✅ Tuple variant construction (e.g., `Message.Move(10, 20)`)
+  - ✅ Match expressions with discriminant checking
+  - ✅ Enum as function parameters and return types
+  - ✅ LLVM IR code generation with full payload storage
+  - ✅ Tuple data payload storage and retrieval
+  - ✅ Pattern destructuring in match arms (tuple and struct patterns)
+  - ✅ Comprehensive test suite (60 tests, all passing including destructuring tests)
+  - ✅ Example programs demonstrating enum usage
+  - ✅ Formatter support for enums and match expressions
+  - ✅ Struct variant construction (parser accepts `Shape.Circle { radius: 5.0 }` syntax)
+  - ✅ Exhaustiveness checking for match expressions
+  - ✅ Generic enum instantiation with explicit types (e.g., `Option<int>.Some(42)`)
+  - ✅ Outer scope variable access in match arm expressions
+  - ❌ Methods on enums (impl blocks for enums) - Parser doesn't recognize impl keyword after enum declarations
+  - ❌ Enum equality comparison operators (==, !=) - LLVM codegen fails with "icmp requires integer operands"
+  - ❌ Recursive enums with pointer types - Parser rejects pointer types (^) in enum variant parameters
+  - ❌ Nested pattern matching - Parser doesn't support enum patterns inside enum patterns (e.g., `Outer.Wrapped(Inner.Value(v))`)
+  - ❌ Direct field access on struct variants - Cannot access variant fields without pattern matching (e.g., `msg.x` on `Message.Move { x, y }`)
+  - ❌ Namespace-qualified enum patterns in match - Parser rejects patterns like `Enums.Color.Red` in match arms
+  - ⏳ Generic enum type inference (e.g., inferring `Option<int>` from `Option.Some(42)` - requires bidirectional type checking)
+  - ⏳ Pattern guards in match expressions (e.g., `Option.Some(x) if x > 10 => ...`)
+  - ⏳ Type checking with `is` keyword for variant checking (e.g., `if (opt is Option<int>.Some) { ... }`)
 
 ## Pending Features (expanded)
 
 ### RECOMMENDED NEXT PRIORITIES
 
-- [2] Enum Types and Pattern Matching (HIGHEST PRIORITY - RECOMMENDED NEXT)
-  - Description: Implement enum types (including tagged unions) with exhaustive pattern matching support. This would enable algebraic data types and safe handling of multiple variants (e.g., Result, Option enums with associated data).
-  - Implementation notes: Add enum syntax (Rust-style), implement tag-based value storage, add match expression with exhaustiveness checking. Support enums with associated data per variant.
-  - Acceptance criteria: Enums compile and match expressions validate all cases are handled; errors on non-exhaustive patterns.
-  - **Why next:** Natural extension of type system after completing generics and operators; highly requested feature for functional programming patterns; enables safer error handling and state machines.
+- [x] Enum Types - Advanced Features (COMPLETED)
+  - Description: Complete remaining enum features: struct variant construction syntax, exhaustiveness checking, and generic enum instantiation.
+  - Implementation notes: Added parser support for struct literal syntax in enum construction (`Shape.Circle { radius: 5.0 }`), implemented exhaustiveness checking to error on non-exhaustive match expressions, added generic enum instantiation with explicit type parameters (e.g., `Option<int>`).
+  - Acceptance criteria: ✅ Struct variant construction compiles successfully, ✅ compiler errors on non-exhaustive matches (missing variants without wildcard), ✅ generic enums like `Option<T>` can be instantiated with concrete types using `Option<int>.Some(42)` syntax.
+  - **Status:** ALL COMPLETE ✅ - Payload storage, pattern destructuring, tuple variants, struct variants, exhaustiveness checking, generic instantiation (explicit).
+
+- [2] Enum Types - Missing Core Features (HIGH PRIORITY)
+  - Description: Implement critical enum features that are currently failing: enum methods, equality comparison, recursive enums, and nested pattern matching.
+  - Implementation notes:
+    - **Enum Methods (impl blocks)**: Extend parser to accept `impl EnumName { ... }` syntax after enum declarations, similar to struct methods. TypeChecker must resolve enum methods and CodeGenerator must handle method dispatch on enum values.
+    - **Enum Equality Comparison**: Implement `==` and `!=` operators for enums. In codegen, compare discriminant tags first, then compare payload data if tags match. Generate proper LLVM `icmp` instructions on discriminant integers.
+    - **Recursive Enums**: Allow pointer types in enum variants (e.g., `List.Cons(int, ^List)`). Parser must accept `^EnumName` in variant type parameters. Handle forward references in type resolution.
+    - **Nested Pattern Matching**: Extend pattern parser to recursively handle enum patterns (e.g., `Outer.Wrapped(Inner.Value(v))`). Codegen must generate nested discriminant checks and variable bindings.
+    - **Direct Field Access**: Allow accessing struct variant fields without pattern matching (e.g., `msg.x` on `Message.Move { x, y }`). Requires runtime discriminant check or compile-time proof of variant type.
+  - Acceptance criteria:
+    - ✅ Enum methods compile and can be called on enum instances
+    - ✅ Equality operators work on all enum types (unit, tuple, struct variants)
+    - ✅ Recursive data structures like linked lists work with pointer-based enums
+    - ✅ Nested enum patterns compile and correctly extract values
+    - ✅ Struct variant fields accessible with dot notation (with safety checks)
+  - **Why important:** These features are essential for practical enum usage - methods enable encapsulation, equality enables collections/comparisons, recursive enums enable complex data structures, nested patterns enable ergonomic code, field access enables convenience.
 
 - [3] Root Global `Type` Struct (RECOMMENDED FOR EARLY IMPLEMENTATION)
   - Description: Define a root `Type` struct that every user-defined struct implicitly inherits from, providing methods like `getTypeName()`, `getSize()`, `toString()`, and basic equality.

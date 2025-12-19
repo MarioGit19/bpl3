@@ -1,0 +1,5 @@
+{
+  "name": "enum_return",
+  "description": "Test enum as function return type with match expression",
+  "exitCode": 2
+}

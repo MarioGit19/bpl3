@@ -1,0 +1,5 @@
+{
+  "name": "enum_mixed_variants",
+  "description": "Demonstrates mixing unit, tuple, and struct variants - comprehensive pattern matching with all variant types",
+  "exitCode": 33
+}

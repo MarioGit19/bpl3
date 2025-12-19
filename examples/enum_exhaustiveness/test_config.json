@@ -1,0 +1,5 @@
+{
+  "name": "enum_exhaustiveness",
+  "description": "Demonstrates exhaustiveness checking - all match expressions must cover all enum variants or use wildcard",
+  "exitCode": 27
+}

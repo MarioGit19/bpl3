@@ -1,0 +1,5 @@
+{
+  "name": "unit_only",
+  "description": "Test enum with only unit variant (Quit)",
+  "expectedExitCode": 0
+}

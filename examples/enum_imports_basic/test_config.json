@@ -1,0 +1,6 @@
+{
+  "name": "enum_imports_basic",
+  "description": "Test basic importing and exporting enum types across modules with pattern destructuring",
+  "exitCode": 221,
+  "note": "Pattern destructuring is now implemented! Variables can be extracted from tuple variants."
+}

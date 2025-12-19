@@ -1,0 +1,6 @@
+{
+  "name": "enum_imports_wildcard",
+  "description": "Test matching only one variant with wildcard pattern for non-exhaustive matching",
+  "exitCode": 100,
+  "note": "Demonstrates wildcard (_) pattern to handle multiple variants without explicitly listing them"
+}
