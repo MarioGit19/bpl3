@@ -1,0 +1,382 @@
+/**
+ * Import and module handling for the BPL type checker
+ * Handles import resolution, module loading, and symbol importing
+ */
+
+import * as fs from "fs";
+import * as path from "path";
+
+import * as AST from "../common/AST";
+import { CompilerError, type SourceLocation } from "../common/CompilerError";
+import { lexWithGrammar } from "../frontend/GrammarLexer";
+import { Parser } from "../frontend/Parser";
+import type { Symbol, SymbolTable } from "./SymbolTable";
+import { initializeBuiltinsInScope } from "./BuiltinTypes";
+
+/**
+ * Get the standard library path, using BPL_HOME environment variable if available
+ * Falls back to relative path for development mode
+ */
+export function getStdLibPath(): string {
+  const bplHome = process.env.BPL_HOME;
+  if (bplHome) {
+    return path.join(bplHome, "lib");
+  }
+  // Fallback to relative path (development mode)
+  return path.join(__dirname, "../../lib");
+}
+
+/**
+ * Import handler context
+ */
+export interface ImportHandlerContext {
+  modules: Map<string, SymbolTable>;
+  preLoadedModules: Map<string, AST.Program>;
+  skipImportResolution: boolean;
+  currentScope: SymbolTable;
+  globalScope: SymbolTable;
+  hoistDeclaration: (stmt: AST.Statement) => void;
+  defineSymbol: (
+    name: string,
+    kind: string,
+    type: AST.TypeNode | undefined,
+    declaration: AST.ASTNode,
+    moduleScope?: SymbolTable
+  ) => void;
+}
+
+/**
+ * Handles import statement processing
+ */
+export class ImportHandler {
+  private ctx: ImportHandlerContext;
+
+  constructor(context: ImportHandlerContext) {
+    this.ctx = context;
+  }
+
+  /**
+   * Define an imported symbol in the current scope
+   */
+  defineImportedSymbol(name: string, symbol: Symbol, scope?: SymbolTable): void {
+    // Define primary symbol
+    if (scope) {
+      scope.define({
+        name,
+        kind: symbol.kind,
+        type: symbol.type,
+        declaration: symbol.declaration,
+        moduleScope: symbol.moduleScope,
+      });
+    } else {
+      this.ctx.defineSymbol(
+        name,
+        symbol.kind,
+        symbol.type,
+        symbol.declaration!,
+        symbol.moduleScope
+      );
+    }
+
+    // Define overloads
+    if (symbol.overloads) {
+      for (const overload of symbol.overloads) {
+        if (scope) {
+          scope.define({
+            name,
+            kind: overload.kind,
+            type: overload.type,
+            declaration: overload.declaration,
+            moduleScope: overload.moduleScope,
+          });
+        } else {
+          this.ctx.defineSymbol(
+            name,
+            overload.kind,
+            overload.type,
+            overload.declaration!,
+            overload.moduleScope
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Resolve the import path from an import statement
+   */
+  private resolveImportPath(stmt: AST.ImportStmt): {
+    importPath: string;
+    ast?: AST.Program;
+  } {
+    const currentFile = stmt.location.file;
+    let importPath: string | undefined;
+    let ast: AST.Program | undefined;
+
+    if (this.ctx.skipImportResolution) {
+      // Try to resolve the import path to match against pre-loaded modules
+      let resolvedImportPath: string | undefined;
+
+      if (stmt.source.startsWith("std/")) {
+        const stdLibPath = getStdLibPath();
+        resolvedImportPath = path.join(stdLibPath, stmt.source.substring(4));
+      } else if (path.isAbsolute(stmt.source)) {
+        resolvedImportPath = stmt.source;
+      } else {
+        const currentDir = path.dirname(currentFile);
+        resolvedImportPath = path.resolve(currentDir, stmt.source);
+      }
+
+      // Try to find exact match first (checking extensions)
+      if (resolvedImportPath) {
+        if (this.ctx.preLoadedModules.has(resolvedImportPath)) {
+          importPath = resolvedImportPath;
+          ast = this.ctx.preLoadedModules.get(importPath);
+        } else {
+          // Try extensions
+          for (const ext of [".x", ".bpl"]) {
+            const withExt = resolvedImportPath + ext;
+            if (this.ctx.preLoadedModules.has(withExt)) {
+              importPath = withExt;
+              ast = this.ctx.preLoadedModules.get(importPath);
+              break;
+            }
+          }
+        }
+      }
+
+      if (!importPath) {
+        // Fallback to heuristic
+        for (const [modulePath, moduleAst] of this.ctx.preLoadedModules) {
+          // Simple heuristic: if the module path contains the import source
+          if (
+            modulePath.includes(stmt.source) ||
+            modulePath.includes(stmt.source.replace(/^[./]+/, ""))
+          ) {
+            importPath = modulePath;
+            ast = moduleAst;
+            break;
+          }
+        }
+      }
+
+      if (!importPath) {
+        // This shouldn't happen if ModuleResolver did its job
+        throw new CompilerError(
+          `Module not found: ${stmt.source}`,
+          "Module resolution failed",
+          stmt.location
+        );
+      }
+    } else {
+      // Handle std/ prefix
+      if (stmt.source.startsWith("std/")) {
+        const stdLibPath = getStdLibPath();
+        const relativePath = stmt.source.substring(4);
+        importPath = path.join(stdLibPath, relativePath);
+      } else {
+        const currentDir = path.dirname(currentFile);
+        importPath = path.resolve(currentDir, stmt.source);
+      }
+    }
+
+    return { importPath: importPath!, ast };
+  }
+
+  /**
+   * Load a module and get its symbol table
+   */
+  private loadModule(
+    importPath: string,
+    ast: AST.Program | undefined,
+    location: SourceLocation
+  ): SymbolTable {
+    const existingScope = this.ctx.modules.get(importPath);
+
+    if (existingScope) {
+      return existingScope;
+    }
+
+    // Load module if not already available
+    let moduleAst = ast;
+    if (!moduleAst) {
+      if (!fs.existsSync(importPath)) {
+        throw new CompilerError(
+          `Module not found: ${importPath}`,
+          "Ensure the file exists and the path is correct.",
+          location
+        );
+      }
+
+      const content = fs.readFileSync(importPath, "utf-8");
+      const tokens = lexWithGrammar(content, importPath);
+      const parser = new Parser(content, importPath, tokens);
+      moduleAst = parser.parse();
+    }
+
+    const moduleScope = (this.ctx.currentScope as any).constructor();
+    this.ctx.modules.set(importPath, moduleScope);
+    initializeBuiltinsInScope(moduleScope);
+
+    // Context switch
+    const prevGlobal = this.ctx.globalScope;
+    const prevCurrent = this.ctx.currentScope;
+
+    // Temporarily switch scopes
+    (this.ctx as any).globalScope = moduleScope;
+    (this.ctx as any).currentScope = moduleScope;
+
+    // Hoist declarations in the imported module
+    for (const s of moduleAst.statements) {
+      this.ctx.hoistDeclaration(s);
+    }
+
+    // Restore context
+    (this.ctx as any).globalScope = prevGlobal;
+    (this.ctx as any).currentScope = prevCurrent;
+
+    return moduleScope;
+  }
+
+  /**
+   * Process an import statement
+   */
+  checkImport(stmt: AST.ImportStmt): void {
+    const { importPath, ast } = this.resolveImportPath(stmt);
+    const moduleScope = this.loadModule(importPath, ast, stmt.location);
+
+    // Get AST for export checking
+    let moduleAst = ast;
+    if (!moduleAst && this.ctx.skipImportResolution) {
+      moduleAst = this.ctx.preLoadedModules.get(importPath);
+    }
+
+    // Import items
+    if (stmt.namespace) {
+      // Import as namespace
+      this.importAsNamespace(stmt, moduleScope, moduleAst, importPath);
+    } else if (stmt.importAll) {
+      // Import all exported symbols
+      this.importAllSymbols(stmt, moduleScope, moduleAst, importPath);
+    }
+
+    // Import specific items
+    for (const item of stmt.items) {
+      this.importItem(item, stmt, moduleScope, moduleAst);
+    }
+  }
+
+  /**
+   * Import a module as a namespace
+   */
+  private importAsNamespace(
+    stmt: AST.ImportStmt,
+    moduleScope: SymbolTable,
+    ast: AST.Program | undefined,
+    importPath: string
+  ): void {
+    // Create a restricted scope that only contains exported items
+    const exportedScope = (moduleScope as any).constructor();
+
+    if (ast) {
+      for (const s of ast.statements) {
+        if (s.kind === "Export") {
+          const exportStmt = s as AST.ExportStmt;
+          const symbol = moduleScope.resolve(exportStmt.item);
+          if (symbol) {
+            this.defineImportedSymbol(symbol.name, symbol, exportedScope);
+          }
+        }
+      }
+    } else if (this.ctx.skipImportResolution) {
+      // Try to find AST from preLoadedModules
+      const moduleAst = this.ctx.preLoadedModules.get(importPath);
+      if (moduleAst) {
+        for (const s of moduleAst.statements) {
+          if (s.kind === "Export") {
+            const exportStmt = s as AST.ExportStmt;
+            const symbol = moduleScope.resolve(exportStmt.item);
+            if (symbol) {
+              exportedScope.define({
+                name: symbol.name,
+                kind: symbol.kind,
+                type: symbol.type,
+                declaration: symbol.declaration,
+                moduleScope: symbol.moduleScope,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    this.ctx.defineSymbol(stmt.namespace!, "Module", undefined, stmt, exportedScope);
+  }
+
+  /**
+   * Import all exported symbols from a module
+   */
+  private importAllSymbols(
+    stmt: AST.ImportStmt,
+    moduleScope: SymbolTable,
+    ast: AST.Program | undefined,
+    importPath: string
+  ): void {
+    let moduleAst = ast;
+
+    // If AST is not available, try to get from preLoadedModules
+    if (!moduleAst && this.ctx.skipImportResolution) {
+      moduleAst = this.ctx.preLoadedModules.get(importPath);
+    }
+
+    if (moduleAst) {
+      for (const s of moduleAst.statements) {
+        if (s.kind === "Export") {
+          const exportStmt = s as AST.ExportStmt;
+          const symbol = moduleScope.resolve(exportStmt.item);
+          if (symbol) {
+            this.defineImportedSymbol(symbol.name, symbol);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Import a specific item from a module
+   */
+  private importItem(
+    item: { name: string; alias?: string },
+    stmt: AST.ImportStmt,
+    moduleScope: SymbolTable,
+    ast: AST.Program | undefined
+  ): void {
+    // Check if the item is exported by looking at ExportStmt nodes in AST
+    let isExported = false;
+    let exportedSymbol: Symbol | undefined;
+
+    if (ast) {
+      for (const s of ast.statements) {
+        if (s.kind === "Export") {
+          const exportStmt = s as AST.ExportStmt;
+          if (exportStmt.item === item.name) {
+            isExported = true;
+            exportedSymbol = moduleScope.resolve(item.name);
+            break;
+          }
+        }
+      }
+    }
+
+    if (!isExported || !exportedSymbol) {
+      throw new CompilerError(
+        `Module '${stmt.source}' does not export '${item.name}'`,
+        "Ensure the symbol is exported (or defined) in the module.",
+        stmt.location
+      );
+    }
+
+    // Define in current scope
+    this.defineImportedSymbol(item.alias || item.name, exportedSymbol);
+  }
+}
