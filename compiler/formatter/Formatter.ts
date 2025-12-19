@@ -274,12 +274,19 @@ export class Formatter {
 
     this.lastLineProcessed = decl.location.startLine;
 
+    // Format variants
     for (let i = 0; i < decl.variants.length; i++) {
       const variant = decl.variants[i]!;
 
-      // Print comments before variant
-      output += this.printCommentsBefore(variant.location.startLine);
+      // Print comments before variant (on same or previous line)
+      const commentsBefore = this.printCommentsBefore(
+        variant.location.startLine,
+      );
+      if (commentsBefore) {
+        output += commentsBefore;
+      }
 
+      // Add blank line if there's a gap in source
       if (
         this.lastLineProcessed > 0 &&
         variant.location.startLine > this.lastLineProcessed + 1
@@ -306,13 +313,51 @@ export class Formatter {
         }
       }
 
-      output += ",\n";
+      output += ",";
+
+      // Print inline comments (on same line as variant)
+      const inlineComment = this.getInlineComment(variant.location.endLine);
+      if (inlineComment) {
+        output += inlineComment;
+      }
+
+      output += "\n";
 
       this.lastLineProcessed = variant.location.endLine;
     }
 
+    // Format enum methods
+    if (decl.methods && decl.methods.length > 0) {
+      for (let i = 0; i < decl.methods.length; i++) {
+        const method = decl.methods[i]!;
+
+        // Print comments before method (which handles gap detection)
+        const commentsBefore = this.printCommentsBefore(
+          method.location.startLine,
+        );
+        if (commentsBefore) {
+          output += commentsBefore;
+        } else if (i === 0) {
+          // If no comments and this is the first method, add separator
+          output += "\n";
+        } else if (method.location.startLine > this.lastLineProcessed + 1) {
+          // Gap between methods
+          output += "\n";
+        }
+
+        // Format the method
+        output += this.formatFunctionDecl(method);
+        output += "\n";
+
+        this.lastLineProcessed = method.location.endLine;
+      }
+    }
+
     // Print comments inside enum (before closing brace)
-    output += this.printCommentsBefore(decl.location.endLine);
+    const finalComments = this.printCommentsBefore(decl.location.endLine);
+    if (finalComments && !finalComments.match(/^\s*$/)) {
+      output += finalComments;
+    }
 
     this.indentLevel--;
     output += `${indent}}`;
@@ -756,8 +801,25 @@ export class Formatter {
     let output = `match (${this.formatExpression(expr.value)}) {\n`;
     this.indentLevel++;
 
+    this.lastLineProcessed = expr.location.startLine;
+
     for (let i = 0; i < expr.arms.length; i++) {
       const arm = expr.arms[i]!;
+
+      // Print comments before this arm
+      const commentsBefore = this.printCommentsBefore(arm.location.startLine);
+      if (commentsBefore) {
+        output += commentsBefore;
+      }
+
+      // Add blank line if there's a gap
+      if (
+        this.lastLineProcessed > 0 &&
+        arm.location.startLine > this.lastLineProcessed + 1
+      ) {
+        output += "\n";
+      }
+
       output += `${this.getIndent()}${this.formatPattern(arm.pattern)}`;
 
       if (arm.guard) {
@@ -773,7 +835,23 @@ export class Formatter {
         output += this.formatExpression(arm.body as AST.Expression);
       }
 
-      output += ",\n";
+      output += ",";
+
+      // Print inline comments (on same line as arm)
+      const inlineComment = this.getInlineComment(arm.location.endLine);
+      if (inlineComment) {
+        output += inlineComment;
+      }
+
+      output += "\n";
+
+      this.lastLineProcessed = arm.location.endLine;
+    }
+
+    // Print any remaining comments before closing brace
+    const finalComments = this.printCommentsBefore(expr.location.endLine);
+    if (finalComments && !finalComments.match(/^\s*$/)) {
+      output += finalComments;
     }
 
     this.indentLevel--;

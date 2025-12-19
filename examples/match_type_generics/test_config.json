@@ -1,0 +1,5 @@
+{
+  "description": "Test match<Type> with enum variants",
+  "expectedOutput": "Option is Some\nOption is None\nResult is Ok\nResult is Err\n",
+  "expectedExitCode": 0
+}

@@ -786,7 +786,7 @@ export class TypeChecker {
 
   private checkFunctionBody(
     decl: AST.FunctionDecl,
-    parentStruct?: AST.StructDecl,
+    parentStruct?: AST.StructDecl | AST.EnumDecl,
   ): void {
     // Symbol already defined in hoist pass
 
@@ -801,7 +801,9 @@ export class TypeChecker {
         if (parentStruct.genericParams.some((p) => p.name === gp.name)) {
           throw new CompilerError(
             `Shadowing of generic parameter '${gp.name}'`,
-            `The generic parameter '${gp.name}' is already defined in the parent struct '${parentStruct.name}'. Please use a different name.`,
+            `The generic parameter '${gp.name}' is already defined in the parent ${
+              parentStruct.kind === "StructDecl" ? "struct" : "enum"
+            } '${parentStruct.name}'. Please use a different name.`,
             decl.location,
           );
         }
@@ -978,6 +980,23 @@ export class TypeChecker {
         }
       }
     }
+
+    // Check enum methods
+    this.currentScope = this.currentScope.enterScope();
+    for (const method of decl.methods || []) {
+      // Set resolvedType for enum methods so CodeGenerator can use it
+      const functionType: AST.FunctionTypeNode = {
+        kind: "FunctionType",
+        returnType: this.resolveType(method.returnType),
+        paramTypes: method.params.map((p) => this.resolveType(p.type)),
+        location: method.location,
+        declaration: method,
+      };
+      method.resolvedType = functionType;
+
+      this.checkFunctionBody(method, decl); // Check method bodies
+    }
+    this.currentScope = this.currentScope.exitScope();
   }
 
   private checkSpecBody(decl: AST.SpecDecl): void {
@@ -1683,6 +1702,12 @@ export class TypeChecker {
         location: expr.location,
       } as any;
     }
+
+    // Resolve the type to ensure resolvedDeclaration is set for struct/enum types
+    if (symbol.type) {
+      return this.resolveType(symbol.type, false);
+    }
+
     return symbol.type;
   }
 
@@ -2616,6 +2641,12 @@ export class TypeChecker {
     }
 
     if (objectType && objectType.kind === "BasicType") {
+      // Resolve the type to ensure resolvedDeclaration is set
+      const resolvedType = this.resolveType(objectType);
+      if (resolvedType.kind === "BasicType") {
+        objectType = resolvedType as AST.BasicTypeNode;
+      }
+
       // Handle pointer to struct (implicit dereference)
       // If pointerDepth > 0, we assume it's a pointer to the struct.
       // We don't need to change anything here because we resolve by name.
@@ -2639,6 +2670,7 @@ export class TypeChecker {
         }
       }
       let structDecl: AST.StructDecl | undefined;
+      let enumDecl: AST.EnumDecl | undefined;
 
       // Handle Generic Params with Constraints
       if (
@@ -2657,16 +2689,132 @@ export class TypeChecker {
       }
 
       if (objectType.resolvedDeclaration) {
-        structDecl = objectType.resolvedDeclaration;
+        if ((objectType.resolvedDeclaration as any).kind === "StructDecl") {
+          structDecl = objectType.resolvedDeclaration as AST.StructDecl;
+        } else if (
+          (objectType.resolvedDeclaration as any).kind === "EnumDecl"
+        ) {
+          enumDecl = objectType.resolvedDeclaration as AST.EnumDecl;
+        }
       } else if (
         symbol &&
         symbol.kind === "Struct" &&
         (symbol.declaration as any).kind === "StructDecl"
       ) {
         structDecl = symbol.declaration as AST.StructDecl;
+      } else if (
+        symbol &&
+        symbol.kind === "Enum" &&
+        (symbol.declaration as any).kind === "EnumDecl"
+      ) {
+        enumDecl = symbol.declaration as AST.EnumDecl;
       }
 
-      if (structDecl) {
+      if (enumDecl) {
+        // Handle enum instance methods
+        const methods = (enumDecl.methods || []).filter(
+          (m) => m.name === expr.property,
+        );
+
+        if (methods.length > 0) {
+          const candidates: AST.FunctionTypeNode[] = [];
+
+          // Create type substitution mapping for generics
+          const mapping = new Map<string, AST.TypeNode>();
+          if (
+            enumDecl.genericParams.length > 0 &&
+            objectType.genericArgs.length === enumDecl.genericParams.length
+          ) {
+            for (let i = 0; i < enumDecl.genericParams.length; i++) {
+              mapping.set(
+                enumDecl.genericParams[i]!.name,
+                objectType.genericArgs[i]!,
+              );
+            }
+          }
+
+          for (const method of methods) {
+            if (method.isStatic) continue;
+
+            let paramTypes = method.params.map((p) => p.type);
+            let compatible = true;
+
+            // Check if first param is 'this' and if it's compatible
+            if (method.params.length > 0 && method.params[0]!.name === "this") {
+              let thisParamType = method.params[0]!.type;
+
+              // Substitute generics in 'this' parameter type
+              if (mapping.size > 0) {
+                thisParamType = this.substituteType(thisParamType, mapping);
+              }
+
+              // Check if 'this' parameter is compatible with the enum instance
+              let isThisCompatible = this.areTypesCompatible(
+                thisParamType,
+                objectType,
+              );
+
+              // Handle pointer compatibility
+              if (
+                !isThisCompatible &&
+                thisParamType.kind === "BasicType" &&
+                objectType.kind === "BasicType" &&
+                thisParamType.name === objectType.name &&
+                thisParamType.pointerDepth === objectType.pointerDepth + 1
+              ) {
+                isThisCompatible = true;
+              }
+
+              if (!isThisCompatible) {
+                compatible = false;
+              } else {
+                // Remove 'this' from param types for the function type
+                paramTypes = paramTypes.slice(1);
+              }
+            }
+
+            if (compatible) {
+              let returnType = method.returnType;
+
+              // Substitute generics in return type and param types
+              if (mapping.size > 0) {
+                returnType = this.substituteType(returnType, mapping);
+                paramTypes = paramTypes.map((p) =>
+                  this.substituteType(p, mapping),
+                );
+              }
+
+              const funcType: AST.FunctionTypeNode = {
+                kind: "FunctionType",
+                returnType,
+                paramTypes,
+                location: method.location,
+                declaration: method,
+              };
+
+              candidates.push(funcType);
+            }
+          }
+
+          if (candidates.length === 0) {
+            throw new CompilerError(
+              `No matching overload for method '${expr.property}' on enum '${objectType.name}'`,
+              "Check 'this' parameter compatibility.",
+              expr.location,
+            );
+          }
+
+          const resultType = candidates[0]!;
+          (resultType as any).overloads = candidates;
+          return resultType;
+        } else {
+          throw new CompilerError(
+            `Enum '${objectType.name}' has no method '${expr.property}'`,
+            "Check the enum definition.",
+            expr.location,
+          );
+        }
+      } else if (structDecl) {
         // Use resolveMemberWithContext to handling inheritance substitution
         const result = this.resolveMemberWithContext(objectType, expr.property);
 
@@ -2807,11 +2955,124 @@ export class TypeChecker {
           );
         }
       } else {
-        throw new CompilerError(
-          `Could not resolve struct declaration for type '${objectType.name}'`,
-          "Ensure the struct is defined and visible.",
-          expr.location,
-        );
+        // Check if it's an enum type and try to resolve enum methods
+        const enumSymbol = this.currentScope.resolve(objectType.name);
+        if (enumSymbol && enumSymbol.kind === "Enum") {
+          const enumDecl = enumSymbol.declaration as AST.EnumDecl;
+
+          // Find methods with matching name
+          const methods = (enumDecl.methods || []).filter(
+            (m) => m.name === expr.property,
+          );
+
+          if (methods.length > 0) {
+            const candidates: AST.FunctionTypeNode[] = [];
+
+            // Create type substitution mapping for generics
+            const mapping = new Map<string, AST.TypeNode>();
+            if (
+              enumDecl.genericParams.length > 0 &&
+              objectType.genericArgs.length === enumDecl.genericParams.length
+            ) {
+              for (let i = 0; i < enumDecl.genericParams.length; i++) {
+                mapping.set(
+                  enumDecl.genericParams[i]!.name,
+                  objectType.genericArgs[i]!,
+                );
+              }
+            }
+
+            for (const method of methods) {
+              if (method.isStatic) continue;
+
+              let paramTypes = method.params.map((p) => p.type);
+              let compatible = true;
+
+              // Check if first param is 'this' and if it's compatible
+              if (
+                method.params.length > 0 &&
+                method.params[0]!.name === "this"
+              ) {
+                let thisParamType = method.params[0]!.type;
+
+                // Substitute generics in 'this' parameter type
+                if (mapping.size > 0) {
+                  thisParamType = this.substituteType(thisParamType, mapping);
+                }
+
+                // Check if 'this' parameter is compatible with the enum instance
+                let isThisCompatible = this.areTypesCompatible(
+                  thisParamType,
+                  objectType,
+                );
+
+                // Handle pointer compatibility
+                if (
+                  !isThisCompatible &&
+                  thisParamType.kind === "BasicType" &&
+                  objectType.kind === "BasicType" &&
+                  thisParamType.name === objectType.name &&
+                  thisParamType.pointerDepth === objectType.pointerDepth + 1
+                ) {
+                  isThisCompatible = true;
+                }
+
+                if (!isThisCompatible) {
+                  compatible = false;
+                } else {
+                  // Remove 'this' from param types for the function type
+                  paramTypes = paramTypes.slice(1);
+                }
+              }
+
+              if (compatible) {
+                let returnType = method.returnType;
+
+                // Substitute generics in return type and param types
+                if (mapping.size > 0) {
+                  returnType = this.substituteType(returnType, mapping);
+                  paramTypes = paramTypes.map((p) =>
+                    this.substituteType(p, mapping),
+                  );
+                }
+
+                const funcType: AST.FunctionTypeNode = {
+                  kind: "FunctionType",
+                  returnType,
+                  paramTypes,
+                  location: method.location,
+                  declaration: method,
+                };
+
+                candidates.push(funcType);
+              }
+            }
+
+            if (candidates.length === 0) {
+              throw new CompilerError(
+                `No matching overload for method '${expr.property}' on enum '${objectType.name}'`,
+                "Check 'this' parameter compatibility.",
+                expr.location,
+              );
+            }
+
+            const resultType = candidates[0]!;
+            (resultType as any).overloads = candidates;
+            return resultType;
+          } else {
+            throw new CompilerError(
+              `Enum '${objectType.name}' has no method '${expr.property}'`,
+              "Check the enum definition.",
+              expr.location,
+            );
+          }
+        } else {
+          throw new CompilerError(
+            `Could not resolve struct declaration for type '${objectType.name}'`,
+            "Ensure the struct is defined and visible.",
+            expr.location,
+          );
+        }
       }
     }
     return undefined;
@@ -2971,9 +3232,79 @@ export class TypeChecker {
   }
 
   private checkTypeMatch(expr: AST.TypeMatchExpr): AST.TypeNode {
+    // Validate the value expression
     if ("kind" in expr.value && (expr.value.kind as string) !== "BasicType") {
       this.checkExpression(expr.value as AST.Expression);
     }
+
+    // Validate the target type
+    const targetType = expr.targetType as AST.BasicTypeNode;
+    const targetTypeName = targetType.name;
+
+    // Check if this is an enum variant pattern (contains a dot)
+    if (targetTypeName.includes(".")) {
+      // Enum variant type matching - extract enum name and variant
+      const parts = targetTypeName.split(".");
+      let enumName = parts[0]!;
+
+      // Handle generic enum names: extract base name if it has generic args
+      // E.g., "Option<int>" -> "Option"
+      const genericMatch = enumName.match(/^([^<]+)/);
+      if (genericMatch) {
+        enumName = genericMatch[1]!;
+      }
+
+      // Verify the enum exists (base enum name without generic instantiation)
+      const enumDecl = this.currentScope.resolve(enumName);
+      if (!enumDecl || enumDecl.kind !== "Enum") {
+        throw new CompilerError(
+          `Cannot find enum '${enumName}'`,
+          `The type '${enumName}' in match<${targetTypeName}> is not a defined enum.`,
+          expr.location,
+        );
+      }
+
+      // Note: Full variant validation is done in CodeGenerator
+      // Here we just validate the enum exists
+    } else {
+      // Regular type matching - for primitives, structs, etc.
+      // Note: Full runtime type checking (RTTI) is not yet implemented
+      // Currently this only works at compile-time for known types
+
+      // Verify the type exists (for structs) or is a known primitive
+      const knownTypes = [
+        "int",
+        "i8",
+        "i16",
+        "i32",
+        "i64",
+        "u8",
+        "u16",
+        "u32",
+        "u64",
+        "float",
+        "double",
+        "bool",
+        "char",
+        "void",
+        "string",
+      ];
+      const isDefined =
+        knownTypes.includes(targetTypeName) ||
+        this.currentScope.resolve(targetTypeName);
+
+      if (!isDefined) {
+        throw new CompilerError(
+          `Unknown type '${targetTypeName}'`,
+          `The type '${targetTypeName}' in match<${targetTypeName}> is not defined.`,
+          expr.location,
+        );
+      }
+
+      // Note: Full RTTI for generic type checking is a future enhancement
+      // e.g., match<int>(genericValue) in a generic function context
+    }
+
     return {
       kind: "BasicType",
       name: "bool",
@@ -4048,9 +4379,14 @@ export class TypeChecker {
       if (
         checkConstraints &&
         symbol &&
-        (symbol.kind === "Struct" || symbol.kind === "TypeAlias")
+        (symbol.kind === "Struct" ||
+          symbol.kind === "Enum" ||
+          symbol.kind === "TypeAlias")
       ) {
-        const decl = symbol.declaration as AST.StructDecl | AST.TypeAliasDecl;
+        const decl = symbol.declaration as
+          | AST.StructDecl
+          | AST.EnumDecl
+          | AST.TypeAliasDecl;
         if (
           decl &&
           (decl as any).genericParams &&
@@ -4100,6 +4436,18 @@ export class TypeChecker {
 
         const basicType = type as AST.BasicTypeNode;
         basicType.resolvedDeclaration = symbol.declaration as AST.StructDecl;
+        basicType.genericArgs = resolvedArgs;
+
+        return basicType;
+      }
+
+      if (symbol && symbol.kind === "Enum") {
+        const resolvedArgs = type.genericArgs.map((t) =>
+          this.resolveType(t, checkConstraints),
+        );
+
+        const basicType = type as AST.BasicTypeNode;
+        basicType.resolvedDeclaration = symbol.declaration as any;
         basicType.genericArgs = resolvedArgs;
 
         return basicType;
@@ -4206,7 +4554,10 @@ export class TypeChecker {
     while (depth < 100) {
       let decl: AST.StructDecl | undefined;
       if (currentType.resolvedDeclaration) {
-        decl = currentType.resolvedDeclaration;
+        // Only assign if it's a StructDecl, not an EnumDecl
+        if (currentType.resolvedDeclaration.kind === "StructDecl") {
+          decl = currentType.resolvedDeclaration as AST.StructDecl;
+        }
       } else {
         const symbol = this.currentScope.resolve(currentType.name);
         if (
@@ -4288,7 +4639,10 @@ export class TypeChecker {
     // Find the struct declaration
     let decl: AST.StructDecl | undefined;
     if (basicType.resolvedDeclaration) {
-      decl = basicType.resolvedDeclaration;
+      // Only assign if it's a StructDecl, not an EnumDecl
+      if (basicType.resolvedDeclaration.kind === "StructDecl") {
+        decl = basicType.resolvedDeclaration as AST.StructDecl;
+      }
     } else {
       // Look up by base name (works for both "Array" and "Array<T>")
       const baseName = basicType.name;

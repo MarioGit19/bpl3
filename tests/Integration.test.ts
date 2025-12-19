@@ -71,9 +71,8 @@ describe("Integration Tests", () => {
         // cmp.sh returns the exit code of the program
         // But if compilation fails, it returns 1.
         // We assume the example should compile and run successfully (exit code 0) unless specified otherwise in config
-        const expectedExitCode =
-          config.exitCode !== undefined ? config.exitCode : 0;
-        expect(result.status).toBe(expectedExitCode);
+        const exitCode = config.exitCode !== undefined ? config.exitCode : 0;
+        expect(result.status).toBe(exitCode);
 
         // Check output
         // cmp.sh appends "Program exited with code X"

@@ -7,19 +7,26 @@ This extension provides comprehensive language support for the BPL3 programming 
 - **Syntax Highlighting**:
   - Full highlighting for keywords, control flow, types, and literals.
   - Distinct colors for variable declarations (`local`, `global`) and function definitions.
-  - Support for BPL3 specific constructs like `frame`, `struct`, `import`, and `asm` blocks.
+  - Support for BPL3 specific constructs like `frame`, `struct`, `enum`, `import`, and `asm` blocks.
+  - **NEW**: Enhanced enum support with variant highlighting (`EnumType.Variant`).
+  - **NEW**: Pattern guard syntax highlighting for conditional pattern matching.
+  - **NEW**: Type-parameterized match syntax (`match<Type>(value)`).
 
 - **IntelliSense & Tooltips**:
-  - **Hover Information**: View full signatures for functions and structs by hovering over them.
+  - **Hover Information**: View full signatures for functions, structs, enums, and specs by hovering over them.
+  - **Spec Tooltips**: Hover over spec (interface) definitions to see all method signatures and implementation relationships.
+  - **Enum Tooltips**: Hover over enum variants to see their signatures and payload types (unit, tuple, or struct variants).
+  - **Method Implementation Info**: When hovering over methods, see which spec (interface) they implement.
   - **Member Access**: Hover over object properties (e.g., `obj.field`) to see the field's type and definition.
   - **Keyword Documentation**: Explanations for standard BPL3 keywords and built-in types.
+  - **Cross-File Support**: Tooltips work for imported symbols across multiple files.
 
 - **Navigation**:
-  - **Go to Definition**: Jump to the definition of symbols (functions, structs, variables) within the current file or across imported files.
+  - **Go to Definition**: Jump to the definition of symbols (functions, structs, enums, variables) within the current file or across imported files.
   - **Import Resolution**: Click on import paths to open the referenced file.
 
 - **Code Completion**:
-  - Suggestions for keywords (`if`, `loop`, `struct`, etc.) and built-in types (`int`, `bool`, `string`, etc.).
+  - Suggestions for keywords (`if`, `loop`, `struct`, `enum`, `match`, etc.) and built-in types (`int`, `bool`, `string`, etc.).
 
 ## Installation
 

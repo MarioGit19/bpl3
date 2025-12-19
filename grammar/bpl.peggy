@@ -107,8 +107,8 @@
     return { kind: "GenericInstantiation", base, genericArgs, location: makeLoc(loc) };
   }
 
-  function enumDecl(name, genericParams, variants, loc) {
-    return { kind: "EnumDecl", name, genericParams, variants, location: makeLoc(loc) };
+  function enumDecl(name, genericParams, variants, methods, loc) {
+    return { kind: "EnumDecl", name, genericParams, variants, methods: methods || [], location: makeLoc(loc) };
   }
 
   function enumVariant(name, dataType, loc) {
@@ -413,15 +413,29 @@ StructDeclaration
     }
 
 EnumDeclaration
-  = K_enum _ name:Identifier _ gen:GenericParamList? _ "{" _ variants:EnumVariantList? _ "}" {
+  = K_enum _ name:Identifier _ gen:GenericParamList? _ "{" _ content:EnumContent? _ "}" {
       const genericParams = gen ? gen : [];
-      const variantList = variants ? variants : [];
-      return enumDecl(name.name, genericParams, variantList, location());
+      const variantList = content ? content.variants : [];
+      const methods = content ? content.methods : [];
+      return enumDecl(name.name, genericParams, variantList, methods, location());
+    }
+
+EnumContent
+  = variants:EnumVariantList _ methods:EnumMethodList? {
+      return { variants, methods: methods || [] };
+    }
+  / methods:EnumMethodList {
+      return { variants: [], methods };
     }
 
 EnumVariantList
   = head:EnumVariant tail:(_ "," _ EnumVariant)* _ ","? {
       return [head, ...tail.map(t => t[3])];
+    }
+
+EnumMethodList
+  = head:FunctionDeclaration tail:(_ FunctionDeclaration)* {
+      return [head, ...tail.map(t => t[1])];
     }
 
 EnumVariant
@@ -783,8 +797,8 @@ Primary
   / TupleOrGrouped
   / CastExpression
   / SizeofExpression
-  / PatternMatchExpression
   / TypeMatchExpression
+  / PatternMatchExpression
   / ArrayLiteral
 
 TupleOrGrouped
@@ -829,8 +843,8 @@ MatchArmList
     }
 
 MatchArm
-  = pattern:Pattern _ guard:(_ K_if _ "(" _ Expression _ ")")? _ "=>" _ body:MatchArmBody {
-      const guardExpr = guard ? guard[5] : undefined;
+  = pattern:Pattern _ guard:(_ K_if _ Expression)? _ "=>" _ body:MatchArmBody {
+      const guardExpr = guard ? guard[3] : undefined;
       return matchArm(pattern, guardExpr, body, location());
     }
 

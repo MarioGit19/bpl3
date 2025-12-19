@@ -1,0 +1,17 @@
+{
+  "expectedOutput": [
+    "=== Test 1 ===",
+    "Result is Ok",
+    "=== Test 2 ===",
+    "Result is Ok",
+    "=== Test 3 ===",
+    "Result is Ok",
+    "=== Test 4 ===",
+    "Result is Err",
+    "Return codes: 1, 2, 3, 0"
+  ],
+  "exitCode": 6,
+  "args": [],
+  "env": {},
+  "input": ""
+}

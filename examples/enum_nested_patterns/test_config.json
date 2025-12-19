@@ -1,0 +1,4 @@
+{
+  "exitCode": 42,
+  "expectedOutput": ["v1: 42, v2: 0, v3: -1"]
+}

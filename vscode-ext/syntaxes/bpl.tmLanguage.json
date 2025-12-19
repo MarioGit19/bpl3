@@ -15,6 +15,12 @@
       "include": "#variables"
     },
     {
+      "include": "#match-type-syntax"
+    },
+    {
+      "include": "#pattern-guards"
+    },
+    {
       "include": "#keywords"
     },
     {
@@ -36,6 +42,25 @@
   "repository": {
     "type-definitions": {
       "patterns": [
+        {
+          "begin": "\\b(struct|type|class|spec)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(:)",
+          "beginCaptures": {
+            "1": { "name": "storage.type.class.bpl" },
+            "2": { "name": "entity.name.type.class.bpl" },
+            "3": { "name": "punctuation.separator.inheritance.bpl" }
+          },
+          "end": "(?=\\{|\\n)",
+          "patterns": [
+            {
+              "match": "([a-zA-Z_][a-zA-Z0-9_]*)",
+              "name": "entity.name.type.inherited.bpl"
+            },
+            {
+              "match": ",",
+              "name": "punctuation.separator.comma.bpl"
+            }
+          ]
+        },
         {
           "match": "\\b(struct|type|class|spec)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
           "captures": {
@@ -116,7 +141,7 @@
         },
         {
           "name": "storage.type.class.bpl",
-          "match": "\\b(struct|type|spec)\\b"
+          "match": "\\b(struct|type|spec|enum)\\b"
         },
         {
           "name": "storage.modifier.bpl",
@@ -125,6 +150,28 @@
         {
           "name": "keyword.other.bpl",
           "match": "\\b(extends|implements|cast|sizeof|match|new)\\b"
+        }
+      ]
+    },
+    "match-type-syntax": {
+      "patterns": [
+        {
+          "match": "\\b(match)\\s*<\\s*([a-zA-Z_][a-zA-Z0-9_.]*)\\s*>",
+          "captures": {
+            "1": { "name": "keyword.other.match.bpl" },
+            "2": { "name": "entity.name.type.bpl" }
+          }
+        }
+      ]
+    },
+    "pattern-guards": {
+      "patterns": [
+        {
+          "match": "=>\\s*(.*?)\\s+(if)\\s+",
+          "captures": {
+            "1": { "name": "variable.other.bpl" },
+            "2": { "name": "keyword.control.conditional.guard.bpl" }
+          }
         }
       ]
     },
@@ -141,6 +188,13 @@
         {
           "name": "storage.type.bpl",
           "match": "\\b(int|uint|float|string|bool|char|void|any|Func|Self)\\b"
+        },
+        {
+          "match": "\\b([A-Z][a-zA-Z0-9_]*)\\.([A-Z][a-zA-Z0-9_]*)",
+          "captures": {
+            "1": { "name": "entity.name.type.enum.bpl" },
+            "2": { "name": "variable.other.enummember.bpl" }
+          }
         },
         {
           "match": "(:)\\s*([a-zA-Z_][a-zA-Z0-9_]*)",

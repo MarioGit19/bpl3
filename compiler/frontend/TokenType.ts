@@ -14,6 +14,7 @@ export enum TokenType {
   Static = "Static",
   Ret = "Ret",
   Struct = "Struct",
+  Enum = "Enum",
   Import = "Import",
   From = "From",
   Export = "Export",

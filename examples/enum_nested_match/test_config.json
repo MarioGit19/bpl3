@@ -1,5 +1,7 @@
 {
-  "name": "enum_nested_match",
-  "description": "Nested match expressions with enum values",
-  "exitCode": 2
+  "expectedOutput": "Test 1 - Wrapped(Value(42)): 42\nTest 2 - Wrapped(Empty): 0\nTest 3 - None: -1\nTest 4 - Warning(5): 105\nv1: 42, v2: 0, status: 105\nCombined result: 147\n",
+  "exitCode": 147,
+  "args": [],
+  "env": {},
+  "input": ""
 }

@@ -12,6 +12,7 @@ npm run compile
 echo "Copying grammar files..."
 mkdir -p out/grammar
 cp ../grammar/bpl.peggy out/grammar/bpl.peggy
+cp ../grammar/grammar.bpl out/grammar/grammar.bpl
 
 echo "Deleting old .vsix files, if any..."
 rm -f *.vsix

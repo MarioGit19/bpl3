@@ -1,0 +1,12 @@
+{
+  "expectedOutput": [
+    "Stored Nil in node1",
+    "Stored Cons(99, node1) in node2",
+    "Testing match on *node2",
+    "Match result: 99"
+  ],
+  "exitCode": 99,
+  "args": [],
+  "env": {},
+  "input": ""
+}

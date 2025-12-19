@@ -1,0 +1,26 @@
+{
+  "expectedOutput": [
+    "=== Temperature Classification ===",
+    "35C: hot",
+    "20C: warm",
+    "5C: cool",
+    "-10C: cold",
+    "=== Fahrenheit ===",
+    "95F: hot",
+    "68F: warm",
+    "=== Loading Progress ===",
+    "Progress 0%: 0",
+    "Progress 30%: 25",
+    "Progress 60%: 50",
+    "Progress 80%: 75",
+    "Progress 100%: 100",
+    "=== Progress Validation ===",
+    "50%: valid",
+    "-5%: negative progress",
+    "150%: exceeds 100%"
+  ],
+  "exitCode": 0,
+  "args": [],
+  "env": {},
+  "input": ""
+}

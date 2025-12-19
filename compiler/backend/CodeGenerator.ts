@@ -39,6 +39,7 @@ export class CodeGenerator {
   > = new Map(); // Track enum variant info
   private generatedEnums: Set<string> = new Set(); // Track generated monomorphized enums
   private enumDeclMap: Map<string, AST.EnumDecl> = new Map(); // Track enum declarations
+  private enumDataSizes: Map<string, number> = new Map(); // Track enum data array sizes
 
   /**
    * Create a CompilerError with proper location information
@@ -77,6 +78,7 @@ export class CodeGenerator {
     this.nextTypeId = 10; // Start from 10 to avoid conflicts
     this.emittedMemIsZero = false;
     this.enumVariants.clear();
+    this.enumDataSizes.clear();
 
     // Register built-in NullAccessError struct
     const internalLoc = {
@@ -165,6 +167,8 @@ export class CodeGenerator {
     this.declaredFunctions.add("free");
     this.emitDeclaration("declare void @exit(i32)");
     this.declaredFunctions.add("exit");
+    this.emitDeclaration("declare i32 @memcmp(i8*, i8*, i64)");
+    this.declaredFunctions.add("memcmp");
 
     // NullAccessError struct for null object access exceptions
     this.emitDeclaration("%struct.NullAccessError = type { i8*, i8*, i8* }");
@@ -479,24 +483,46 @@ export class CodeGenerator {
     if (this.generatedStructs.has(enumName)) return;
     this.generatedStructs.add(enumName);
 
-    // Calculate maximum variant data size
+    // Calculate maximum variant data size with proper alignment
     let maxSize = 0;
     for (const variant of decl.variants) {
       let variantSize = 0;
 
       if (variant.dataType) {
         if (variant.dataType.kind === "EnumVariantTuple") {
-          // Tuple variant: sum of all field sizes
+          // Tuple variant: calculate size with alignment
+          let offset = 0;
           for (const fieldType of variant.dataType.types) {
             const llvmType = this.resolveType(fieldType);
-            variantSize += this.getTypeSize(llvmType);
+            const fieldSize = this.getTypeSize(llvmType);
+
+            // Align offset based on field size
+            const alignment =
+              fieldSize >= 8 ? 8 : fieldSize >= 4 ? 4 : fieldSize >= 2 ? 2 : 1;
+            if (offset % alignment !== 0) {
+              offset = Math.ceil(offset / alignment) * alignment;
+            }
+
+            offset += fieldSize;
           }
+          variantSize = offset;
         } else if (variant.dataType.kind === "EnumVariantStruct") {
-          // Struct variant: sum of all field sizes
+          // Struct variant: calculate size with alignment
+          let offset = 0;
           for (const field of variant.dataType.fields) {
             const llvmType = this.resolveType(field.type);
-            variantSize += this.getTypeSize(llvmType);
+            const fieldSize = this.getTypeSize(llvmType);
+
+            // Align offset based on field size
+            const alignment =
+              fieldSize >= 8 ? 8 : fieldSize >= 4 ? 4 : fieldSize >= 2 ? 2 : 1;
+            if (offset % alignment !== 0) {
+              offset = Math.ceil(offset / alignment) * alignment;
+            }
+
+            offset += fieldSize;
           }
+          variantSize = offset;
         }
       }
       // Unit variants have size 0
@@ -524,6 +550,11 @@ export class CodeGenerator {
     }
     this.structLayouts.set(enumName, layout);
 
+    // Store the data array size for equality comparisons
+    if (maxSize > 0) {
+      this.enumDataSizes.set(enumName, maxSize);
+    }
+
     // Store variant information for later use in pattern matching
     const variantInfo = new Map<
       string,
@@ -533,6 +564,19 @@ export class CodeGenerator {
       variantInfo.set(v.name, { index: i, dataType: v.dataType });
     });
     this.enumVariants.set(enumName, variantInfo);
+
+    // Generate methods
+    // Only generate methods for non-generic enums.
+    // For monomorphized enums (when mangledName is provided), methods are queued
+    // separately in instantiateGenericEnum() with proper type substitution.
+    if (decl.genericParams.length === 0 && !mangledName && decl.methods) {
+      for (const method of decl.methods) {
+        const originalName = method.name;
+        method.name = `${enumName}_${method.name}`;
+        this.generateFunction(method, decl);
+        method.name = originalName;
+      }
+    }
   }
 
   private instantiateGenericEnum(
@@ -608,12 +652,36 @@ export class CodeGenerator {
 
     const argNames = genericArgs.map((arg) => {
       if (arg.kind === "BasicType") {
-        let name = arg.name;
-        if (arg.genericArgs && arg.genericArgs.length > 0) {
-          name = this.mangleGenericTypeName(name, arg.genericArgs);
+        const basicArg = arg as AST.BasicTypeNode;
+        let name = basicArg.name;
+
+        // Normalize primitive type names to their LLVM canonical form
+        const primitiveMap: Record<string, string> = {
+          int: "i32",
+          uint: "i32",
+          u32: "i32",
+          char: "i8",
+          uchar: "i8",
+          u8: "i8",
+          short: "i16",
+          ushort: "i16",
+          u16: "i16",
+          long: "i64",
+          ulong: "i64",
+          u64: "i64",
+          bool: "i1",
+        };
+
+        const normalizedName = primitiveMap[name];
+        if (normalizedName) {
+          name = normalizedName;
         }
-        if (arg.pointerDepth > 0) {
-          name += "_ptr".repeat(arg.pointerDepth);
+
+        if (basicArg.genericArgs && basicArg.genericArgs.length > 0) {
+          name = this.mangleGenericTypeName(name, basicArg.genericArgs);
+        }
+        if (basicArg.pointerDepth > 0) {
+          name += "_ptr".repeat(basicArg.pointerDepth);
         }
         return name;
       }
@@ -637,6 +705,17 @@ export class CodeGenerator {
     if (llvmType.startsWith("%struct.")) return 8; // Approximate struct size
     if (llvmType.startsWith("%enum.")) return 8; // Approximate enum size
     return 8; // Default fallback
+  }
+
+  private getDataArraySize(enumTypeName: string): number {
+    // Extract the data array size from enum type string like "%enum.Color = type { i32, [16 x i8] }"
+    // or from just the type name "%enum.Color"
+    const match = enumTypeName.match(/\[(\d+) x i8\]/);
+    if (match && match[1]) {
+      return parseInt(match[1], 10);
+    }
+    // If no match, the enum might not have a data field (unit-only enum)
+    return 0;
   }
 
   private generateEnumVariantConstruction(
@@ -1000,7 +1079,7 @@ export class CodeGenerator {
 
   private generateFunction(
     decl: AST.FunctionDecl,
-    parentStruct?: AST.StructDecl,
+    parentStruct?: AST.StructDecl | AST.EnumDecl,
   ) {
     // Skip generic templates unless we are instantiating them (map is populated)
     if (decl.genericParams.length > 0) {
@@ -1022,7 +1101,11 @@ export class CodeGenerator {
 
     // Setup destructor chaining
     let parentStructType: AST.TypeNode | undefined;
-    if (parentStruct && parentStruct.inheritanceList) {
+    if (
+      parentStruct &&
+      parentStruct.kind === "StructDecl" &&
+      parentStruct.inheritanceList
+    ) {
       for (const t of parentStruct.inheritanceList) {
         if (t.kind === "BasicType" && this.structMap.has(t.name)) {
           parentStructType = t;
@@ -1033,11 +1116,12 @@ export class CodeGenerator {
 
     if (
       parentStruct &&
+      parentStruct.kind === "StructDecl" &&
       decl.name === `${parentStruct.name}_destroy` &&
       parentStructType
     ) {
       this.onReturn = () => {
-        this.emitParentDestroy(parentStruct, decl);
+        this.emitParentDestroy(parentStruct as AST.StructDecl, decl);
       };
     } else {
       this.onReturn = undefined;
@@ -1852,6 +1936,8 @@ export class CodeGenerator {
         return this.generateTernary(expr as AST.TernaryExpr);
       case "Match":
         return this.generateMatchExpr(expr as AST.MatchExpr);
+      case "TypeMatch":
+        return this.generateTypeMatch(expr as AST.TypeMatchExpr);
       default:
         console.warn(`Unhandled expression kind: ${expr.kind}`);
         return "0"; // Placeholder
@@ -1912,6 +1998,10 @@ export class CodeGenerator {
       armLabels.push(this.newLabel(`match_arm${i}`));
     }
 
+    // Build a map from variant index to first arm index for that variant
+    // This avoids duplicate switch cases when multiple arms match the same variant (with guards)
+    const variantToFirstArm = new Map<number, number>();
+
     // Generate switch statement
     const cases: string[] = [];
     for (let i = 0; i < expr.arms.length; i++) {
@@ -1930,7 +2020,11 @@ export class CodeGenerator {
           | AST.PatternEnumStruct;
         const variant = variantInfo.get(enumPattern.variantName);
         if (variant) {
-          cases.push(`i32 ${variant.index}, label %${armLabels[i]}`);
+          // Only add switch case for the FIRST arm with this variant
+          if (!variantToFirstArm.has(variant.index)) {
+            variantToFirstArm.set(variant.index, i);
+            cases.push(`i32 ${variant.index}, label %${armLabels[i]}`);
+          }
         }
       } else if (pattern.kind === "PatternWildcard") {
         // Wildcard handled as default case
@@ -1968,6 +2062,42 @@ export class CodeGenerator {
         );
       }
 
+      // Check guard condition if present
+      if (arm.guard) {
+        const guardValue = this.generateExpression(arm.guard);
+        const guardPassLabel = this.newLabel(`guard_pass${i}`);
+
+        // Find next arm: try next arm with same variant first, then default
+        let nextLabel = defaultLabel;
+        if (i + 1 < expr.arms.length) {
+          // Check if next arm is for the same variant
+          const currentPattern = arm.pattern;
+          const nextPattern = expr.arms[i + 1]!.pattern;
+
+          if (
+            (currentPattern.kind === "PatternEnum" ||
+              currentPattern.kind === "PatternEnumTuple" ||
+              currentPattern.kind === "PatternEnumStruct") &&
+            (nextPattern.kind === "PatternEnum" ||
+              nextPattern.kind === "PatternEnumTuple" ||
+              nextPattern.kind === "PatternEnumStruct")
+          ) {
+            const currentVariant = (currentPattern as any).variantName;
+            const nextVariant = (nextPattern as any).variantName;
+
+            // If same variant, jump to next arm; otherwise jump to default
+            if (currentVariant === nextVariant) {
+              nextLabel = armLabels[i + 1]!;
+            }
+          }
+        }
+
+        this.emit(
+          `  br i1 ${guardValue}, label %${guardPassLabel}, label %${nextLabel}`,
+        );
+        this.emit(`${guardPassLabel}:`);
+      }
+
       // Generate arm body
       const armValue = this.generateMatchArmBody(arm.body);
       const currentLabel = this.getCurrentLabel();
@@ -1980,10 +2110,20 @@ export class CodeGenerator {
       this.emit(`  br label %${mergeLabel}`);
     }
 
-    // Default case (should not be reached if exhaustive)
+    // Default case (should not be reached if exhaustive, but needed for LLVM)
     this.emit(`${defaultLabel}:`);
-    this.emit(`  br label %${mergeLabel}`);
-    armResults.push({ value: "0", label: defaultLabel, type: resultType });
+    // Generate unreachable or a default value based on result type
+    if (resultType.includes("*") || resultType.includes("i8*")) {
+      // For pointer types, use null
+      this.emit(`  br label %${mergeLabel}`);
+      armResults.push({ value: "null", label: defaultLabel, type: resultType });
+    } else if (resultType === "void") {
+      this.emit(`  br label %${mergeLabel}`);
+    } else {
+      // For other types, use 0
+      this.emit(`  br label %${mergeLabel}`);
+      armResults.push({ value: "0", label: defaultLabel, type: resultType });
+    }
 
     // Merge point with phi node
     this.emit(`${mergeLabel}:`);
@@ -2010,6 +2150,213 @@ export class CodeGenerator {
     }
   }
 
+  private generateTypeMatch(expr: AST.TypeMatchExpr): string {
+    // Generate code for match<Type>(value)
+    // This checks:
+    // 1. If enum value is of a specific variant: match<Option.Some>(opt)
+    // 2. If value matches a specific type: match<int>(arg) in generic context
+
+    // The value should be an expression
+    if (!("kind" in expr.value) || (expr.value as any).kind === "BasicType") {
+      throw this.createError(
+        "TypeMatch value must be an expression",
+        expr as any,
+      );
+    }
+
+    const valueExpr = expr.value as AST.Expression;
+    const matchValue = this.generateExpression(valueExpr);
+    const valueType = valueExpr.resolvedType;
+
+    if (!valueType) {
+      throw this.createError("TypeMatch value has no resolved type", valueExpr);
+    }
+
+    const targetType = expr.targetType as AST.BasicTypeNode;
+    const fullTypeName = targetType.name;
+
+    // Check if this is an enum variant pattern (contains a dot)
+    if (fullTypeName.includes(".")) {
+      return this.generateEnumVariantTypeMatch(
+        matchValue,
+        valueType as AST.BasicTypeNode,
+        fullTypeName,
+        expr,
+      );
+    } else {
+      // Regular type checking for non-enum types
+      return this.generateRegularTypeMatch(
+        matchValue,
+        valueType,
+        targetType,
+        expr,
+      );
+    }
+  }
+
+  private generateEnumVariantTypeMatch(
+    matchValue: string,
+    valueType: AST.BasicTypeNode,
+    fullTypeName: string,
+    expr: AST.TypeMatchExpr,
+  ): string {
+    // Split enum name and variant name
+    const parts = fullTypeName.split(".");
+    const enumName = parts[0]!;
+    const variantName = parts.slice(1).join("."); // Handle nested dots if any
+
+    // Get enum information - handle generic instantiation
+    let resolvedEnumName = enumName;
+    if (valueType.genericArgs && valueType.genericArgs.length > 0) {
+      resolvedEnumName = this.instantiateGenericEnum(
+        enumName,
+        valueType.genericArgs,
+      );
+    }
+
+    const variantInfo = this.enumVariants.get(resolvedEnumName);
+    if (!variantInfo) {
+      throw this.createError(`Cannot find enum '${enumName}'`, expr as any);
+    }
+
+    const variant = variantInfo.get(variantName);
+    if (!variant) {
+      throw this.createError(
+        `Cannot find variant '${variantName}' in enum '${enumName}'`,
+        expr as any,
+      );
+    }
+
+    // Allocate space for the enum value and extract discriminant
+    const enumType = `%enum.${resolvedEnumName}`;
+    const matchPtr = this.newRegister();
+    this.emit(`  ${matchPtr} = alloca ${enumType}`);
+    this.emit(`  store ${enumType} ${matchValue}, ${enumType}* ${matchPtr}`);
+
+    const tagPtr = this.newRegister();
+    this.emit(
+      `  ${tagPtr} = getelementptr inbounds ${enumType}, ${enumType}* ${matchPtr}, i32 0, i32 0`,
+    );
+    const tag = this.newRegister();
+    this.emit(`  ${tag} = load i32, i32* ${tagPtr}`);
+
+    // Compare tag with variant index
+    const result = this.newRegister();
+    this.emit(`  ${result} = icmp eq i32 ${tag}, ${variant.index}`);
+
+    return result;
+  }
+
+  private generateRegularTypeMatch(
+    matchValue: string,
+    valueType: AST.TypeNode,
+    targetType: AST.BasicTypeNode,
+    expr: AST.TypeMatchExpr,
+  ): string {
+    // For regular type matching, compare the runtime types
+    // This is useful in generic contexts like: match<int>(arg) where arg: T
+
+    const valueTypeStr = this.resolveType(valueType);
+    const targetTypeStr = this.resolveType(targetType);
+
+    // For simple cases where we can determine at compile time
+    if (valueTypeStr === targetTypeStr) {
+      // Types match at compile time - always true
+      const result = this.newRegister();
+      this.emit(`  ${result} = icmp eq i1 1, 1`);
+      return result;
+    }
+
+    // Check if value type is a generic type parameter
+    // In this case, we need runtime type information
+    if (
+      valueType.kind === "BasicType" &&
+      this.isGenericTypeParameter((valueType as AST.BasicTypeNode).name)
+    ) {
+      // For generic type parameters, we'd need RTTI
+      // For now, we'll compare the resolved types
+      // This is a simplified implementation - full RTTI would require type IDs
+
+      // Try to match based on size and structure
+      const valueSize = this.getASTTypeSize(valueType);
+      const targetSize = this.getASTTypeSize(targetType);
+
+      if (valueSize !== targetSize) {
+        // Sizes don't match - definitely different types
+        const result = this.newRegister();
+        this.emit(`  ${result} = icmp eq i1 0, 1`); // Always false
+        return result;
+      }
+
+      // If sizes match, we need to compare the actual types
+      // For primitive types, we can do a best-effort comparison
+      const result = this.newRegister();
+      if (this.isPrimitiveType(targetType.name)) {
+        // For primitives, if size matches, assume it's the same type
+        // This is a simplification - real RTTI would be needed for full support
+        this.emit(`  ${result} = icmp eq i1 1, 1`); // Assume true for matching sizes
+      } else {
+        // For complex types, return false by default
+        this.emit(`  ${result} = icmp eq i1 0, 1`); // Return false
+      }
+      return result;
+    }
+
+    // For non-generic cases, compare at compile time
+    const result = this.newRegister();
+    if (valueTypeStr === targetTypeStr) {
+      this.emit(`  ${result} = icmp eq i1 1, 1`); // True
+    } else {
+      this.emit(`  ${result} = icmp eq i1 0, 1`); // False
+    }
+
+    return result;
+  }
+
+  private isGenericTypeParameter(name: string): boolean {
+    // Check if this is a generic type parameter (usually single uppercase letter or short name)
+    // This is a heuristic - better would be to track in symbol table
+    return name.length <= 2 && name === name.toUpperCase();
+  }
+
+  private isPrimitiveType(name: string): boolean {
+    const primitives = [
+      "int",
+      "i8",
+      "i16",
+      "i32",
+      "i64",
+      "u8",
+      "u16",
+      "u32",
+      "u64",
+      "float",
+      "double",
+      "bool",
+      "char",
+      "void",
+      "string",
+    ];
+    return primitives.includes(name);
+  }
+
+  private getASTTypeSize(type: AST.TypeNode): number {
+    const typeStr = this.resolveType(type);
+
+    // Map LLVM types to sizes
+    if (typeStr === "i1") return 1;
+    if (typeStr === "i8") return 1;
+    if (typeStr === "i16") return 2;
+    if (typeStr === "i32") return 4;
+    if (typeStr === "i64") return 8;
+    if (typeStr === "float") return 4;
+    if (typeStr === "double") return 8;
+    if (typeStr.includes("*")) return 8; // Pointers are 8 bytes
+
+    // For structs and other types, return a default
+    return 0;
+  }
+
   private generatePatternTupleBindings(
     pattern: AST.PatternEnumTuple,
     matchPtr: string,
@@ -2031,37 +2378,49 @@ export class CodeGenerator {
       `  ${dataPtr} = getelementptr inbounds ${enumType}, ${enumType}* ${matchPtr}, i32 0, i32 1`,
     );
 
+    // Get enum name from type (strip "%enum." prefix)
+    const enumName = enumType.substring(6);
+    const dataArraySize = this.enumDataSizes.get(enumName) || 64;
+
     // Cast to i8* for easier manipulation
     const bytePtr = this.newRegister();
-    const dataArraySize = 64; // TODO: Get actual size from enum layout
     this.emit(
       `  ${bytePtr} = bitcast [${dataArraySize} x i8]* ${dataPtr} to i8*`,
     );
 
-    // For each binding, extract the value from the data array
-    let currentOffset = 0;
+    // For each binding, extract the value from the data array with proper byte offsets
+    let byteOffset = 0;
     for (let i = 0; i < pattern.bindings.length; i++) {
       const bindingName = pattern.bindings[i]!;
+      const bindingType = variant.dataType.types[i]!;
+      const llvmType = this.resolveType(bindingType);
+      const typeSize = this.getTypeSize(llvmType);
 
-      // Skip wildcard bindings
+      // Align the offset based on type size
+      const alignment =
+        typeSize >= 8 ? 8 : typeSize >= 4 ? 4 : typeSize >= 2 ? 2 : 1;
+      if (byteOffset % alignment !== 0) {
+        byteOffset = Math.ceil(byteOffset / alignment) * alignment;
+      }
+
+      // Skip wildcard bindings (but still account for offset)
       if (bindingName === "_") {
+        byteOffset += typeSize;
         continue;
       }
 
-      const bindingType = variant.dataType.types[i]!;
-      const llvmType = this.resolveType(bindingType);
-
-      // Cast the byte pointer to the binding type pointer
-      const typedPtr = this.newRegister();
-      this.emit(`  ${typedPtr} = bitcast i8* ${bytePtr} to ${llvmType}*`);
-
-      // If this is not the first element, offset the pointer
-      let elementPtr = typedPtr;
-      if (i > 0) {
+      // Get pointer at the correct byte offset
+      let elementPtr: string;
+      if (byteOffset === 0) {
         elementPtr = this.newRegister();
+        this.emit(`  ${elementPtr} = bitcast i8* ${bytePtr} to ${llvmType}*`);
+      } else {
+        const offsetPtr = this.newRegister();
         this.emit(
-          `  ${elementPtr} = getelementptr ${llvmType}, ${llvmType}* ${typedPtr}, i32 ${i}`,
+          `  ${offsetPtr} = getelementptr i8, i8* ${bytePtr}, i32 ${byteOffset}`,
         );
+        elementPtr = this.newRegister();
+        this.emit(`  ${elementPtr} = bitcast i8* ${offsetPtr} to ${llvmType}*`);
       }
 
       // Load the value
@@ -2076,6 +2435,8 @@ export class CodeGenerator {
       // Register the binding so it can be used in the arm body
       this.locals.add(bindingName);
       this.localPointers.set(bindingName, ptr);
+
+      byteOffset += typeSize;
     }
   }
 
@@ -2475,6 +2836,101 @@ export class CodeGenerator {
         this.emit(`  ${inv} = xor i1 ${res}, true`);
         return inv;
       }
+
+      // Enum comparison (== or !=)
+      const isEnumType = (llvmType: string) => llvmType.startsWith("%enum.");
+      if (isEnumType(leftType) && isEnumType(rightType)) {
+        // Both are enum types - compare tags and data
+        const enumTypeName = leftType; // Both should be the same type
+        // Extract just the enum name (without "%enum." prefix)
+        const enumName = enumTypeName.substring(6);
+
+        // Load both enum values (they might already be values, not pointers)
+        let leftVal = leftRaw;
+        let rightVal = rightRaw;
+
+        // Extract tag fields (index 0)
+        const leftTag = this.newRegister();
+        this.emit(`  ${leftTag} = extractvalue ${enumTypeName} ${leftVal}, 0`);
+        const rightTag = this.newRegister();
+        this.emit(
+          `  ${rightTag} = extractvalue ${enumTypeName} ${rightVal}, 0`,
+        );
+
+        // Compare tags
+        const tagsEqual = this.newRegister();
+        this.emit(`  ${tagsEqual} = icmp eq i32 ${leftTag}, ${rightTag}`);
+
+        // Check if enum has data field by looking up the stored data size
+        const dataSize = this.enumDataSizes.get(enumName) || 0;
+
+        if (dataSize > 0) {
+          // Need to compare data fields as well when tags are equal
+          // First, spill both enums to stack to get their addresses
+          const leftPtr = this.allocateStack(
+            `enum_cmp_left_${this.labelCount}`,
+            enumTypeName,
+          );
+          this.emit(
+            `  store ${enumTypeName} ${leftVal}, ${enumTypeName}* ${leftPtr}`,
+          );
+
+          const rightPtr = this.allocateStack(
+            `enum_cmp_right_${this.labelCount++}`,
+            enumTypeName,
+          );
+          this.emit(
+            `  store ${enumTypeName} ${rightVal}, ${enumTypeName}* ${rightPtr}`,
+          );
+
+          // Get pointer to data field (index 1) for both enums
+          const leftDataPtr = this.newRegister();
+          this.emit(
+            `  ${leftDataPtr} = getelementptr inbounds ${enumTypeName}, ${enumTypeName}* ${leftPtr}, i32 0, i32 1`,
+          );
+          const leftDataI8Ptr = this.newRegister();
+          this.emit(
+            `  ${leftDataI8Ptr} = bitcast [${dataSize} x i8]* ${leftDataPtr} to i8*`,
+          );
+
+          const rightDataPtr = this.newRegister();
+          this.emit(
+            `  ${rightDataPtr} = getelementptr inbounds ${enumTypeName}, ${enumTypeName}* ${rightPtr}, i32 0, i32 1`,
+          );
+          const rightDataI8Ptr = this.newRegister();
+          this.emit(
+            `  ${rightDataI8Ptr} = bitcast [${dataSize} x i8]* ${rightDataPtr} to i8*`,
+          );
+
+          // Use memcmp to compare data bytes
+          const memcmpResult = this.newRegister();
+          this.emit(
+            `  ${memcmpResult} = call i32 @memcmp(i8* ${leftDataI8Ptr}, i8* ${rightDataI8Ptr}, i64 ${dataSize})`,
+          );
+
+          const dataEqual = this.newRegister();
+          this.emit(`  ${dataEqual} = icmp eq i32 ${memcmpResult}, 0`);
+
+          // Both tags and data must be equal
+          const result = this.newRegister();
+          this.emit(`  ${result} = and i1 ${tagsEqual}, ${dataEqual}`);
+
+          if (expr.operator.type === TokenType.BangEqual) {
+            const notResult = this.newRegister();
+            this.emit(`  ${notResult} = xor i1 ${result}, true`);
+            return notResult;
+          }
+          return result;
+        } else {
+          // No data field, just compare tags
+          if (expr.operator.type === TokenType.BangEqual) {
+            const notResult = this.newRegister();
+            this.emit(`  ${notResult} = xor i1 ${tagsEqual}, true`);
+            return notResult;
+          }
+          return tagsEqual;
+        }
+      }
     }
 
     // Pointer arithmetic
@@ -2640,26 +3096,44 @@ export class CodeGenerator {
         );
 
         if (variant.dataType.kind === "EnumVariantTuple") {
-          // Store each argument in sequence in the data array
-          let offset = 0;
+          // Get enum name from type (strip "%enum." prefix)
+          const enumName = enumType.substring(6);
+          const dataSize = this.enumDataSizes.get(enumName) || 64;
+
+          // Store each argument in sequence in the data array with proper byte offsets
+          const bytePtr = this.newRegister();
+          this.emit(
+            `  ${bytePtr} = bitcast [${dataSize} x i8]* ${dataPtr} to i8*`,
+          );
+
+          let byteOffset = 0;
           for (let i = 0; i < expr.args.length; i++) {
             const argValue = this.generateExpression(expr.args[i]!);
             const argType = this.resolveType(expr.args[i]!.resolvedType!);
+            const argSize = this.getTypeSize(argType);
 
-            // Cast data pointer to the argument type
-            const typedPtr = this.newRegister();
-            this.emit(
-              `  ${typedPtr} = bitcast [${this.getTypeSize(
-                argType,
-              )} x i8]* ${dataPtr} to ${argType}*`,
-            );
+            // Align the offset based on type size
+            const alignment =
+              argSize >= 8 ? 8 : argSize >= 4 ? 4 : argSize >= 2 ? 2 : 1;
+            if (byteOffset % alignment !== 0) {
+              byteOffset = Math.ceil(byteOffset / alignment) * alignment;
+            }
 
-            // If there are multiple args, we need to offset the pointer
-            let storePtr = typedPtr;
-            if (i > 0) {
+            // Get pointer at the correct byte offset
+            let storePtr: string;
+            if (byteOffset === 0) {
               storePtr = this.newRegister();
               this.emit(
-                `  ${storePtr} = getelementptr ${argType}, ${argType}* ${typedPtr}, i32 ${i}`,
+                `  ${storePtr} = bitcast i8* ${bytePtr} to ${argType}*`,
+              );
+            } else {
+              const offsetPtr = this.newRegister();
+              this.emit(
+                `  ${offsetPtr} = getelementptr i8, i8* ${bytePtr}, i32 ${byteOffset}`,
+              );
+              storePtr = this.newRegister();
+              this.emit(
+                `  ${storePtr} = bitcast i8* ${offsetPtr} to ${argType}*`,
               );
             }
 
@@ -2667,6 +3141,8 @@ export class CodeGenerator {
             this.emit(
               `  store ${argType} ${argValue}, ${argType}* ${storePtr}`,
             );
+
+            byteOffset += argSize;
           }
         }
         // TODO: Handle EnumVariantStruct similarly

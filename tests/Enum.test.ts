@@ -1328,3 +1328,342 @@ describe("Enum Import/Export", () => {
     expect(program.statements[0]!.kind).toBe("Import");
   });
 });
+
+describe("Enum Methods", () => {
+  it("should parse enum with methods", () => {
+    const source = `
+      enum Color {
+        Red,
+        Green,
+        Blue,
+        
+        frame to_code(this: Color) ret int {
+          return match (this) {
+            Color.Red => 1,
+            Color.Green => 2,
+            Color.Blue => 3,
+          };
+        }
+      }
+    `;
+    const program = parse(source);
+    expect(program.statements.length).toBe(1);
+    const enumDecl = program.statements[0]!;
+    expect(enumDecl.kind).toBe("EnumDecl");
+    if (enumDecl.kind === "EnumDecl") {
+      expect(enumDecl.name).toBe("Color");
+      expect(enumDecl.variants.length).toBe(3);
+      expect(enumDecl.methods.length).toBe(1);
+      expect(enumDecl.methods[0]!.name).toBe("to_code");
+    }
+  });
+
+  it("should accept calling enum methods", () => {
+    const source = `
+      enum Color {
+        Red,
+        Green,
+        
+        frame to_code(this: Color) ret int {
+          return match (this) {
+            Color.Red => 1,
+            Color.Green => 2,
+          };
+        }
+      }
+      
+      frame main() ret int {
+        local color: Color = Color.Red;
+        local code: int = color.to_code();
+        return code;
+      }
+    `;
+    expect(() => check(source)).not.toThrow();
+  });
+
+  it("should reject undefined enum method", () => {
+    const source = `
+      enum Color {
+        Red,
+        Green,
+      }
+      
+      frame main() {
+        local color: Color = Color.Red;
+        color.undefined_method();
+      }
+    `;
+    expect(() => check(source)).toThrow("has no method");
+  });
+});
+
+describe("Enum Pattern Guards", () => {
+  it("should parse pattern guard with condition", () => {
+    const source = `
+      enum Option<T> {
+        Some(T),
+        None,
+      }
+      frame main() ret int {
+        local opt: Option<int> = Option<int>.Some(42);
+        return match (opt) {
+          Option<int>.Some(x) if x > 0 => 1,
+          Option<int>.Some(x) => 0,
+          Option<int>.None => -1,
+        };
+      }
+    `;
+    expect(() => check(source)).not.toThrow();
+  });
+
+  it("should accept multiple guards for same variant", () => {
+    const source = `
+      enum Status {
+        Value(int),
+      }
+      frame main() ret string {
+        local s: Status = Status.Value(50);
+        return match (s) {
+          Status.Value(x) if x > 100 => "high",
+          Status.Value(x) if x > 50 => "medium",
+          Status.Value(x) if x > 0 => "low",
+          Status.Value(x) => "zero or negative",
+        };
+      }
+    `;
+    expect(() => check(source)).not.toThrow();
+  });
+
+  it("should accept guard with complex condition", () => {
+    const source = `
+      enum Range {
+        Value(int),
+      }
+      frame main() ret int {
+        local r: Range = Range.Value(25);
+        return match (r) {
+          Range.Value(x) if x >= 0 && x <= 100 => 1,
+          Range.Value(x) => 0,
+        };
+      }
+    `;
+    expect(() => check(source)).not.toThrow();
+  });
+
+  it("should reject guard with non-boolean condition", () => {
+    const source = `
+      enum Option<T> {
+        Some(T),
+        None,
+      }
+      frame main() ret int {
+        local opt: Option<int> = Option<int>.Some(42);
+        return match (opt) {
+          Option<int>.Some(x) if x => 1,
+          Option<int>.None => 0,
+        };
+      }
+    `;
+    expect(() => check(source)).toThrow("must be a boolean expression");
+  });
+
+  it("should allow guards with wildcard fallback", () => {
+    const source = `
+      enum Status {
+        Active(int),
+        Inactive,
+      }
+      frame main() ret int {
+        local s: Status = Status.Active(5);
+        return match (s) {
+          Status.Active(x) if x > 10 => 1,
+          _ => 0,
+        };
+      }
+    `;
+    expect(() => check(source)).not.toThrow();
+  });
+
+  it("should check exhaustiveness with guards", () => {
+    const source = `
+      enum Color {
+        Red,
+        Green,
+        Blue,
+      }
+      frame main() ret int {
+        local c: Color = Color.Red;
+        return match (c) {
+          Color.Red => 1,
+          Color.Green => 2,
+          Color.Blue => 3,
+        };
+      }
+    `;
+    // All variants covered, should be exhaustive
+    expect(() => check(source)).not.toThrow();
+  });
+});
+
+describe("Enum Type Matching with match<Type>", () => {
+  it("should parse match<Type> expression", () => {
+    const source = `
+      enum Option<T> {
+        Some(T),
+        None,
+      }
+      frame main() ret int {
+        local opt: Option<int> = Option<int>.Some(42);
+        if (match<Option.Some>(opt)) {
+          return 1;
+        }
+        return 0;
+      }
+    `;
+    expect(() => check(source)).not.toThrow();
+  });
+
+  it("should check variant type correctly", () => {
+    const source = `
+      enum Result<T, E> {
+        Ok(T),
+        Err(E),
+      }
+      frame main() ret int {
+        local r: Result<int, string> = Result<int, string>.Ok(42);
+        if (match<Result.Ok>(r)) {
+          return 1;
+        } else {
+          return 0;
+        }
+      }
+    `;
+    expect(() => check(source)).not.toThrow();
+  });
+
+  it("should work with multiple checks", () => {
+    const source = `
+      enum Message {
+        Text(string),
+        Number(int),
+        Empty,
+      }
+      frame main() ret int {
+        local msg: Message = Message.Number(42);
+        if (match<Message.Text>(msg)) {
+          return 1;
+        } else if (match<Message.Number>(msg)) {
+          return 2;
+        } else if (match<Message.Empty>(msg)) {
+          return 3;
+        }
+        return 0;
+      }
+    `;
+    expect(() => check(source)).not.toThrow();
+  });
+
+  it("should work in logical expressions", () => {
+    const source = `
+      enum Status {
+        Active,
+        Pending,
+        Inactive,
+      }
+      frame main() ret int {
+        local s: Status = Status.Active;
+        if (match<Status.Active>(s) || match<Status.Pending>(s)) {
+          return 1;
+        }
+        return 0;
+      }
+    `;
+    expect(() => check(source)).not.toThrow();
+  });
+
+  it("should return boolean type", () => {
+    const source = `
+      enum Color {
+        Red,
+        Green,
+      }
+      frame main() {
+        local c: Color = Color.Red;
+        local is_red: bool = match<Color.Red>(c);
+      }
+    `;
+    expect(() => check(source)).not.toThrow();
+  });
+
+  it("should work with all enum variants", () => {
+    const source = `
+      enum Color {
+        Red,
+        Green,
+        Blue,
+      }
+      frame main() ret int {
+        local c: Color = Color.Red;
+        if (match<Color.Red>(c)) {
+          return 1;
+        } else if (match<Color.Green>(c)) {
+          return 2;
+        } else if (match<Color.Blue>(c)) {
+          return 3;
+        }
+        return 0;
+      }
+    `;
+    expect(() => check(source)).not.toThrow();
+  });
+});
+
+describe("Combined Guards and Type Matching", () => {
+  it("should combine type matching with pattern guards", () => {
+    const source = `
+      enum Result<T, E> {
+        Ok(T),
+        Err(E),
+      }
+      frame process(r: Result<int, string>) ret int {
+        if (match<Result.Ok>(r)) {
+          return match (r) {
+            Result<int, string>.Ok(val) if val > 0 => val,
+            Result<int, string>.Ok(val) => 0,
+            Result<int, string>.Err(_) => -1,
+          };
+        }
+        return -1;
+      }
+      frame main() ret int {
+        local r: Result<int, string> = Result<int, string>.Ok(42);
+        return process(r);
+      }
+    `;
+    expect(() => check(source)).not.toThrow();
+  });
+
+  it("should use type matching for early returns", () => {
+    const source = `
+      enum Option<T> {
+        Some(T),
+        None,
+      }
+      frame unwrap_positive(opt: Option<int>) ret int {
+        if (match<Option.None>(opt)) {
+          return 0;
+        }
+        return match (opt) {
+          Option<int>.Some(x) if x > 0 => x,
+          Option<int>.Some(x) => 0,
+          Option<int>.None => 0,
+        };
+      }
+      frame main() ret int {
+        local opt: Option<int> = Option<int>.Some(42);
+        return unwrap_positive(opt);
+      }
+    `;
+    expect(() => check(source)).not.toThrow();
+  });
+});

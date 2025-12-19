@@ -533,7 +533,7 @@ function findSymbolDefinition(
 
   // 1. Search in current file
   const definitionRegex = new RegExp(
-    `\\b(frame|struct|local|global|type|extern|spec)\\s+${word}\\b`,
+    `\\b(frame|struct|enum|local|global|type|extern|spec)\\s+${word}\\b`,
     "g",
   );
   let match = definitionRegex.exec(text);
@@ -546,21 +546,101 @@ function findSymbolDefinition(
     const lines = text.split(/\r?\n/);
     let currentLineIdx = startPos.line;
 
+    // Special handling for 'frame': Always show just the signature, never the body
+    if (matchType === "frame") {
+      let collectedLines: string[] = [];
+      const maxLines = 10;
+
+      for (let i = 0; i < maxLines; i++) {
+        if (currentLineIdx + i >= lines.length) break;
+        let lineStr = lines[currentLineIdx + i] ?? "";
+
+        const braceIdx = lineStr.indexOf("{");
+        if (braceIdx !== -1) {
+          lineStr = lineStr.substring(0, braceIdx).trim();
+          collectedLines.push(lineStr);
+          break;
+        } else {
+          collectedLines.push(lineStr);
+        }
+      }
+      lineContent = collectedLines.join(" ").trim();
+
+      return {
+        uri: document.uri,
+        range: Range.create(startPos, endPos),
+        lineContent: lineContent,
+      };
+    }
+
     if (
       matchType === "struct" ||
+      matchType === "enum" ||
       matchType === "class" ||
       matchType === "spec"
     ) {
       let braceCount = 0;
       let foundStartBrace = false;
       let collectedLines: string[] = [];
-      const maxLines = 50;
+      const maxLines = 100;
+      let inMethod = false;
+      let methodBraceCount = 0;
 
       for (let i = 0; i < maxLines; i++) {
         if (currentLineIdx + i >= lines.length) break;
         const lineStr = lines[currentLineIdx + i] ?? "";
-        collectedLines.push(lineStr);
+        const trimmed = lineStr.trim();
 
+        // If we're inside a method body, track braces and skip (CHECK THIS FIRST!)
+        if (inMethod) {
+          for (const char of lineStr) {
+            if (char === "{") methodBraceCount++;
+            else if (char === "}") methodBraceCount--;
+          }
+          if (methodBraceCount === 0) {
+            inMethod = false;
+          }
+          continue;
+        }
+
+        // Check if we're entering a method (frame keyword followed by {)
+        if (trimmed.startsWith("frame ") && lineStr.includes("{")) {
+          // Add only the signature (up to the first {)
+          const signatureEnd = lineStr.indexOf("{");
+          const signature = lineStr.substring(0, signatureEnd).trim();
+          collectedLines.push("    " + signature + ";");
+
+          // Count braces on this line to handle single-line methods: frame foo() { }
+          inMethod = true;
+          methodBraceCount = 0;
+          for (const char of lineStr) {
+            if (char === "{") methodBraceCount++;
+            else if (char === "}") methodBraceCount--;
+          }
+
+          // If braces are balanced on this line, we're not in a method anymore
+          if (methodBraceCount === 0) {
+            inMethod = false;
+          }
+          continue;
+        } else if (trimmed.startsWith("frame ")) {
+          // Method signature without opening brace on same line (like in specs)
+          // Add with proper indentation
+          collectedLines.push("    " + trimmed);
+          continue;
+        }
+
+        // Skip comments
+        if (trimmed.startsWith("#") || trimmed.length === 0) {
+          continue;
+        }
+
+        // For the first line (struct/spec/enum declaration) or field declarations or closing brace
+        if (i === 0 || trimmed.includes(":") || trimmed === "}") {
+          collectedLines.push(lineStr);
+        }
+
+        // Track braces for struct/spec/enum boundaries
         for (const char of lineStr) {
           if (char === "{") {
             braceCount++;
@@ -575,24 +655,6 @@ function findSymbolDefinition(
         }
       }
       lineContent = collectedLines.join("\n");
-    } else if (matchType === "func" || matchType === "frame") {
-      let collectedLines: string[] = [];
-      const maxLines = 10;
-
-      for (let i = 0; i < maxLines; i++) {
-        if (currentLineIdx + i >= lines.length) break;
-        let lineStr = lines[currentLineIdx + i] ?? "";
-
-        const braceIdx = lineStr.indexOf("{");
-        if (braceIdx !== -1) {
-          lineStr = lineStr.substring(0, braceIdx);
-          collectedLines.push(lineStr);
-          break;
-        } else {
-          collectedLines.push(lineStr);
-        }
-      }
-      lineContent = collectedLines.join("\n").trim();
     } else {
       lineContent = (lines[currentLineIdx] ?? "").trim();
     }
@@ -628,7 +690,7 @@ function findSymbolDefinition(
         );
 
         const defRegex = new RegExp(
-          `\\b(frame|struct|local|global|type|func|class|extern)\\s+${word}\\b`,
+          `\\b(frame|struct|enum|local|global|type|func|class|extern|spec)\\s+${word}\\b`,
           "g",
         );
         const defMatch = defRegex.exec(importedText);
@@ -643,17 +705,100 @@ function findSymbolDefinition(
           const lines = importedText.split(/\r?\n/);
           let currentLineIdx = startPos.line;
 
-          if (matchType === "struct" || matchType === "class") {
+          // Special handling for 'frame': Always show just the signature, never the body
+          if (matchType === "frame") {
+            let collectedLines: string[] = [];
+            const maxLines = 10;
+
+            for (let i = 0; i < maxLines; i++) {
+              if (currentLineIdx + i >= lines.length) break;
+              let lineStr = lines[currentLineIdx + i] ?? "";
+
+              const braceIdx = lineStr.indexOf("{");
+              if (braceIdx !== -1) {
+                lineStr = lineStr.substring(0, braceIdx).trim();
+                collectedLines.push(lineStr);
+                break;
+              } else {
+                collectedLines.push(lineStr);
+              }
+            }
+            lineContent = collectedLines.join(" ").trim();
+
+            return {
+              uri: pathToFileURL(resolvedPath).toString(),
+              range: Range.create(startPos, endPos),
+              lineContent: lineContent,
+            };
+          }
+
+          if (
+            matchType === "struct" ||
+            matchType === "enum" ||
+            matchType === "spec"
+          ) {
             let braceCount = 0;
             let foundStartBrace = false;
             let collectedLines: string[] = [];
-            const maxLines = 50;
+            const maxLines = 100;
+            let inMethod = false;
+            let methodBraceCount = 0;
 
             for (let i = 0; i < maxLines; i++) {
               if (currentLineIdx + i >= lines.length) break;
               const lineStr = lines[currentLineIdx + i] ?? "";
-              collectedLines.push(lineStr);
+              const trimmed = lineStr.trim();
 
+              // If we're inside a method body, track braces and skip (CHECK THIS FIRST!)
+              if (inMethod) {
+                for (const char of lineStr) {
+                  if (char === "{") methodBraceCount++;
+                  else if (char === "}") methodBraceCount--;
+                }
+                if (methodBraceCount === 0) {
+                  inMethod = false;
+                }
+                continue;
+              }
+
+              // Check if we're entering a method (frame keyword followed by {)
+              if (trimmed.startsWith("frame ") && lineStr.includes("{")) {
+                // Add only the signature (up to the first {)
+                const signatureEnd = lineStr.indexOf("{");
+                const signature = lineStr.substring(0, signatureEnd).trim();
+                collectedLines.push("    " + signature + ";");
+
+                // Count braces on this line to handle single-line methods: frame foo() { }
+                inMethod = true;
+                methodBraceCount = 0;
+                for (const char of lineStr) {
+                  if (char === "{") methodBraceCount++;
+                  else if (char === "}") methodBraceCount--;
+                }
+
+                // If braces are balanced on this line, we're not in a method anymore
+                if (methodBraceCount === 0) {
+                  inMethod = false;
+                }
+                continue;
+              } else if (trimmed.startsWith("frame ")) {
+                // Method signature without opening brace on same line (like in specs)
+                // Add with proper indentation
+                collectedLines.push("    " + trimmed);
+                continue;
+              }
+
+              // Skip comments
+              if (trimmed.startsWith("#") || trimmed.length === 0) {
+                continue;
+              }
+
+              // For the first line (struct/spec/enum declaration) or field declarations or closing brace
+              if (i === 0 || trimmed.includes(":") || trimmed === "}") {
+                collectedLines.push(lineStr);
+              }
+
+              // Track braces for struct/spec/enum boundaries
               for (const char of lineStr) {
                 if (char === "{") {
                   braceCount++;
@@ -668,24 +813,6 @@ function findSymbolDefinition(
               }
             }
             lineContent = collectedLines.join("\n");
-          } else if (matchType === "func" || matchType === "frame") {
-            let collectedLines: string[] = [];
-            const maxLines = 10;
-
-            for (let i = 0; i < maxLines; i++) {
-              if (currentLineIdx + i >= lines.length) break;
-              let lineStr = lines[currentLineIdx + i] ?? "";
-
-              const braceIdx = lineStr.indexOf("{");
-              if (braceIdx !== -1) {
-                lineStr = lineStr.substring(0, braceIdx);
-                collectedLines.push(lineStr);
-                break;
-              } else {
-                collectedLines.push(lineStr);
-              }
-            }
-            lineContent = collectedLines.join("\n").trim();
           } else {
             lineContent = (lines[currentLineIdx] ?? "").trim();
           }
@@ -835,6 +962,8 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
     "frame",
     "ret",
     "struct",
+    "enum",
+    "spec",
     "import",
     "from",
     "export",
@@ -897,22 +1026,47 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
 
   const def = findSymbolDefinition(document, word);
   if (def) {
+    // Check if this is a spec definition to add special formatting
+    let displayValue = def.lineContent;
+    let additionalInfo = `Defined in: \`${path.basename(fileURLToPath(def.uri))}\``;
+
+    if (def.lineContent.trimStart().startsWith("spec")) {
+      // Parse spec to show method signatures
+      const lines = def.lineContent.split("\n");
+      const methods: string[] = [];
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        // Match method signatures: frame methodName(params) ret Type;
+        if (trimmed.startsWith("frame ")) {
+          methods.push(trimmed);
+        }
+      }
+
+      if (methods.length > 0) {
+        additionalInfo =
+          `(interface) with ${methods.length} method${methods.length > 1 ? "s" : ""}\n\n` +
+          `Defined in: \`${path.basename(fileURLToPath(def.uri))}\``;
+      } else {
+        additionalInfo = `(interface)\n\nDefined in: \`${path.basename(fileURLToPath(def.uri))}\``;
+      }
+    } else if (def.lineContent.includes("enum")) {
+      additionalInfo = `(enum)\n\nDefined in: \`${path.basename(fileURLToPath(def.uri))}\``;
+    } else if (def.lineContent.includes("struct")) {
+      additionalInfo = `(struct)\n\nDefined in: \`${path.basename(fileURLToPath(def.uri))}\``;
+    }
+
     return {
       contents: {
         kind: MarkupKind.Markdown,
-        value: [
-          "```bpl",
-          def.lineContent,
-          "```",
-          `Defined in: \`${path.basename(fileURLToPath(def.uri))}\``,
-        ].join("\n"),
+        value: ["```bpl", displayValue, "```", additionalInfo].join("\n"),
       },
     };
   }
 
-  // Check for property access (obj.prop)
+  // Check for property access (obj.prop), enum variant (Enum.Variant), or this.field
   if (foundMatch.index > 0 && text[foundMatch.index - 1] === ".") {
-    // Find the object name (scan backwards)
+    // Find the object/enum name (scan backwards)
     let i = foundMatch.index - 2;
     while (i >= 0 && /[a-zA-Z0-9_]/.test(text[i] || "")) {
       i--;
@@ -920,6 +1074,128 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
     const objName = text.substring(i + 1, foundMatch.index - 1);
 
     if (objName) {
+      // Special handling for 'this' keyword
+      if (objName === "this") {
+        // Find the enclosing struct/class
+        const lines = text.split(/\r?\n/);
+        const currentLine = document.positionAt(offset).line;
+
+        // Search backwards for struct/class definition
+        let structName = "";
+        for (let lineIdx = currentLine; lineIdx >= 0; lineIdx--) {
+          const line = lines[lineIdx] || "";
+          const structMatch = /struct\s+([a-zA-Z_][a-zA-Z0-9_]*)/.exec(line);
+          if (structMatch) {
+            structName = structMatch[1] || "";
+            break;
+          }
+        }
+
+        if (structName) {
+          const structDef = findSymbolDefinition(document, structName);
+          if (structDef) {
+            // Find the field in struct definition
+            const memberRegex = new RegExp(
+              `\\b${word}\\s*:\\s*([a-zA-Z0-9_*]+)`,
+            );
+            const memberMatch = memberRegex.exec(structDef.lineContent);
+
+            if (memberMatch) {
+              const memberType = memberMatch[1];
+              return {
+                contents: {
+                  kind: MarkupKind.Markdown,
+                  value: `(property) \`${structName}.${word}\`: \`${memberType}\``,
+                },
+              };
+            }
+          }
+        }
+      }
+
+      // First, check if objName is an enum
+      const enumDef = findSymbolDefinition(document, objName);
+      if (enumDef && enumDef.lineContent.includes("enum")) {
+        // This is an enum variant access (e.g., Color.Red)
+        const variantName = word;
+
+        // Parse the enum definition to find the variant
+        const enumText = enumDef.lineContent;
+        const lines = enumText.split("\n");
+
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+
+          // Match variant with tuple payload: VariantName(Type1, Type2, ...)
+          const tupleVariantMatch = new RegExp(
+            `^${variantName}\\s*\\(([^)]*)\\)`,
+          ).exec(trimmedLine);
+
+          if (tupleVariantMatch) {
+            const payload = tupleVariantMatch[1]?.trim() || "";
+            return {
+              contents: {
+                kind: MarkupKind.Markdown,
+                value: [
+                  "```bpl",
+                  `${objName}.${variantName}(${payload})`,
+                  "```",
+                  `(enum variant) Tuple variant with payload`,
+                ].join("\n"),
+              },
+            };
+          }
+
+          // Match variant with struct payload: VariantName { field1: Type1, field2: Type2, ... }
+          const structVariantMatch = new RegExp(
+            `^${variantName}\\s*\\{([^}]*)\\}`,
+          ).exec(trimmedLine);
+
+          if (structVariantMatch) {
+            const fields = structVariantMatch[1]?.trim() || "";
+            return {
+              contents: {
+                kind: MarkupKind.Markdown,
+                value: [
+                  "```bpl",
+                  `${objName}.${variantName} { ${fields} }`,
+                  "```",
+                  `(enum variant) Struct variant with fields`,
+                ].join("\n"),
+              },
+            };
+          }
+
+          // Match unit variant (no payload): VariantName, or VariantName,
+          const unitVariantMatch = new RegExp(
+            `^${variantName}\\s*,?\\s*(?:#|$)`,
+          ).exec(trimmedLine);
+
+          if (unitVariantMatch) {
+            return {
+              contents: {
+                kind: MarkupKind.Markdown,
+                value: [
+                  "```bpl",
+                  `${objName}.${variantName}`,
+                  "```",
+                  `(enum variant) Unit variant`,
+                ].join("\n"),
+              },
+            };
+          }
+        }
+
+        // Variant found in enum but couldn't parse details
+        return {
+          contents: {
+            kind: MarkupKind.Markdown,
+            value: `(enum variant) \`${objName}.${variantName}\``,
+          },
+        };
+      }
+
+      // Not an enum, check for regular property access
       // 1. Find definition of the object
       const objDef = findSymbolDefinition(document, objName);
       if (objDef) {
@@ -960,6 +1236,32 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
               const methodMatch = methodRegex.exec(structText);
               if (methodMatch) {
                 const signatureLine = methodMatch[0]?.trim() || `${word}()`;
+
+                // Check if this struct implements any specs
+                let specInfo = "";
+                const structDefLine =
+                  structDef.lineContent.split("\n")[0] || "";
+                const specMatch = /struct\s+\w+\s*:\s*([^{]+)/.exec(
+                  structDefLine,
+                );
+
+                if (specMatch) {
+                  const implementsList = specMatch[1]?.trim() || "";
+                  const specs = implementsList.split(",").map((s) => s.trim());
+
+                  // Check if any of these specs define this method
+                  for (const specName of specs) {
+                    const specDef = findSymbolDefinition(document, specName);
+                    if (
+                      specDef &&
+                      specDef.lineContent.includes(`frame ${word}`)
+                    ) {
+                      specInfo = `\n\n*Implements: \`${specName}.${word}\`*`;
+                      break;
+                    }
+                  }
+                }
+
                 return {
                   contents: {
                     kind: MarkupKind.Markdown,
@@ -967,7 +1269,7 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
                       "```bpl",
                       signatureLine,
                       "```",
-                      `(method) \`${typeName}.${word}\``,
+                      `(method) \`${typeName}.${word}\`${specInfo}`,
                     ].join("\n"),
                   },
                 };

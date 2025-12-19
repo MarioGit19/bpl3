@@ -27,7 +27,7 @@ export interface BasicTypeNode extends ASTNode {
   genericArgs: TypeNode[];
   pointerDepth: number;
   arrayDimensions: (number | null)[];
-  resolvedDeclaration?: StructDecl;
+  resolvedDeclaration?: StructDecl | EnumDecl;
 }
 
 export interface TupleTypeNode extends ASTNode {
@@ -332,6 +332,7 @@ export interface EnumDecl extends ASTNode {
   name: string;
   genericParams: GenericParam[];
   variants: EnumVariant[];
+  methods: FunctionDecl[];
 }
 
 export interface EnumVariant extends ASTNode {

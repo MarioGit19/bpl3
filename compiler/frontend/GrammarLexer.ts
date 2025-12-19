@@ -234,6 +234,7 @@ const keywordMap: Record<string, TokenType> = {
   static: TokenType.Static,
   ret: TokenType.Ret,
   struct: TokenType.Struct,
+  enum: TokenType.Enum,
   import: TokenType.Import,
   from: TokenType.From,
   export: TokenType.Export,

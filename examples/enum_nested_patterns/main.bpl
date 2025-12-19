@@ -1,0 +1,37 @@
+# Test nested enums (using nested match expressions as workaround)
+
+extern printf(fmt: string, ...) ret int;
+
+enum Inner {
+    Value(int),
+    Empty,
+}
+
+enum Outer {
+    Wrapped(Inner),
+    None,
+}
+
+frame get_value(outer: Outer) ret int {
+    return match (outer) {
+        Outer.Wrapped(inner) => match (inner) {
+            Inner.Value(v) => v,
+            Inner.Empty => 0,
+        },
+        Outer.None => -1,
+    };
+}
+
+frame main() ret int {
+    local o1: Outer = Outer.Wrapped(Inner.Value(42));
+    local o2: Outer = Outer.Wrapped(Inner.Empty);
+    local o3: Outer = Outer.None;
+
+    local v1: int = get_value(o1);
+    local v2: int = get_value(o2);
+    local v3: int = get_value(o3);
+
+    printf("v1: %d, v2: %d, v3: %d\n", v1, v2, v3);
+
+    return v1;
+}

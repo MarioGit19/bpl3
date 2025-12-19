@@ -1,0 +1,9 @@
+{
+  "exitCode": 0,
+  "expectedOutput": [
+    "c1 == c2: true",
+    "c1 != c3: true",
+    "p1 == p2: true",
+    "p1 != p3: true"
+  ]
+}

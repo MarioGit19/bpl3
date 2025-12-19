@@ -1,5 +1,5 @@
 {
   "name": "simple_tuple",
   "description": "Test enum with single tuple variant Move(int, int)",
-  "expectedExitCode": 0
+  "exitCode": 0
 }
