@@ -9,6 +9,11 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.min.css"
     />
+    <!-- Add Font Awesome for better icons -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
   </head>
 
   <body>
@@ -16,9 +21,70 @@
       <!-- Sidebar with examples -->
       <aside class="sidebar">
         <div class="sidebar-header">
-          <h1>BPL by Example</h1>
-          <p class="tagline">Learn BPL through annotated example programs</p>
+          <h1><i class="fas fa-code"></i> BPL by Example</h1>
+          <p class="tagline">Learn BPL through interactive examples</p>
+
+          <!-- Server Stats -->
+          <div class="server-stats" id="server-stats">
+            <div class="stat-item">
+              <span class="stat-label"
+                ><i class="fas fa-circle-dot"></i> Status:</span
+              >
+              <span class="stat-value status-indicator" id="server-status">
+                <span class="status-dot"></span>Checking...
+              </span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label"
+                ><i class="fas fa-chart-line"></i> Compiled:</span
+              >
+              <span class="stat-value" id="compile-count">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label"
+                ><i class="fas fa-clock"></i> Avg Time:</span
+              >
+              <span class="stat-value" id="avg-time">0ms</span>
+            </div>
+          </div>
+
+          <!-- Quick actions -->
+          <div class="quick-actions">
+            <button
+              class="quick-action-btn"
+              id="clear-editor-btn"
+              title="Clear editor"
+            >
+              <i class="fas fa-eraser"></i> Clear
+            </button>
+            <button
+              class="quick-action-btn"
+              id="copy-code-btn"
+              title="Copy code to clipboard"
+            >
+              <i class="fas fa-copy"></i> Copy Code
+            </button>
+          </div>
         </div>
+
+        <!-- Search examples -->
+        <div class="search-container">
+          <i class="fas fa-search search-icon"></i>
+          <input
+            type="text"
+            id="example-search"
+            placeholder="Search examples..."
+            class="search-input"
+          />
+          <button
+            id="clear-search-btn"
+            class="clear-search-btn"
+            style="display: none"
+          >
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+
         <div class="examples-list" id="examples-list">
           <!-- Examples will be loaded here -->
         </div>
@@ -29,14 +95,31 @@
         <!-- Header with title and description -->
         <div class="content-header">
           <div class="header-top">
-            <h2 id="example-title">Welcome to BPL</h2>
-            <button
-              id="toggle-output-btn"
-              class="btn btn-secondary btn-icon"
-              title="Toggle output panel"
-            >
-              ⊕ Output
-            </button>
+            <div class="title-section">
+              <h2 id="example-title">Welcome to BPL</h2>
+              <span
+                class="difficulty-badge"
+                id="difficulty-badge"
+                style="display: none"
+              ></span>
+            </div>
+            <div class="header-actions">
+              <button
+                id="toggle-output-btn"
+                class="btn btn-secondary btn-icon"
+                title="Toggle output panel"
+              >
+                <i class="fas fa-terminal"></i>
+                <span class="btn-text">Output</span>
+              </button>
+              <button
+                id="fullscreen-btn"
+                class="btn btn-secondary btn-icon"
+                title="Toggle fullscreen"
+              >
+                <i class="fas fa-expand"></i>
+              </button>
+            </div>
           </div>
           <p id="example-description">
             Select an example from the sidebar to get started
@@ -50,19 +133,26 @@
             <!-- Code editor -->
             <div class="editor-container">
               <div class="editor-header">
-                <span class="editor-label">Code Editor</span>
+                <span class="editor-label">
+                  <i class="fas fa-file-code"></i> Code Editor
+                  <span class="editor-info" id="editor-info"
+                    >Lines: 0 | Chars: 0</span
+                  >
+                </span>
                 <div class="editor-actions">
                   <label
                     class="checkbox-label"
                     title="Automatically format code before running"
                   >
                     <input type="checkbox" id="auto-format-checkbox" checked />
-                    Auto-format on run
+                    Auto-format
                   </label>
                   <button id="format-btn" class="btn btn-secondary">
-                    Format
+                    <i class="fas fa-align-left"></i> Format
                   </button>
-                  <button id="run-btn" class="btn btn-primary">Run Code</button>
+                  <button id="run-btn" class="btn btn-primary">
+                    <i class="fas fa-play"></i> Run Code
+                  </button>
                 </div>
               </div>
               <div id="editor" class="editor"></div>
@@ -71,10 +161,15 @@
             <!-- Input/Args section -->
             <div class="input-section">
               <details>
-                <summary>Input & Arguments (Optional)</summary>
+                <summary>
+                  <i class="fas fa-terminal"></i> Input & Arguments (Optional)
+                  <span class="summary-hint">Click to expand</span>
+                </summary>
                 <div class="input-content">
                   <div class="input-group">
-                    <label for="stdin-input">Standard Input (stdin):</label>
+                    <label for="stdin-input">
+                      <i class="fas fa-keyboard"></i> Standard Input (stdin):
+                    </label>
                     <textarea
                       id="stdin-input"
                       placeholder="Enter input data here..."
@@ -82,13 +177,18 @@
                     ></textarea>
                   </div>
                   <div class="input-group">
-                    <label for="args-input">Command-line Arguments:</label>
+                    <label for="args-input">
+                      <i class="fas fa-list"></i> Command-line Arguments:
+                    </label>
                     <input
                       type="text"
                       id="args-input"
                       placeholder="arg1 arg2 arg3"
                     />
-                    <small>Separate arguments with spaces</small>
+                    <small
+                      ><i class="fas fa-info-circle"></i> Separate arguments
+                      with spaces</small
+                    >
                   </div>
                 </div>
               </details>
@@ -102,29 +202,73 @@
           <div class="panel panel-right">
             <div class="tabs-container">
               <div class="tabs-header">
-                <button class="tab-btn active" data-tab="output">Output</button>
-                <button class="tab-btn" data-tab="ir">LLVM IR</button>
-                <button class="tab-btn" data-tab="ast">AST</button>
-                <button class="tab-btn" data-tab="tokens">Tokens</button>
+                <button class="tab-btn active" data-tab="output">
+                  <i class="fas fa-terminal"></i> Output
+                </button>
+                <button class="tab-btn" data-tab="ir">
+                  <i class="fas fa-code"></i> LLVM IR
+                </button>
+                <button class="tab-btn" data-tab="ast">
+                  <i class="fas fa-sitemap"></i> AST
+                </button>
+                <button class="tab-btn" data-tab="tokens">
+                  <i class="fas fa-list-ul"></i> Tokens
+                </button>
+                <button
+                  class="copy-output-btn"
+                  id="copy-output-btn"
+                  title="Copy current tab content"
+                >
+                  <i class="fas fa-copy"></i>
+                </button>
               </div>
               <div class="tabs-content">
                 <div id="tab-output" class="tab-pane active">
-                  <pre id="output-content">Run the code to see output...</pre>
+                  <div class="execution-info" id="execution-info">
+                    <span
+                      ><i class="fas fa-stopwatch"></i> Execution time:
+                      <strong id="exec-time">-</strong></span
+                    >
+                    <span
+                      ><i class="fas fa-ruler"></i> Output size:
+                      <strong id="output-size">-</strong></span
+                    >
+                    <span
+                      ><i class="fas fa-check-circle"></i> Status:
+                      <strong id="exec-status">Ready</strong></span
+                    >
+                  </div>
+                  <pre
+                    id="output-content"
+                  ><i class="fas fa-info-circle"></i> Click "Run Code" to see the output...
+
+<strong>Keyboard Shortcuts:</strong>
+• Ctrl/Cmd + Enter - Run code
+• Ctrl/Cmd + S - Format code</pre>
                 </div>
                 <div id="tab-ir" class="tab-pane">
-                  <pre id="ir-content">
-LLVM IR will appear here after compilation...</pre
-                  >
+                  <pre
+                    id="ir-content"
+                  ><i class="fas fa-code"></i> LLVM IR will appear here after compilation...
+
+The LLVM Intermediate Representation shows how your BPL code
+is translated into a low-level representation.</pre>
                 </div>
                 <div id="tab-ast" class="tab-pane">
-                  <pre id="ast-content">
-Abstract Syntax Tree will appear here after parsing...</pre
-                  >
+                  <pre
+                    id="ast-content"
+                  ><i class="fas fa-sitemap"></i> Abstract Syntax Tree will appear here after parsing...
+
+The AST shows the structure of your code as a tree of nodes,
+representing the syntax and semantics of your program.</pre>
                 </div>
                 <div id="tab-tokens" class="tab-pane">
-                  <pre id="tokens-content">
-Lexer tokens will appear here after parsing...</pre
-                  >
+                  <pre
+                    id="tokens-content"
+                  ><i class="fas fa-list-ul"></i> Lexer tokens will appear here after parsing...
+
+Tokens are the basic building blocks identified by the lexer:
+keywords, identifiers, operators, literals, etc.</pre>
                 </div>
               </div>
             </div>
@@ -136,8 +280,12 @@ Lexer tokens will appear here after parsing...</pre
     <!-- Loading indicator -->
     <div id="loading" class="loading-overlay" style="display: none">
       <div class="spinner"></div>
-      <p>Compiling and running...</p>
+      <p><i class="fas fa-code"></i> Compiling and running...</p>
+      <small id="loading-status">Preparing compilation...</small>
     </div>
+
+    <!-- Toast notifications -->
+    <div id="toast-container" class="toast-container"></div>
 
     <!-- Monaco Editor -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>

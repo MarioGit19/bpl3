@@ -1,6 +1,7 @@
 // Initialize Monaco Editor
 let editor;
 let currentExample = null;
+let allExamples = []; // Store all examples for searching
 
 require.config({
   paths: {
@@ -169,14 +170,40 @@ require(["vs/editor/editor.main"], function () {
     automaticLayout: true,
   });
 
+  // Update editor info on content change
+  editor.onDidChangeModelContent(() => {
+    updateEditorInfo();
+  });
+
+  // Add keyboard shortcuts
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+    document.getElementById("run-btn").click();
+  });
+
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, (e) => {
+    e.preventDefault();
+    document.getElementById("format-btn").click();
+  });
+
   // Setup split pane resizing
   setupSplitPaneResize();
 
   // Setup output panel toggle
   setupOutputToggle();
 
+  // Setup additional UI features
+  setupQuickActions();
+  setupSearch();
+  setupCopyButtons();
+  setupFullscreen();
+  updateEditorInfo();
+
   // Load examples
   loadExamples();
+
+  // Start stats polling
+  pollServerStats();
+  setInterval(pollServerStats, 5000); // Update every 5 seconds
 });
 
 // Split pane resizing
@@ -284,14 +311,24 @@ document.getElementById("run-btn").addEventListener("click", async () => {
   const autoFormat = document.getElementById("auto-format-checkbox")?.checked;
   if (autoFormat) {
     document.getElementById("format-btn")?.click();
+    // Wait a bit for formatting to complete
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
+
   const code = editor.getValue();
+
+  if (!code.trim()) {
+    showToast("Editor is empty. Please write some code first!", "warning");
+    return;
+  }
+
   const stdin = document.getElementById("stdin-input").value;
   const argsInput = document.getElementById("args-input").value;
   const args = argsInput ? argsInput.split(/\s+/).filter((a) => a) : [];
 
   // Show loading
   document.getElementById("loading").style.display = "flex";
+  document.getElementById("loading-status").textContent = "Lexical analysis...";
 
   // Clear previous results
   document.getElementById("output-content").textContent = "Compiling...";
@@ -299,7 +336,28 @@ document.getElementById("run-btn").addEventListener("click", async () => {
   document.getElementById("ast-content").textContent = "";
   document.getElementById("tokens-content").textContent = "";
 
+  // Reset execution info
+  document.getElementById("exec-time").textContent = "...";
+  document.getElementById("output-size").textContent = "...";
+  document.getElementById("exec-status").textContent = "Running";
+  document.getElementById("exec-status").style.color = "var(--warning)";
+
+  const startTime = Date.now();
+
+  // Switch to output tab
+  document
+    .querySelectorAll(".tab-btn")
+    .forEach((b) => b.classList.remove("active"));
+  document.querySelector('[data-tab="output"]').classList.add("active");
+  document
+    .querySelectorAll(".tab-pane")
+    .forEach((p) => p.classList.remove("active"));
+  document.getElementById("tab-output").classList.add("active");
+
   try {
+    document.getElementById("loading-status").textContent =
+      "Compiling to LLVM IR...";
+
     const response = await fetch("http://localhost:3001/compile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -307,18 +365,36 @@ document.getElementById("run-btn").addEventListener("click", async () => {
     });
 
     const result = await response.json();
+    const duration = Date.now() - startTime;
 
     // Update output
     const outputEl = document.getElementById("output-content");
     if (result.success) {
       outputEl.textContent = result.output || "(no output)";
       outputEl.className = "success";
+
+      // Update execution info
+      document.getElementById("exec-time").textContent = duration + "ms";
+      document.getElementById("output-size").textContent =
+        (result.output?.length || 0) + " bytes";
+      document.getElementById("exec-status").textContent = "Success";
+      document.getElementById("exec-status").style.color = "var(--success)";
+
+      showToast("Code executed successfully!", "success");
     } else {
       outputEl.textContent = result.error || "Unknown error";
       outputEl.className = "error";
       if (result.output) {
         outputEl.textContent += "\n\nPartial output:\n" + result.output;
       }
+
+      // Update execution info with error
+      document.getElementById("exec-time").textContent = duration + "ms";
+      document.getElementById("output-size").textContent = "N/A";
+      document.getElementById("exec-status").textContent = "Failed";
+      document.getElementById("exec-status").style.color = "var(--error)";
+
+      showToast("Compilation failed", "error");
     }
 
     // Update IR
@@ -340,10 +416,14 @@ document.getElementById("run-btn").addEventListener("click", async () => {
     if (result.warnings && result.warnings.length > 0) {
       outputEl.textContent += "\n\nWarnings:\n" + result.warnings.join("\n");
     }
+
+    // Update server stats after compilation
+    setTimeout(pollServerStats, 500);
   } catch (error) {
     const outputEl = document.getElementById("output-content");
     outputEl.textContent = `Failed to connect to server: ${error.message}\n\nMake sure the backend server is running:\ncd playground/backend && bun run dev`;
     outputEl.className = "error";
+    showToast("Server connection failed", "error");
   } finally {
     document.getElementById("loading").style.display = "none";
   }
@@ -354,6 +434,7 @@ document.getElementById("format-btn").addEventListener("click", async () => {
   const code = editor.getValue();
 
   if (!code.trim()) {
+    showToast("Editor is empty", "warning");
     return;
   }
 
@@ -368,38 +449,15 @@ document.getElementById("format-btn").addEventListener("click", async () => {
 
     if (result.success && result.code) {
       editor.setValue(result.code);
+      showToast("Code formatted successfully!", "success");
     } else {
-      // Display error in output tab instead of alert
-      const outputEl = document.getElementById("output-content");
-      outputEl.textContent =
-        "Formatting failed:\n\n" + (result.error || "Unknown error");
-      outputEl.className = "error";
-
-      // Switch to output tab to show the error
-      document
-        .querySelectorAll(".tab-btn")
-        .forEach((b) => b.classList.remove("active"));
-      document.querySelector('[data-tab="output"]').classList.add("active");
-      document
-        .querySelectorAll(".tab-pane")
-        .forEach((p) => p.classList.remove("active"));
-      document.getElementById("tab-output").classList.add("active");
+      showToast(
+        "Formatting failed: " + (result.error || "Unknown error"),
+        "error",
+      );
     }
   } catch (error) {
-    // Display connection error in output tab instead of alert
-    const outputEl = document.getElementById("output-content");
-    outputEl.textContent = `Failed to connect to server: ${error.message}\n\nMake sure the backend server is running:\ncd playground/backend && bun run dev`;
-    outputEl.className = "error";
-
-    // Switch to output tab to show the error
-    document
-      .querySelectorAll(".tab-btn")
-      .forEach((b) => b.classList.remove("active"));
-    document.querySelector('[data-tab="output"]').classList.add("active");
-    document
-      .querySelectorAll(".tab-pane")
-      .forEach((p) => p.classList.remove("active"));
-    document.getElementById("tab-output").classList.add("active");
+    showToast("Failed to connect to server", "error");
   }
 });
 
@@ -457,6 +515,7 @@ function loadExample(example, itemEl) {
   // Update editor
   if (editor) {
     editor.setValue(example.code.join("\n"));
+    showToast(`Loaded: ${example.title}`, "info");
   }
 
   // Clear input/args
@@ -475,6 +534,12 @@ function loadExample(example, itemEl) {
   document.getElementById("tokens-content").textContent =
     "Lexer tokens will appear here after parsing...";
 
+  // Reset execution info
+  document.getElementById("exec-time").textContent = "-";
+  document.getElementById("output-size").textContent = "-";
+  document.getElementById("exec-status").textContent = "Ready";
+  document.getElementById("exec-status").style.color = "var(--text-secondary)";
+
   // Switch to output tab
   document
     .querySelectorAll(".tab-btn")
@@ -484,4 +549,183 @@ function loadExample(example, itemEl) {
     .querySelectorAll(".tab-pane")
     .forEach((p) => p.classList.remove("active"));
   document.getElementById("tab-output").classList.add("active");
+}
+
+// Poll server stats
+async function pollServerStats() {
+  try {
+    const response = await fetch("http://localhost:3001/stats");
+    const stats = await response.json();
+
+    // Update status indicator
+    const statusEl = document.getElementById("server-status");
+    const statusDot = statusEl.querySelector(".status-dot");
+    statusEl.classList.remove("offline");
+    statusEl.innerHTML = '<span class="status-dot"></span>Online';
+
+    // Update compile count
+    document.getElementById("compile-count").textContent =
+      `${stats.successfulCompilations}/${stats.totalRequests}`;
+
+    // Update average time
+    document.getElementById("avg-time").textContent = stats.averageCompileTime
+      ? `${stats.averageCompileTime.toFixed(0)}ms`
+      : "0ms";
+  } catch (error) {
+    // Server is offline
+    const statusEl = document.getElementById("server-status");
+    statusEl.classList.add("offline");
+    statusEl.innerHTML = '<span class="status-dot"></span>Offline';
+  }
+}
+
+// Update editor info
+function updateEditorInfo() {
+  if (!editor) return;
+  const model = editor.getModel();
+  const lineCount = model.getLineCount();
+  const charCount = model.getValueLength();
+  document.getElementById("editor-info").textContent =
+    `Lines: ${lineCount} | Chars: ${charCount}`;
+}
+
+// Setup quick actions
+function setupQuickActions() {
+  // Clear editor
+  document.getElementById("clear-editor-btn").addEventListener("click", () => {
+    if (confirm("Clear the editor? This will remove all your code.")) {
+      editor.setValue("");
+      showToast("Editor cleared", "info");
+    }
+  });
+
+  // Copy code to clipboard
+  document
+    .getElementById("copy-code-btn")
+    .addEventListener("click", async () => {
+      const code = editor.getValue();
+      if (!code.trim()) {
+        showToast("Nothing to copy - editor is empty", "warning");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(code);
+        showToast("Code copied to clipboard!", "success");
+      } catch (err) {
+        showToast("Failed to copy code", "error");
+      }
+    });
+}
+
+// Setup search functionality
+function setupSearch() {
+  const searchInput = document.getElementById("example-search");
+  const clearBtn = document.getElementById("clear-search-btn");
+
+  searchInput.addEventListener("input", (e) => {
+    const query = e.target.value.toLowerCase().trim();
+    clearBtn.style.display = query ? "block" : "none";
+    filterExamples(query);
+  });
+
+  clearBtn.addEventListener("click", () => {
+    searchInput.value = "";
+    clearBtn.style.display = "none";
+    filterExamples("");
+  });
+}
+
+function filterExamples(query) {
+  const items = document.querySelectorAll(".example-item");
+
+  items.forEach((item) => {
+    const title = item.querySelector(".example-name").textContent.toLowerCase();
+    const snippet = item
+      .querySelector(".example-snippet")
+      .textContent.toLowerCase();
+
+    if (!query || title.includes(query) || snippet.includes(query)) {
+      item.style.display = "flex";
+    } else {
+      item.style.display = "none";
+    }
+  });
+}
+
+// Setup copy buttons
+function setupCopyButtons() {
+  const copyBtn = document.getElementById("copy-output-btn");
+
+  copyBtn.addEventListener("click", async () => {
+    const activeTab = document.querySelector(".tab-btn.active").dataset.tab;
+    const contentEl = document.getElementById(`${activeTab}-content`);
+    const text = contentEl.textContent;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      copyBtn.classList.add("copied");
+      copyBtn.innerHTML = '<i class="fas fa-check"></i>';
+      showToast("Content copied!", "success");
+
+      setTimeout(() => {
+        copyBtn.classList.remove("copied");
+        copyBtn.innerHTML = '<i class="fas fa-copy"></i>';
+      }, 2000);
+    } catch (err) {
+      showToast("Failed to copy", "error");
+    }
+  });
+}
+
+// Setup fullscreen toggle
+function setupFullscreen() {
+  const fullscreenBtn = document.getElementById("fullscreen-btn");
+  const container = document.querySelector(".container");
+
+  fullscreenBtn.addEventListener("click", () => {
+    container.classList.toggle("fullscreen");
+    const isFullscreen = container.classList.contains("fullscreen");
+    fullscreenBtn.innerHTML = isFullscreen
+      ? '<i class="fas fa-compress"></i>'
+      : '<i class="fas fa-expand"></i>';
+
+    // Trigger editor layout recalculation
+    setTimeout(() => editor.layout(), 100);
+  });
+}
+
+// Toast notification system
+function showToast(message, type = "info", duration = 3000) {
+  const container = document.getElementById("toast-container");
+
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+
+  const icons = {
+    success: "fa-check-circle",
+    error: "fa-exclamation-circle",
+    warning: "fa-exclamation-triangle",
+    info: "fa-info-circle",
+  };
+
+  toast.innerHTML = `
+    <i class="fas ${icons[type]} toast-icon"></i>
+    <div class="toast-content">
+      <div class="toast-message">${message}</div>
+    </div>
+    <button class="toast-close">&times;</button>
+  `;
+
+  container.appendChild(toast);
+
+  // Close button
+  toast.querySelector(".toast-close").addEventListener("click", () => {
+    toast.remove();
+  });
+
+  // Auto remove
+  setTimeout(() => {
+    toast.style.animation = "slideIn 0.3s ease reverse";
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
 }
