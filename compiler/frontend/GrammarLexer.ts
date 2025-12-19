@@ -2,6 +2,7 @@ import { existsSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 
+import { resolveBplPath, getBplHome } from "../common/PathResolver";
 import { GenericParser, type TokenNode } from "../../grammar/GenericParser";
 import { GrammarParser } from "../../grammar/GrammarParser";
 import { Token } from "./Token";
@@ -13,33 +14,17 @@ let cachedGrammar: Grammar | null = null;
 function loadGrammar(): Grammar {
   if (cachedGrammar) return cachedGrammar;
 
-  // Try multiple paths to find grammar.bpl
-  // 1. Relative to current module (for normal execution)
-  let grammarPath = resolve(__dirname, "../../grammar/grammar.bpl");
-
-  // 2. Relative to process.cwd() (for compiled binary)
-  if (!existsSync(grammarPath)) {
-    grammarPath = resolve(process.cwd(), "grammar/grammar.bpl");
-  }
-
-  // 3. Relative to the executable directory (for installed binary)
-  if (!existsSync(grammarPath)) {
-    const execDir = dirname(process.argv[1] || process.execPath);
-    grammarPath = resolve(execDir, "grammar/grammar.bpl");
-  }
-
-  // 4. Try looking in common install locations
-  if (!existsSync(grammarPath)) {
-    grammarPath = resolve("/usr/local/lib/bpl/grammar/grammar.bpl");
-  }
+  // Use BPL_HOME to locate grammar file
+  const grammarPath = resolveBplPath("grammar", "grammar.bpl");
 
   if (!existsSync(grammarPath)) {
+    const bplHome = getBplHome();
     throw new Error(
-      `Could not find grammar.bpl file. Searched in:\n` +
-        `  - ${resolve(__dirname, "../../grammar/grammar.bpl")}\n` +
-        `  - ${resolve(process.cwd(), "grammar/grammar.bpl")}\n` +
-        `  - ${resolve(dirname(process.argv[1] || process.execPath), "grammar/grammar.bpl")}\n` +
-        `Please ensure the grammar directory is present.`,
+      `Could not find grammar.bpl file.\n` +
+        `BPL_HOME: ${bplHome}\n` +
+        `Looking for: ${grammarPath}\n` +
+        `Please ensure BPL_HOME is set correctly or the grammar directory exists.\n` +
+        `You can set it with: export BPL_HOME=/path/to/bpl`,
     );
   }
 

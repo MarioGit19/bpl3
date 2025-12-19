@@ -2,21 +2,19 @@
 # BPL3 Compiler Wrapper Script
 # This script ensures BPL_HOME is set before running the compiler
 
-# Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# If BPL_HOME is not set, try to determine it
-if [ -z "$BPL_HOME" ]; then
-    # Check if we're in /usr/bin (installed via symlink)
-    if [ "$(basename "$SCRIPT_DIR")" = "bin" ] && [ -L "$0" ]; then
-        # Follow the symlink to find the real installation directory
-        REAL_PATH="$(readlink -f "$0")"
-        export BPL_HOME="$(dirname "$REAL_PATH")"
-    else
-        # Assume we're running from the installation directory
-        export BPL_HOME="$SCRIPT_DIR"
-    fi
+# Get the directory where this script is located (resolving symlinks)
+if [ -L "$0" ]; then
+    # If this script is a symlink, resolve it to the real path
+    REAL_SCRIPT="$(readlink -f "$0")"
+    SCRIPT_DIR="$(dirname "$REAL_SCRIPT")"
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fi
 
-# Run the actual compiler binary
-exec "$SCRIPT_DIR/bpl" "$@"
+# If BPL_HOME is not set, set it to the script directory
+if [ -z "$BPL_HOME" ]; then
+    export BPL_HOME="$SCRIPT_DIR"
+fi
+
+# Run the actual compiler binary from the installation directory
+exec "$BPL_HOME/bpl" "$@"

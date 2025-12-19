@@ -16,6 +16,7 @@ import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 
+import { getLibPath } from "../common/PathResolver";
 import { CompilerError } from "../common/CompilerError";
 import { lexWithGrammar } from "../frontend/GrammarLexer";
 import { Parser } from "../frontend/Parser";
@@ -57,19 +58,8 @@ export class ModuleResolver {
   private readonly SUPPORTED_EXTENSIONS = [".x", ".bpl", ""];
 
   constructor(options: { stdLibPath?: string; searchPaths?: string[] } = {}) {
-    // Determine stdLibPath by resolving the location of the 'bpl' executable and appending '/lib'
-    let bplPath: string | undefined;
-    try {
-      // Find the path to the 'bpl' executable
-      bplPath = execSync("which bpl").toString().trim();
-      // Resolve symlinks to get the real path
-      bplPath = fs.realpathSync(bplPath);
-      // Use the directory containing 'bpl' and append '/lib'
-      this.stdLibPath = path.join(path.dirname(bplPath), "lib");
-    } catch (e) {
-      // Fallback to provided option or default
-      this.stdLibPath = options.stdLibPath || path.join(__dirname, "../../lib");
-    }
+    // Use PathResolver to get the standard library path from BPL_HOME
+    this.stdLibPath = options.stdLibPath || getLibPath();
     this.searchPaths = options.searchPaths || [];
   }
 

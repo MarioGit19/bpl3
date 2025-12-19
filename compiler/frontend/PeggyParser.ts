@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "fs";
 import { dirname, resolve } from "path";
 import * as peggy from "peggy";
 
+import { resolveBplPath, getBplHome } from "../common/PathResolver";
 import * as AST from "../common/AST";
 import { CompilerError, type SourceLocation } from "../common/CompilerError";
 
@@ -10,33 +11,17 @@ let cachedParser: peggy.Parser | null = null;
 function loadParser(): peggy.Parser {
   if (cachedParser) return cachedParser;
 
-  // Try multiple paths to find bpl.peggy
-  // 1. Relative to current module (for normal execution)
-  let grammarPath = resolve(__dirname, "../../grammar/bpl.peggy");
-
-  // 2. Relative to process.cwd() (for compiled binary)
-  if (!existsSync(grammarPath)) {
-    grammarPath = resolve(process.cwd(), "grammar/bpl.peggy");
-  }
-
-  // 3. Relative to the executable directory (for installed binary)
-  if (!existsSync(grammarPath)) {
-    const execDir = dirname(process.argv[1] || process.execPath);
-    grammarPath = resolve(execDir, "grammar/bpl.peggy");
-  }
-
-  // 4. Try looking in common install locations
-  if (!existsSync(grammarPath)) {
-    grammarPath = resolve("/usr/local/lib/bpl/grammar/bpl.peggy");
-  }
+  // Use BPL_HOME to locate grammar file
+  const grammarPath = resolveBplPath("grammar", "bpl.peggy");
 
   if (!existsSync(grammarPath)) {
+    const bplHome = getBplHome();
     throw new Error(
-      `Could not find bpl.peggy grammar file. Searched in:\n` +
-        `  - ${resolve(__dirname, "../../grammar/bpl.peggy")}\n` +
-        `  - ${resolve(process.cwd(), "grammar/bpl.peggy")}\n` +
-        `  - ${resolve(dirname(process.argv[1] || process.execPath), "grammar/bpl.peggy")}\n` +
-        `Please ensure the grammar directory is present.`,
+      `Could not find bpl.peggy grammar file.\n` +
+        `BPL_HOME: ${bplHome}\n` +
+        `Looking for: ${grammarPath}\n` +
+        `Please ensure BPL_HOME is set correctly or the grammar directory exists.\n` +
+        `You can set it with: export BPL_HOME=/path/to/bpl`,
     );
   }
 

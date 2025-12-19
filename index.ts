@@ -9,6 +9,7 @@ import { Compiler } from "./compiler";
 import { CodeGenerator } from "./compiler/backend/CodeGenerator";
 import { CompilerError } from "./compiler/common/CompilerError";
 import { DiagnosticFormatter } from "./compiler/common/DiagnosticFormatter";
+import { resolveBplPath } from "./compiler/common/PathResolver";
 import { Formatter } from "./compiler/formatter/Formatter";
 import { lexWithGrammar } from "./compiler/frontend/GrammarLexer";
 import { Parser } from "./compiler/frontend/Parser";
@@ -47,10 +48,10 @@ function getHostDefaults() {
 
 // Embedded completion scripts for when running as compiled binary
 function getBashCompletion(): string {
-  // Try to load from file first (development mode)
-  const devPath = path.join(process.cwd(), "completions/bpl-completion.bash");
-  if (fs.existsSync(devPath)) {
-    return fs.readFileSync(devPath, "utf-8");
+  // Try to load from file first using BPL_HOME
+  const completionPath = resolveBplPath("completions", "bpl-completion.bash");
+  if (fs.existsSync(completionPath)) {
+    return fs.readFileSync(completionPath, "utf-8");
   }
 
   // Fallback: embedded script
@@ -180,10 +181,10 @@ complete -F _bpl_completion bpl
 }
 
 function getZshCompletion(): string {
-  // Try to load from file first (development mode)
-  const devPath = path.join(process.cwd(), "completions/_bpl");
-  if (fs.existsSync(devPath)) {
-    return fs.readFileSync(devPath, "utf-8");
+  // Try to load from file first using BPL_HOME
+  const completionPath = resolveBplPath("completions", "_bpl");
+  if (fs.existsSync(completionPath)) {
+    return fs.readFileSync(completionPath, "utf-8");
   }
 
   // Fallback: embedded script
@@ -848,12 +849,11 @@ program
         process.exit(1);
       }
 
-      // Try to read from file first (for development)
-      const completionsDir = path.join(__dirname, "completions");
+      // Try to read from file first using BPL_HOME
       const completionFile =
         targetShell === "bash"
-          ? path.join(completionsDir, "bpl-completion.bash")
-          : path.join(completionsDir, "_bpl");
+          ? resolveBplPath("completions", "bpl-completion.bash")
+          : resolveBplPath("completions", "_bpl");
 
       let content: string;
 
