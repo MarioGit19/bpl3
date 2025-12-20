@@ -320,14 +320,56 @@ export class ModuleResolver {
     // Normalize entry file path
     const entryPath = path.resolve(entryFile);
 
-    // Load all modules recursively
+    // Load entry module recursively
     this.loadModule(entryPath);
 
+    // Ensure primitives.bpl is loaded
+    const primitivesPath = this.normalizePath(
+      path.join(this.stdLibPath, "primitives.bpl"),
+    );
+    if (fs.existsSync(primitivesPath)) {
+      this.loadModule(primitivesPath);
+    }
+
     // Get topologically sorted order
-    const sortedPaths = this.topologicalSort(entryPath);
+    // We manually perform sort to include primitives
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+    const sorted: string[] = [];
+
+    const visit = (modulePath: string) => {
+      if (visited.has(modulePath)) return;
+      if (visiting.has(modulePath)) {
+        throw new Error(`Circular dependency detected: ${modulePath}`);
+      }
+
+      visiting.add(modulePath);
+
+      const module = this.modules.get(modulePath);
+      if (!module) {
+        throw new Error(`Module not found in cache: ${modulePath}`);
+      }
+
+      // Visit dependencies first
+      for (const dep of module.dependencies) {
+        visit(dep);
+      }
+
+      visiting.delete(modulePath);
+      visited.add(modulePath);
+      sorted.push(modulePath);
+    };
+
+    // Visit primitives first to ensure it's available and processed early
+    if (this.modules.has(primitivesPath)) {
+      visit(primitivesPath);
+    }
+
+    // Visit entry point
+    visit(entryPath);
 
     // Return module infos in order
-    return sortedPaths.map((p) => this.modules.get(p)!);
+    return sorted.map((p) => this.modules.get(p)!);
   }
 
   /**

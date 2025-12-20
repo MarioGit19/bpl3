@@ -5,6 +5,18 @@
 import [Type] from "std/type.bpl";
 export [Type];
 
+import [Int], [Double], [Bool], [Long], [Char], [UChar], [Short], [UShort], [UInt], [ULong] from "std/primitives.bpl";
+export [Int];
+export [Bool];
+export [Double];
+export [Long];
+export [Char];
+export [UChar];
+export [Short];
+export [UShort];
+export [UInt];
+export [ULong];
+
 # Data Structures
 import [Array] from "std/array.bpl";
 export [Array];

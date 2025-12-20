@@ -1,5 +1,5 @@
 # IO utilities
-
+import [String] from "std/string.bpl";
 export [IO];
 
 extern printf(fmt: string, ...) ret int;
@@ -26,6 +26,10 @@ struct IO {
 
     frame printString(s: string) {
         printf("%s\n", s);
+    }
+
+    frame printString(s: String) {
+        printf("%s\n", s.cstr());
     }
 
     frame log(msg: string) {

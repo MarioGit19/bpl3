@@ -322,6 +322,7 @@ program
   .option("-v, --verbose", "enable verbose output")
   .option("--cache", "enable incremental compilation with module caching")
   .option("--write", "write formatted output back to file (only for formatted)")
+  .option("--no-prelude", "do not load implicit primitives")
   .action((files, options) => {
     // Handle --eval option
     if (options.eval) {
@@ -534,7 +535,9 @@ function processCodeInternal(content: string, filePath: string, options: any) {
   }
 
   // 3. Type Checking
-  const typeChecker = new TypeChecker();
+  const typeChecker = new TypeChecker({
+    skipImportResolution: options.prelude === false,
+  });
   typeChecker.checkProgram(ast);
 
   const typeErrors = typeChecker.getErrors();
@@ -608,6 +611,22 @@ function compileBinaryAndRun(outputPath: string, options: any) {
 
   if (options.march) {
     clangArgs.push(`-march=${options.march}`);
+  }
+
+  if (options.libPath) {
+    const paths = Array.isArray(options.libPath)
+      ? options.libPath
+      : [options.libPath];
+    for (const p of paths) {
+      clangArgs.push(`-L${p}`);
+    }
+  }
+
+  if (options.lib) {
+    const libs = Array.isArray(options.lib) ? options.lib : [options.lib];
+    for (const l of libs) {
+      clangArgs.push(`-l${l}`);
+    }
   }
 
   const extraClangFlags = options.clangFlag

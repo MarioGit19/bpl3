@@ -6,33 +6,23 @@ Priority levels: 0 = Highest Priority, 9 = Lowest Priority
 
 ---
 
-## 🎯 RECOMMENDED NEXT STEPS (December 2025)
+## 🎯 RECOMMENDED NEXT STEPS
 
-After successfully completing **Operator Overloading** and **Generic-Aware Operator Resolution**, the following features are recommended for implementation next:
+The following features are recommended for implementation next:
 
-### 1. **Enum Types and Pattern Matching** [Priority 2] ⭐ HIGHEST PRIORITY
+### 1. **Multi-Target Support** [Priority 3] 🌍 CROSS-PLATFORM
 
-- **Why:** Natural extension of the type system; enables algebraic data types (ADTs)
-- **Impact:** Makes Result<T,E> and Option<T> more powerful with associated data
-- **Use cases:** Error handling, state machines, variant types
-- **Complexity:** Medium-High (parser, type system, exhaustiveness checking)
+- **Why:** Enables compiling for different architectures (x86, ARM) and OSs
+- **Impact:** Broader reach for BPL applications
+- **Use cases:** Cross-compilation, embedded systems
+- **Complexity:** High (requires backend abstraction)
 
-### 2. **Root Global `Type` Struct** [Priority 3] 🔧 FOUNDATION (COMPLETED)
+### 2. **Closures and Lambda Expressions** [Priority 4] 🧩 FUNCTIONAL PROGRAMMING
 
-- **Why:** Provides runtime type information (RTTI) and common object methods
-- **Impact:** Enables reflection, better debugging, toString() on all types
-- **Use cases:** Debugging, serialization, generic algorithms
-- **Complexity:** Medium (requires inheritance system enhancement)
-- **Status:** ✅ Implemented (December 2025) - Implicit inheritance, `Type` struct in stdlib, cross-module method resolution.
-
-### 3. **Primitive Types as Structs** [Priority 3] 🎨 TYPE SYSTEM UNIFICATION
-
-- **Why:** Unifies type system, allows methods on primitives
-- **Impact:** More consistent language design, enables `42.toString()`, `3.14.abs()`
-- **Use cases:** Method chaining, uniform type handling
-- **Complexity:** Medium (requires careful performance optimization)
-
-**Recommendation:** Start with **Enum Types and Pattern Matching** as it's the highest priority pending feature and would significantly enhance the language's expressiveness.
+- **Why:** Essential for modern functional programming patterns
+- **Impact:** Cleaner callback APIs, higher-order functions
+- **Use cases:** Event handling, functional algorithms (map/filter/reduce)
+- **Complexity:** High (requires capture analysis and closure conversion)
 
 ---
 
@@ -40,7 +30,25 @@ After successfully completing **Operator Overloading** and **Generic-Aware Opera
 
 ---
 
-## [1] ✅ Operator Overloading for User Types (COMPLETED)
+## [1] ✅ Enum Types and Pattern Matching (COMPLETED)
+
+**Description:** Implement enum types (including tagged unions with associated data) with exhaustive pattern matching support. This enables type-safe state representation and powerful control flow based on data variants.
+
+**Implementation Status:** ✅ Fully Implemented (December 2025)
+
+**What Was Implemented:**
+
+- ✅ Enum declaration with unit, tuple, and struct variants
+- ✅ Generic enums
+- ✅ Match expressions with exhaustiveness checking
+- ✅ Pattern guards (`if` conditions in match arms)
+- ✅ Enum methods and equality operators
+- ✅ Recursive enums (via pointers)
+- ✅ LLVM IR generation for tagged unions
+
+---
+
+## [2] ✅ Operator Overloading for User Types (COMPLETED)
 
 **Description:** Let user-defined types implement special methods (dunder-style like `__add__`, `__eq__`) that override built-in operator behavior for instances. This makes custom types (like Vector, Complex, BigInt) feel like first-class citizens by allowing them to be used with familiar operators. Operators become syntactic sugar for method calls, making code more intuitive and readable.
 
@@ -118,19 +126,19 @@ After successfully completing **Operator Overloading** and **Generic-Aware Opera
 
 ---
 
-## [3] Root Global `Type` Struct
+## [3] ✅ Root Global `Type` Struct (COMPLETED)
 
 **Description:** Define a root `Type` struct that every user-defined struct implicitly inherits from, providing methods like `getTypeName()`, `getSize()`, `toString()`, and basic equality. This creates a unified type hierarchy where all objects share common capabilities, enabling polymorphic code that works with any type and providing runtime type information.
 
-**Implementation Notes:**
+**Implementation Status:** ✅ Fully Implemented (December 2025)
 
-- Design the core `Type` struct with essential runtime information
-- Inject implicit inheritance of `Type` for every user-defined struct during semantic analysis
-- Implement common methods as part of the runtime/stdlib (`getTypeName()`, `getSize()`, `equals()`, `hashCode()`, etc.)
-- Ensure proper method virtual dispatch and override semantics
-- Generate type metadata tables for reflection at runtime
-- Handle inheritance chains correctly (user struct -> Type)
-- Support method overriding in user code for virtual methods
+**What Was Implemented:**
+
+- ✅ `Type` struct in `std` module
+- ✅ Implicit inheritance: All user structs inherit from `Type`
+- ✅ Virtual method dispatch for `toString()`, `equals()`, `hashCode()`
+- ✅ Runtime Type Information (RTTI) basics
+- ✅ Cross-module method resolution for inherited methods
 
 **Acceptance Criteria:**
 
@@ -142,19 +150,19 @@ After successfully completing **Operator Overloading** and **Generic-Aware Opera
 
 ---
 
-## [3] Primitive Types as Structs Inheriting `Primitive`
+## [3] ✅ Primitive Types as Structs (COMPLETED)
 
 **Description:** Model primitive types (int, float, bool, char) as structs inheriting from a `Primitive` base, exposing operations as methods to unify the type system. This eliminates the distinction between primitive and user-defined types, allowing primitives to have methods and follow the same protocols as user types while maintaining performance through specialized handling.
 
-**Implementation Notes:**
+**Implementation Status:** ✅ Fully Implemented (December 2025)
 
-- Create a `Primitive` base struct with common methods for all primitive types
-- Represent primitives specially in the type system for performance optimization
-- Provide method dispatch wrappers for primitive operations (e.g., `int_val.toString()`, `float_val.abs()`)
-- Balance performance through inlining and specialization with uniformity through object-like method access
-- Generate efficient code paths for primitives while maintaining polymorphic behavior
-- Support method calls on primitive literal values
-- Ensure operators and methods interoperate seamlessly
+**What Was Implemented:**
+
+- ✅ Wrapper structs `Int`, `Bool`, `Double` in `std` module
+- ✅ Compiler mapping from primitive types (`i32`, `i1`, `f64`) to wrapper structs
+- ✅ Method calls on primitive variables and literals (e.g., `42.toString()`)
+- ✅ `CallChecker` logic to resolve primitive members to wrapper struct members
+- ✅ `CodeGenerator` support for primitive member access
 
 **Acceptance Criteria:**
 
@@ -491,32 +499,6 @@ The operator resolution happens before generic type substitution, so it never se
 - Performance remains acceptable (no significant compilation slowdown)
 - All existing operator overloading tests continue to pass
 - New integration tests demonstrate generic operators working with Array<T>, Vec<T>, etc.
-
----
-
-## [2] Enum Types and Pattern Matching
-
-**Description:** Implement enum types (including tagged unions with associated data) with exhaustive pattern matching support. This enables type-safe state representation and powerful control flow based on data variants, replacing many use cases for conditionals with cleaner pattern matching.
-
-**Implementation Notes:**
-
-- Add enum keyword and syntax for variant definitions with optional associated data
-- Implement discriminant-based storage for enum values
-- Add match expression syntax with pattern syntax for destructuring variants
-- Implement exhaustiveness checking to ensure all variants are handled
-- Support pattern guards and nested patterns
-- Handle enum inheritance and variance rules
-- Support enum methods similar to structs
-- Implement error messages for non-exhaustive patterns
-
-**Acceptance Criteria:**
-
-- Enums with and without associated data compile correctly
-- Match expressions validate that all cases are handled
-- Compiler errors on non-exhaustive patterns
-- Pattern matching destructures associated data correctly
-- Enum methods work as expected
-- Examples demonstrate practical use cases (Option, Result, State machines)
 
 ---
 

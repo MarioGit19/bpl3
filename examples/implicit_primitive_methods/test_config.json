@@ -1,0 +1,6 @@
+{
+  "expectedOutput": ["42", "123", "true", "false", "3.140000"],
+  "args": [],
+  "env": {},
+  "input": ""
+}

@@ -1,10 +1,27 @@
 import * as AST from "../common/AST";
-import { createTypeStructDecl } from "../middleend/BuiltinTypes";
+import {
+  createTypeStructDecl,
+  createIntStructDecl,
+  createBoolStructDecl,
+  createDoubleStructDecl,
+  createStringStructDecl,
+  PRIMITIVE_STRUCT_MAP,
+} from "../middleend/BuiltinTypes";
 import { CompilerError } from "../common/CompilerError";
 import { Token } from "../frontend/Token";
 import { TokenType } from "../frontend/TokenType";
 
 export class CodeGenerator {
+  private stdLibPath?: string;
+  private useLinkOnceOdrForStdLib: boolean = false;
+
+  constructor(
+    options: { stdLibPath?: string; useLinkOnceOdrForStdLib?: boolean } = {},
+  ) {
+    this.stdLibPath = options.stdLibPath;
+    this.useLinkOnceOdrForStdLib = options.useLinkOnceOdrForStdLib || false;
+  }
+
   private output: string[] = [];
   private declarationsOutput: string[] = []; // declarations like struct definitions
   private currentFilePath: string = "unknown"; // Track current file for error reporting
@@ -87,21 +104,63 @@ export class CodeGenerator {
     this.emittedFunctions.clear();
     this.typeAliasMap.clear();
 
-    // Inject built-in Type struct
-    const typeDecl = createTypeStructDecl();
-    this.structMap.set("Type", typeDecl);
-    this.generateStruct(typeDecl);
-    // Register generated methods as defined
-    for (const member of typeDecl.members) {
-      if (member.kind === "FunctionDecl") {
-        const method = member as AST.FunctionDecl;
-        const funcName = `Type_${method.name}`;
-        const mangled = this.getMangledName(
-          funcName,
-          method.resolvedType as AST.FunctionTypeNode,
+    // Populate structMap with user-defined structs first
+    for (const stmt of program.statements) {
+      if (stmt.kind === "StructDecl") {
+        this.structMap.set(
+          (stmt as AST.StructDecl).name,
+          stmt as AST.StructDecl,
         );
-        this.definedFunctions.add(mangled);
-        this.declaredFunctions.add(mangled);
+      }
+    }
+
+    // Inject built-in Type struct
+    if (!this.structMap.has("Type")) {
+      const typeDecl = createTypeStructDecl();
+      this.structMap.set("Type", typeDecl);
+      this.generateStruct(typeDecl);
+    }
+
+    // Inject built-in primitive wrapper structs
+    if (!this.structMap.has("Int")) {
+      const intDecl = createIntStructDecl();
+      this.structMap.set("Int", intDecl);
+      this.generateStruct(intDecl);
+    }
+
+    if (!this.structMap.has("Bool")) {
+      const boolDecl = createBoolStructDecl();
+      this.structMap.set("Bool", boolDecl);
+      this.generateStruct(boolDecl);
+    }
+
+    if (!this.structMap.has("Double")) {
+      const doubleDecl = createDoubleStructDecl();
+      this.structMap.set("Double", doubleDecl);
+      this.generateStruct(doubleDecl);
+    }
+
+    if (!this.structMap.has("String")) {
+      const stringDecl = createStringStructDecl();
+      this.structMap.set("String", stringDecl);
+      this.generateStruct(stringDecl);
+    }
+
+    // Register generated methods as defined
+    // We need to do this for Type struct if it was injected
+    const typeDecl = this.structMap.get("Type");
+    if (typeDecl) {
+      for (const member of typeDecl.members) {
+        if (member.kind === "FunctionDecl") {
+          const method = member as AST.FunctionDecl;
+          const funcName = `Type_${method.name}`;
+          const mangled = this.getMangledName(
+            funcName,
+            method.resolvedType as AST.FunctionTypeNode,
+          );
+          this.definedFunctions.add(mangled);
+          this.declaredFunctions.add(mangled);
+        }
       }
     }
 
@@ -275,14 +334,14 @@ export class CodeGenerator {
       `%struct.ExceptionFrame = type { [32 x i64], %struct.ExceptionFrame* }`,
     );
     this.emitDeclaration(
-      `@exception_top = global %struct.ExceptionFrame* null`,
+      `@exception_top = weak global %struct.ExceptionFrame* null`,
     );
-    this.emitDeclaration(`@exception_value = global i64 0`);
-    this.emitDeclaration(`@exception_type = global i32 0`);
+    this.emitDeclaration(`@exception_value = weak global i64 0`);
+    this.emitDeclaration(`@exception_type = weak global i32 0`);
 
     // Global argc/argv for Args library
-    this.emitDeclaration(`@__bpl_argc_value = global i32 0`);
-    this.emitDeclaration(`@__bpl_argv_value = global i8** null`);
+    this.emitDeclaration(`@__bpl_argc_value = weak global i32 0`);
+    this.emitDeclaration(`@__bpl_argv_value = weak global i8** null`);
 
     this.emitDeclaration(`declare i32 @setjmp(i8*) returns_twice`);
     this.declaredFunctions.add("setjmp");
@@ -290,12 +349,14 @@ export class CodeGenerator {
     this.declaredFunctions.add("longjmp");
 
     // Helper functions for accessing argc/argv
-    this.emitDeclaration(`define i32 @__bpl_argc() {`);
+    this.emitDeclaration(`define linkonce_odr i32 @__bpl_argc() {`);
     this.emitDeclaration(`  %1 = load i32, i32* @__bpl_argc_value`);
     this.emitDeclaration(`  ret i32 %1`);
     this.emitDeclaration(`}`);
     this.emitDeclaration(``);
-    this.emitDeclaration(`define i8* @__bpl_argv_get(i32 %index) {`);
+    this.emitDeclaration(
+      `define linkonce_odr i8* @__bpl_argv_get(i32 %index) {`,
+    );
     this.emitDeclaration(`  %1 = load i8**, i8*** @__bpl_argv_value`);
     this.emitDeclaration(`  %2 = getelementptr i8*, i8** %1, i32 %index`);
     this.emitDeclaration(`  %3 = load i8*, i8** %2`);
@@ -308,7 +369,9 @@ export class CodeGenerator {
 
     // Helper: memory zero-check function used for 'struct == null' comparisons
     if (!this.emittedMemIsZero) {
-      this.emitDeclaration("define i1 @__bpl_mem_is_zero(i8* %ptr, i64 %n) {");
+      this.emitDeclaration(
+        "define linkonce_odr i1 @__bpl_mem_is_zero(i8* %ptr, i64 %n) {",
+      );
       this.emitDeclaration("entry:");
       this.emitDeclaration("  %end = getelementptr i8, i8* %ptr, i64 %n");
       this.emitDeclaration("  br label %loop");
@@ -1322,7 +1385,19 @@ export class CodeGenerator {
         .join(", ");
     }
 
-    this.emit(`define ${retType} @${name}(${params}) {`);
+    let linkage = "";
+    if (name.startsWith("Type_")) {
+      linkage = "linkonce_odr ";
+    } else if (
+      this.useLinkOnceOdrForStdLib &&
+      this.stdLibPath &&
+      decl.location &&
+      decl.location.file &&
+      decl.location.file.startsWith(this.stdLibPath)
+    ) {
+      linkage = "linkonce_odr ";
+    }
+    this.emit(`define ${linkage}${retType} @${name}(${params}) {`);
     this.emit("entry:");
 
     // Store argc/argv in global variables for main function
@@ -2732,6 +2807,20 @@ export class CodeGenerator {
           return str.includes(".") ? str : `${str}.0`;
         }
       }
+
+      // Use raw value for integers to preserve precision
+      if (expr.raw) {
+        try {
+          const cleaned = expr.raw.replace(/_/g, "");
+          // Only use BigInt if it doesn't look like a float
+          if (!cleaned.includes(".")) {
+            return BigInt(cleaned).toString();
+          }
+        } catch (e) {
+          // Fallback to value.toString()
+        }
+      }
+
       return expr.value.toString();
     } else if (expr.type === "char") {
       return expr.value.toString().charCodeAt(0);
@@ -3154,6 +3243,7 @@ export class CodeGenerator {
 
     // Check if we're dealing with floating point types
     const isFloat = leftType === "double" || leftType === "float";
+    const isUnsigned = !isFloat && !this.isSigned(expr.left.resolvedType!);
 
     let op = "";
     switch (expr.operator.type) {
@@ -3167,7 +3257,8 @@ export class CodeGenerator {
         op = isFloat ? "fmul" : "mul";
         break;
       case TokenType.Slash:
-        op = isFloat ? "fdiv" : "sdiv";
+        if (isFloat) op = "fdiv";
+        else op = isUnsigned ? "udiv" : "sdiv";
         break;
       case TokenType.EqualEqual:
         op = isFloat ? "fcmp oeq" : "icmp eq";
@@ -3176,19 +3267,24 @@ export class CodeGenerator {
         op = isFloat ? "fcmp one" : "icmp ne";
         break;
       case TokenType.Less:
-        op = isFloat ? "fcmp olt" : "icmp slt";
+        if (isFloat) op = "fcmp olt";
+        else op = isUnsigned ? "icmp ult" : "icmp slt";
         break;
       case TokenType.LessEqual:
-        op = isFloat ? "fcmp ole" : "icmp sle";
+        if (isFloat) op = "fcmp ole";
+        else op = isUnsigned ? "icmp ule" : "icmp sle";
         break;
       case TokenType.Greater:
-        op = isFloat ? "fcmp ogt" : "icmp sgt";
+        if (isFloat) op = "fcmp ogt";
+        else op = isUnsigned ? "icmp ugt" : "icmp sgt";
         break;
       case TokenType.GreaterEqual:
-        op = isFloat ? "fcmp oge" : "icmp sge";
+        if (isFloat) op = "fcmp oge";
+        else op = isUnsigned ? "icmp uge" : "icmp sge";
         break;
       case TokenType.Percent:
-        op = isFloat ? "frem" : "srem";
+        if (isFloat) op = "frem";
+        else op = isUnsigned ? "urem" : "srem";
         break;
       case TokenType.Ampersand:
         op = "and";
@@ -3203,7 +3299,7 @@ export class CodeGenerator {
         op = "shl";
         break;
       case TokenType.GreaterGreater:
-        op = "ashr"; // Assuming arithmetic shift right
+        op = isUnsigned ? "lshr" : "ashr";
         break;
     }
 
@@ -3496,6 +3592,12 @@ export class CodeGenerator {
 
           if (cleanType.startsWith("%struct.")) {
             structName = cleanType.substring(8);
+          } else if (PRIMITIVE_STRUCT_MAP[objType.name]) {
+            structName = PRIMITIVE_STRUCT_MAP[objType.name]!;
+            targetThisType = `%struct.${structName}*`;
+          } else if (PRIMITIVE_STRUCT_MAP[cleanType]) {
+            structName = PRIMITIVE_STRUCT_MAP[cleanType]!;
+            targetThisType = `%struct.${structName}*`;
           } else {
             structName = objType.name;
           }

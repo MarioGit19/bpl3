@@ -54,6 +54,32 @@ export const TYPE_ALIASES: [string, string][] = [
 ];
 
 /**
+ * Mapping from primitive types to their struct wrappers
+ */
+export const PRIMITIVE_STRUCT_MAP: Record<string, string> = {
+  i32: "Int",
+  int: "Int",
+  i1: "Bool",
+  bool: "Bool",
+  double: "Double",
+  float: "Double",
+  i64: "Long",
+  long: "Long",
+  i8: "Char",
+  char: "Char",
+  u8: "UChar",
+  uchar: "UChar",
+  i16: "Short",
+  short: "Short",
+  u16: "UShort",
+  ushort: "UShort",
+  u32: "UInt",
+  uint: "UInt",
+  u64: "ULong",
+  ulong: "ULong",
+};
+
+/**
  * Create a basic type node
  */
 export function createBasicType(
@@ -233,6 +259,84 @@ export function createTypeStructDecl(): AST.StructDecl {
     genericParams: [],
     inheritanceList: [],
     members: [getTypeNameMethod, toStringMethod, destroyMethod],
+    location: INTERNAL_LOCATION,
+  };
+}
+
+export function createIntStructDecl(): AST.StructDecl {
+  return {
+    kind: "StructDecl",
+    name: "Int",
+    genericParams: [],
+    inheritanceList: [],
+    members: [
+      {
+        kind: "StructField",
+        name: "value",
+        type: createBasicType("i32"),
+        location: INTERNAL_LOCATION,
+      },
+    ],
+    location: INTERNAL_LOCATION,
+  };
+}
+
+export function createBoolStructDecl(): AST.StructDecl {
+  return {
+    kind: "StructDecl",
+    name: "Bool",
+    genericParams: [],
+    inheritanceList: [],
+    members: [
+      {
+        kind: "StructField",
+        name: "value",
+        type: createBasicType("i1"),
+        location: INTERNAL_LOCATION,
+      },
+    ],
+    location: INTERNAL_LOCATION,
+  };
+}
+
+export function createDoubleStructDecl(): AST.StructDecl {
+  return {
+    kind: "StructDecl",
+    name: "Double",
+    genericParams: [],
+    inheritanceList: [],
+    members: [
+      {
+        kind: "StructField",
+        name: "value",
+        type: createBasicType("double"),
+        location: INTERNAL_LOCATION,
+      },
+    ],
+    location: INTERNAL_LOCATION,
+  };
+}
+
+export function createStringStructDecl(): AST.StructDecl {
+  return {
+    kind: "StructDecl",
+    name: "String",
+    genericParams: [],
+    inheritanceList: [],
+    members: [
+      {
+        kind: "StructField",
+        name: "data",
+        type: createBasicType("i8", { pointerDepth: 1 }),
+        location: INTERNAL_LOCATION,
+      },
+      {
+        kind: "StructField",
+        name: "length",
+        type: createBasicType("i32"),
+        location: INTERNAL_LOCATION,
+      },
+    ],
     location: INTERNAL_LOCATION,
   };
 }

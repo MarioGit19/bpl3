@@ -91,6 +91,7 @@ export class SymbolTable {
   }
 
   private levenshtein(a: string, b: string): number {
+    if (!a || !b) return (a || b)?.length;
     if (a.length === 0) return b.length;
     if (b.length === 0) return a.length;
 

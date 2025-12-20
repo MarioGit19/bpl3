@@ -75,6 +75,8 @@
     - Direct field access on struct variants (e.g., `msg.x`) - use pattern matching instead
     - Namespace-qualified patterns in match (e.g., `Enums.Color.Red`) - import enum directly
     - Generic enum type inference (e.g., `Option.Some(42)` → `Option<int>`) - requires bidirectional type checking
+- [x] Root Global `Type` Struct (Implicit inheritance for all structs)
+- [x] Primitive Types as Structs Inheriting `Primitive` (Wrapper structs for int, float, bool, char)
 
 ## Pending Features (expanded)
 
@@ -97,18 +99,6 @@
     - ⏳ Namespace-qualified patterns - Import enums directly instead
     - ⏳ Generic type inference - Requires bidirectional type checking (future enhancement)
   - **Why complete:** All essential features for practical enum usage are implemented and thoroughly tested. Remaining limitations have simple workarounds and don't impact typical use cases.
-
-- [x] Root Global `Type` Struct (COMPLETED)
-
-  - Description: Define a root `Type` struct that every user-defined struct implicitly inherits from, providing methods like `getTypeName()`, `getSize()`, `toString()`, and basic equality.
-  - **Status:** ✅ Implemented. `lib/type.bpl` defines `Type` struct. `TypeChecker` injects it as implicit parent. `CodeGenerator` supports cross-module inheritance and method resolution.
-
-- [3] Primitive Types as Structs Inheriting `Primitive` (COMPLEMENTS TYPE SYSTEM)
-
-  - Description: Model primitive types (int, float, bool, char) as structs inheriting from a `Primitive` base, exposing operations as methods to unify the type system.
-  - Implementation notes: Represent primitives specially in the type system but provide method dispatch wrappers so code like `int_val.toString()` is valid. Balance performance (inlined primitives) with uniformity (object-like methods).
-  - Acceptance criteria: Primitive methods are callable and interoperate with language operators; performance-sensitive paths remain efficient.
-  - **Why important:** Unifies type system, allows calling methods on primitives (42.toString()), eliminates special cases in language design.
 
 - [3] Multi-Target Support
 

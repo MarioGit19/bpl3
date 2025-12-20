@@ -535,7 +535,7 @@ export function checkStructLiteral(
       );
     }
 
-    const { field: member, type: memberType } = memberResult;
+    const { type: memberType } = memberResult;
 
     const valueType = this.checkExpression(field.value);
     if (valueType) {

@@ -10,7 +10,7 @@ import * as AST from "../common/AST";
 import { CompilerError, type SourceLocation } from "../common/CompilerError";
 import { lexWithGrammar } from "../frontend/GrammarLexer";
 import { Parser } from "../frontend/Parser";
-import type { Symbol, SymbolTable } from "./SymbolTable";
+import { type Symbol, SymbolTable } from "./SymbolTable";
 import { initializeBuiltinsInScope } from "./BuiltinTypes";
 
 /**
@@ -36,6 +36,7 @@ export interface ImportHandlerContext {
   currentScope: SymbolTable;
   globalScope: SymbolTable;
   hoistDeclaration: (stmt: AST.Statement) => void;
+  checkStatement: (stmt: AST.Statement) => void;
   defineSymbol: (
     name: string,
     kind: string,
@@ -216,9 +217,10 @@ export class ImportHandler {
       const tokens = lexWithGrammar(content, importPath);
       const parser = new Parser(content, importPath, tokens);
       moduleAst = parser.parse();
+      this.ctx.preLoadedModules.set(importPath, moduleAst);
     }
 
-    const moduleScope = (this.ctx.currentScope as any).constructor();
+    const moduleScope = new SymbolTable();
     this.ctx.modules.set(importPath, moduleScope);
     initializeBuiltinsInScope(moduleScope);
 
@@ -233,6 +235,12 @@ export class ImportHandler {
     // Hoist declarations in the imported module
     for (const s of moduleAst.statements) {
       this.ctx.hoistDeclaration(s);
+    }
+
+    // Check statements (Pass 2) to resolve methods in structs
+    // This ensures that methods in implicitly loaded modules have their resolvedType set
+    for (const s of moduleAst.statements) {
+      this.ctx.checkStatement(s);
     }
 
     // Restore context
@@ -251,7 +259,7 @@ export class ImportHandler {
 
     // Get AST for export checking
     let moduleAst = ast;
-    if (!moduleAst && this.ctx.skipImportResolution) {
+    if (!moduleAst) {
       moduleAst = this.ctx.preLoadedModules.get(importPath);
     }
 
@@ -271,6 +279,54 @@ export class ImportHandler {
   }
 
   /**
+   * Load implicit imports (primitives) into the global scope
+   */
+  public loadImplicitImports(): void {
+    const stdLibPath = getStdLibPath();
+    const primitivesPath = path.join(stdLibPath, "primitives.bpl");
+
+    // Check if file exists to avoid crashing if stdlib is missing
+    if (!fs.existsSync(primitivesPath)) {
+      // console.log("Primitives file not found");
+      return;
+    }
+
+    const location: SourceLocation = {
+      file: "internal",
+      startLine: 0,
+      startColumn: 0,
+      endLine: 0,
+      endColumn: 0,
+    };
+
+    try {
+      const moduleScope = this.loadModule(primitivesPath, undefined, location);
+
+      // Export specific symbols to global scope
+      const symbolsToExport = [
+        "Int",
+        "Bool",
+        "Double",
+        "Long",
+        "Char",
+        "UChar",
+        "Short",
+        "UShort",
+        "UInt",
+        "ULong",
+      ];
+      for (const name of symbolsToExport) {
+        const symbol = moduleScope.resolve(name);
+        if (symbol) {
+          this.defineImportedSymbol(name, symbol, this.ctx.globalScope);
+        }
+      }
+    } catch (e) {
+      // console.log("Error loading implicit primitives:", e);
+    }
+  }
+
+  /**
    * Import a module as a namespace
    */
   private importAsNamespace(
@@ -280,7 +336,7 @@ export class ImportHandler {
     importPath: string,
   ): void {
     // Create a restricted scope that only contains exported items
-    const exportedScope = (moduleScope as any).constructor();
+    const exportedScope = new SymbolTable();
 
     if (ast) {
       for (const s of ast.statements) {
@@ -369,9 +425,21 @@ export class ImportHandler {
       for (const s of ast.statements) {
         if (s.kind === "Export") {
           const exportStmt = s as AST.ExportStmt;
+          // console.log(
+          //   `Checking export: '${exportStmt.item}' vs '${item.name}'`,
+          // );
           if (exportStmt.item === item.name) {
             isExported = true;
             exportedSymbol = moduleScope.resolve(item.name);
+            if (!exportedSymbol) {
+              // console.log(
+              //   `Failed to resolve exported symbol '${item}' in module scope.`,
+              // );
+              // console.log(
+              //   "Available symbols:",
+              //   Array.from((moduleScope as any).symbols.keys()),
+              // );
+            }
             break;
           }
         }

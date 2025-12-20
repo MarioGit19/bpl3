@@ -313,9 +313,96 @@ export function checkMember(
   const objectType = this.checkExpression(expr.object);
   if (!objectType) return undefined;
 
+  // Handle primitive member access - map to wrapper structs (Int, Bool, etc.)
+  let effectiveObjectType = objectType;
+  if (
+    objectType.kind === "BasicType" &&
+    objectType.pointerDepth === 0 &&
+    objectType.arrayDimensions.length === 0 &&
+    !objectType.resolvedDeclaration
+  ) {
+    let structName: string | undefined;
+    switch (objectType.name) {
+      case "int":
+      case "i32":
+        structName = "Int";
+        break;
+      case "long":
+      case "i64":
+        structName = "Long";
+        break;
+      case "char":
+      case "i8":
+        structName = "Char";
+        break;
+      case "uchar":
+      case "u8":
+        structName = "UChar";
+        break;
+      case "short":
+      case "i16":
+        structName = "Short";
+        break;
+      case "ushort":
+      case "u16":
+        structName = "UShort";
+        break;
+      case "uint":
+      case "u32":
+        structName = "UInt";
+        break;
+      case "ulong":
+      case "u64":
+        structName = "ULong";
+        break;
+      case "bool":
+      case "i1":
+        structName = "Bool";
+        break;
+      case "double":
+      case "f64":
+        structName = "Double";
+        break;
+    }
+
+    if (structName) {
+      let symbol = this.currentScope.resolve(structName);
+      if (!symbol) {
+        const stdSymbol = this.currentScope.resolve("std");
+        if (stdSymbol && stdSymbol.kind === "Module" && stdSymbol.moduleScope) {
+          symbol = stdSymbol.moduleScope.resolve(structName);
+        }
+      }
+
+      // Fallback: Try to find in any loaded module (e.g. primitives.bpl)
+      // This allows primitive methods to work even if the wrapper struct isn't imported
+      if (!symbol && (this as any).modules) {
+        for (const moduleScope of (this as any).modules.values()) {
+          const s = (moduleScope as any).resolve(structName);
+          if (s && s.kind === "Struct") {
+            symbol = s;
+            break;
+          }
+        }
+      }
+
+      if (symbol && symbol.kind === "Struct") {
+        effectiveObjectType = {
+          kind: "BasicType",
+          name: symbol.name,
+          genericArgs: [],
+          pointerDepth: 0,
+          arrayDimensions: [],
+          location: objectType.location,
+          resolvedDeclaration: symbol.declaration as AST.StructDecl,
+        };
+      }
+    }
+  }
+
   // Handle module member access
-  if ((objectType as any).kind === "ModuleType") {
-    const moduleScope = (objectType as any).moduleScope;
+  if ((effectiveObjectType as any).kind === "ModuleType") {
+    const moduleScope = (effectiveObjectType as any).moduleScope;
     const symbol = moduleScope?.resolve(expr.property);
     if (!symbol) {
       throw new CompilerError(
@@ -345,8 +432,8 @@ export function checkMember(
   }
 
   // Handle enum variant access
-  if ((objectType as any).kind === "MetaType") {
-    const innerType = (objectType as any).type as AST.BasicTypeNode;
+  if ((effectiveObjectType as any).kind === "MetaType") {
+    const innerType = (effectiveObjectType as any).type as AST.BasicTypeNode;
     const symbol = this.currentScope.resolve(innerType.name);
 
     if (symbol && symbol.kind === "Enum") {
@@ -432,11 +519,14 @@ export function checkMember(
   }
 
   // Handle struct/enum member access
-  if (objectType.kind === "BasicType") {
+  if (effectiveObjectType.kind === "BasicType") {
     const baseType =
-      objectType.pointerDepth > 0
-        ? { ...objectType, pointerDepth: objectType.pointerDepth - 1 }
-        : objectType;
+      effectiveObjectType.pointerDepth > 0
+        ? {
+            ...effectiveObjectType,
+            pointerDepth: effectiveObjectType.pointerDepth - 1,
+          }
+        : effectiveObjectType;
 
     // Check if it's an enum and look for methods
     const symbol = this.currentScope.resolve(baseType.name);
@@ -525,39 +615,37 @@ export function checkMember(
               thisParamType = this.substituteType(thisParamType, genericMap);
             }
 
-            console.log(
-              `Checking compatibility for ${method.name}: this=${this.typeToString(thisParamType)}, object=${this.typeToString(objectType)}`,
-            );
-
             // Check compatibility of 'this' parameter type with object type
             const isThisCompatible = this.areTypesCompatible(
               thisParamType,
-              objectType,
+              effectiveObjectType,
             );
 
             // Also handle pointer compatibility (this: T* vs object: T)
             // We check if T is compatible with object type
             const pointerCompatible =
               thisParamType.kind === "BasicType" &&
-              objectType.kind === "BasicType" &&
-              thisParamType.pointerDepth === objectType.pointerDepth + 1 &&
+              effectiveObjectType.kind === "BasicType" &&
+              thisParamType.pointerDepth ===
+                effectiveObjectType.pointerDepth + 1 &&
               this.areTypesCompatible(
                 {
                   ...thisParamType,
                   pointerDepth: thisParamType.pointerDepth - 1,
                 },
-                objectType,
+                effectiveObjectType,
               );
 
             // Also handle dereference compatibility (this: T vs object: T*)
             // We check if T is compatible with object type dereferenced
             const dereferenceCompatible =
               thisParamType.kind === "BasicType" &&
-              objectType.kind === "BasicType" &&
-              thisParamType.pointerDepth === objectType.pointerDepth - 1 &&
+              effectiveObjectType.kind === "BasicType" &&
+              thisParamType.pointerDepth ===
+                effectiveObjectType.pointerDepth - 1 &&
               this.areTypesCompatible(thisParamType, {
-                ...objectType,
-                pointerDepth: objectType.pointerDepth - 1,
+                ...effectiveObjectType,
+                pointerDepth: effectiveObjectType.pointerDepth - 1,
               });
 
             if (
@@ -578,7 +666,7 @@ export function checkMember(
         if (compatibleMethods.length === 0) {
           throw new CompilerError(
             `No compatible instance method '${expr.property}' found on type '${this.typeToString(
-              objectType,
+              effectiveObjectType,
             )}'`,
             "Static methods must be called on the type, not an instance.",
             expr.location,
@@ -670,20 +758,24 @@ export function checkMember(
   }
 
   // Handle tuple indexing
-  if (objectType.kind === "TupleType") {
+  if (effectiveObjectType.kind === "TupleType") {
     const index = parseInt(expr.property, 10);
-    if (!isNaN(index) && index >= 0 && index < objectType.types.length) {
-      return objectType.types[index];
+    if (
+      !isNaN(index) &&
+      index >= 0 &&
+      index < effectiveObjectType.types.length
+    ) {
+      return effectiveObjectType.types[index];
     }
     throw new CompilerError(
       `Invalid tuple index '${expr.property}'`,
-      `Valid indices are 0-${objectType.types.length - 1}`,
+      `Valid indices are 0-${effectiveObjectType.types.length - 1}`,
       expr.location,
     );
   }
 
   throw new CompilerError(
-    `Cannot access member '${expr.property}' on type '${this.typeToString(objectType)}'`,
+    `Cannot access member '${expr.property}' on type '${this.typeToString(effectiveObjectType)}'`,
     "Check the type definition for available members.",
     expr.location,
   );

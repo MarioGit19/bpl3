@@ -1,6 +1,6 @@
 # Test pattern destructuring with tuple variant data
 
-import [Message] from "./enums.bpl";
+import [Message] from "../enums.bpl";
 
 extern printf(fmt: string, ...);
 

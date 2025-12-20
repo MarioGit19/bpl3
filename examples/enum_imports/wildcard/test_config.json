@@ -1,0 +1,5 @@
+{
+  "name": "enum_imports",
+  "description": "Test importing and exporting enum types across modules",
+  "exitCode": 100
+}

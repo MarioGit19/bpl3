@@ -29,7 +29,7 @@ describe("ModuleResolver", () => {
     `,
     );
 
-    const resolver = new ModuleResolver();
+    const resolver = new ModuleResolver({ stdLibPath: tempDir });
     const modules = resolver.resolveModules(mainPath);
 
     expect(modules.length).toBe(1);
@@ -77,7 +77,7 @@ describe("ModuleResolver", () => {
     `,
     );
 
-    const resolver = new ModuleResolver();
+    const resolver = new ModuleResolver({ stdLibPath: tempDir });
     const modules = resolver.resolveModules(mainPath);
 
     // Should be in order: A, B, main
@@ -175,7 +175,7 @@ describe("ModuleResolver", () => {
     `,
     );
 
-    const resolver = new ModuleResolver();
+    const resolver = new ModuleResolver({ stdLibPath: tempDir });
     const modules = resolver.resolveModules(mainPath);
 
     // Common should appear first, then left and right, then main

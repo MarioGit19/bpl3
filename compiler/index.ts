@@ -11,6 +11,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { resolveBplPath } from "./common/PathResolver";
 import { CodeGenerator } from "./backend/CodeGenerator";
 import { ASTPrinter } from "./common/ASTPrinter";
 import { CompilerError } from "./common/CompilerError";
@@ -228,6 +229,11 @@ export class Compiler {
         typeChecker.setCurrentModulePath(module.path);
         typeChecker.checkProgram(module.ast, module.path);
         module.checked = true;
+
+        // Inject primitives into global scope if we just checked primitives.bpl
+        if (module.path.endsWith("primitives.bpl")) {
+          typeChecker.injectPrimitivesFromModule(module.path);
+        }
       }
 
       // Check for undefined symbols (linker verification)
@@ -300,7 +306,13 @@ export class Compiler {
         console.log("[Backend] Generating code...");
       }
 
-      const codeGenerator = new CodeGenerator();
+      const stdLibPath = path.resolve(resolveBplPath("lib"));
+      const isLinkingBpl = this.options.libraries?.includes("bpl");
+
+      const codeGenerator = new CodeGenerator({
+        stdLibPath,
+        useLinkOnceOdrForStdLib: isLinkingBpl,
+      });
 
       const llvmIR = codeGenerator.generate(combinedAST, this.options.filePath);
 

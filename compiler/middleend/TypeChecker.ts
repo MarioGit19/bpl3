@@ -46,6 +46,48 @@ export class TypeChecker extends TypeCheckerBase {
     super(options);
     this.importHandler = new ImportHandler(this as any);
     this.overloadResolver = new OverloadResolver(this as any);
+
+    // Load implicit imports (primitives)
+    if (!options.skipImportResolution) {
+      this.importHandler.loadImplicitImports();
+    }
+  }
+
+  /**
+   * Inject primitive symbols from a loaded module into the global scope
+   * Used when running with module resolution to ensure primitives are available globally
+   */
+  public injectPrimitivesFromModule(modulePath: string): void {
+    const moduleScope = this.modules.get(modulePath);
+    if (!moduleScope) return;
+
+    const symbolsToExport = [
+      "Int",
+      "Bool",
+      "Double",
+      "Long",
+      "Char",
+      "UChar",
+      "Short",
+      "UShort",
+      "UInt",
+      "ULong",
+    ];
+
+    for (const name of symbolsToExport) {
+      const symbol = moduleScope.resolve(name);
+      if (symbol) {
+        // Define in global scope if not already defined
+        if (!this.globalScope.resolve(name)) {
+          this.globalScope.define({
+            name,
+            kind: symbol.kind,
+            type: symbol.type,
+            declaration: symbol.declaration,
+          });
+        }
+      }
+    }
   }
 
   // ========== Program Checking ==========
@@ -90,28 +132,40 @@ export class TypeChecker extends TypeCheckerBase {
   public hoistDeclaration(stmt: AST.Statement): void {
     switch (stmt.kind) {
       case "StructDecl":
-        this.defineSymbol(stmt.name, "Struct", undefined, stmt);
-        this.registerLinkerSymbol(stmt.name, "type", undefined, stmt);
-        stmt.resolvedType = {
-          kind: "BasicType",
-          name: stmt.name,
-          genericArgs: [],
-          pointerDepth: 0,
-          arrayDimensions: [],
+        const structType: AST.TypeNode = {
+          kind: "MetaType",
+          type: {
+            kind: "BasicType",
+            name: stmt.name,
+            genericArgs: [],
+            pointerDepth: 0,
+            arrayDimensions: [],
+            location: stmt.location,
+            resolvedDeclaration: stmt,
+          },
           location: stmt.location,
         };
+        this.defineSymbol(stmt.name, "Struct", structType, stmt);
+        this.registerLinkerSymbol(stmt.name, "type", structType, stmt);
+        stmt.resolvedType = structType.type;
         break;
       case "EnumDecl":
-        this.defineSymbol(stmt.name, "Enum", undefined, stmt);
-        this.registerLinkerSymbol(stmt.name, "type", undefined, stmt);
-        stmt.resolvedType = {
-          kind: "BasicType",
-          name: stmt.name,
-          genericArgs: [],
-          pointerDepth: 0,
-          arrayDimensions: [],
+        const enumType: AST.TypeNode = {
+          kind: "MetaType",
+          type: {
+            kind: "BasicType",
+            name: stmt.name,
+            genericArgs: [],
+            pointerDepth: 0,
+            arrayDimensions: [],
+            location: stmt.location,
+            resolvedDeclaration: stmt,
+          },
           location: stmt.location,
         };
+        this.defineSymbol(stmt.name, "Enum", enumType, stmt);
+        this.registerLinkerSymbol(stmt.name, "type", enumType, stmt);
+        stmt.resolvedType = enumType.type;
         break;
       case "SpecDecl":
         this.defineSymbol(stmt.name, "Spec", undefined, stmt);

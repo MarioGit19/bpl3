@@ -15,7 +15,10 @@ import { TokenType } from "../frontend/TokenType";
 import { LinkerSymbolTable } from "./LinkerSymbolTable";
 import type { Symbol, SymbolKind } from "./SymbolTable";
 import { SymbolTable } from "./SymbolTable";
-import { initializeBuiltinsInScope } from "./BuiltinTypes";
+import {
+  initializeBuiltinsInScope,
+  PRIMITIVE_STRUCT_MAP,
+} from "./BuiltinTypes";
 import {
   TypeUtils,
   TypeSubstitution,
@@ -451,9 +454,6 @@ export abstract class TypeCheckerBase {
     t2: AST.TypeNode,
     checkConstraints: boolean = true,
   ): boolean {
-    console.log(
-      `areTypesCompatible: ${this.typeToString(t1)} vs ${this.typeToString(t2)}`,
-    );
     const rt1 = this.resolveType(t1, checkConstraints);
     const rt2 = this.resolveType(t2, checkConstraints);
 
@@ -839,26 +839,37 @@ export abstract class TypeCheckerBase {
     ) {
       decl = baseType.resolvedDeclaration as AST.StructDecl | AST.SpecDecl;
     } else {
-      const symbol = this.currentScope.resolve(baseType.name);
-      if (symbol) {
-        if (symbol.kind === "Struct") {
+      // Check if it's a primitive type that maps to a struct
+      if (PRIMITIVE_STRUCT_MAP[baseType.name]) {
+        const structName = PRIMITIVE_STRUCT_MAP[baseType.name]!;
+        const symbol = this.currentScope.resolve(structName);
+        if (symbol && symbol.kind === "Struct") {
           decl = symbol.declaration as AST.StructDecl;
-        } else if (symbol.kind === "Spec") {
-          decl = symbol.declaration as AST.SpecDecl;
-        } else if (symbol.kind === "TypeAlias") {
-          // Check if it's a generic parameter with a constraint
-          const aliasDecl = symbol.declaration as any;
-          // GenericParam interface doesn't have 'kind' property, so we check for constraint existence
-          // or if it happens to have kind="GenericParam" (future proofing)
-          if (
-            (aliasDecl.kind === "GenericParam" || !aliasDecl.kind) &&
-            aliasDecl.constraint
-          ) {
-            if (aliasDecl.constraint.kind === "BasicType") {
-              return this.resolveMemberWithContext(
-                aliasDecl.constraint as AST.BasicTypeNode,
-                memberName,
-              );
+        }
+      }
+
+      if (!decl) {
+        const symbol = this.currentScope.resolve(baseType.name);
+        if (symbol) {
+          if (symbol.kind === "Struct") {
+            decl = symbol.declaration as AST.StructDecl;
+          } else if (symbol.kind === "Spec") {
+            decl = symbol.declaration as AST.SpecDecl;
+          } else if (symbol.kind === "TypeAlias") {
+            // Check if it's a generic parameter with a constraint
+            const aliasDecl = symbol.declaration as any;
+            // GenericParam interface doesn't have 'kind' property, so we check for constraint existence
+            // or if it happens to have kind="GenericParam" (future proofing)
+            if (
+              (aliasDecl.kind === "GenericParam" || !aliasDecl.kind) &&
+              aliasDecl.constraint
+            ) {
+              if (aliasDecl.constraint.kind === "BasicType") {
+                return this.resolveMemberWithContext(
+                  aliasDecl.constraint as AST.BasicTypeNode,
+                  memberName,
+                );
+              }
             }
           }
         }
