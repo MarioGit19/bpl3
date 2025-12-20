@@ -3280,8 +3280,8 @@ export class TypeChecker {
     const decl = symbol.declaration as AST.StructDecl;
 
     for (const field of expr.fields) {
-      const member = this.resolveStructField(decl, field.name);
-      if (!member) {
+      const memberResult = this.resolveStructField(decl, field.name);
+      if (!memberResult) {
         throw new CompilerError(
           `Unknown field '${field.name}' in struct '${expr.structName}'`,
           "Check the struct definition for valid fields.",
@@ -3289,15 +3289,17 @@ export class TypeChecker {
         );
       }
 
+      const { field: member, type: memberType } = memberResult;
+
       const valueType = this.checkExpression(field.value);
       if (valueType) {
-        const resolvedMemberType = this.resolveType(member.type);
+        const resolvedMemberType = this.resolveType(memberType);
         const resolvedValueType = this.resolveType(valueType);
 
         if (!this.areTypesCompatible(resolvedMemberType, resolvedValueType)) {
           throw new CompilerError(
             `Type mismatch for field '${field.name}': expected ${this.typeToString(
-              member.type,
+              memberType,
             )}, got ${this.typeToString(valueType)}`,
             "Field value must match the declared type.",
             field.value.location,

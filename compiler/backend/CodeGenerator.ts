@@ -402,6 +402,35 @@ export class CodeGenerator {
     if (decl.inheritanceList) {
       for (const typeNode of decl.inheritanceList) {
         if (typeNode.kind === "BasicType") {
+          // Check for generic instantiation
+          if (typeNode.genericArgs && typeNode.genericArgs.length > 0) {
+            const baseDecl =
+              (typeNode.resolvedDeclaration as AST.StructDecl) ||
+              this.structMap.get(typeNode.name);
+            if (baseDecl && baseDecl.kind === "StructDecl") {
+              // Resolve the monomorphized struct to ensure it exists and we get the concrete name
+              const llvmType = this.resolveMonomorphizedType(
+                baseDecl,
+                typeNode.genericArgs,
+              );
+              // llvmType is like %struct.Name_Args
+              let structName = llvmType;
+              if (structName.startsWith("%struct.")) {
+                structName = structName.substring(8);
+              }
+              // Strip pointer if present (shouldn't be for struct type)
+              while (structName.endsWith("*")) {
+                structName = structName.slice(0, -1);
+              }
+
+              const parent = this.structMap.get(structName);
+              if (parent) {
+                fields = this.getAllStructFields(parent);
+                break; // Only one parent struct
+              }
+            }
+          }
+
           // Try to use resolved declaration first (supports cross-module inheritance)
           if (
             typeNode.resolvedDeclaration &&
@@ -963,7 +992,7 @@ export class CodeGenerator {
         );
       }
       for (let i = 0; i < baseStruct.genericParams.length; i++) {
-        typeMap.set(baseStruct.genericParams[i]!.name, genericArgs[i]!);
+        typeMap.set(baseStruct.genericParams[i]!.name.trim(), genericArgs[i]!);
       }
 
       // Clone and substitute fields
@@ -1157,21 +1186,25 @@ export class CodeGenerator {
     map: Map<string, AST.TypeNode>,
   ): AST.TypeNode {
     if (type.kind === "BasicType") {
-      if (map.has(type.name)) {
-        const mapped = map.get(type.name)!;
-        // Merge pointer depth and array dims
-        if (mapped.kind === "BasicType") {
-          return {
-            ...mapped,
-            pointerDepth: mapped.pointerDepth + type.pointerDepth,
-            arrayDimensions: [
-              ...mapped.arrayDimensions,
-              ...type.arrayDimensions,
-            ],
-          };
+      // Check map by iterating keys to ensure string matching works
+      for (const [key, value] of map.entries()) {
+        if (key === type.name.trim()) {
+          const mapped = value;
+          // Merge pointer depth and array dims
+          if (mapped.kind === "BasicType") {
+            return {
+              ...mapped,
+              pointerDepth: mapped.pointerDepth + type.pointerDepth,
+              arrayDimensions: [
+                ...mapped.arrayDimensions,
+                ...type.arrayDimensions,
+              ],
+            };
+          }
+          return mapped;
         }
-        return mapped;
       }
+
       // Recursively substitute generic args
       return {
         ...type,
@@ -2377,64 +2410,58 @@ export class CodeGenerator {
     targetType: AST.BasicTypeNode,
     expr: AST.TypeMatchExpr,
   ): string {
-    // For regular type matching, compare the runtime types
-    // This is useful in generic contexts like: match<int>(arg) where arg: T
+    // For regular type matching, compare the resolved LLVM types
+    // Since generics are monomorphized, we know the concrete types at compile time.
 
     const valueTypeStr = this.resolveType(valueType);
     const targetTypeStr = this.resolveType(targetType);
 
-    // For simple cases where we can determine at compile time
+    // Exact match
     if (valueTypeStr === targetTypeStr) {
-      // Types match at compile time - always true
       const result = this.newRegister();
       this.emit(`  ${result} = icmp eq i1 1, 1`);
       return result;
     }
 
-    // Check if value type is a generic type parameter
-    // In this case, we need runtime type information
-    if (
-      valueType.kind === "BasicType" &&
-      this.isGenericTypeParameter((valueType as AST.BasicTypeNode).name)
-    ) {
-      // For generic type parameters, we'd need RTTI
-      // For now, we'll compare the resolved types
-      // This is a simplified implementation - full RTTI would require type IDs
+    // Inheritance checking
+    if (valueType.kind === "BasicType" && targetType.kind === "BasicType") {
+      const valueBasic = valueType as AST.BasicTypeNode;
+      const targetBasic = targetType as AST.BasicTypeNode;
 
-      // Try to match based on size and structure
-      const valueSize = this.getASTTypeSize(valueType);
-      const targetSize = this.getASTTypeSize(targetType);
-
-      if (valueSize !== targetSize) {
-        // Sizes don't match - definitely different types
-        const result = this.newRegister();
-        this.emit(`  ${result} = icmp eq i1 0, 1`); // Always false
-        return result;
+      // Only check inheritance if pointer depth matches
+      if (valueBasic.pointerDepth === targetBasic.pointerDepth) {
+        if (this.checkInheritance(valueBasic.name, targetBasic.name)) {
+          const result = this.newRegister();
+          this.emit(`  ${result} = icmp eq i1 1, 1`);
+          return result;
+        }
       }
-
-      // If sizes match, we need to compare the actual types
-      // For primitive types, we can do a best-effort comparison
-      const result = this.newRegister();
-      if (this.isPrimitiveType(targetType.name)) {
-        // For primitives, if size matches, assume it's the same type
-        // This is a simplification - real RTTI would be needed for full support
-        this.emit(`  ${result} = icmp eq i1 1, 1`); // Assume true for matching sizes
-      } else {
-        // For complex types, return false by default
-        this.emit(`  ${result} = icmp eq i1 0, 1`); // Return false
-      }
-      return result;
     }
 
-    // For non-generic cases, compare at compile time
+    // Otherwise, types do not match
     const result = this.newRegister();
-    if (valueTypeStr === targetTypeStr) {
-      this.emit(`  ${result} = icmp eq i1 1, 1`); // True
-    } else {
-      this.emit(`  ${result} = icmp eq i1 0, 1`); // False
-    }
-
+    this.emit(`  ${result} = icmp eq i1 0, 1`);
     return result;
+  }
+
+  private checkInheritance(childName: string, parentName: string): boolean {
+    if (childName === parentName) return true;
+
+    const structDecl = this.structMap.get(childName);
+    if (!structDecl) return false;
+
+    if (structDecl.inheritanceList) {
+      for (const parent of structDecl.inheritanceList) {
+        if (parent.kind === "BasicType") {
+          const parentBasic = parent as AST.BasicTypeNode;
+          // Check direct parent
+          if (parentBasic.name === parentName) return true;
+          // Check recursive
+          if (this.checkInheritance(parentBasic.name, parentName)) return true;
+        }
+      }
+    }
+    return false;
   }
 
   private isGenericTypeParameter(name: string): boolean {
@@ -3375,6 +3402,7 @@ export class CodeGenerator {
     let funcName = "";
     let argsToGenerate = expr.args;
     let isInstanceCall = false;
+    let targetThisType: string | undefined;
 
     let callee = expr.callee;
     let genericArgs = expr.genericArgs || [];
@@ -3570,8 +3598,47 @@ export class CodeGenerator {
           if (ownerDecl.genericParams.length === 0) {
             // Parent is not generic, use its name directly
             structName = ownerDecl.name;
+            targetThisType = `%struct.${structName}*`;
+          } else {
+            // Generic parent inheritance
+            const childDecl = this.structMap.get(
+              (objType as AST.BasicTypeNode).name,
+            );
+            if (childDecl) {
+              const parentType = this.findInstantiatedParentType(
+                childDecl,
+                objType as AST.BasicTypeNode,
+                ownerDecl.name,
+              );
+
+              if (parentType) {
+                const llvmType = this.resolveMonomorphizedType(
+                  ownerDecl,
+                  parentType.genericArgs,
+                );
+                structName = llvmType.substring(8); // Strip %struct.
+                targetThisType = `${llvmType}*`;
+
+                // Populate callSubstitutionMap for generic parent
+                if (ownerDecl.genericParams.length > 0) {
+                  for (let i = 0; i < ownerDecl.genericParams.length; i++) {
+                    if (i < parentType.genericArgs.length) {
+                      callSubstitutionMap.set(
+                        ownerDecl.genericParams[i]!.name,
+                        parentType.genericArgs[i]!,
+                      );
+                      // Also populate contextMap for mangling
+                      if (!contextMap) contextMap = new Map();
+                      contextMap.set(
+                        ownerDecl.genericParams[i]!.name,
+                        parentType.genericArgs[i]!,
+                      );
+                    }
+                  }
+                }
+              }
+            }
           }
-          // TODO: Handle generic parent inheritance
         }
 
         funcName = `${structName}_${memberExpr.property}`;
@@ -3806,6 +3873,57 @@ export class CodeGenerator {
           const destType = this.resolveType(targetTypeNode);
           const srcType = this.resolveType(arg.resolvedType!);
 
+          // Handle 'this' pointer cast for inherited methods
+          if (
+            isInstanceCall &&
+            i === 0 &&
+            targetThisType &&
+            srcType !== targetThisType
+          ) {
+            let ptrVal: string;
+            let ptrType: string;
+
+            if (srcType.endsWith("*")) {
+              ptrVal = this.generateExpression(arg);
+              ptrType = srcType;
+            } else {
+              // Try to get address
+              try {
+                ptrVal = this.generateAddress(arg);
+                ptrType = srcType + "*";
+              } catch {
+                // Spill to stack
+                const val = this.generateExpression(arg);
+                const spill = this.allocateStack(
+                  `spill_${this.labelCount++}`,
+                  srcType,
+                );
+                this.emit(`  store ${srcType} ${val}, ${srcType}* ${spill}`);
+                ptrVal = spill;
+                ptrType = srcType + "*";
+              }
+            }
+
+            const castReg = this.newRegister();
+            this.emit(
+              `  ${castReg} = bitcast ${ptrType} ${ptrVal} to ${targetThisType}`,
+            );
+
+            // Check if the function expects a value or a pointer
+            if (destType === targetThisType) {
+              return `${targetThisType} ${castReg}`;
+            } else if (targetThisType === destType + "*") {
+              // Function expects value, load it from the casted pointer
+              const loaded = this.newRegister();
+              this.emit(
+                `  ${loaded} = load ${destType}, ${targetThisType} ${castReg}`,
+              );
+              return `${destType} ${loaded}`;
+            }
+            // Fallback: return casted pointer (might be wrong if types don't match, but better than nothing)
+            return `${targetThisType} ${castReg}`;
+          }
+
           // Optimize for L-values passing to pointer: take address directly (T -> *T)
           if (destType === srcType + "*") {
             if (
@@ -3888,7 +4006,13 @@ export class CodeGenerator {
             funcDecl.params.length > 0 &&
             funcDecl.params[0]!.name === "this"
           ) {
-            const thisParamType = funcDecl.params[0]!.type;
+            let thisParamType = funcDecl.params[0]!.type;
+            if (callSubstitutionMap.size > 0) {
+              thisParamType = this.substituteType(
+                thisParamType,
+                callSubstitutionMap,
+              );
+            }
             const resolvedThisParamType = this.resolveType(thisParamType);
             expectsPointer = resolvedThisParamType.endsWith("*");
           }
@@ -3908,15 +4032,51 @@ export class CodeGenerator {
             if (callSubstitutionMap.size > 0) {
               resolved = this.substituteType(t, callSubstitutionMap);
             }
+
+            if (
+              resolved.kind === "BasicType" &&
+              resolved.genericArgs.length > 0
+            ) {
+              const structDecl = this.structMap.get(resolved.name);
+              if (structDecl) {
+                let ret = this.resolveMonomorphizedType(
+                  structDecl,
+                  resolved.genericArgs,
+                );
+                for (let i = 0; i < resolved.pointerDepth; i++) ret += "*";
+                return ret;
+              }
+            }
             return this.resolveType(resolved);
           }),
         );
 
-        const retTypeStr = this.resolveType(
+        const substitutedRet =
           callSubstitutionMap.size > 0
             ? this.substituteType(funcType.returnType, callSubstitutionMap)
-            : funcType.returnType,
-        );
+            : funcType.returnType;
+
+        let retTypeStr: string;
+        if (
+          substitutedRet.kind === "BasicType" &&
+          substitutedRet.genericArgs.length > 0
+        ) {
+          // Try to resolve monomorphized type directly to avoid resolveType issues with empty map
+          const structDecl = this.structMap.get(substitutedRet.name);
+          if (structDecl) {
+            retTypeStr = this.resolveMonomorphizedType(
+              structDecl,
+              substitutedRet.genericArgs,
+            );
+            // Add pointer depth
+            for (let i = 0; i < substitutedRet.pointerDepth; i++)
+              retTypeStr += "*";
+          } else {
+            retTypeStr = this.resolveType(substitutedRet);
+          }
+        } else {
+          retTypeStr = this.resolveType(substitutedRet);
+        }
 
         // Check if function is already declared or defined
         if (
@@ -4704,6 +4864,48 @@ export class CodeGenerator {
     return reg;
   }
 
+  private findInstantiatedParentType(
+    childDecl: AST.StructDecl,
+    childType: AST.BasicTypeNode,
+    parentName: string,
+  ): AST.BasicTypeNode | undefined {
+    if (childDecl.name === parentName) return childType;
+
+    if (!childDecl.inheritanceList || childDecl.inheritanceList.length === 0)
+      return undefined;
+
+    const parentType = childDecl.inheritanceList[0] as AST.BasicTypeNode;
+
+    // Substitute if child is generic
+    let instantiatedParent = parentType;
+    if (
+      childDecl.genericParams.length > 0 &&
+      childType.genericArgs.length > 0
+    ) {
+      const map = new Map<string, AST.TypeNode>();
+      for (let i = 0; i < childDecl.genericParams.length; i++) {
+        if (i < childType.genericArgs.length) {
+          map.set(childDecl.genericParams[i]!.name, childType.genericArgs[i]!);
+        }
+      }
+      instantiatedParent = this.substituteType(
+        parentType,
+        map,
+      ) as AST.BasicTypeNode;
+    }
+
+    if (instantiatedParent.name === parentName) return instantiatedParent;
+
+    const parentDecl = this.structMap.get(instantiatedParent.name);
+    if (!parentDecl) return undefined;
+
+    return this.findInstantiatedParentType(
+      parentDecl,
+      instantiatedParent,
+      parentName,
+    );
+  }
+
   private generateSizeof(expr: AST.SizeofExpr): string {
     let type: AST.TypeNode;
     if ("kind" in expr.target && (expr.target.kind as string) !== "BasicType") {
@@ -4726,174 +4928,195 @@ export class CodeGenerator {
     return intReg;
   }
 
+  private resolveTypeDepth = 0;
+
   private resolveType(type: AST.TypeNode): string {
-    if (!type) {
-      // Should not happen if TypeChecker did its job
-      throw new Error("Cannot resolve undefined type");
+    if (this.resolveTypeDepth > 200) {
+      console.log(`resolveType recursion limit reached! Type: ${type.kind}`);
+      if (type.kind === "BasicType") console.log(`Name: ${(type as any).name}`);
+      throw new Error("resolveType recursion limit");
     }
-    if (type.kind === "BasicType") {
-      const basicType = type as AST.BasicTypeNode;
-      let llvmType = "";
-
-      // Check currentTypeMap for generic substitutions
-      if (this.currentTypeMap.has(basicType.name)) {
-        let llvmType = this.resolveType(
-          this.currentTypeMap.get(basicType.name)!,
-        );
-
-        for (let i = 0; i < basicType.pointerDepth; i++) {
-          llvmType += "*";
-        }
-
-        for (let i = basicType.arrayDimensions.length - 1; i >= 0; i--) {
-          llvmType = `[${basicType.arrayDimensions[i]} x ${llvmType}]`;
-        }
-        return llvmType;
+    this.resolveTypeDepth++;
+    try {
+      if (!type) {
+        // Should not happen if TypeChecker did its job
+        throw new Error("Cannot resolve undefined type");
       }
+      if (type.kind === "BasicType") {
+        const basicType = type as AST.BasicTypeNode;
+        let llvmType = "";
 
-      // Check for type aliases
-      if (this.typeAliasMap.has(basicType.name)) {
-        const aliasDecl = this.typeAliasMap.get(basicType.name)!;
-        // If it's a generic alias, we need to substitute args
-        if (aliasDecl.genericParams && aliasDecl.genericParams.length > 0) {
-          // For now, just resolve the base type if no args provided (should be handled by TypeChecker)
-          // If args provided, we need substitution logic similar to structs
-          if (basicType.genericArgs.length > 0) {
-            const typeMap = new Map<string, AST.TypeNode>();
-            for (let i = 0; i < aliasDecl.genericParams.length; i++) {
-              typeMap.set(
-                aliasDecl.genericParams[i]!.name,
-                basicType.genericArgs[i]!,
-              );
-            }
-            const substituted = this.substituteType(aliasDecl.type, typeMap);
-            let llvmType = this.resolveType(substituted);
+        // Check currentTypeMap for generic substitutions
+        if (this.currentTypeMap.has(basicType.name)) {
+          const mapped = this.currentTypeMap.get(basicType.name)!;
 
-            for (let i = 0; i < basicType.pointerDepth; i++) {
-              llvmType += "*";
+          // Prevent infinite recursion if mapped type is same as current type (T -> T)
+          if (
+            mapped.kind === "BasicType" &&
+            (mapped as any).name === basicType.name
+          ) {
+            // Fallback to struct name if T maps to T (generic template context)
+            return `%struct.${basicType.name}`;
+          }
+
+          let llvmType = this.resolveType(mapped);
+
+          for (let i = 0; i < basicType.pointerDepth; i++) {
+            llvmType += "*";
+          }
+
+          for (let i = basicType.arrayDimensions.length - 1; i >= 0; i--) {
+            llvmType = `[${basicType.arrayDimensions[i]} x ${llvmType}]`;
+          }
+          return llvmType;
+        }
+
+        // Check for type aliases
+        if (this.typeAliasMap.has(basicType.name)) {
+          const aliasDecl = this.typeAliasMap.get(basicType.name)!;
+          // If it's a generic alias, we need to substitute args
+          if (aliasDecl.genericParams && aliasDecl.genericParams.length > 0) {
+            // For now, just resolve the base type if no args provided (should be handled by TypeChecker)
+            // If args provided, we need substitution logic similar to structs
+            if (basicType.genericArgs.length > 0) {
+              const typeMap = new Map<string, AST.TypeNode>();
+              for (let i = 0; i < aliasDecl.genericParams.length; i++) {
+                typeMap.set(
+                  aliasDecl.genericParams[i]!.name,
+                  basicType.genericArgs[i]!,
+                );
+              }
+              const substituted = this.substituteType(aliasDecl.type, typeMap);
+              let llvmType = this.resolveType(substituted);
+
+              for (let i = 0; i < basicType.pointerDepth; i++) {
+                llvmType += "*";
+              }
+              for (let i = basicType.arrayDimensions.length - 1; i >= 0; i--) {
+                llvmType = `[${basicType.arrayDimensions[i]} x ${llvmType}]`;
+              }
+              return llvmType;
             }
-            for (let i = basicType.arrayDimensions.length - 1; i >= 0; i--) {
-              llvmType = `[${basicType.arrayDimensions[i]} x ${llvmType}]`;
-            }
-            return llvmType;
+          }
+
+          // Non-generic alias or generic alias used without args (if allowed/resolved)
+          let llvmType = this.resolveType(aliasDecl.type);
+          for (let i = 0; i < basicType.pointerDepth; i++) {
+            llvmType += "*";
+          }
+          for (let i = basicType.arrayDimensions.length - 1; i >= 0; i--) {
+            llvmType = `[${basicType.arrayDimensions[i]} x ${llvmType}]`;
+          }
+          return llvmType;
+        }
+
+        // Check for generics usage
+        if (basicType.genericArgs && basicType.genericArgs.length > 0) {
+          // Substitute generic args first
+          const instantiatedArgs = basicType.genericArgs.map((arg) =>
+            this.substituteType(arg, this.currentTypeMap),
+          );
+          const structDecl = this.structMap.get(basicType.name);
+          const enumDecl = this.enumDeclMap.get(basicType.name);
+
+          if (structDecl) {
+            // Instantiate generic struct
+            llvmType = this.resolveMonomorphizedType(
+              structDecl,
+              instantiatedArgs,
+            );
+          } else if (enumDecl) {
+            // Instantiate generic enum
+            const mangledName = this.instantiateGenericEnum(
+              basicType.name,
+              instantiatedArgs,
+            );
+            llvmType = `%enum.${mangledName}`;
+          } else {
+            // Maybe a primitive like int<T>? Should not happen.
+            llvmType = `%struct.${basicType.name}`; // Fallback
+          }
+        } else {
+          switch (basicType.name) {
+            case "int":
+            case "i32":
+            case "u32":
+            case "uint":
+              llvmType = "i32";
+              break;
+            case "i8":
+            case "u8":
+            case "char":
+            case "uchar":
+              llvmType = "i8";
+              break;
+            case "i16":
+            case "u16":
+            case "short":
+            case "ushort":
+              llvmType = "i16";
+              break;
+            case "i64":
+            case "u64":
+            case "long":
+            case "ulong":
+              llvmType = "i64";
+              break;
+            case "float":
+            case "double":
+              llvmType = "double";
+              break;
+            case "bool":
+            case "i1":
+              llvmType = "i1";
+              break;
+            case "void":
+              llvmType = basicType.pointerDepth > 0 ? "i8" : "void";
+              break;
+            case "string":
+              llvmType = "i8*";
+              break;
+            case "null":
+            case "nullptr":
+              llvmType = "i8*"; // Generic pointer type
+              break;
+            default:
+              // Check if it's an enum type
+              if (this.enumVariants.has(basicType.name)) {
+                llvmType = `%enum.${basicType.name}`;
+              } else {
+                llvmType = `%struct.${basicType.name}`;
+              }
+              break;
           }
         }
 
-        // Non-generic alias or generic alias used without args (if allowed/resolved)
-        let llvmType = this.resolveType(aliasDecl.type);
         for (let i = 0; i < basicType.pointerDepth; i++) {
           llvmType += "*";
         }
+
         for (let i = basicType.arrayDimensions.length - 1; i >= 0; i--) {
           llvmType = `[${basicType.arrayDimensions[i]} x ${llvmType}]`;
         }
+
         return llvmType;
+      } else if (type.kind === "TupleType") {
+        const tupleType = type as AST.TupleTypeNode;
+        // Represent tuples as LLVM structs: { type0, type1, ... }
+        const elementTypes = tupleType.types.map((t) => this.resolveType(t));
+        return `{ ${elementTypes.join(", ")} }`;
+      } else if (type.kind === "FunctionType") {
+        const funcType = type as AST.FunctionTypeNode;
+        const ret = this.resolveType(funcType.returnType);
+        const params = funcType.paramTypes
+          .map((p) => this.resolveType(p))
+          .join(", ");
+        return `${ret} (${params})*`;
       }
-
-      // Check for generics usage
-      if (basicType.genericArgs && basicType.genericArgs.length > 0) {
-        // Substitute generic args first
-        const instantiatedArgs = basicType.genericArgs.map((arg) =>
-          this.substituteType(arg, this.currentTypeMap),
-        );
-        const structDecl = this.structMap.get(basicType.name);
-        const enumDecl = this.enumDeclMap.get(basicType.name);
-
-        if (structDecl) {
-          // Instantiate generic struct
-          llvmType = this.resolveMonomorphizedType(
-            structDecl,
-            instantiatedArgs,
-          );
-        } else if (enumDecl) {
-          // Instantiate generic enum
-          const mangledName = this.instantiateGenericEnum(
-            basicType.name,
-            instantiatedArgs,
-          );
-          llvmType = `%enum.${mangledName}`;
-        } else {
-          // Maybe a primitive like int<T>? Should not happen.
-          llvmType = `%struct.${basicType.name}`; // Fallback
-        }
-      } else {
-        switch (basicType.name) {
-          case "int":
-          case "i32":
-          case "u32":
-          case "uint":
-            llvmType = "i32";
-            break;
-          case "i8":
-          case "u8":
-          case "char":
-          case "uchar":
-            llvmType = "i8";
-            break;
-          case "i16":
-          case "u16":
-          case "short":
-          case "ushort":
-            llvmType = "i16";
-            break;
-          case "i64":
-          case "u64":
-          case "long":
-          case "ulong":
-            llvmType = "i64";
-            break;
-          case "float":
-          case "double":
-            llvmType = "double";
-            break;
-          case "bool":
-          case "i1":
-            llvmType = "i1";
-            break;
-          case "void":
-            llvmType = basicType.pointerDepth > 0 ? "i8" : "void";
-            break;
-          case "string":
-            llvmType = "i8*";
-            break;
-          case "null":
-          case "nullptr":
-            llvmType = "i8*"; // Generic pointer type
-            break;
-          default:
-            // Check if it's an enum type
-            if (this.enumVariants.has(basicType.name)) {
-              llvmType = `%enum.${basicType.name}`;
-            } else {
-              llvmType = `%struct.${basicType.name}`;
-            }
-            break;
-        }
-      }
-
-      for (let i = 0; i < basicType.pointerDepth; i++) {
-        llvmType += "*";
-      }
-
-      for (let i = basicType.arrayDimensions.length - 1; i >= 0; i--) {
-        llvmType = `[${basicType.arrayDimensions[i]} x ${llvmType}]`;
-      }
-
-      return llvmType;
-    } else if (type.kind === "TupleType") {
-      const tupleType = type as AST.TupleTypeNode;
-      // Represent tuples as LLVM structs: { type0, type1, ... }
-      const elementTypes = tupleType.types.map((t) => this.resolveType(t));
-      return `{ ${elementTypes.join(", ")} }`;
-    } else if (type.kind === "FunctionType") {
-      const funcType = type as AST.FunctionTypeNode;
-      const ret = this.resolveType(funcType.returnType);
-      const params = funcType.paramTypes
-        .map((p) => this.resolveType(p))
-        .join(", ");
-      return `${ret} (${params})*`;
+      return "void";
+    } finally {
+      this.resolveTypeDepth--;
     }
-    return "void";
   }
 
   private newRegister(): string {

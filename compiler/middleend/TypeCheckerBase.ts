@@ -451,6 +451,9 @@ export abstract class TypeCheckerBase {
     t2: AST.TypeNode,
     checkConstraints: boolean = true,
   ): boolean {
+    console.log(
+      `areTypesCompatible: ${this.typeToString(t1)} vs ${this.typeToString(t2)}`,
+    );
     const rt1 = this.resolveType(t1, checkConstraints);
     const rt2 = this.resolveType(t2, checkConstraints);
 
@@ -520,6 +523,30 @@ export abstract class TypeCheckerBase {
           !this.isSubtype(rt2 as AST.BasicTypeNode, rt1 as AST.BasicTypeNode)
         ) {
           return false;
+        }
+
+        // If subtype, check against the instantiated super type
+        if (!isAlias) {
+          const superType = this.getSuperType(
+            rt2 as AST.BasicTypeNode,
+            rt1.name,
+          );
+          if (superType) {
+            // Propagate pointer depth and array dimensions from the child type
+            const adjustedSuperType = {
+              ...superType,
+              pointerDepth: superType.pointerDepth + rt2.pointerDepth,
+              arrayDimensions: [
+                ...superType.arrayDimensions,
+                ...rt2.arrayDimensions,
+              ],
+            };
+            return this.areTypesCompatible(
+              rt1,
+              adjustedSuperType,
+              checkConstraints,
+            );
+          }
         }
       }
 
@@ -653,6 +680,44 @@ export abstract class TypeCheckerBase {
     return symbol !== undefined && symbol.kind === "Struct";
   }
 
+  protected getSuperType(
+    child: AST.BasicTypeNode,
+    parentName: string,
+  ): AST.BasicTypeNode | undefined {
+    console.log(`getSuperType: ${child.name} -> ${parentName}`);
+    if (child.name === parentName) return child;
+
+    const childSymbol = this.currentScope.resolve(child.name);
+    if (!childSymbol || childSymbol.kind !== "Struct") return undefined;
+
+    const childDecl = childSymbol.declaration as AST.StructDecl;
+    if (!childDecl.inheritanceList || childDecl.inheritanceList.length === 0)
+      return undefined;
+
+    const parentType = childDecl.inheritanceList[0] as AST.BasicTypeNode;
+
+    // Instantiate parent type if child is generic
+    let instantiatedParent = parentType;
+    if (
+      childDecl.genericParams.length > 0 &&
+      child.genericArgs.length > 0 &&
+      childDecl.genericParams.length <= child.genericArgs.length
+    ) {
+      const map = new Map<string, AST.TypeNode>();
+      for (let i = 0; i < childDecl.genericParams.length; i++) {
+        map.set(childDecl.genericParams[i]!.name, child.genericArgs[i]!);
+      }
+      instantiatedParent = this.substituteType(
+        parentType,
+        map,
+      ) as AST.BasicTypeNode;
+    }
+
+    if (instantiatedParent.name === parentName) return instantiatedParent;
+
+    return this.getSuperType(instantiatedParent, parentName);
+  }
+
   protected isSubtype(
     child: AST.BasicTypeNode,
     parent: AST.BasicTypeNode,
@@ -708,10 +773,14 @@ export abstract class TypeCheckerBase {
   protected resolveStructField(
     decl: AST.StructDecl,
     fieldName: string,
-  ): AST.StructField | undefined {
+    substitutionMap: Map<string, AST.TypeNode> = new Map(),
+  ): { field: AST.StructField; type: AST.TypeNode } | undefined {
     for (const member of decl.members) {
       if (member.kind === "StructField" && member.name === fieldName) {
-        return member;
+        return {
+          field: member,
+          type: this.substituteType(member.type, substitutionMap),
+        };
       }
     }
 
@@ -720,10 +789,30 @@ export abstract class TypeCheckerBase {
       if (parentType && parentType.kind === "BasicType") {
         const parentSymbol = this.currentScope.resolve(parentType.name);
         if (parentSymbol && parentSymbol.kind === "Struct") {
-          return this.resolveStructField(
-            parentSymbol.declaration as AST.StructDecl,
-            fieldName,
-          );
+          const parentDecl = parentSymbol.declaration as AST.StructDecl;
+
+          // Update substitution map with parent's generic args
+          const newMap = new Map(substitutionMap);
+          if (
+            parentDecl.genericParams &&
+            parentType.genericArgs &&
+            parentType.genericArgs.length > 0
+          ) {
+            for (let i = 0; i < parentDecl.genericParams.length; i++) {
+              if (i < parentType.genericArgs.length) {
+                const paramName = parentDecl.genericParams[i]!.name;
+                const argType = parentType.genericArgs[i]!;
+                // Substitute the argument with the current context
+                const substitutedArg = this.substituteType(
+                  argType,
+                  substitutionMap,
+                );
+                newMap.set(paramName, substitutedArg);
+              }
+            }
+          }
+
+          return this.resolveStructField(parentDecl, fieldName, newMap);
         }
       }
     }

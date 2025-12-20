@@ -1,0 +1,4 @@
+{
+  "expectedOutput": "Value is an int\nValue is a float\nValue is something else\nValue is a Point\n",
+  "exitCode": 0
+}

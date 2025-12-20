@@ -525,6 +525,10 @@ export function checkMember(
               thisParamType = this.substituteType(thisParamType, genericMap);
             }
 
+            console.log(
+              `Checking compatibility for ${method.name}: this=${this.typeToString(thisParamType)}, object=${this.typeToString(objectType)}`,
+            );
+
             // Check compatibility of 'this' parameter type with object type
             const isThisCompatible = this.areTypesCompatible(
               thisParamType,
@@ -532,18 +536,29 @@ export function checkMember(
             );
 
             // Also handle pointer compatibility (this: T* vs object: T)
+            // We check if T is compatible with object type
             const pointerCompatible =
               thisParamType.kind === "BasicType" &&
               objectType.kind === "BasicType" &&
-              thisParamType.name === objectType.name &&
-              thisParamType.pointerDepth === objectType.pointerDepth + 1;
+              thisParamType.pointerDepth === objectType.pointerDepth + 1 &&
+              this.areTypesCompatible(
+                {
+                  ...thisParamType,
+                  pointerDepth: thisParamType.pointerDepth - 1,
+                },
+                objectType,
+              );
 
             // Also handle dereference compatibility (this: T vs object: T*)
+            // We check if T is compatible with object type dereferenced
             const dereferenceCompatible =
               thisParamType.kind === "BasicType" &&
               objectType.kind === "BasicType" &&
-              thisParamType.name === objectType.name &&
-              thisParamType.pointerDepth === objectType.pointerDepth - 1;
+              thisParamType.pointerDepth === objectType.pointerDepth - 1 &&
+              this.areTypesCompatible(thisParamType, {
+                ...objectType,
+                pointerDepth: objectType.pointerDepth - 1,
+              });
 
             if (
               !isThisCompatible &&

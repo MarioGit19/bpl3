@@ -19,7 +19,6 @@ struct Cat {
 frame printType<T: Type>(obj: *T) {
     IO.print("Object is a: ");
     IO.printString(obj.getTypeName());
-    IO.print("\n");
 }
 
 frame main() {

@@ -211,34 +211,32 @@ match (opt) {
 
 **Recommendation:** Use pattern matching when you need the data. Use `match<Type>` for quick checks or when combining with other logic.
 
-## Future: Generic Type Checking
+## Generic Type Checking
 
-While not yet implemented, `match<Type>` is designed to eventually support checking generic parameters:
+`match<Type>` supports checking generic parameters against concrete types. This works because BPL uses monomorphization for generics, meaning the compiler generates specialized versions of the function for each concrete type used.
 
 ```bpl
-# Future capability (not yet implemented)
 frame processGeneric<T>(value: T) ret int {
     if (match<int>(value)) {
         # value is an int
-        return value * 2;
+        return 1;
     }
-    if (match<string>(value)) {
-        # value is a string
-        printf("%s\n", value);
-        return 0;
+    if (match<float>(value)) {
+        # value is a float
+        return 2;
     }
     return -1;
 }
 ```
 
-This would require Runtime Type Information (RTTI) to track the actual type of generic parameters at runtime.
+This allows you to write generic functions that behave differently based on the concrete type of the argument.
 
 ## Limitations
 
-1. **Enum variants only:** Currently only works with enum variant checking
-2. **No primitive type checking:** `match<int>(value)` not yet implemented
-3. **No struct type checking:** `match<MyStruct>(value)` not yet implemented
-4. **No generic parameter checking:** Can't check actual type of `T` in generic functions
+1. **Enum variants:** Works with enum variant checking
+2. **Primitive type checking:** Supported (e.g., `match<int>`)
+3. **Struct type checking:** Supported (e.g., `match<MyStruct>`)
+4. **Inheritance checking:** `match<BaseType>(derivedValue)` is not yet fully supported (checks for exact type match)
 
 ## See Also
 
