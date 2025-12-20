@@ -152,16 +152,19 @@ setInterval(pollServerStats, 5000); // Every 5 seconds
 ### 🎯 Benefits
 
 1. **Developer Experience**
+
    - Better debugging with detailed logs
    - Performance insights with metrics
    - Health monitoring capabilities
 
 2. **User Experience**
+
    - Live feedback on server status
    - Execution performance visibility
    - Better error context
 
 3. **Operations**
+
    - Easy monitoring via `/health` endpoint
    - Performance tracking via `/stats`
    - Debug capabilities via `/logs`

@@ -44,12 +44,22 @@ export const OPERATOR_METHOD_MAP: Record<string, string> = {
  */
 export interface OverloadResolutionContext {
   resolveType: (type: AST.TypeNode, checkConstraints?: boolean) => AST.TypeNode;
-  areTypesCompatible: (t1: AST.TypeNode, t2: AST.TypeNode, checkConstraints?: boolean) => boolean;
+  areTypesCompatible: (
+    t1: AST.TypeNode,
+    t2: AST.TypeNode,
+    checkConstraints?: boolean,
+  ) => boolean;
   areTypesExactMatch: (t1: AST.TypeNode, t2: AST.TypeNode) => boolean;
-  isImplicitWideningAllowed: (source: AST.TypeNode, target: AST.TypeNode) => boolean;
-  substituteType: (type: AST.TypeNode, map: Map<string, AST.TypeNode>) => AST.TypeNode;
+  isImplicitWideningAllowed: (
+    source: AST.TypeNode,
+    target: AST.TypeNode,
+  ) => boolean;
+  substituteType: (
+    type: AST.TypeNode,
+    map: Map<string, AST.TypeNode>,
+  ) => AST.TypeNode;
   typeToString: (type: AST.TypeNode | undefined) => string;
-  scope: SymbolTable;
+  currentScope: SymbolTable;
 }
 
 /**
@@ -65,10 +75,16 @@ export class OverloadResolver {
   /**
    * Check if two function signatures are equal (same parameter types)
    */
-  areSignaturesEqual(a: AST.FunctionTypeNode, b: AST.FunctionTypeNode): boolean {
+  areSignaturesEqual(
+    a: AST.FunctionTypeNode,
+    b: AST.FunctionTypeNode,
+  ): boolean {
     if (a.paramTypes.length !== b.paramTypes.length) return false;
     for (let i = 0; i < a.paramTypes.length; i++) {
-      if (this.ctx.typeToString(a.paramTypes[i]!) !== this.ctx.typeToString(b.paramTypes[i]!))
+      if (
+        this.ctx.typeToString(a.paramTypes[i]!) !==
+        this.ctx.typeToString(b.paramTypes[i]!)
+      )
         return false;
     }
     return true;
@@ -82,7 +98,7 @@ export class OverloadResolver {
     candidates: Symbol[],
     argTypes: (AST.TypeNode | undefined)[],
     genericArgs: AST.TypeNode[],
-    location: SourceLocation
+    location: SourceLocation,
   ): {
     symbol: Symbol;
     type: AST.FunctionTypeNode;
@@ -126,10 +142,12 @@ export class OverloadResolver {
     if (viableCandidates.length === 0) {
       throw new CompilerError(
         `No matching function for call to '${name}' with ${argTypes.length} arguments${
-          genericArgs.length > 0 ? ` and ${genericArgs.length} generic arguments` : ""
+          genericArgs.length > 0
+            ? ` and ${genericArgs.length} generic arguments`
+            : ""
         }.`,
         `Available overloads:\n${candidates.map((c) => this.ctx.typeToString(c.type!)).join("\n")}`,
-        location
+        location,
       );
     }
 
@@ -142,9 +160,31 @@ export class OverloadResolver {
       if (args && decl.kind === "FunctionDecl") {
         const map = new Map<string, AST.TypeNode>();
         for (let i = 0; i < decl.genericParams.length; i++) {
-          map.set(decl.genericParams[i]!.name, args[i]!);
+          const param = decl.genericParams[i]!;
+          const arg = args[i]!;
+          map.set(param.name, arg);
+
+          // Check constraint
+          if (param.constraint) {
+            const substitutedConstraint = this.ctx.substituteType(
+              param.constraint,
+              map,
+            );
+            if (
+              !this.ctx.areTypesCompatible(substitutedConstraint, arg, false)
+            ) {
+              throw new CompilerError(
+                `Type argument '${this.ctx.typeToString(arg)}' does not satisfy constraint '${this.ctx.typeToString(substitutedConstraint)}'`,
+                "Ensure the type argument satisfies the constraint.",
+                location,
+              );
+            }
+          }
         }
-        const sub = this.ctx.substituteType(c.type!, map) as AST.FunctionTypeNode;
+        const sub = this.ctx.substituteType(
+          c.type!,
+          map,
+        ) as AST.FunctionTypeNode;
         return {
           symbol: c,
           type: sub,
@@ -177,20 +217,29 @@ export class OverloadResolver {
           break;
         }
 
-        const exactMatch = this.ctx.areTypesExactMatch(ft.paramTypes[i]!, argTypes[i]!);
+        const exactMatch = this.ctx.areTypesExactMatch(
+          ft.paramTypes[i]!,
+          argTypes[i]!,
+        );
         if (exactMatch) {
           continue;
         }
 
         isExact = false;
 
-        const widening = this.ctx.isImplicitWideningAllowed(argTypes[i]!, ft.paramTypes[i]!);
+        const widening = this.ctx.isImplicitWideningAllowed(
+          argTypes[i]!,
+          ft.paramTypes[i]!,
+        );
         if (widening) {
           needsWidening = true;
           continue;
         }
 
-        const compatible = this.ctx.areTypesCompatible(ft.paramTypes[i]!, argTypes[i]!);
+        const compatible = this.ctx.areTypesCompatible(
+          ft.paramTypes[i]!,
+          argTypes[i]!,
+        );
         if (!compatible) {
           allCompatible = false;
           break;
@@ -213,8 +262,8 @@ export class OverloadResolver {
       exactMatches.length > 0
         ? exactMatches
         : wideningMatches.length > 0
-        ? wideningMatches
-        : compatibleMatches;
+          ? wideningMatches
+          : compatibleMatches;
 
     if (matched.length > 1) {
       // Sort to prefer non-generic functions
@@ -230,7 +279,7 @@ export class OverloadResolver {
       throw new CompilerError(
         `No matching function for call to '${name}' with provided argument types.`,
         `Available overloads:\n${candidates.map((c) => this.ctx.typeToString(c.type!)).join("\n")}`,
-        location
+        location,
       );
     }
 
@@ -248,14 +297,14 @@ export class OverloadResolver {
     paramTypes: AST.TypeNode[],
     resolveMemberWithContext: (
       objectType: AST.BasicTypeNode,
-      memberName: string
+      memberName: string,
     ) =>
       | {
           members: (AST.StructField | AST.FunctionDecl)[];
           contextType: AST.BasicTypeNode;
           contextDecl: AST.StructDecl;
         }
-      | undefined
+      | undefined,
   ): AST.FunctionDecl | undefined {
     // Only structs can have operator overloads
     if (targetType.kind !== "BasicType") return undefined;
@@ -275,8 +324,12 @@ export class OverloadResolver {
     } else {
       // Look up by base name (works for both "Array" and "Array<T>")
       const baseName = basicType.name;
-      const symbol = this.ctx.scope.resolve(baseName);
-      if (symbol && symbol.kind === "Struct" && (symbol.declaration as any).kind === "StructDecl") {
+      const symbol = this.ctx.currentScope.resolve(baseName);
+      if (
+        symbol &&
+        symbol.kind === "Struct" &&
+        (symbol.declaration as any).kind === "StructDecl"
+      ) {
         decl = symbol.declaration as AST.StructDecl;
       }
     }
@@ -292,7 +345,10 @@ export class OverloadResolver {
       }
 
       for (let i = 0; i < decl.genericParams.length; i++) {
-        typeSubstitutionMap.set(decl.genericParams[i]!.name, basicType.genericArgs[i]!);
+        typeSubstitutionMap.set(
+          decl.genericParams[i]!.name,
+          basicType.genericArgs[i]!,
+        );
       }
     }
 
@@ -324,22 +380,34 @@ export class OverloadResolver {
         const resolvedTargetType = this.ctx.resolveType(targetType);
 
         // Check if 'this' type matches target type exactly
-        const exactMatch = this.ctx.areTypesCompatible(resolvedThisType, resolvedTargetType);
+        const exactMatch = this.ctx.areTypesCompatible(
+          resolvedThisType,
+          resolvedTargetType,
+        );
 
         // Also allow if 'this' is a pointer to target type
         let pointerMatch = false;
-        if (declaredThisType.kind === "BasicType" && targetType.kind === "BasicType") {
+        if (
+          declaredThisType.kind === "BasicType" &&
+          targetType.kind === "BasicType"
+        ) {
           const sameName = declaredThisType.name === targetType.name;
-          const pointerDiff = declaredThisType.pointerDepth === targetType.pointerDepth + 1;
+          const pointerDiff =
+            declaredThisType.pointerDepth === targetType.pointerDepth + 1;
           const sameGenericCount =
-            declaredThisType.genericArgs.length === targetType.genericArgs.length;
+            declaredThisType.genericArgs.length ===
+            targetType.genericArgs.length;
 
           if (sameName && pointerDiff && sameGenericCount) {
             // Check generic args match
             let argsMatch = true;
             for (let i = 0; i < declaredThisType.genericArgs.length; i++) {
-              const thisArg = this.ctx.resolveType(declaredThisType.genericArgs[i]!);
-              const targetArg = this.ctx.resolveType(targetType.genericArgs[i]!);
+              const thisArg = this.ctx.resolveType(
+                declaredThisType.genericArgs[i]!,
+              );
+              const targetArg = this.ctx.resolveType(
+                targetType.genericArgs[i]!,
+              );
               if (!this.ctx.areTypesCompatible(thisArg, targetArg)) {
                 argsMatch = false;
                 break;

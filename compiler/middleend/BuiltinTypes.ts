@@ -63,7 +63,7 @@ export function createBasicType(
     genericArgs?: AST.TypeNode[];
     arrayDimensions?: number[];
     location?: SourceLocation;
-  } = {}
+  } = {},
 ): AST.BasicTypeNode {
   return {
     kind: "BasicType",

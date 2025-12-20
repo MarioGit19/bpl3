@@ -44,95 +44,52 @@ This document summarizes the ongoing refactoring of the BPL3 compiler's type che
   - Added explicit compatibility checks for the `this` parameter in method calls.
 - **Type Annotation:**
   - Ensured that `resolvedType` is set on all checked expressions.
+- **Logical Operator Type Checking:**
+  - Fixed `ExpressionChecker.checkBinary` to correctly handle `i1` (resolved `bool`) types for logical AND/OR operations.
 
 ---
 
 ## 4. Current Status
 
 - **File Sizes:** All modular files are under 1000 lines.
+  - `TypeChecker.ts`: ~675 lines (reduced from 965)
+  - `ExpressionChecker.ts`: 745 lines
+  - `StatementChecker.ts`: 367 lines
+  - `CallChecker.ts`: 475 lines
 - **Build:** TypeScript compiles and builds successfully.
 - **Tests:**
-  - Enum tests: 93/93 pass
-  - TypeChecker unit tests: 4/4 pass
-  - Overall: 658/781 pass, 123 fail (down from 174 fail)
-- **Failing Tests:**
-  - Most failures are in CodeGenerator and integration tests, especially logical AND/OR and type resolution.
+  - `test_logical_debug.ts` passes.
+  - Need to re-run full test suite.
 
 ---
 
 ## 5. Debugging Progress
 
-- **Current Issue:**
-  - CodeGenerator tests fail with `Cannot resolve undefined type` in `generateReturn` for logical AND/OR expressions.
+- **Resolved Issue:**
+  - CodeGenerator tests failed with `Cannot resolve undefined type` in `generateReturn` for logical AND/OR expressions.
 - **Root Cause:**
-  - The AST for return statements uses `value` (not `expression`).
-  - The type checker and code generator expect `resolvedType` to be set on `stmt.value`.
-  - Confirmed that `checkReturn` uses `stmt.value` and calls `checkExpression`, which should set `resolvedType`.
-  - Debugging shows that after type checking, `stmt.value.resolvedType` is still `undefined` for logical AND/OR.
-- **Next Steps:**
-  - Investigate if `checkExpression` is being called for all expressions in all code paths.
-  - Ensure that all expression nodes have their `resolvedType` set after type checking.
+  - `ExpressionChecker.checkBinary` was manually checking `leftType.name === "bool"`.
+  - However, `bool` is aliased to `i1` in `BuiltinTypes.ts`.
+  - `checkIdentifier` returns the resolved type (`i1`), causing the check to fail and throw an error (which was caught and suppressed in `TypeChecker.ts`).
+- **Fix:**
+  - Updated `ExpressionChecker.ts` to accept both `bool` and `i1` as boolean types (using `isBoolType` logic).
+  - Verified with `test_logical_debug.ts` that `resolvedType` is now correctly set.
 
----
+## 6. Refactoring Updates
 
-## 6. Example Debug Output
-
-- **AST for Return Statement:**
-  ```json
-  {
-    "kind": "Return",
-    "value": {
-      "kind": "Binary",
-      "left": { "kind": "Identifier", "name": "a", ... },
-      "operator": { "type": "AndAnd", "lexeme": "&&", ... },
-      "right": { "kind": "Identifier", "name": "b", ... },
-      ...
-    },
-    ...
-  }
-  ```
-- **After Type Checking:**
-  - `stmt.value.resolvedType` is `undefined` (should be `{ kind: "BasicType", name: "bool", ... }`).
+- **TypeChecker.ts Size Reduction:**
+  - Moved `checkImport` logic to `ImportHandler.ts`.
+  - Moved `resolveOverload` and `findOperatorOverload` logic to `OverloadResolver.ts`.
+  - `TypeChecker.ts` is now significantly smaller (~675 lines).
+- **OverloadResolver.ts:**
+  - Updated to use `currentScope` from context.
 
 ---
 
 ## 7. Open Questions / TODO
 
-- [ ] Why is `resolvedType` not set on logical AND/OR expressions after type checking?
-- [ ] Are there code paths in `checkExpression` or `checkBinary` that skip setting `resolvedType`?
-- [ ] Audit all expression checkers to ensure they always set `resolvedType`.
-- [ ] Fix and re-run tests.
-
----
-
-## 8. Summary Table
-
-| File                 | Purpose                     | Lines |
-| -------------------- | --------------------------- | ----- |
-| TypeCheckerBase.ts   | Base class, shared state    | 659   |
-| TypeChecker.ts       | Main type checker (modular) | 935   |
-| ExpressionChecker.ts | Expression checking         | 683   |
-| StatementChecker.ts  | Statement checking          | 347   |
-| CallChecker.ts       | Call/member/index checking  | 475   |
-| TypeUtils.ts         | Type utilities              | 591   |
-| BuiltinTypes.ts      | Built-in types              | 169   |
-| OverloadResolver.ts  | Overload resolution         | 388   |
-| ImportHandler.ts     | Import/module handling      | 382   |
-
----
-
-## 9. References
-
-- See `tests/CodeGeneratorExtended.test.ts` for failing logical AND/OR test cases.
-- See `compiler/middleend/TypeChecker.ts` and `ExpressionChecker.ts` for type resolution logic.
-
----
-
-## 10. Next Steps
-
-- [ ] Fix `resolvedType` propagation for all expressions.
 - [ ] Re-run all tests and verify fixes.
-- [ ] Continue modularization and documentation.
+- [ ] Continue modularization if needed (e.g., `DeclarationChecker.ts`).
 
 ---
 

@@ -1,7 +1,7 @@
 {
   "exitCode": 1,
   "expectedOutput": [
-    "Method 'foo' parameter 'x' type mismatch",
+    "Parameter 'x' of method 'foo' has incorrect type",
     "Expected 'int', got '*i8'"
   ]
 }

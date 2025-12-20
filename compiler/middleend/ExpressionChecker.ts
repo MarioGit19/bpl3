@@ -18,9 +18,16 @@ export interface ExpressionCheckerContext {
   currentScope: any;
   checkExpression(expr: AST.Expression): AST.TypeNode | undefined;
   resolveType(type: AST.TypeNode, checkConstraints?: boolean): AST.TypeNode;
-  areTypesCompatible(t1: AST.TypeNode, t2: AST.TypeNode, checkConstraints?: boolean): boolean;
+  areTypesCompatible(
+    t1: AST.TypeNode,
+    t2: AST.TypeNode,
+    checkConstraints?: boolean,
+  ): boolean;
   typeToString(type: AST.TypeNode | undefined): string;
-  substituteType(type: AST.TypeNode, map: Map<string, AST.TypeNode>): AST.TypeNode;
+  substituteType(
+    type: AST.TypeNode,
+    map: Map<string, AST.TypeNode>,
+  ): AST.TypeNode;
   isBoolType(type: AST.TypeNode): boolean;
   makeVoidType(): AST.TypeNode;
   isIntegerTypeCompatible(val: bigint, targetType: AST.TypeNode): boolean;
@@ -28,20 +35,32 @@ export interface ExpressionCheckerContext {
   findOperatorOverload(
     targetType: AST.TypeNode,
     methodName: string,
-    paramTypes: AST.TypeNode[]
+    paramTypes: AST.TypeNode[],
   ): AST.FunctionDecl | undefined;
   resolveOverload(
     name: string,
     candidates: Symbol[],
     argTypes: (AST.TypeNode | undefined)[],
     genericArgs: AST.TypeNode[],
-    location: SourceLocation
+    location: SourceLocation,
   ): any;
-  resolveMemberWithContext(baseType: AST.BasicTypeNode, memberName: string): any;
-  resolveStructField(decl: AST.StructDecl, fieldName: string): AST.StructField | undefined;
+  resolveMemberWithContext(
+    baseType: AST.BasicTypeNode,
+    memberName: string,
+  ): any;
+  resolveStructField(
+    decl: AST.StructDecl,
+    fieldName: string,
+  ): AST.StructField | undefined;
   checkMatchExhaustiveness(expr: AST.MatchExpr, enumDecl: AST.EnumDecl): void;
-  checkPattern(pattern: AST.Pattern, enumType: AST.TypeNode, enumDecl: AST.EnumDecl): void;
-  checkMatchArmBody(body: AST.Expression | AST.BlockStmt): AST.TypeNode | undefined;
+  checkPattern(
+    pattern: AST.Pattern,
+    enumType: AST.TypeNode,
+    enumDecl: AST.EnumDecl,
+  ): void;
+  checkMatchArmBody(
+    body: AST.Expression | AST.BlockStmt,
+  ): AST.TypeNode | undefined;
   checkBlock(stmt: AST.BlockStmt, newScope?: boolean): void;
   isCastAllowed(source: AST.TypeNode, target: AST.TypeNode): boolean;
 }
@@ -49,10 +68,17 @@ export interface ExpressionCheckerContext {
 /**
  * Check a literal expression and return its type
  */
-export function checkLiteral(this: ExpressionCheckerContext, expr: AST.LiteralExpr): AST.TypeNode {
+export function checkLiteral(
+  this: ExpressionCheckerContext,
+  expr: AST.LiteralExpr,
+): AST.TypeNode {
   let name = "void";
   if (expr.type === "number") {
-    if (expr.raw.includes(".") || expr.raw.includes("e") || expr.raw.includes("E")) {
+    if (
+      expr.raw.includes(".") ||
+      expr.raw.includes("e") ||
+      expr.raw.includes("E")
+    ) {
       name = "float";
     } else {
       const val = BigInt(expr.raw);
@@ -91,7 +117,7 @@ export function checkLiteral(this: ExpressionCheckerContext, expr: AST.LiteralEx
  */
 export function checkIdentifier(
   this: ExpressionCheckerContext,
-  expr: AST.IdentifierExpr
+  expr: AST.IdentifierExpr,
 ): AST.TypeNode | undefined {
   const symbol = this.currentScope.resolve(expr.name);
   if (!symbol) {
@@ -99,7 +125,11 @@ export function checkIdentifier(
     const hint = similar
       ? `Did you mean '${similar}'?`
       : "Ensure the variable or function is declared before use.";
-    throw new CompilerError(`Undefined symbol '${expr.name}'`, hint, expr.location);
+    throw new CompilerError(
+      `Undefined symbol '${expr.name}'`,
+      hint,
+      expr.location,
+    );
   }
 
   if (symbol.declaration) {
@@ -155,7 +185,7 @@ export function checkIdentifier(
  */
 export function checkBinary(
   this: ExpressionCheckerContext,
-  expr: AST.BinaryExpr
+  expr: AST.BinaryExpr,
 ): AST.TypeNode | undefined {
   const leftType = this.checkExpression(expr.left);
   const rightType = this.checkExpression(expr.right);
@@ -176,7 +206,10 @@ export function checkBinary(
         const decl = leftType.resolvedDeclaration;
         if (decl && decl.genericParams && decl.genericParams.length > 0) {
           for (let i = 0; i < decl.genericParams.length; i++) {
-            typeSubstitutionMap.set(decl.genericParams[i]!.name, leftType.genericArgs[i]!);
+            typeSubstitutionMap.set(
+              decl.genericParams[i]!.name,
+              leftType.genericArgs[i]!,
+            );
           }
         }
       }
@@ -235,18 +268,16 @@ export function checkBinary(
 
   // Boolean operators
   if (op === TokenType.AndAnd || op === TokenType.OrOr) {
-    if (
-      leftType.kind !== "BasicType" ||
-      rightType.kind !== "BasicType" ||
-      leftType.name !== "bool" ||
-      rightType.name !== "bool"
-    ) {
+    const isBool = (t: AST.TypeNode) =>
+      t.kind === "BasicType" && (t.name === "bool" || t.name === "i1");
+
+    if (!isBool(leftType) || !isBool(rightType)) {
       throw new CompilerError(
         `Logical operators require boolean operands, got ${this.typeToString(
-          leftType
+          leftType,
         )} and ${this.typeToString(rightType)}`,
         "Ensure both operands are boolean expressions.",
-        expr.location
+        expr.location,
       );
     }
     return leftType;
@@ -259,7 +290,7 @@ export function checkBinary(
       throw new CompilerError(
         `Cannot compare ${this.typeToString(leftType)} and ${this.typeToString(rightType)}`,
         "Operands must be of compatible types.",
-        expr.location
+        expr.location,
       );
     }
     return {
@@ -282,13 +313,16 @@ export function checkBinary(
       TokenType.GreaterGreater,
     ].includes(op)
   ) {
-    if (!TypeUtils.isIntegerType(leftType) || !TypeUtils.isIntegerType(rightType)) {
+    if (
+      !TypeUtils.isIntegerType(leftType) ||
+      !TypeUtils.isIntegerType(rightType)
+    ) {
       throw new CompilerError(
         `Bitwise operators require integer operands, got ${this.typeToString(
-          leftType
+          leftType,
         )} and ${this.typeToString(rightType)}`,
         "Ensure both operands are integers.",
-        expr.location
+        expr.location,
       );
     }
     return leftType;
@@ -299,7 +333,7 @@ export function checkBinary(
     throw new CompilerError(
       `Type mismatch: ${this.typeToString(leftType)} and ${this.typeToString(rightType)}`,
       "Ensure operands have compatible types.",
-      expr.location
+      expr.location,
     );
   }
 
@@ -311,7 +345,7 @@ export function checkBinary(
  */
 export function checkUnary(
   this: ExpressionCheckerContext,
-  expr: AST.UnaryExpr
+  expr: AST.UnaryExpr,
 ): AST.TypeNode | undefined {
   const operandType = this.checkExpression(expr.operand);
   if (!operandType) return undefined;
@@ -319,18 +353,29 @@ export function checkUnary(
   const op = expr.operator.type;
 
   // Try operator overload for user-defined types
-  const methodName = OPERATOR_METHOD_MAP[expr.operator.lexeme];
+  let lookupKey = expr.operator.lexeme;
+  // Special handling for unary operators that share lexeme with binary operators or are defined with prefix in map
+  if (["-", "+", "~"].includes(lookupKey)) {
+    lookupKey = "unary" + lookupKey;
+  }
+  const methodName = OPERATOR_METHOD_MAP[lookupKey];
   if (methodName) {
     const method = this.findOperatorOverload(operandType, methodName, []);
 
     if (method) {
       // Build type substitution map for return type resolution (for generics)
       const typeSubstitutionMap = new Map<string, AST.TypeNode>();
-      if (operandType.kind === "BasicType" && operandType.genericArgs.length > 0) {
+      if (
+        operandType.kind === "BasicType" &&
+        operandType.genericArgs.length > 0
+      ) {
         const decl = operandType.resolvedDeclaration;
         if (decl && decl.genericParams && decl.genericParams.length > 0) {
           for (let i = 0; i < decl.genericParams.length; i++) {
-            typeSubstitutionMap.set(decl.genericParams[i]!.name, operandType.genericArgs[i]!);
+            typeSubstitutionMap.set(
+              decl.genericParams[i]!.name,
+              operandType.genericArgs[i]!,
+            );
           }
         }
       }
@@ -359,7 +404,7 @@ export function checkUnary(
     throw new CompilerError(
       `Cannot take address of ${this.typeToString(operandType)}`,
       "Address-of requires an lvalue.",
-      expr.location
+      expr.location,
     );
   }
 
@@ -383,7 +428,7 @@ export function checkUnary(
     throw new CompilerError(
       `Cannot dereference non-pointer type ${this.typeToString(operandType)}`,
       "Dereference requires a pointer type.",
-      expr.location
+      expr.location,
     );
   }
 
@@ -393,7 +438,7 @@ export function checkUnary(
       throw new CompilerError(
         `Logical not requires boolean operand, got ${this.typeToString(operandType)}`,
         "Ensure the operand is a boolean expression.",
-        expr.location
+        expr.location,
       );
     }
     return operandType;
@@ -405,7 +450,7 @@ export function checkUnary(
       throw new CompilerError(
         `Bitwise not requires integer operand, got ${this.typeToString(operandType)}`,
         "Ensure the operand is an integer.",
-        expr.location
+        expr.location,
       );
     }
     return operandType;
@@ -417,7 +462,7 @@ export function checkUnary(
       throw new CompilerError(
         `Cannot negate ${this.typeToString(operandType)}`,
         "Negation requires a numeric type.",
-        expr.location
+        expr.location,
       );
     }
     return operandType;
@@ -431,20 +476,24 @@ export function checkUnary(
  */
 export function checkArrayLiteral(
   this: ExpressionCheckerContext,
-  expr: AST.ArrayLiteralExpr
+  expr: AST.ArrayLiteralExpr,
 ): AST.TypeNode | undefined {
   if (expr.elements.length === 0) return undefined;
 
   const firstType = this.checkExpression(expr.elements[0]!);
   for (let i = 1; i < expr.elements.length; i++) {
     const elemType = this.checkExpression(expr.elements[i]!);
-    if (firstType && elemType && !this.areTypesCompatible(firstType, elemType)) {
+    if (
+      firstType &&
+      elemType &&
+      !this.areTypesCompatible(firstType, elemType)
+    ) {
       throw new CompilerError(
         `Array literal has inconsistent element types: ${this.typeToString(
-          firstType
+          firstType,
         )} vs ${this.typeToString(elemType)}`,
         "All elements in an array literal must have the same type.",
-        expr.elements[i]!.location
+        expr.elements[i]!.location,
       );
     }
   }
@@ -463,14 +512,14 @@ export function checkArrayLiteral(
  */
 export function checkStructLiteral(
   this: ExpressionCheckerContext,
-  expr: AST.StructLiteralExpr
+  expr: AST.StructLiteralExpr,
 ): AST.TypeNode | undefined {
   const symbol = this.currentScope.resolve(expr.structName);
   if (!symbol || symbol.kind !== "Struct") {
     throw new CompilerError(
       `Unknown struct '${expr.structName}'`,
       "Ensure the struct is defined.",
-      expr.location
+      expr.location,
     );
   }
 
@@ -482,7 +531,7 @@ export function checkStructLiteral(
       throw new CompilerError(
         `Unknown field '${field.name}' in struct '${expr.structName}'`,
         "Check the struct definition for valid fields.",
-        field.value.location
+        field.value.location,
       );
     }
 
@@ -494,10 +543,10 @@ export function checkStructLiteral(
       if (!this.areTypesCompatible(resolvedMemberType, resolvedValueType)) {
         throw new CompilerError(
           `Type mismatch for field '${field.name}': expected ${this.typeToString(
-            member.type
+            member.type,
           )}, got ${this.typeToString(valueType)}`,
           "Field value must match the declared type.",
-          field.value.location
+          field.value.location,
         );
       }
     }
@@ -518,7 +567,7 @@ export function checkStructLiteral(
  */
 export function checkTupleLiteral(
   this: ExpressionCheckerContext,
-  expr: AST.TupleLiteralExpr
+  expr: AST.TupleLiteralExpr,
 ): AST.TypeNode {
   const types: AST.TypeNode[] = [];
 
@@ -543,14 +592,14 @@ export function checkTupleLiteral(
  */
 export function checkTernary(
   this: ExpressionCheckerContext,
-  expr: AST.TernaryExpr
+  expr: AST.TernaryExpr,
 ): AST.TypeNode | undefined {
   const condType = this.checkExpression(expr.condition);
   if (condType && !this.isBoolType(condType)) {
     throw new CompilerError(
       `Ternary condition must be boolean, got ${this.typeToString(condType)}`,
       "Ensure the condition evaluates to a boolean.",
-      expr.condition.location
+      expr.condition.location,
     );
   }
 
@@ -560,10 +609,10 @@ export function checkTernary(
   if (thenType && elseType && !this.areTypesCompatible(thenType, elseType)) {
     throw new CompilerError(
       `Ternary branches must have compatible types: ${this.typeToString(
-        thenType
+        thenType,
       )} vs ${this.typeToString(elseType)}`,
       "Both branches must return the same type.",
-      expr.location
+      expr.location,
     );
   }
 
@@ -573,7 +622,10 @@ export function checkTernary(
 /**
  * Check a cast expression
  */
-export function checkCast(this: ExpressionCheckerContext, expr: AST.CastExpr): AST.TypeNode {
+export function checkCast(
+  this: ExpressionCheckerContext,
+  expr: AST.CastExpr,
+): AST.TypeNode {
   const exprType = this.checkExpression(expr.expression);
 
   if (exprType) {
@@ -585,7 +637,7 @@ export function checkCast(this: ExpressionCheckerContext, expr: AST.CastExpr): A
       throw new CompilerError(
         `Cannot cast ${this.typeToString(resolved)} to ${this.typeToString(target)}`,
         "This cast is not allowed.",
-        expr.location
+        expr.location,
       );
     }
   }
@@ -596,7 +648,10 @@ export function checkCast(this: ExpressionCheckerContext, expr: AST.CastExpr): A
 /**
  * Check a sizeof expression
  */
-export function checkSizeof(this: ExpressionCheckerContext, expr: AST.SizeofExpr): AST.TypeNode {
+export function checkSizeof(
+  this: ExpressionCheckerContext,
+  expr: AST.SizeofExpr,
+): AST.TypeNode {
   if ("kind" in expr.target && (expr.target.kind as string) !== "BasicType") {
     this.checkExpression(expr.target as AST.Expression);
   }
@@ -615,7 +670,7 @@ export function checkSizeof(this: ExpressionCheckerContext, expr: AST.SizeofExpr
  */
 export function checkTypeMatch(
   this: ExpressionCheckerContext,
-  expr: AST.TypeMatchExpr
+  expr: AST.TypeMatchExpr,
 ): AST.TypeNode {
   if ("kind" in expr.value && (expr.value.kind as string) !== "BasicType") {
     this.checkExpression(expr.value as AST.Expression);
@@ -639,18 +694,19 @@ export function checkTypeMatch(
       throw new CompilerError(
         `Cannot find enum '${enumName}'`,
         `The type '${enumName}' in match<${targetTypeName}> is not a defined enum.`,
-        expr.location
+        expr.location,
       );
     }
   } else {
     const isDefined =
-      KNOWN_TYPES.includes(targetTypeName) || this.currentScope.resolve(targetTypeName);
+      KNOWN_TYPES.includes(targetTypeName) ||
+      this.currentScope.resolve(targetTypeName);
 
     if (!isDefined) {
       throw new CompilerError(
         `Unknown type '${targetTypeName}'`,
         `The type '${targetTypeName}' in match<${targetTypeName}> is not defined.`,
-        expr.location
+        expr.location,
       );
     }
   }
@@ -668,13 +724,16 @@ export function checkTypeMatch(
 /**
  * Check a match expression
  */
-export function checkMatchExpr(this: ExpressionCheckerContext, expr: AST.MatchExpr): AST.TypeNode {
+export function checkMatchExpr(
+  this: ExpressionCheckerContext,
+  expr: AST.MatchExpr,
+): AST.TypeNode {
   const valueType = this.checkExpression(expr.value);
   if (!valueType) {
     throw new CompilerError(
       "Match value has no type",
       "Cannot match on values without a type.",
-      expr.value.location
+      expr.value.location,
     );
   }
 
@@ -682,7 +741,7 @@ export function checkMatchExpr(this: ExpressionCheckerContext, expr: AST.MatchEx
     throw new CompilerError(
       `Match value must be an enum type, got ${this.typeToString(valueType)}`,
       "Match expressions are currently only supported on enum types.",
-      expr.value.location
+      expr.value.location,
     );
   }
 
@@ -691,14 +750,14 @@ export function checkMatchExpr(this: ExpressionCheckerContext, expr: AST.MatchEx
     throw new CompilerError(
       `Cannot find type '${valueType.name}'`,
       "Ensure the enum is declared before use.",
-      expr.value.location
+      expr.value.location,
     );
   }
   if (symbol.kind !== "Enum") {
     throw new CompilerError(
       `Cannot match on non-enum type '${valueType.name}' (found ${symbol.kind})`,
       "Match expressions are currently only supported on enum types.",
-      expr.value.location
+      expr.value.location,
     );
   }
 
@@ -718,7 +777,7 @@ export function checkMatchExpr(this: ExpressionCheckerContext, expr: AST.MatchEx
         throw new CompilerError(
           `Match guard must be a boolean expression, got ${this.typeToString(guardType)}`,
           "Guards must evaluate to bool.",
-          arm.guard.location
+          arm.guard.location,
         );
       }
     }
@@ -732,10 +791,10 @@ export function checkMatchExpr(this: ExpressionCheckerContext, expr: AST.MatchEx
     } else if (armType && !this.areTypesCompatible(resultType, armType)) {
       throw new CompilerError(
         `Match arms must have compatible types: ${this.typeToString(
-          resultType
+          resultType,
         )} vs ${this.typeToString(armType)}`,
         "All match arms must return the same type.",
-        arm.location
+        arm.location,
       );
     }
   }

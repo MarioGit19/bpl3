@@ -783,6 +783,7 @@ loop (local i: int = 0; i < 1000; i++) {
    ```
 
 7. **Limit pointer arithmetic**
+
    - Stay within array bounds
    - Use indexes when possible for clarity
 

@@ -27,10 +27,25 @@ if (fn) {
         console.log("Return statement (AFTER TYPE CHECK):");
         console.log("  stmt.value:", stmt.value ? "exists" : "undefined");
         console.log("  stmt.value.kind:", stmt.value?.kind);
-        console.log("  stmt.value.resolvedType:", stmt.value?.resolvedType ? JSON.stringify(stmt.value.resolvedType, null, 2) : "undefined");
+        console.log(
+          "  stmt.value.resolvedType:",
+          stmt.value?.resolvedType
+            ? JSON.stringify(stmt.value.resolvedType, null, 2)
+            : "undefined",
+        );
         if (stmt.value?.kind === "Binary") {
-          console.log("  left.resolvedType:", stmt.value.left?.resolvedType ? JSON.stringify(stmt.value.left.resolvedType, null, 2) : "undefined");
-          console.log("  right.resolvedType:", stmt.value.right?.resolvedType ? JSON.stringify(stmt.value.right.resolvedType, null, 2) : "undefined");
+          console.log(
+            "  left.resolvedType:",
+            stmt.value.left?.resolvedType
+              ? JSON.stringify(stmt.value.left.resolvedType, null, 2)
+              : "undefined",
+          );
+          console.log(
+            "  right.resolvedType:",
+            stmt.value.right?.resolvedType
+              ? JSON.stringify(stmt.value.right.resolvedType, null, 2)
+              : "undefined",
+          );
         }
       }
     }

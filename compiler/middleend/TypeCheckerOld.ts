@@ -10,7 +10,13 @@ import { LinkerSymbolTable } from "./LinkerSymbolTable";
 import type { Symbol, SymbolKind } from "./SymbolTable";
 import { SymbolTable } from "./SymbolTable";
 import { initializeBuiltinsInScope } from "./BuiltinTypes";
-import { TypeUtils, TypeSubstitution, INTEGER_TYPES, KNOWN_TYPES, NUMERIC_TYPES } from "./TypeUtils";
+import {
+  TypeUtils,
+  TypeSubstitution,
+  INTEGER_TYPES,
+  KNOWN_TYPES,
+  NUMERIC_TYPES,
+} from "./TypeUtils";
 import { OPERATOR_METHOD_MAP } from "./OverloadResolver";
 
 /**
@@ -316,7 +322,9 @@ export class TypeChecker {
     val: bigint,
     targetType: AST.TypeNode,
   ): boolean {
-    return TypeUtils.isIntegerTypeCompatible(val, targetType, (t) => this.resolveType(t));
+    return TypeUtils.isIntegerTypeCompatible(val, targetType, (t) =>
+      this.resolveType(t),
+    );
   }
 
   private checkVariableDecl(decl: AST.VariableDecl): void {
@@ -2790,7 +2798,8 @@ export class TypeChecker {
     // Fall back to built-in array/pointer indexing
     if (
       !indexType ||
-      (indexType.kind === "BasicType" && !INTEGER_TYPES.includes(indexType.name))
+      (indexType.kind === "BasicType" &&
+        !INTEGER_TYPES.includes(indexType.name))
     ) {
       throw new CompilerError(
         `Array index must be an integer, got ${this.typeToString(indexType)}`,

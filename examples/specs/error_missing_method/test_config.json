@@ -2,6 +2,6 @@
   "exitCode": 1,
   "expectedOutput": [
     "Struct 'Incomplete' does not implement method 'required' from spec 'S'",
-    "Missing implementation for: frame required(this: *Self)"
+    "Missing implementation of: required"
   ]
 }

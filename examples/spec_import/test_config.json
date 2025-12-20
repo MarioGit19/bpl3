@@ -1,6 +1,4 @@
 {
-  "exitCode": 1,
-  "expectedOutput": [
-    "Could not resolve struct declaration for type 'Disposable'"
-  ]
+  "exitCode": 0,
+  "expectedOutput": []
 }

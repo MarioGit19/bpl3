@@ -15,17 +15,23 @@ export interface StatementCheckerContext {
   globalScope: any;
   currentFunctionReturnType: AST.TypeNode | undefined;
   loopDepth: number;
+  errors: CompilerError[];
+  collectAllErrors: boolean;
   checkExpression(expr: AST.Expression): AST.TypeNode | undefined;
   checkStatement(stmt: AST.Statement): void;
   resolveType(type: AST.TypeNode, checkConstraints?: boolean): AST.TypeNode;
-  areTypesCompatible(t1: AST.TypeNode, t2: AST.TypeNode, checkConstraints?: boolean): boolean;
+  areTypesCompatible(
+    t1: AST.TypeNode,
+    t2: AST.TypeNode,
+    checkConstraints?: boolean,
+  ): boolean;
   typeToString(type: AST.TypeNode | undefined): string;
   defineSymbol(
     name: string,
     kind: SymbolKind,
     type: AST.TypeNode | undefined,
     node: AST.ASTNode,
-    moduleScope?: any
+    moduleScope?: any,
   ): void;
   isBoolType(type: AST.TypeNode): boolean;
   makeVoidType(): AST.TypeNode;
@@ -40,14 +46,22 @@ export interface StatementCheckerContext {
 export function checkBlock(
   this: StatementCheckerContext,
   stmt: AST.BlockStmt,
-  newScope: boolean = true
+  newScope: boolean = true,
 ): void {
   if (newScope) {
     this.currentScope = this.currentScope.enterScope();
   }
 
   for (const s of stmt.statements) {
-    this.checkStatement(s);
+    try {
+      this.checkStatement(s);
+    } catch (e) {
+      if (this.collectAllErrors && e instanceof CompilerError) {
+        this.errors.push(e);
+        continue;
+      }
+      throw e;
+    }
   }
 
   if (newScope) {
@@ -64,7 +78,7 @@ export function checkIf(this: StatementCheckerContext, stmt: AST.IfStmt): void {
     throw new CompilerError(
       `If condition must be boolean, got ${this.typeToString(condType)}`,
       "Ensure the condition evaluates to a boolean.",
-      stmt.condition.location
+      stmt.condition.location,
     );
   }
   this.checkStatement(stmt.thenBranch);
@@ -76,7 +90,10 @@ export function checkIf(this: StatementCheckerContext, stmt: AST.IfStmt): void {
 /**
  * Check a loop statement (for/while)
  */
-export function checkLoop(this: StatementCheckerContext, stmt: AST.LoopStmt): void {
+export function checkLoop(
+  this: StatementCheckerContext,
+  stmt: AST.LoopStmt,
+): void {
   this.loopDepth++;
   if (stmt.condition) {
     const condType = this.checkExpression(stmt.condition);
@@ -84,7 +101,7 @@ export function checkLoop(this: StatementCheckerContext, stmt: AST.LoopStmt): vo
       throw new CompilerError(
         `Loop condition must be boolean, got ${this.typeToString(condType)}`,
         "Ensure the condition evaluates to a boolean.",
-        stmt.condition.location
+        stmt.condition.location,
       );
     }
   }
@@ -95,17 +112,27 @@ export function checkLoop(this: StatementCheckerContext, stmt: AST.LoopStmt): vo
 /**
  * Check a return statement
  */
-export function checkReturn(this: StatementCheckerContext, stmt: AST.ReturnStmt): void {
-  const returnType = stmt.value ? this.checkExpression(stmt.value) : this.makeVoidType();
+export function checkReturn(
+  this: StatementCheckerContext,
+  stmt: AST.ReturnStmt,
+): void {
+  const returnType = stmt.value
+    ? this.checkExpression(stmt.value)
+    : this.makeVoidType();
 
   if (this.currentFunctionReturnType) {
     const resolvedExpected = this.resolveType(this.currentFunctionReturnType);
-    const resolvedActual = returnType ? this.resolveType(returnType) : this.makeVoidType();
+    const resolvedActual = returnType
+      ? this.resolveType(returnType)
+      : this.makeVoidType();
 
     // Allow integer constant to match any compatible integer type
     if (stmt.value && returnType && returnType.kind === "BasicType") {
       const constVal = this.getIntegerConstantValue(stmt.value);
-      if (constVal !== undefined && this.isIntegerTypeCompatible(constVal, resolvedExpected)) {
+      if (
+        constVal !== undefined &&
+        this.isIntegerTypeCompatible(constVal, resolvedExpected)
+      ) {
         // Annotate the literal with the target type for code generation
         if (stmt.value.kind === "Literal" || stmt.value.kind === "Unary") {
           stmt.value.resolvedType = resolvedExpected;
@@ -117,10 +144,10 @@ export function checkReturn(this: StatementCheckerContext, stmt: AST.ReturnStmt)
     if (!this.areTypesCompatible(resolvedExpected, resolvedActual)) {
       throw new CompilerError(
         `Return type mismatch: expected ${this.typeToString(
-          resolvedExpected
+          resolvedExpected,
         )}, got ${this.typeToString(resolvedActual)}`,
         "Ensure the returned value matches the function's return type.",
-        stmt.location
+        stmt.location,
       );
     }
   }
@@ -129,7 +156,10 @@ export function checkReturn(this: StatementCheckerContext, stmt: AST.ReturnStmt)
 /**
  * Check a try statement
  */
-export function checkTry(this: StatementCheckerContext, stmt: AST.TryStmt): void {
+export function checkTry(
+  this: StatementCheckerContext,
+  stmt: AST.TryStmt,
+): void {
   checkBlock.call(this, stmt.tryBlock);
 
   // Check catch clauses
@@ -149,25 +179,35 @@ export function checkTry(this: StatementCheckerContext, stmt: AST.TryStmt): void
 /**
  * Check a throw statement
  */
-export function checkThrow(this: StatementCheckerContext, stmt: AST.ThrowStmt): void {
+export function checkThrow(
+  this: StatementCheckerContext,
+  stmt: AST.ThrowStmt,
+): void {
   this.checkExpression(stmt.expression);
 }
 
 /**
  * Check a switch statement
  */
-export function checkSwitch(this: StatementCheckerContext, stmt: AST.SwitchStmt): void {
+export function checkSwitch(
+  this: StatementCheckerContext,
+  stmt: AST.SwitchStmt,
+): void {
   const valueType = this.checkExpression(stmt.expression);
 
   for (const caseItem of stmt.cases) {
     const patternType = this.checkExpression(caseItem.value);
-    if (patternType && valueType && !this.areTypesCompatible(valueType, patternType)) {
+    if (
+      patternType &&
+      valueType &&
+      !this.areTypesCompatible(valueType, patternType)
+    ) {
       throw new CompilerError(
         `Case pattern type ${this.typeToString(
-          patternType
+          patternType,
         )} not compatible with switch value type ${this.typeToString(valueType)}`,
         "Ensure case patterns match the switch value type.",
-        caseItem.value.location
+        caseItem.value.location,
       );
     }
     checkBlock.call(this, caseItem.body);
@@ -181,12 +221,15 @@ export function checkSwitch(this: StatementCheckerContext, stmt: AST.SwitchStmt)
 /**
  * Check a break statement
  */
-export function checkBreak(this: StatementCheckerContext, stmt: AST.BreakStmt): void {
+export function checkBreak(
+  this: StatementCheckerContext,
+  stmt: AST.BreakStmt,
+): void {
   if (this.loopDepth === 0) {
     throw new CompilerError(
       "'break' statement outside of loop",
       "Break statements can only be used inside loops.",
-      stmt.location
+      stmt.location,
     );
   }
 }
@@ -194,12 +237,15 @@ export function checkBreak(this: StatementCheckerContext, stmt: AST.BreakStmt): 
 /**
  * Check a continue statement
  */
-export function checkContinue(this: StatementCheckerContext, stmt: AST.ContinueStmt): void {
+export function checkContinue(
+  this: StatementCheckerContext,
+  stmt: AST.ContinueStmt,
+): void {
   if (this.loopDepth === 0) {
     throw new CompilerError(
       "'continue' statement outside of loop",
       "Continue statements can only be used inside loops.",
-      stmt.location
+      stmt.location,
     );
   }
 }
@@ -207,10 +253,15 @@ export function checkContinue(this: StatementCheckerContext, stmt: AST.ContinueS
 /**
  * Check a variable declaration
  */
-export function checkVariableDecl(this: StatementCheckerContext, decl: AST.VariableDecl): void {
+export function checkVariableDecl(
+  this: StatementCheckerContext,
+  decl: AST.VariableDecl,
+): void {
   if (Array.isArray(decl.name)) {
     // Destructuring
-    const flattenTargets = (targets: any[]): { name: string; type?: AST.TypeNode }[] => {
+    const flattenTargets = (
+      targets: any[],
+    ): { name: string; type?: AST.TypeNode }[] => {
       const result: { name: string; type?: AST.TypeNode }[] = [];
       for (const target of targets) {
         if (Array.isArray(target)) {
@@ -223,7 +274,9 @@ export function checkVariableDecl(this: StatementCheckerContext, decl: AST.Varia
     };
 
     const targets = flattenTargets(decl.name);
-    const initType = decl.initializer ? this.checkExpression(decl.initializer) : undefined;
+    const initType = decl.initializer
+      ? this.checkExpression(decl.initializer)
+      : undefined;
 
     if (initType && initType.kind === "TupleType") {
       const tupleType = initType as AST.TupleTypeNode;
@@ -247,7 +300,7 @@ export function checkVariableDecl(this: StatementCheckerContext, decl: AST.Varia
       const assignTypes = (
         names: string[],
         types: AST.TypeNode[],
-        explicit: (AST.TypeNode | undefined)[]
+        explicit: (AST.TypeNode | undefined)[],
       ): void => {
         for (let i = 0; i < names.length; i++) {
           const name = names[i]!;
@@ -258,7 +311,12 @@ export function checkVariableDecl(this: StatementCheckerContext, decl: AST.Varia
 
           const finalType = explicitType || inferredType;
           if (finalType) {
-            this.defineSymbol(name, "Variable", this.resolveType(finalType), decl);
+            this.defineSymbol(
+              name,
+              "Variable",
+              this.resolveType(finalType),
+              decl,
+            );
           }
         }
       };
@@ -270,7 +328,12 @@ export function checkVariableDecl(this: StatementCheckerContext, decl: AST.Varia
         if (target.name === "_") continue;
         const finalType = target.type || initType;
         if (finalType) {
-          this.defineSymbol(target.name, "Variable", this.resolveType(finalType), decl);
+          this.defineSymbol(
+            target.name,
+            "Variable",
+            this.resolveType(finalType),
+            decl,
+          );
         }
       }
     }
@@ -279,7 +342,9 @@ export function checkVariableDecl(this: StatementCheckerContext, decl: AST.Varia
   }
 
   // Single variable
-  let declaredType = decl.typeAnnotation ? this.resolveType(decl.typeAnnotation) : undefined;
+  let declaredType = decl.typeAnnotation
+    ? this.resolveType(decl.typeAnnotation)
+    : undefined;
   let initType: AST.TypeNode | undefined;
 
   if (decl.initializer) {
@@ -292,18 +357,24 @@ export function checkVariableDecl(this: StatementCheckerContext, decl: AST.Varia
 
         // Check for integer constant compatibility
         const constVal = this.getIntegerConstantValue(decl.initializer);
-        if (constVal !== undefined && this.isIntegerTypeCompatible(constVal, resolvedDecl)) {
+        if (
+          constVal !== undefined &&
+          this.isIntegerTypeCompatible(constVal, resolvedDecl)
+        ) {
           // Annotate the literal for codegen
-          if (decl.initializer.kind === "Literal" || decl.initializer.kind === "Unary") {
+          if (
+            decl.initializer.kind === "Literal" ||
+            decl.initializer.kind === "Unary"
+          ) {
             decl.initializer.resolvedType = resolvedDecl;
           }
         } else if (!this.areTypesCompatible(resolvedDecl, resolvedInit)) {
           throw new CompilerError(
             `Type mismatch: cannot assign ${this.typeToString(resolvedInit)} to ${this.typeToString(
-              resolvedDecl
+              resolvedDecl,
             )}`,
             "Ensure the initializer type matches the declared type.",
-            decl.location
+            decl.location,
           );
         }
       } else {
@@ -316,7 +387,7 @@ export function checkVariableDecl(this: StatementCheckerContext, decl: AST.Varia
     throw new CompilerError(
       `Cannot infer type for variable '${decl.name}'`,
       "Either provide a type annotation or an initializer.",
-      decl.location
+      decl.location,
     );
   }
 
@@ -326,7 +397,10 @@ export function checkVariableDecl(this: StatementCheckerContext, decl: AST.Varia
 /**
  * Check if all paths in a statement return
  */
-export function checkAllPathsReturn(this: StatementCheckerContext, stmt: AST.Statement): boolean {
+export function checkAllPathsReturn(
+  this: StatementCheckerContext,
+  stmt: AST.Statement,
+): boolean {
   switch (stmt.kind) {
     case "Return":
       return true;

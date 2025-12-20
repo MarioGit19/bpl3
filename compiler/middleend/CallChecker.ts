@@ -23,34 +23,57 @@ export interface CallCheckerContext {
     candidates: Symbol[],
     argTypes: (AST.TypeNode | undefined)[],
     genericArgs: AST.TypeNode[],
-    location: SourceLocation
+    location: SourceLocation,
   ): {
     symbol: Symbol;
     type: AST.FunctionTypeNode;
     declaration: AST.ASTNode;
     genericArgs?: AST.TypeNode[];
   };
-  substituteType(type: AST.TypeNode, typeMap: Map<string, AST.TypeNode>): AST.TypeNode;
+  substituteType(
+    type: AST.TypeNode,
+    typeMap: Map<string, AST.TypeNode>,
+  ): AST.TypeNode;
   findOperatorOverload(
     targetType: AST.TypeNode,
     methodName: string,
-    argTypes: AST.TypeNode[]
+    argTypes: AST.TypeNode[],
   ): AST.FunctionDecl | undefined;
   resolveMemberWithContext(
     type: AST.BasicTypeNode,
-    memberName: string
+    memberName: string,
   ):
-    | { members: (AST.FunctionDecl | AST.StructField)[]; genericMap: Map<string, AST.TypeNode> }
+    | {
+        members: (AST.FunctionDecl | AST.StructField)[];
+        genericMap: Map<string, AST.TypeNode>;
+      }
     | undefined;
 }
 
 /**
  * Check a call expression
  */
-export function checkCall(this: CallCheckerContext, expr: AST.CallExpr): AST.TypeNode | undefined {
-  // Handle direct function calls
+export function checkCall(
+  this: CallCheckerContext,
+  expr: AST.CallExpr,
+): AST.TypeNode | undefined {
+  let name: string | undefined;
+  let genericArgs: AST.TypeNode[] = expr.genericArgs || [];
+
+  // Handle direct function calls or generic instantiation calls
   if (expr.callee.kind === "Identifier") {
-    const name = (expr.callee as AST.IdentifierExpr).name;
+    name = (expr.callee as AST.IdentifierExpr).name;
+  } else if (expr.callee.kind === "GenericInstantiation") {
+    const genExpr = expr.callee as AST.GenericInstantiationExpr;
+    if (genExpr.base.kind === "Identifier") {
+      name = (genExpr.base as AST.IdentifierExpr).name;
+      if (genericArgs.length === 0) {
+        genericArgs = genExpr.genericArgs;
+      }
+    }
+  }
+
+  if (name) {
     const symbol = this.currentScope.resolve(name);
 
     if (symbol && symbol.kind === "Function") {
@@ -61,12 +84,22 @@ export function checkCall(this: CallCheckerContext, expr: AST.CallExpr): AST.Typ
         name,
         candidates,
         argTypes,
-        expr.genericArgs || [],
-        expr.location
+        genericArgs,
+        expr.location,
       );
 
-      expr.resolvedDeclaration = match.declaration as AST.FunctionDecl | AST.ExternDecl;
+      expr.resolvedDeclaration = match.declaration as
+        | AST.FunctionDecl
+        | AST.ExternDecl;
       expr.callee.resolvedType = match.type;
+
+      // Ensure base identifier in GenericInstantiation has resolvedType for CodeGenerator
+      if (expr.callee.kind === "GenericInstantiation") {
+        const genExpr = expr.callee as AST.GenericInstantiationExpr;
+        if (genExpr.base.kind === "Identifier") {
+          genExpr.base.resolvedType = match.type;
+        }
+      }
 
       if (match.genericArgs) {
         expr.genericArgs = match.genericArgs;
@@ -85,7 +118,13 @@ export function checkCall(this: CallCheckerContext, expr: AST.CallExpr): AST.Typ
     const enumVariantInfo = (memberExpr as any).enumVariantInfo;
 
     if (enumVariantInfo) {
-      return handleEnumVariantCall.call(this, expr, enumVariantInfo, argTypes, calleeType);
+      return handleEnumVariantCall.call(
+        this,
+        expr,
+        enumVariantInfo,
+        argTypes,
+        calleeType,
+      );
     }
   }
 
@@ -94,7 +133,7 @@ export function checkCall(this: CallCheckerContext, expr: AST.CallExpr): AST.Typ
     const method = this.findOperatorOverload(
       calleeType,
       "__call__",
-      argTypes.filter((t): t is AST.TypeNode => t !== undefined)
+      argTypes.filter((t): t is AST.TypeNode => t !== undefined),
     );
 
     if (method) {
@@ -109,12 +148,58 @@ export function checkCall(this: CallCheckerContext, expr: AST.CallExpr): AST.Typ
     throw new CompilerError(
       `Type '${this.typeToString(calleeType)}' is not callable`,
       "Only functions or types with __call__ operator can be called.",
-      expr.location
+      expr.location,
     );
   }
 
   if (calleeType && calleeType.kind === "FunctionType") {
-    return validateFunctionCall.call(this, expr, calleeType as AST.FunctionTypeNode, argTypes);
+    const funcType = calleeType as AST.FunctionTypeNode;
+    const overloads = (funcType as any).overloads as AST.FunctionTypeNode[];
+
+    if (overloads && overloads.length > 0) {
+      let bestMatch: AST.FunctionTypeNode | undefined;
+
+      for (const candidate of overloads) {
+        if (
+          !candidate.isVariadic &&
+          candidate.paramTypes.length !== argTypes.length
+        )
+          continue;
+
+        let match = true;
+        for (let i = 0; i < candidate.paramTypes.length; i++) {
+          const paramType = candidate.paramTypes[i]!;
+          const argType = argTypes[i];
+          if (argType && !this.areTypesCompatible(paramType, argType)) {
+            match = false;
+            break;
+          }
+        }
+
+        if (match) {
+          bestMatch = candidate;
+          break;
+        }
+      }
+
+      if (bestMatch) {
+        expr.callee.resolvedType = bestMatch;
+        if (bestMatch.declaration) {
+          expr.resolvedDeclaration = bestMatch.declaration as AST.FunctionDecl;
+        }
+        return validateFunctionCall.call(this, expr, bestMatch, argTypes);
+      }
+    }
+
+    if (calleeType.declaration) {
+      expr.resolvedDeclaration = calleeType.declaration as AST.FunctionDecl;
+    }
+    return validateFunctionCall.call(
+      this,
+      expr,
+      calleeType as AST.FunctionTypeNode,
+      argTypes,
+    );
   }
 
   return undefined;
@@ -125,7 +210,7 @@ function handleEnumVariantCall(
   expr: AST.CallExpr,
   enumVariantInfo: any,
   argTypes: (AST.TypeNode | undefined)[],
-  calleeType: AST.TypeNode | undefined
+  calleeType: AST.TypeNode | undefined,
 ): AST.TypeNode | undefined {
   const variant = enumVariantInfo.variant as AST.EnumVariant;
   const typeMap = new Map<string, AST.TypeNode>();
@@ -133,7 +218,11 @@ function handleEnumVariantCall(
   const genericArgs = enumVariantInfo.genericArgs || [];
 
   if (enumDecl.genericParams && genericArgs.length > 0) {
-    for (let i = 0; i < enumDecl.genericParams.length && i < genericArgs.length; i++) {
+    for (
+      let i = 0;
+      i < enumDecl.genericParams.length && i < genericArgs.length;
+      i++
+    ) {
       typeMap.set(enumDecl.genericParams[i]!.name, genericArgs[i]!);
     }
   }
@@ -148,7 +237,7 @@ function handleEnumVariantCall(
           `Usage: ${enumDecl.name}.${variant.name}(${expectedTypes
             .map((t: AST.TypeNode) => this.typeToString(t))
             .join(", ")})`,
-          expr.location
+          expr.location,
         );
       }
 
@@ -162,10 +251,10 @@ function handleEnumVariantCall(
         if (actualType && !this.areTypesCompatible(expectedType, actualType)) {
           throw new CompilerError(
             `Type mismatch for argument ${i + 1} of '${variant.name}': expected ${this.typeToString(
-              expectedType
+              expectedType,
             )}, got ${this.typeToString(actualType)}`,
             "Check the variant definition and argument types.",
-            expr.location
+            expr.location,
           );
         }
       }
@@ -174,7 +263,7 @@ function handleEnumVariantCall(
     throw new CompilerError(
       `Unit variant '${variant.name}' does not take any arguments`,
       `Use: ${enumDecl.name}.${variant.name}`,
-      expr.location
+      expr.location,
     );
   }
 
@@ -186,13 +275,13 @@ function validateFunctionCall(
   this: CallCheckerContext,
   expr: AST.CallExpr,
   funcType: AST.FunctionTypeNode,
-  argTypes: (AST.TypeNode | undefined)[]
+  argTypes: (AST.TypeNode | undefined)[],
 ): AST.TypeNode {
   if (!funcType.isVariadic && funcType.paramTypes.length !== expr.args.length) {
     throw new CompilerError(
       `Expected ${funcType.paramTypes.length} arguments, got ${expr.args.length}`,
       "Argument count mismatch.",
-      expr.location
+      expr.location,
     );
   }
 
@@ -202,10 +291,10 @@ function validateFunctionCall(
     if (argType && !this.areTypesCompatible(paramType, argType)) {
       throw new CompilerError(
         `Argument ${i + 1} type mismatch: expected ${this.typeToString(
-          paramType
+          paramType,
         )}, got ${this.typeToString(argType)}`,
         "Ensure argument types match.",
-        expr.args[i]!.location
+        expr.args[i]!.location,
       );
     }
   }
@@ -218,7 +307,7 @@ function validateFunctionCall(
  */
 export function checkMember(
   this: CallCheckerContext,
-  expr: AST.MemberExpr
+  expr: AST.MemberExpr,
 ): AST.TypeNode | undefined {
   const objectType = this.checkExpression(expr.object);
   if (!objectType) return undefined;
@@ -231,7 +320,7 @@ export function checkMember(
       throw new CompilerError(
         `Module has no exported member '${expr.property}'`,
         "Check the module's exports.",
-        expr.location
+        expr.location,
       );
     }
 
@@ -267,7 +356,7 @@ export function checkMember(
         throw new CompilerError(
           `Enum '${innerType.name}' has no variant '${expr.property}'`,
           `Available variants: ${enumDecl.variants.map((v) => v.name).join(", ")}`,
-          expr.location
+          expr.location,
         );
       }
 
@@ -289,6 +378,56 @@ export function checkMember(
         location: expr.location,
       };
     }
+
+    if (symbol && symbol.kind === "Struct") {
+      const memberContext = this.resolveMemberWithContext(
+        innerType,
+        expr.property,
+      );
+      if (memberContext) {
+        const { members, genericMap } = memberContext;
+        const methods = members.filter(
+          (m) => m.kind === "FunctionDecl",
+        ) as AST.FunctionDecl[];
+
+        if (methods.length > 0) {
+          const candidates = methods.map((method) => {
+            // Substitute generics if we have a map
+            let returnType = method.returnType;
+            let paramTypes = method.params.map((p) => p.type);
+
+            if (genericMap && genericMap.size > 0) {
+              returnType = this.substituteType(returnType, genericMap);
+              paramTypes = paramTypes.map((t) =>
+                this.substituteType(t, genericMap),
+              );
+            }
+
+            return {
+              kind: "FunctionType",
+              returnType: returnType,
+              paramTypes: paramTypes,
+              location: expr.location,
+              declaration: method,
+            } as AST.FunctionTypeNode;
+          });
+
+          if (candidates.length === 1) {
+            return candidates[0];
+          }
+
+          const result = candidates[0]!;
+          (result as any).overloads = candidates;
+          return result;
+        }
+
+        throw new CompilerError(
+          `No static member '${expr.property}' found on type '${innerType.name}'`,
+          "Ensure the member is static (does not take 'this').",
+          expr.location,
+        );
+      }
+    }
   }
 
   // Handle struct/enum member access
@@ -303,7 +442,7 @@ export function checkMember(
     if (symbol && symbol.kind === "Enum") {
       const enumDecl = symbol.declaration as AST.EnumDecl;
       const methods = (enumDecl.methods || []).filter(
-        (m: AST.FunctionDecl) => m.name === expr.property
+        (m: AST.FunctionDecl) => m.name === expr.property,
       );
 
       if (methods.length > 0) {
@@ -343,35 +482,53 @@ export function checkMember(
       throw new CompilerError(
         `Enum '${enumDecl.name}' has no method '${expr.property}'`,
         `To access enum variants, use the enum type directly (e.g., ${enumDecl.name}.${expr.property}).`,
-        expr.location
+        expr.location,
       );
     }
     const memberContext = this.resolveMemberWithContext(
       baseType as AST.BasicTypeNode,
-      expr.property
+      expr.property,
     );
     if (memberContext) {
-      const { members } = memberContext;
+      const { members, genericMap } = memberContext;
       const member = members[0];
 
       if (member && member.kind === "StructField") {
-        return this.resolveType((member as AST.StructField).type);
+        const fieldType = this.resolveType((member as AST.StructField).type);
+        if (genericMap && genericMap.size > 0) {
+          return this.substituteType(fieldType, genericMap);
+        }
+        return fieldType;
       }
 
-      if (member && member.kind === "FunctionDecl") {
-        const allMethods = members.filter((m) => m.kind === "FunctionDecl") as AST.FunctionDecl[];
+      if (
+        member &&
+        (member.kind === "FunctionDecl" || member.kind === "SpecMethod")
+      ) {
+        const allMethods = members.filter(
+          (m) => m.kind === "FunctionDecl" || m.kind === "SpecMethod",
+        ) as (AST.FunctionDecl | AST.SpecMethod)[];
 
         // Filter out static methods and check 'this' compatibility
-        const compatibleMethods: AST.FunctionDecl[] = [];
+        const compatibleMethods: (AST.FunctionDecl | AST.SpecMethod)[] = [];
         for (const method of allMethods) {
           // Skip static methods (no 'this' parameter)
-          if (method.isStatic) continue;
+          if (method.kind === "FunctionDecl" && method.isStatic) continue;
 
           // Check if method has a 'this' parameter
           if (method.params.length > 0 && method.params[0]!.name === "this") {
-            const thisParamType = method.params[0]!.type;
+            let thisParamType = method.params[0]!.type;
+
+            // Substitute generics if needed
+            if (genericMap && genericMap.size > 0) {
+              thisParamType = this.substituteType(thisParamType, genericMap);
+            }
+
             // Check compatibility of 'this' parameter type with object type
-            const isThisCompatible = this.areTypesCompatible(thisParamType, objectType);
+            const isThisCompatible = this.areTypesCompatible(
+              thisParamType,
+              objectType,
+            );
 
             // Also handle pointer compatibility (this: T* vs object: T)
             const pointerCompatible =
@@ -380,7 +537,18 @@ export function checkMember(
               thisParamType.name === objectType.name &&
               thisParamType.pointerDepth === objectType.pointerDepth + 1;
 
-            if (!isThisCompatible && !pointerCompatible) {
+            // Also handle dereference compatibility (this: T vs object: T*)
+            const dereferenceCompatible =
+              thisParamType.kind === "BasicType" &&
+              objectType.kind === "BasicType" &&
+              thisParamType.name === objectType.name &&
+              thisParamType.pointerDepth === objectType.pointerDepth - 1;
+
+            if (
+              !isThisCompatible &&
+              !pointerCompatible &&
+              !dereferenceCompatible
+            ) {
               continue; // Skip incompatible methods
             }
           } else {
@@ -394,21 +562,38 @@ export function checkMember(
         if (compatibleMethods.length === 0) {
           throw new CompilerError(
             `No compatible instance method '${expr.property}' found on type '${this.typeToString(
-              objectType
+              objectType,
             )}'`,
             "Static methods must be called on the type, not an instance.",
-            expr.location
+            expr.location,
           );
         }
 
         if (compatibleMethods.length === 1 && compatibleMethods[0]) {
           const method = compatibleMethods[0];
           // Strip 'this' parameter
-          const paramTypes = method.params.slice(1).map((p) => p.type);
+          let paramTypes = method.params.slice(1).map((p) => p.type);
+          let returnType =
+            method.returnType ||
+            ({
+              kind: "BasicType",
+              name: "void",
+              genericArgs: [],
+              pointerDepth: 0,
+              arrayDimensions: [],
+              location: method.location,
+            } as AST.TypeNode);
+
+          if (genericMap && genericMap.size > 0) {
+            returnType = this.substituteType(returnType, genericMap);
+            paramTypes = paramTypes.map((t) =>
+              this.substituteType(t, genericMap),
+            );
+          }
 
           return {
             kind: "FunctionType",
-            returnType: method.returnType,
+            returnType: returnType,
             paramTypes,
             location: expr.location,
             declaration: method,
@@ -418,20 +603,47 @@ export function checkMember(
         // Multiple overloads
         if (compatibleMethods.length > 0 && compatibleMethods[0]) {
           const first = compatibleMethods[0];
-          const firstParamTypes = first.params.slice(1).map((p) => p.type);
+          let firstParamTypes = first.params.slice(1).map((p) => p.type);
+          let firstReturnType = first.returnType || {
+            kind: "BasicType",
+            name: "void",
+            genericArgs: [],
+            pointerDepth: 0,
+            arrayDimensions: [],
+            location: first.location,
+          };
+
+          if (genericMap && genericMap.size > 0) {
+            firstReturnType = this.substituteType(firstReturnType, genericMap);
+            firstParamTypes = firstParamTypes.map((t) =>
+              this.substituteType(t, genericMap),
+            );
+          }
 
           return {
             kind: "FunctionType",
-            returnType: first.returnType,
+            returnType: firstReturnType,
             paramTypes: firstParamTypes,
             location: expr.location,
             overloads: compatibleMethods.map((m) => {
-              const params = m.params.slice(1).map((p) => p.type);
+              let params = m.params.slice(1).map((p) => p.type);
+              let ret = m.returnType || {
+                kind: "BasicType",
+                name: "void",
+                genericArgs: [],
+                pointerDepth: 0,
+                arrayDimensions: [],
+                location: m.location,
+              };
+              if (genericMap && genericMap.size > 0) {
+                ret = this.substituteType(ret, genericMap);
+                params = params.map((t) => this.substituteType(t, genericMap));
+              }
               return {
                 kind: "FunctionType" as const,
-                returnType: m.returnType,
+                returnType: ret,
                 paramTypes: params,
-                location: expr.location,
+                location: m.location,
                 declaration: m,
               };
             }),
@@ -450,14 +662,14 @@ export function checkMember(
     throw new CompilerError(
       `Invalid tuple index '${expr.property}'`,
       `Valid indices are 0-${objectType.types.length - 1}`,
-      expr.location
+      expr.location,
     );
   }
 
   throw new CompilerError(
     `Cannot access member '${expr.property}' on type '${this.typeToString(objectType)}'`,
     "Check the type definition for available members.",
-    expr.location
+    expr.location,
   );
 }
 
@@ -466,7 +678,7 @@ export function checkMember(
  */
 export function checkIndex(
   this: CallCheckerContext,
-  expr: AST.IndexExpr
+  expr: AST.IndexExpr,
 ): AST.TypeNode | undefined {
   const objectType = this.checkExpression(expr.object);
   const indexType = this.checkExpression(expr.index);
@@ -492,12 +704,14 @@ export function checkIndex(
     };
   }
 
-  // Try __index__ operator overload
+  // Try __get__ operator overload
   if (indexType) {
-    const method = this.findOperatorOverload(objectType, "__index__", [indexType]);
+    const method = this.findOperatorOverload(objectType, "__get__", [
+      indexType,
+    ]);
     if (method) {
       expr.operatorOverload = {
-        methodName: "__index__",
+        methodName: "__get__",
         targetType: objectType,
         methodDeclaration: method,
       };
@@ -507,7 +721,7 @@ export function checkIndex(
 
   throw new CompilerError(
     `Type '${this.typeToString(objectType)}' is not indexable`,
-    "Only arrays, pointers, or types with __index__ operator can be indexed.",
-    expr.location
+    "Only arrays, pointers, or types with __get__ operator can be indexed.",
+    expr.location,
   );
 }

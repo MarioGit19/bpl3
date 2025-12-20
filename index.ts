@@ -551,23 +551,27 @@ function processCodeInternal(content: string, filePath: string, options: any) {
   const generator = new CodeGenerator();
   const ir = generator.generate(ast, filePath);
 
-  if (options.emit === "llvm" && !options.output && !options.run) {
-    // If no output file and not running, maybe print to stdout?
-    // Or default to file.
-    // Current behavior was writing to file.
+  // Determine output path for LLVM IR
+  // If output is specified, use it as base but ensure .ll extension for IR
+  // This prevents overwriting the executable if the user specified the executable name
+  let irPath: string;
+  if (options.output) {
+    irPath = options.output.endsWith(".ll")
+      ? options.output
+      : options.output + ".ll";
+  } else {
+    irPath = filePath.replace(/\.[^/.]+$/, "") + ".ll";
   }
 
-  const outputPath =
-    options.output || filePath.replace(/\.[^/.]+$/, "") + ".ll";
-  fs.writeFileSync(outputPath, ir);
+  fs.writeFileSync(irPath, ir);
 
   if (options.verbose || (!options.run && options.emit === "llvm")) {
-    console.log(`LLVM IR written to ${outputPath}`);
+    console.log(`LLVM IR written to ${irPath}`);
   }
 
   // 5. Compile & Run
   if (options.emit === "llvm") {
-    compileBinaryAndRun(outputPath, options);
+    compileBinaryAndRun(irPath, options);
   }
 }
 

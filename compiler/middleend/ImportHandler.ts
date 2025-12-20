@@ -41,7 +41,7 @@ export interface ImportHandlerContext {
     kind: string,
     type: AST.TypeNode | undefined,
     declaration: AST.ASTNode,
-    moduleScope?: SymbolTable
+    moduleScope?: SymbolTable,
   ) => void;
 }
 
@@ -58,7 +58,11 @@ export class ImportHandler {
   /**
    * Define an imported symbol in the current scope
    */
-  defineImportedSymbol(name: string, symbol: Symbol, scope?: SymbolTable): void {
+  defineImportedSymbol(
+    name: string,
+    symbol: Symbol,
+    scope?: SymbolTable,
+  ): void {
     // Define primary symbol
     if (scope) {
       scope.define({
@@ -74,7 +78,7 @@ export class ImportHandler {
         symbol.kind,
         symbol.type,
         symbol.declaration!,
-        symbol.moduleScope
+        symbol.moduleScope,
       );
     }
 
@@ -95,7 +99,7 @@ export class ImportHandler {
             overload.kind,
             overload.type,
             overload.declaration!,
-            overload.moduleScope
+            overload.moduleScope,
           );
         }
       }
@@ -165,7 +169,7 @@ export class ImportHandler {
         throw new CompilerError(
           `Module not found: ${stmt.source}`,
           "Module resolution failed",
-          stmt.location
+          stmt.location,
         );
       }
     } else {
@@ -189,7 +193,7 @@ export class ImportHandler {
   private loadModule(
     importPath: string,
     ast: AST.Program | undefined,
-    location: SourceLocation
+    location: SourceLocation,
   ): SymbolTable {
     const existingScope = this.ctx.modules.get(importPath);
 
@@ -204,7 +208,7 @@ export class ImportHandler {
         throw new CompilerError(
           `Module not found: ${importPath}`,
           "Ensure the file exists and the path is correct.",
-          location
+          location,
         );
       }
 
@@ -273,7 +277,7 @@ export class ImportHandler {
     stmt: AST.ImportStmt,
     moduleScope: SymbolTable,
     ast: AST.Program | undefined,
-    importPath: string
+    importPath: string,
   ): void {
     // Create a restricted scope that only contains exported items
     const exportedScope = (moduleScope as any).constructor();
@@ -310,7 +314,13 @@ export class ImportHandler {
       }
     }
 
-    this.ctx.defineSymbol(stmt.namespace!, "Module", undefined, stmt, exportedScope);
+    this.ctx.defineSymbol(
+      stmt.namespace!,
+      "Module",
+      undefined,
+      stmt,
+      exportedScope,
+    );
   }
 
   /**
@@ -320,7 +330,7 @@ export class ImportHandler {
     stmt: AST.ImportStmt,
     moduleScope: SymbolTable,
     ast: AST.Program | undefined,
-    importPath: string
+    importPath: string,
   ): void {
     let moduleAst = ast;
 
@@ -349,7 +359,7 @@ export class ImportHandler {
     item: { name: string; alias?: string },
     stmt: AST.ImportStmt,
     moduleScope: SymbolTable,
-    ast: AST.Program | undefined
+    ast: AST.Program | undefined,
   ): void {
     // Check if the item is exported by looking at ExportStmt nodes in AST
     let isExported = false;
@@ -372,7 +382,7 @@ export class ImportHandler {
       throw new CompilerError(
         `Module '${stmt.source}' does not export '${item.name}'`,
         "Ensure the symbol is exported (or defined) in the module.",
-        stmt.location
+        stmt.location,
       );
     }
 

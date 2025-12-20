@@ -89,17 +89,26 @@ export class TypeUtils {
     if (type.kind === "BasicType") {
       let result = "*".repeat(type.pointerDepth) + type.name;
       if (type.genericArgs.length > 0) {
-        result += "<" + type.genericArgs.map((t) => TypeUtils.typeToString(t)).join(", ") + ">";
+        result +=
+          "<" +
+          type.genericArgs.map((t) => TypeUtils.typeToString(t)).join(", ") +
+          ">";
       }
       if (type.arrayDimensions.length > 0) {
-        result += type.arrayDimensions.map((d) => (d ? `[${d}]` : "[]")).join("");
+        result += type.arrayDimensions
+          .map((d) => (d ? `[${d}]` : "[]"))
+          .join("");
       }
       return result;
     } else if (type.kind === "FunctionType") {
-      const params = type.paramTypes.map((p) => TypeUtils.typeToString(p)).join(", ");
+      const params = type.paramTypes
+        .map((p) => TypeUtils.typeToString(p))
+        .join(", ");
       return `(${params}) => ${TypeUtils.typeToString(type.returnType)}`;
     } else if (type.kind === "TupleType") {
-      return "(" + type.types.map((t) => TypeUtils.typeToString(t)).join(", ") + ")";
+      return (
+        "(" + type.types.map((t) => TypeUtils.typeToString(t)).join(", ") + ")"
+      );
     }
     return "unknown";
   }
@@ -175,7 +184,10 @@ export class TypeUtils {
    * Get the integer constant value from an expression if it's a constant
    */
   static getIntegerConstantValue(expr: AST.Expression): bigint | undefined {
-    if (expr.kind === "Literal" && (expr as AST.LiteralExpr).type === "number") {
+    if (
+      expr.kind === "Literal" &&
+      (expr as AST.LiteralExpr).type === "number"
+    ) {
       try {
         return BigInt((expr as AST.LiteralExpr).raw);
       } catch {
@@ -195,7 +207,7 @@ export class TypeUtils {
   static isIntegerTypeCompatible(
     val: bigint,
     targetType: AST.TypeNode,
-    resolveType: (type: AST.TypeNode) => AST.TypeNode
+    resolveType: (type: AST.TypeNode) => AST.TypeNode,
   ): boolean {
     const resolvedTarget = resolveType(targetType);
     if (resolvedTarget.kind !== "BasicType") return false;
@@ -260,15 +272,24 @@ export class TypeUtils {
  */
 export class TypeComparison {
   private scope: SymbolTable;
-  private resolveTypeFn: (type: AST.TypeNode, checkConstraints?: boolean) => AST.TypeNode;
+  private resolveTypeFn: (
+    type: AST.TypeNode,
+    checkConstraints?: boolean,
+  ) => AST.TypeNode;
   private isStructTypeFn: (typeName: string) => boolean;
-  private isSubtypeFn: (child: AST.BasicTypeNode, parent: AST.BasicTypeNode) => boolean;
+  private isSubtypeFn: (
+    child: AST.BasicTypeNode,
+    parent: AST.BasicTypeNode,
+  ) => boolean;
 
   constructor(
     scope: SymbolTable,
-    resolveType: (type: AST.TypeNode, checkConstraints?: boolean) => AST.TypeNode,
+    resolveType: (
+      type: AST.TypeNode,
+      checkConstraints?: boolean,
+    ) => AST.TypeNode,
     isStructType: (typeName: string) => boolean,
-    isSubtype: (child: AST.BasicTypeNode, parent: AST.BasicTypeNode) => boolean
+    isSubtype: (child: AST.BasicTypeNode, parent: AST.BasicTypeNode) => boolean,
   ) {
     this.scope = scope;
     this.resolveTypeFn = resolveType;
@@ -294,7 +315,8 @@ export class TypeComparison {
       if (rt1.pointerDepth !== rt2.pointerDepth) return false;
 
       // Exact array dimensions match
-      if (rt1.arrayDimensions.length !== rt2.arrayDimensions.length) return false;
+      if (rt1.arrayDimensions.length !== rt2.arrayDimensions.length)
+        return false;
       for (let i = 0; i < rt1.arrayDimensions.length; i++) {
         if (rt1.arrayDimensions[i] !== rt2.arrayDimensions[i]) return false;
       }
@@ -302,21 +324,25 @@ export class TypeComparison {
       // Exact generic args match
       if (rt1.genericArgs.length !== rt2.genericArgs.length) return false;
       for (let i = 0; i < rt1.genericArgs.length; i++) {
-        if (!this.areTypesExactMatch(rt1.genericArgs[i]!, rt2.genericArgs[i]!)) return false;
+        if (!this.areTypesExactMatch(rt1.genericArgs[i]!, rt2.genericArgs[i]!))
+          return false;
       }
 
       return true;
     } else if (rt1.kind === "FunctionType" && rt2.kind === "FunctionType") {
-      if (!this.areTypesExactMatch(rt1.returnType, rt2.returnType)) return false;
+      if (!this.areTypesExactMatch(rt1.returnType, rt2.returnType))
+        return false;
       if (rt1.paramTypes.length !== rt2.paramTypes.length) return false;
       for (let i = 0; i < rt1.paramTypes.length; i++) {
-        if (!this.areTypesExactMatch(rt1.paramTypes[i]!, rt2.paramTypes[i]!)) return false;
+        if (!this.areTypesExactMatch(rt1.paramTypes[i]!, rt2.paramTypes[i]!))
+          return false;
       }
       return true;
     } else if (rt1.kind === "TupleType" && rt2.kind === "TupleType") {
       if (rt1.types.length !== rt2.types.length) return false;
       for (let i = 0; i < rt1.types.length; i++) {
-        if (!this.areTypesExactMatch(rt1.types[i]!, rt2.types[i]!)) return false;
+        if (!this.areTypesExactMatch(rt1.types[i]!, rt2.types[i]!))
+          return false;
       }
       return true;
     }
@@ -330,7 +356,7 @@ export class TypeComparison {
   areTypesCompatible(
     t1: AST.TypeNode,
     t2: AST.TypeNode,
-    checkConstraints: boolean = true
+    checkConstraints: boolean = true,
   ): boolean {
     const rt1 = this.resolveTypeFn(t1, checkConstraints);
     const rt2 = this.resolveTypeFn(t2, checkConstraints);
@@ -373,7 +399,9 @@ export class TypeComparison {
       // Exact name match
       if (rt1.name !== rt2.name) {
         // Check inheritance
-        if (!this.isSubtypeFn(rt2 as AST.BasicTypeNode, rt1 as AST.BasicTypeNode)) {
+        if (
+          !this.isSubtypeFn(rt2 as AST.BasicTypeNode, rt1 as AST.BasicTypeNode)
+        ) {
           return false;
         }
       }
@@ -419,7 +447,9 @@ export class TypeComparison {
           return false;
         }
         for (let i = 0; i < rt1.genericArgs.length; i++) {
-          if (!this.areTypesCompatible(rt1.genericArgs[i]!, rt2.genericArgs[i]!)) {
+          if (
+            !this.areTypesCompatible(rt1.genericArgs[i]!, rt2.genericArgs[i]!)
+          ) {
             return false;
           }
         }
@@ -427,16 +457,19 @@ export class TypeComparison {
 
       return true;
     } else if (rt1.kind === "FunctionType" && rt2.kind === "FunctionType") {
-      if (!this.areTypesCompatible(rt1.returnType, rt2.returnType)) return false;
+      if (!this.areTypesCompatible(rt1.returnType, rt2.returnType))
+        return false;
       if (rt1.paramTypes.length !== rt2.paramTypes.length) return false;
       for (let i = 0; i < rt1.paramTypes.length; i++) {
-        if (!this.areTypesCompatible(rt1.paramTypes[i]!, rt2.paramTypes[i]!)) return false;
+        if (!this.areTypesCompatible(rt1.paramTypes[i]!, rt2.paramTypes[i]!))
+          return false;
       }
       return true;
     } else if (rt1.kind === "TupleType" && rt2.kind === "TupleType") {
       if (rt1.types.length !== rt2.types.length) return false;
       for (let i = 0; i < rt1.types.length; i++) {
-        if (!this.areTypesCompatible(rt1.types[i]!, rt2.types[i]!)) return false;
+        if (!this.areTypesCompatible(rt1.types[i]!, rt2.types[i]!))
+          return false;
       }
       return true;
     }
@@ -453,7 +486,10 @@ export class TypeComparison {
 
     if (this.areTypesCompatible(resolvedSource, resolvedTarget)) return true;
 
-    if (resolvedSource.kind === "BasicType" && resolvedTarget.kind === "BasicType") {
+    if (
+      resolvedSource.kind === "BasicType" &&
+      resolvedTarget.kind === "BasicType"
+    ) {
       // Numeric casts
       if (
         NUMERIC_TYPES.includes(resolvedSource.name) &&
@@ -470,10 +506,21 @@ export class TypeComparison {
       }
 
       // Pointer to int / int to pointer
-      const integerCastTypes = ["i64", "u64", "long", "ulong", "int", "uint", "i32", "u32"];
+      const integerCastTypes = [
+        "i64",
+        "u64",
+        "long",
+        "ulong",
+        "int",
+        "uint",
+        "i32",
+        "u32",
+      ];
       if (
-        (resolvedSource.pointerDepth > 0 && integerCastTypes.includes(resolvedTarget.name)) ||
-        (resolvedTarget.pointerDepth > 0 && integerCastTypes.includes(resolvedSource.name))
+        (resolvedSource.pointerDepth > 0 &&
+          integerCastTypes.includes(resolvedTarget.name)) ||
+        (resolvedTarget.pointerDepth > 0 &&
+          integerCastTypes.includes(resolvedSource.name))
       ) {
         return true;
       }
@@ -485,13 +532,24 @@ export class TypeComparison {
   /**
    * Check if implicit widening from source to target type is allowed
    */
-  isImplicitWideningAllowed(source: AST.TypeNode, target: AST.TypeNode): boolean {
+  isImplicitWideningAllowed(
+    source: AST.TypeNode,
+    target: AST.TypeNode,
+  ): boolean {
     const resolvedSource = this.resolveTypeFn(source);
     const resolvedTarget = this.resolveTypeFn(target);
 
-    if (resolvedSource.kind !== "BasicType" || resolvedTarget.kind !== "BasicType") return false;
-    if (resolvedSource.pointerDepth > 0 || resolvedTarget.pointerDepth > 0) return false;
-    if (resolvedSource.arrayDimensions.length > 0 || resolvedTarget.arrayDimensions.length > 0)
+    if (
+      resolvedSource.kind !== "BasicType" ||
+      resolvedTarget.kind !== "BasicType"
+    )
+      return false;
+    if (resolvedSource.pointerDepth > 0 || resolvedTarget.pointerDepth > 0)
+      return false;
+    if (
+      resolvedSource.arrayDimensions.length > 0 ||
+      resolvedTarget.arrayDimensions.length > 0
+    )
       return false;
 
     const sName = (resolvedSource as AST.BasicTypeNode).name;
@@ -527,12 +585,18 @@ export class TypeComparison {
     if (sRank < tRank) return true;
 
     // Allow implicit downsizing from i64/long to int/i32 (common for sizeof results)
-    if ((sName === "i64" || sName === "long") && (tName === "int" || tName === "i32")) {
+    if (
+      (sName === "i64" || sName === "long") &&
+      (tName === "int" || tName === "i32")
+    ) {
       return true;
     }
 
     // Allow implicit downsizing from u64/ulong to uint/u32
-    if ((sName === "u64" || sName === "ulong") && (tName === "uint" || tName === "u32")) {
+    if (
+      (sName === "u64" || sName === "ulong") &&
+      (tName === "uint" || tName === "u32")
+    ) {
       return true;
     }
 
@@ -547,7 +611,10 @@ export class TypeSubstitution {
   /**
    * Substitute type parameters with concrete types
    */
-  static substituteType(type: AST.TypeNode, map: Map<string, AST.TypeNode>): AST.TypeNode {
+  static substituteType(
+    type: AST.TypeNode,
+    map: Map<string, AST.TypeNode>,
+  ): AST.TypeNode {
     if (type.kind === "BasicType") {
       if (map.has(type.name)) {
         const subst = map.get(type.name)!;
@@ -555,7 +622,10 @@ export class TypeSubstitution {
           return {
             ...subst,
             pointerDepth: subst.pointerDepth + type.pointerDepth,
-            arrayDimensions: [...subst.arrayDimensions, ...type.arrayDimensions],
+            arrayDimensions: [
+              ...subst.arrayDimensions,
+              ...type.arrayDimensions,
+            ],
             location: type.location,
           };
         }
@@ -565,7 +635,9 @@ export class TypeSubstitution {
       if (type.genericArgs.length > 0) {
         return {
           ...type,
-          genericArgs: type.genericArgs.map((arg) => TypeSubstitution.substituteType(arg, map)),
+          genericArgs: type.genericArgs.map((arg) =>
+            TypeSubstitution.substituteType(arg, map),
+          ),
         };
       }
     } else if (type.kind === "TupleType") {
@@ -577,7 +649,9 @@ export class TypeSubstitution {
       return {
         ...type,
         returnType: TypeSubstitution.substituteType(type.returnType, map),
-        paramTypes: type.paramTypes.map((t) => TypeSubstitution.substituteType(t, map)),
+        paramTypes: type.paramTypes.map((t) =>
+          TypeSubstitution.substituteType(t, map),
+        ),
       };
     } else if (type.kind === "MetaType") {
       return {

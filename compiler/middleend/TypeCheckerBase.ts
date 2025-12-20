@@ -58,14 +58,18 @@ export interface ITypeCheckerContext {
   checkExpression(expr: AST.Expression): AST.TypeNode | undefined;
   checkStatement(stmt: AST.Statement): void;
   resolveType(type: AST.TypeNode, checkConstraints?: boolean): AST.TypeNode;
-  areTypesCompatible(t1: AST.TypeNode, t2: AST.TypeNode, checkConstraints?: boolean): boolean;
+  areTypesCompatible(
+    t1: AST.TypeNode,
+    t2: AST.TypeNode,
+    checkConstraints?: boolean,
+  ): boolean;
   typeToString(type: AST.TypeNode | undefined): string;
   defineSymbol(
     name: string,
     kind: SymbolKind,
     type: AST.TypeNode | undefined,
     node: AST.ASTNode,
-    moduleScope?: SymbolTable
+    moduleScope?: SymbolTable,
   ): void;
   hoistDeclaration(stmt: AST.Statement): void;
 }
@@ -87,7 +91,12 @@ export abstract class TypeCheckerBase {
   protected collectAllErrors: boolean = true;
   protected loopDepth: number = 0;
 
-  constructor(options: { skipImportResolution?: boolean; collectAllErrors?: boolean } = {}) {
+  constructor(
+    options: {
+      skipImportResolution?: boolean;
+      collectAllErrors?: boolean;
+    } = {},
+  ) {
     this.globalScope = new SymbolTable();
     this.currentScope = this.globalScope;
     this.skipImportResolution = options.skipImportResolution || false;
@@ -99,6 +108,146 @@ export abstract class TypeCheckerBase {
   // ========== Abstract methods - implemented by checker modules ==========
   abstract checkExpression(expr: AST.Expression): AST.TypeNode | undefined;
   abstract checkStatement(stmt: AST.Statement): void;
+
+  // ========== Type Resolution ==========
+
+  public resolveType(
+    type: AST.TypeNode,
+    checkConstraints: boolean = true,
+  ): AST.TypeNode {
+    if (type.kind === "BasicType") {
+      const symbol = this.currentScope.resolve(type.name);
+
+      if (
+        checkConstraints &&
+        symbol &&
+        (symbol.kind === "Struct" ||
+          symbol.kind === "Enum" ||
+          symbol.kind === "TypeAlias")
+      ) {
+        const decl = symbol.declaration as
+          | AST.StructDecl
+          | AST.EnumDecl
+          | AST.TypeAliasDecl;
+        if (
+          decl &&
+          (decl as any).genericParams &&
+          (decl as any).genericParams.length > 0
+        ) {
+          const genericParams = (decl as any)
+            .genericParams as AST.GenericParam[];
+          if (type.genericArgs.length === genericParams.length) {
+            const resolvedArgs = type.genericArgs.map((t) =>
+              this.resolveType(t, true),
+            );
+
+            const mapping = new Map<string, AST.TypeNode>();
+            for (let i = 0; i < genericParams.length; i++) {
+              mapping.set(genericParams[i]!.name, resolvedArgs[i]!);
+            }
+
+            for (let i = 0; i < genericParams.length; i++) {
+              const param = genericParams[i]!;
+              const arg = resolvedArgs[i]!;
+              if (param.constraint) {
+                const substitutedConstraint = this.substituteType(
+                  param.constraint,
+                  mapping,
+                );
+                if (
+                  !this.areTypesCompatible(substitutedConstraint, arg, false)
+                ) {
+                  throw new CompilerError(
+                    `Type '${this.typeToString(
+                      arg,
+                    )}' does not satisfy constraint '${this.typeToString(substitutedConstraint)}'`,
+                    `Ensure the type argument satisfies the constraint.`,
+                    type.location,
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (symbol && symbol.kind === "Struct") {
+        const resolvedArgs = type.genericArgs.map((t) =>
+          this.resolveType(t, checkConstraints),
+        );
+
+        const basicType = type as AST.BasicTypeNode;
+        basicType.resolvedDeclaration = symbol.declaration as AST.StructDecl;
+        basicType.genericArgs = resolvedArgs;
+
+        return basicType;
+      }
+
+      if (symbol && symbol.kind === "Enum") {
+        const resolvedArgs = type.genericArgs.map((t) =>
+          this.resolveType(t, checkConstraints),
+        );
+
+        const basicType = type as AST.BasicTypeNode;
+        basicType.resolvedDeclaration = symbol.declaration as any;
+        basicType.genericArgs = resolvedArgs;
+
+        return basicType;
+      }
+
+      if (symbol && symbol.kind === "TypeAlias" && symbol.type) {
+        // If the alias points to itself (base type definition), return it
+        if (
+          symbol.type.kind === "BasicType" &&
+          symbol.type.name === type.name
+        ) {
+          return type;
+        }
+
+        const resolvedBase = this.resolveType(symbol.type, checkConstraints);
+
+        if (resolvedBase.kind === "BasicType") {
+          return {
+            ...resolvedBase,
+            genericArgs: [
+              ...resolvedBase.genericArgs,
+              ...type.genericArgs.map((t) =>
+                this.resolveType(t, checkConstraints),
+              ),
+            ],
+            pointerDepth: resolvedBase.pointerDepth + type.pointerDepth,
+            arrayDimensions: [
+              ...resolvedBase.arrayDimensions,
+              ...type.arrayDimensions,
+            ],
+            location: type.location,
+          };
+        }
+        return resolvedBase;
+      }
+    } else if (type.kind === "FunctionType") {
+      return {
+        ...type,
+        returnType: this.resolveType(type.returnType, checkConstraints),
+        paramTypes: type.paramTypes.map((p) =>
+          this.resolveType(p, checkConstraints),
+        ),
+      };
+    } else if (type.kind === "TupleType") {
+      return {
+        ...type,
+        types: type.types.map((t) => this.resolveType(t, checkConstraints)),
+      };
+    }
+    return type;
+  }
+
+  public substituteType(
+    type: AST.TypeNode,
+    map: Map<string, AST.TypeNode>,
+  ): AST.TypeNode {
+    return TypeSubstitution.substituteType(type, map);
+  }
 
   // ========== Public API ==========
 
@@ -131,7 +280,7 @@ export abstract class TypeCheckerBase {
     kind: "function" | "variable" | "type",
     type?: AST.TypeNode,
     declaration?: AST.ASTNode,
-    isExtern: boolean = false
+    isExtern: boolean = false,
   ): void {
     this.linkerSymbolTable.defineSymbol({
       name,
@@ -171,15 +320,23 @@ export abstract class TypeCheckerBase {
     return TypeUtils.getIntegerConstantValue(expr);
   }
 
-  protected isIntegerTypeCompatible(val: bigint, targetType: AST.TypeNode): boolean {
-    return TypeUtils.isIntegerTypeCompatible(val, targetType, (t) => this.resolveType(t));
+  protected isIntegerTypeCompatible(
+    val: bigint,
+    targetType: AST.TypeNode,
+  ): boolean {
+    return TypeUtils.isIntegerTypeCompatible(val, targetType, (t) =>
+      this.resolveType(t),
+    );
   }
 
   protected getIntegerSize(type: AST.TypeNode): number {
     return TypeUtils.getIntegerSize(type);
   }
 
-  protected substituteType(type: AST.TypeNode, map: Map<string, AST.TypeNode>): AST.TypeNode {
+  protected substituteType(
+    type: AST.TypeNode,
+    map: Map<string, AST.TypeNode>,
+  ): AST.TypeNode {
     return TypeSubstitution.substituteType(type, map);
   }
 
@@ -190,7 +347,7 @@ export abstract class TypeCheckerBase {
     kind: SymbolKind,
     type: AST.TypeNode | undefined,
     node: AST.ASTNode,
-    moduleScope?: SymbolTable
+    moduleScope?: SymbolTable,
   ): void {
     const existing = this.currentScope.getInCurrentScope(name);
 
@@ -205,12 +362,15 @@ export abstract class TypeCheckerBase {
       for (const cand of candidates) {
         if (cand.type && cand.type.kind === "FunctionType") {
           if (
-            this.areSignaturesEqual(cand.type as AST.FunctionTypeNode, type as AST.FunctionTypeNode)
+            this.areSignaturesEqual(
+              cand.type as AST.FunctionTypeNode,
+              type as AST.FunctionTypeNode,
+            )
           ) {
             throw new CompilerError(
               `Function '${name}' with this signature is already defined.`,
               "Overloads must have different parameter types.",
-              node.location
+              node.location,
             );
           }
         }
@@ -226,7 +386,11 @@ export abstract class TypeCheckerBase {
     });
   }
 
-  protected defineImportedSymbol(name: string, symbol: Symbol, scope?: SymbolTable): void {
+  protected defineImportedSymbol(
+    name: string,
+    symbol: Symbol,
+    scope?: SymbolTable,
+  ): void {
     const targetScope = scope || this.currentScope;
 
     targetScope.define({
@@ -252,20 +416,35 @@ export abstract class TypeCheckerBase {
 
   // ========== Type Resolution ==========
 
-  protected resolveType(type: AST.TypeNode, checkConstraints: boolean = true): AST.TypeNode {
+  protected resolveType(
+    type: AST.TypeNode,
+    checkConstraints: boolean = true,
+  ): AST.TypeNode {
     if (type.kind === "BasicType") {
       const symbol = this.currentScope.resolve(type.name);
 
       if (
         checkConstraints &&
         symbol &&
-        (symbol.kind === "Struct" || symbol.kind === "Enum" || symbol.kind === "TypeAlias")
+        (symbol.kind === "Struct" ||
+          symbol.kind === "Enum" ||
+          symbol.kind === "TypeAlias")
       ) {
-        const decl = symbol.declaration as AST.StructDecl | AST.EnumDecl | AST.TypeAliasDecl;
-        if (decl && (decl as any).genericParams && (decl as any).genericParams.length > 0) {
-          const genericParams = (decl as any).genericParams as AST.GenericParam[];
+        const decl = symbol.declaration as
+          | AST.StructDecl
+          | AST.EnumDecl
+          | AST.TypeAliasDecl;
+        if (
+          decl &&
+          (decl as any).genericParams &&
+          (decl as any).genericParams.length > 0
+        ) {
+          const genericParams = (decl as any)
+            .genericParams as AST.GenericParam[];
           if (type.genericArgs.length === genericParams.length) {
-            const resolvedArgs = type.genericArgs.map((t) => this.resolveType(t, true));
+            const resolvedArgs = type.genericArgs.map((t) =>
+              this.resolveType(t, true),
+            );
 
             const mapping = new Map<string, AST.TypeNode>();
             for (let i = 0; i < genericParams.length; i++) {
@@ -276,14 +455,19 @@ export abstract class TypeCheckerBase {
               const param = genericParams[i]!;
               const arg = resolvedArgs[i]!;
               if (param.constraint) {
-                const substitutedConstraint = this.substituteType(param.constraint, mapping);
-                if (!this.areTypesCompatible(substitutedConstraint, arg, false)) {
+                const substitutedConstraint = this.substituteType(
+                  param.constraint,
+                  mapping,
+                );
+                if (
+                  !this.areTypesCompatible(substitutedConstraint, arg, false)
+                ) {
                   throw new CompilerError(
                     `Type '${this.typeToString(
-                      arg
+                      arg,
                     )}' does not satisfy constraint '${this.typeToString(substitutedConstraint)}'`,
                     `Ensure the type argument satisfies the constraint.`,
-                    type.location
+                    type.location,
                   );
                 }
               }
@@ -293,7 +477,9 @@ export abstract class TypeCheckerBase {
       }
 
       if (symbol && symbol.kind === "Struct") {
-        const resolvedArgs = type.genericArgs.map((t) => this.resolveType(t, checkConstraints));
+        const resolvedArgs = type.genericArgs.map((t) =>
+          this.resolveType(t, checkConstraints),
+        );
         const basicType = type as AST.BasicTypeNode;
         basicType.resolvedDeclaration = symbol.declaration as AST.StructDecl;
         basicType.genericArgs = resolvedArgs;
@@ -301,7 +487,19 @@ export abstract class TypeCheckerBase {
       }
 
       if (symbol && symbol.kind === "Enum") {
-        const resolvedArgs = type.genericArgs.map((t) => this.resolveType(t, checkConstraints));
+        const resolvedArgs = type.genericArgs.map((t) =>
+          this.resolveType(t, checkConstraints),
+        );
+        const basicType = type as AST.BasicTypeNode;
+        basicType.resolvedDeclaration = symbol.declaration as any;
+        basicType.genericArgs = resolvedArgs;
+        return basicType;
+      }
+
+      if (symbol && symbol.kind === "Spec") {
+        const resolvedArgs = type.genericArgs.map((t) =>
+          this.resolveType(t, checkConstraints),
+        );
         const basicType = type as AST.BasicTypeNode;
         basicType.resolvedDeclaration = symbol.declaration as any;
         basicType.genericArgs = resolvedArgs;
@@ -309,7 +507,10 @@ export abstract class TypeCheckerBase {
       }
 
       if (symbol && symbol.kind === "TypeAlias" && symbol.type) {
-        if (symbol.type.kind === "BasicType" && symbol.type.name === type.name) {
+        if (
+          symbol.type.kind === "BasicType" &&
+          symbol.type.name === type.name
+        ) {
           return type;
         }
 
@@ -320,10 +521,15 @@ export abstract class TypeCheckerBase {
             ...resolvedBase,
             genericArgs: [
               ...resolvedBase.genericArgs,
-              ...type.genericArgs.map((t) => this.resolveType(t, checkConstraints)),
+              ...type.genericArgs.map((t) =>
+                this.resolveType(t, checkConstraints),
+              ),
             ],
             pointerDepth: resolvedBase.pointerDepth + type.pointerDepth,
-            arrayDimensions: [...resolvedBase.arrayDimensions, ...type.arrayDimensions],
+            arrayDimensions: [
+              ...resolvedBase.arrayDimensions,
+              ...type.arrayDimensions,
+            ],
           };
         }
 
@@ -333,7 +539,9 @@ export abstract class TypeCheckerBase {
       if (type.genericArgs.length > 0) {
         return {
           ...type,
-          genericArgs: type.genericArgs.map((t) => this.resolveType(t, checkConstraints)),
+          genericArgs: type.genericArgs.map((t) =>
+            this.resolveType(t, checkConstraints),
+          ),
         };
       }
 
@@ -347,7 +555,9 @@ export abstract class TypeCheckerBase {
       return {
         ...type,
         returnType: this.resolveType(type.returnType, checkConstraints),
-        paramTypes: type.paramTypes.map((t) => this.resolveType(t, checkConstraints)),
+        paramTypes: type.paramTypes.map((t) =>
+          this.resolveType(t, checkConstraints),
+        ),
       };
     }
 
@@ -356,10 +566,31 @@ export abstract class TypeCheckerBase {
 
   // ========== Type Compatibility ==========
 
+  protected getIntegerBits(typeName: string): number {
+    const aliases: { [key: string]: string } = {
+      long: "i64",
+      ulong: "u64",
+      int: "i32",
+      uint: "u32",
+      short: "i16",
+      ushort: "u16",
+      char: "i8",
+      uchar: "u8",
+      bool: "i1",
+    };
+    const name = aliases[typeName] || typeName;
+    if (name === "i1") return 1;
+    if (name === "i8" || name === "u8") return 8;
+    if (name === "i16" || name === "u16") return 16;
+    if (name === "i32" || name === "u32") return 32;
+    if (name === "i64" || name === "u64") return 64;
+    return 0;
+  }
+
   protected areTypesCompatible(
     t1: AST.TypeNode,
     t2: AST.TypeNode,
-    checkConstraints: boolean = true
+    checkConstraints: boolean = true,
   ): boolean {
     const rt1 = this.resolveType(t1, checkConstraints);
     const rt2 = this.resolveType(t2, checkConstraints);
@@ -393,9 +624,42 @@ export abstract class TypeCheckerBase {
         return true;
       }
 
+      // Check integer compatibility (implicit casts)
+      const size1 = this.getIntegerBits(rt1.name);
+      const size2 = this.getIntegerBits(rt2.name);
+
+      if (
+        size1 > 0 &&
+        size2 > 0 &&
+        rt1.pointerDepth === 0 &&
+        rt2.pointerDepth === 0 &&
+        rt1.arrayDimensions.length === 0 &&
+        rt2.arrayDimensions.length === 0
+      ) {
+        return true;
+      }
+
       // Exact name match or inheritance
       if (rt1.name !== rt2.name) {
-        if (!this.isSubtype(rt2 as AST.BasicTypeNode, rt1 as AST.BasicTypeNode)) {
+        // Check aliases
+        const aliases: { [key: string]: string } = {
+          long: "i64",
+          ulong: "u64",
+          int: "i32",
+          uint: "u32",
+          short: "i16",
+          ushort: "u16",
+          char: "i8",
+          uchar: "u8",
+        };
+        const n1 = aliases[rt1.name] || rt1.name;
+        const n2 = aliases[rt2.name] || rt2.name;
+        const isAlias = n1 === n2;
+
+        if (
+          !isAlias &&
+          !this.isSubtype(rt2 as AST.BasicTypeNode, rt1 as AST.BasicTypeNode)
+        ) {
           return false;
         }
       }
@@ -440,7 +704,9 @@ export abstract class TypeCheckerBase {
           return false;
         }
         for (let i = 0; i < rt1.genericArgs.length; i++) {
-          if (!this.areTypesCompatible(rt1.genericArgs[i]!, rt2.genericArgs[i]!)) {
+          if (
+            !this.areTypesCompatible(rt1.genericArgs[i]!, rt2.genericArgs[i]!)
+          ) {
             return false;
           }
         }
@@ -448,16 +714,19 @@ export abstract class TypeCheckerBase {
 
       return true;
     } else if (rt1.kind === "FunctionType" && rt2.kind === "FunctionType") {
-      if (!this.areTypesCompatible(rt1.returnType, rt2.returnType)) return false;
+      if (!this.areTypesCompatible(rt1.returnType, rt2.returnType))
+        return false;
       if (rt1.paramTypes.length !== rt2.paramTypes.length) return false;
       for (let i = 0; i < rt1.paramTypes.length; i++) {
-        if (!this.areTypesCompatible(rt1.paramTypes[i]!, rt2.paramTypes[i]!)) return false;
+        if (!this.areTypesCompatible(rt1.paramTypes[i]!, rt2.paramTypes[i]!))
+          return false;
       }
       return true;
     } else if (rt1.kind === "TupleType" && rt2.kind === "TupleType") {
       if (rt1.types.length !== rt2.types.length) return false;
       for (let i = 0; i < rt1.types.length; i++) {
-        if (!this.areTypesCompatible(rt1.types[i]!, rt2.types[i]!)) return false;
+        if (!this.areTypesCompatible(rt1.types[i]!, rt2.types[i]!))
+          return false;
       }
       return true;
     }
@@ -474,26 +743,31 @@ export abstract class TypeCheckerBase {
     if (rt1.kind === "BasicType" && rt2.kind === "BasicType") {
       if (rt1.name !== rt2.name) return false;
       if (rt1.pointerDepth !== rt2.pointerDepth) return false;
-      if (rt1.arrayDimensions.length !== rt2.arrayDimensions.length) return false;
+      if (rt1.arrayDimensions.length !== rt2.arrayDimensions.length)
+        return false;
       for (let i = 0; i < rt1.arrayDimensions.length; i++) {
         if (rt1.arrayDimensions[i] !== rt2.arrayDimensions[i]) return false;
       }
       if (rt1.genericArgs.length !== rt2.genericArgs.length) return false;
       for (let i = 0; i < rt1.genericArgs.length; i++) {
-        if (!this.areTypesExactMatch(rt1.genericArgs[i]!, rt2.genericArgs[i]!)) return false;
+        if (!this.areTypesExactMatch(rt1.genericArgs[i]!, rt2.genericArgs[i]!))
+          return false;
       }
       return true;
     } else if (rt1.kind === "FunctionType" && rt2.kind === "FunctionType") {
-      if (!this.areTypesExactMatch(rt1.returnType, rt2.returnType)) return false;
+      if (!this.areTypesExactMatch(rt1.returnType, rt2.returnType))
+        return false;
       if (rt1.paramTypes.length !== rt2.paramTypes.length) return false;
       for (let i = 0; i < rt1.paramTypes.length; i++) {
-        if (!this.areTypesExactMatch(rt1.paramTypes[i]!, rt2.paramTypes[i]!)) return false;
+        if (!this.areTypesExactMatch(rt1.paramTypes[i]!, rt2.paramTypes[i]!))
+          return false;
       }
       return true;
     } else if (rt1.kind === "TupleType" && rt2.kind === "TupleType") {
       if (rt1.types.length !== rt2.types.length) return false;
       for (let i = 0; i < rt1.types.length; i++) {
-        if (!this.areTypesExactMatch(rt1.types[i]!, rt2.types[i]!)) return false;
+        if (!this.areTypesExactMatch(rt1.types[i]!, rt2.types[i]!))
+          return false;
       }
       return true;
     }
@@ -501,10 +775,14 @@ export abstract class TypeCheckerBase {
     return false;
   }
 
-  protected areSignaturesEqual(f1: AST.FunctionTypeNode, f2: AST.FunctionTypeNode): boolean {
+  protected areSignaturesEqual(
+    f1: AST.FunctionTypeNode,
+    f2: AST.FunctionTypeNode,
+  ): boolean {
     if (f1.paramTypes.length !== f2.paramTypes.length) return false;
     for (let i = 0; i < f1.paramTypes.length; i++) {
-      if (!this.areTypesExactMatch(f1.paramTypes[i]!, f2.paramTypes[i]!)) return false;
+      if (!this.areTypesExactMatch(f1.paramTypes[i]!, f2.paramTypes[i]!))
+        return false;
     }
     return true;
   }
@@ -516,14 +794,18 @@ export abstract class TypeCheckerBase {
     return symbol !== undefined && symbol.kind === "Struct";
   }
 
-  protected isSubtype(child: AST.BasicTypeNode, parent: AST.BasicTypeNode): boolean {
+  protected isSubtype(
+    child: AST.BasicTypeNode,
+    parent: AST.BasicTypeNode,
+  ): boolean {
     if (child.name === parent.name) return true;
 
     const childSymbol = this.currentScope.resolve(child.name);
     if (!childSymbol || childSymbol.kind !== "Struct") return false;
 
     const childDecl = childSymbol.declaration as AST.StructDecl;
-    if (!childDecl.inheritanceList || childDecl.inheritanceList.length === 0) return false;
+    if (!childDecl.inheritanceList || childDecl.inheritanceList.length === 0)
+      return false;
 
     // First element in inheritanceList is the parent struct (if any)
     const parentType = childDecl.inheritanceList[0] as AST.BasicTypeNode;
@@ -536,7 +818,11 @@ export abstract class TypeCheckerBase {
       const currentSymbol = this.currentScope.resolve(current.name);
       if (!currentSymbol || currentSymbol.kind !== "Struct") break;
       const currentDecl = currentSymbol.declaration as AST.StructDecl;
-      if (!currentDecl.inheritanceList || currentDecl.inheritanceList.length === 0) break;
+      if (
+        !currentDecl.inheritanceList ||
+        currentDecl.inheritanceList.length === 0
+      )
+        break;
       current = currentDecl.inheritanceList[0] as AST.BasicTypeNode | undefined;
     }
 
@@ -545,7 +831,7 @@ export abstract class TypeCheckerBase {
 
   protected resolveStructField(
     decl: AST.StructDecl,
-    fieldName: string
+    fieldName: string,
   ): AST.StructField | undefined {
     for (const member of decl.members) {
       if (member.kind === "StructField" && member.name === fieldName) {
@@ -558,7 +844,10 @@ export abstract class TypeCheckerBase {
       if (parentType && parentType.kind === "BasicType") {
         const parentSymbol = this.currentScope.resolve(parentType.name);
         if (parentSymbol && parentSymbol.kind === "Struct") {
-          return this.resolveStructField(parentSymbol.declaration as AST.StructDecl, fieldName);
+          return this.resolveStructField(
+            parentSymbol.declaration as AST.StructDecl,
+            fieldName,
+          );
         }
       }
     }
@@ -568,39 +857,106 @@ export abstract class TypeCheckerBase {
 
   protected resolveMemberWithContext(
     baseType: AST.BasicTypeNode,
-    memberName: string
-  ): { decl: AST.StructDecl; members: (AST.StructField | AST.FunctionDecl)[] } | undefined {
-    let decl: AST.StructDecl | undefined;
+    memberName: string,
+  ):
+    | {
+        decl: AST.StructDecl | AST.SpecDecl;
+        members: (AST.StructField | AST.FunctionDecl | AST.SpecMethod)[];
+        genericMap: Map<string, AST.TypeNode>;
+      }
+    | undefined {
+    let decl: AST.StructDecl | AST.SpecDecl | undefined;
 
     if (
       baseType.resolvedDeclaration &&
-      (baseType.resolvedDeclaration as any).kind === "StructDecl"
+      ((baseType.resolvedDeclaration as any).kind === "StructDecl" ||
+        (baseType.resolvedDeclaration as any).kind === "SpecDecl")
     ) {
-      decl = baseType.resolvedDeclaration as AST.StructDecl;
+      decl = baseType.resolvedDeclaration as AST.StructDecl | AST.SpecDecl;
     } else {
       const symbol = this.currentScope.resolve(baseType.name);
-      if (symbol && symbol.kind === "Struct") {
-        decl = symbol.declaration as AST.StructDecl;
+      if (symbol) {
+        if (symbol.kind === "Struct") {
+          decl = symbol.declaration as AST.StructDecl;
+        } else if (symbol.kind === "Spec") {
+          decl = symbol.declaration as AST.SpecDecl;
+        } else if (symbol.kind === "TypeAlias") {
+          // Check if it's a generic parameter with a constraint
+          const aliasDecl = symbol.declaration as any;
+          if (aliasDecl.kind === "GenericParam" && aliasDecl.constraint) {
+            if (aliasDecl.constraint.kind === "BasicType") {
+              return this.resolveMemberWithContext(
+                aliasDecl.constraint as AST.BasicTypeNode,
+                memberName,
+              );
+            }
+          }
+        }
       }
     }
 
     if (!decl) return undefined;
 
-    const members = decl.members.filter(
-      (m) =>
-        (m.kind === "StructField" && m.name === memberName) ||
-        (m.kind === "FunctionDecl" && m.name === memberName)
-    );
+    let members: (AST.StructField | AST.FunctionDecl | AST.SpecMethod)[] = [];
+
+    if (decl.kind === "StructDecl") {
+      members = (decl as AST.StructDecl).members.filter(
+        (m) =>
+          (m.kind === "StructField" && m.name === memberName) ||
+          (m.kind === "FunctionDecl" && m.name === memberName),
+      );
+    } else {
+      members = (decl as AST.SpecDecl).methods.filter(
+        (m) => m.name === memberName,
+      );
+    }
 
     if (members.length > 0) {
-      return { decl, members };
+      const genericMap = new Map<string, AST.TypeNode>();
+      if (decl.genericParams.length > 0 && baseType.genericArgs.length > 0) {
+        for (let i = 0; i < decl.genericParams.length; i++) {
+          genericMap.set(decl.genericParams[i]!.name, baseType.genericArgs[i]!);
+        }
+      }
+
+      if (decl.kind === "SpecDecl") {
+        // Map Self to the spec type itself when accessing members on the spec type
+        genericMap.set("Self", baseType);
+      }
+
+      return { decl, members, genericMap };
     }
 
     // Check parent struct via inheritanceList
-    if (decl.inheritanceList && decl.inheritanceList.length > 0) {
-      const parentType = decl.inheritanceList[0];
+    if (
+      decl.kind === "StructDecl" &&
+      decl.inheritanceList &&
+      decl.inheritanceList.length > 0
+    ) {
+      let parentType = decl.inheritanceList[0];
       if (parentType && parentType.kind === "BasicType") {
-        return this.resolveMemberWithContext(parentType as AST.BasicTypeNode, memberName);
+        // Substitute generics in parent type if we have a map
+        const currentGenericMap = new Map<string, AST.TypeNode>();
+        if (decl.genericParams.length > 0 && baseType.genericArgs.length > 0) {
+          for (let i = 0; i < decl.genericParams.length; i++) {
+            currentGenericMap.set(
+              decl.genericParams[i]!.name,
+              baseType.genericArgs[i]!,
+            );
+          }
+        }
+
+        if (currentGenericMap.size > 0) {
+          parentType = this.substituteType(
+            parentType,
+            currentGenericMap,
+          ) as AST.BasicTypeNode;
+        }
+
+        return this.resolveMemberWithContext(
+          parentType as AST.BasicTypeNode,
+          memberName,
+        );
       }
     }
 
@@ -615,7 +971,22 @@ export abstract class TypeCheckerBase {
 
     if (this.areTypesCompatible(resolvedSource, resolvedTarget)) return true;
 
-    if (resolvedSource.kind === "BasicType" && resolvedTarget.kind === "BasicType") {
+    // Allow casting between function pointers and void pointers (or any pointer)
+    if (
+      (resolvedSource.kind === "FunctionType" &&
+        resolvedTarget.kind === "BasicType" &&
+        resolvedTarget.pointerDepth > 0) ||
+      (resolvedSource.kind === "BasicType" &&
+        resolvedSource.pointerDepth > 0 &&
+        resolvedTarget.kind === "FunctionType")
+    ) {
+      return true;
+    }
+
+    if (
+      resolvedSource.kind === "BasicType" &&
+      resolvedTarget.kind === "BasicType"
+    ) {
       // Numeric casts
       if (
         NUMERIC_TYPES.includes(resolvedSource.name) &&
@@ -635,11 +1006,11 @@ export abstract class TypeCheckerBase {
       if (
         (resolvedSource.pointerDepth > 0 &&
           ["i64", "u64", "long", "ulong", "int", "uint", "i32", "u32"].includes(
-            resolvedTarget.name
+            resolvedTarget.name,
           )) ||
         (resolvedTarget.pointerDepth > 0 &&
           ["i64", "u64", "long", "ulong", "int", "uint", "i32", "u32"].includes(
-            resolvedSource.name
+            resolvedSource.name,
           ))
       ) {
         return true;
@@ -649,7 +1020,10 @@ export abstract class TypeCheckerBase {
     return false;
   }
 
-  protected isImplicitWideningAllowed(source: AST.TypeNode, target: AST.TypeNode): boolean {
+  protected isImplicitWideningAllowed(
+    source: AST.TypeNode,
+    target: AST.TypeNode,
+  ): boolean {
     const rs = this.resolveType(source);
     const rt = this.resolveType(target);
 
@@ -662,12 +1036,26 @@ export abstract class TypeCheckerBase {
     if (sourceSize === 0 || targetSize === 0) return false;
 
     // Same signedness, target larger or equal
-    const sourceIsSigned = ["i8", "i16", "i32", "i64", "char", "short", "int", "long"].includes(
-      rs.name
-    );
-    const targetIsSigned = ["i8", "i16", "i32", "i64", "char", "short", "int", "long"].includes(
-      rt.name
-    );
+    const sourceIsSigned = [
+      "i8",
+      "i16",
+      "i32",
+      "i64",
+      "char",
+      "short",
+      "int",
+      "long",
+    ].includes(rs.name);
+    const targetIsSigned = [
+      "i8",
+      "i16",
+      "i32",
+      "i64",
+      "char",
+      "short",
+      "int",
+      "long",
+    ].includes(rt.name);
 
     if (sourceIsSigned === targetIsSigned && targetSize >= sourceSize) {
       return true;
