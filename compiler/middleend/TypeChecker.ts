@@ -429,7 +429,7 @@ export class TypeChecker extends TypeCheckerBase {
         genericArgs: [],
         pointerDepth: 0,
         arrayDimensions: [],
-        location: p.location,
+        location: p.location || structDecl.location,
       })),
       pointerDepth: 0,
       arrayDimensions: [],
@@ -518,6 +518,55 @@ export class TypeChecker extends TypeCheckerBase {
     }
 
     // Check inheritance
+    // Inject implicit inheritance from Type
+    if (decl.name !== "Type") {
+      let hasStructParent = false;
+      for (const parent of decl.inheritanceList) {
+        const resolved = this.resolveType(parent);
+        if (
+          resolved.kind === "BasicType" &&
+          resolved.resolvedDeclaration &&
+          (resolved.resolvedDeclaration as any).kind === "StructDecl"
+        ) {
+          hasStructParent = true;
+          break;
+        }
+      }
+
+      if (!hasStructParent && decl.name !== "Type") {
+        // Add Type as parent
+        // We rely on Type being available in the scope (e.g. via std import)
+        try {
+          const typeStruct = this.resolveType({
+            kind: "BasicType",
+            name: "Type",
+            genericArgs: [],
+            pointerDepth: 0,
+            arrayDimensions: [],
+            location: decl.location,
+          });
+
+          if (
+            typeStruct.kind === "BasicType" &&
+            typeStruct.resolvedDeclaration &&
+            (typeStruct.resolvedDeclaration as any).kind === "StructDecl"
+          ) {
+            decl.inheritanceList.push({
+              kind: "BasicType",
+              name: "Type",
+              genericArgs: [],
+              pointerDepth: 0,
+              arrayDimensions: [],
+              location: decl.location,
+              resolvedDeclaration: typeStruct.resolvedDeclaration,
+            });
+          }
+        } catch (e) {
+          // Type struct not found (e.g. std not imported), ignore
+        }
+      }
+    }
+
     for (const parentType of decl.inheritanceList) {
       const resolvedParent = this.resolveType(parentType);
       if (

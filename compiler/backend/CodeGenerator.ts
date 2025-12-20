@@ -1,4 +1,5 @@
 import * as AST from "../common/AST";
+import { createTypeStructDecl } from "../middleend/BuiltinTypes";
 import { CompilerError } from "../common/CompilerError";
 import { Token } from "../frontend/Token";
 import { TokenType } from "../frontend/TokenType";
@@ -85,6 +86,24 @@ export class CodeGenerator {
     this.definedFunctions.clear();
     this.emittedFunctions.clear();
     this.typeAliasMap.clear();
+
+    // Inject built-in Type struct
+    const typeDecl = createTypeStructDecl();
+    this.structMap.set("Type", typeDecl);
+    this.generateStruct(typeDecl);
+    // Register generated methods as defined
+    for (const member of typeDecl.members) {
+      if (member.kind === "FunctionDecl") {
+        const method = member as AST.FunctionDecl;
+        const funcName = `Type_${method.name}`;
+        const mangled = this.getMangledName(
+          funcName,
+          method.resolvedType as AST.FunctionTypeNode,
+        );
+        this.definedFunctions.add(mangled);
+        this.declaredFunctions.add(mangled);
+      }
+    }
 
     // Collect defined functions to avoid unnecessary declarations
     for (const stmt of program.statements) {
@@ -383,6 +402,17 @@ export class CodeGenerator {
     if (decl.inheritanceList) {
       for (const typeNode of decl.inheritanceList) {
         if (typeNode.kind === "BasicType") {
+          // Try to use resolved declaration first (supports cross-module inheritance)
+          if (
+            typeNode.resolvedDeclaration &&
+            (typeNode.resolvedDeclaration as any).kind === "StructDecl"
+          ) {
+            const parent = typeNode.resolvedDeclaration as AST.StructDecl;
+            fields = this.getAllStructFields(parent);
+            break; // Only one parent struct
+          }
+
+          // Fallback to name lookup (local structs)
           const parent = this.structMap.get(typeNode.name);
           if (parent) {
             fields = this.getAllStructFields(parent);
@@ -420,9 +450,6 @@ export class CodeGenerator {
   }
 
   private generateTopLevel(node: AST.ASTNode) {
-    if (node.kind === "Extern") {
-      console.log(`Processing Extern: ${(node as AST.ExternDecl).name}`);
-    }
     switch (node.kind) {
       case "FunctionDecl":
         this.generateFunction(node as AST.FunctionDecl);
@@ -973,6 +1000,7 @@ export class CodeGenerator {
               ...instantiatedType,
               name: parentName,
               genericArgs: [], // Cleared because name is now concrete
+              resolvedDeclaration: undefined, // Clear resolved declaration to force name lookup
             };
           }
           return instantiatedType;
@@ -3160,6 +3188,42 @@ export class CodeGenerator {
     return "0";
   }
 
+  private findMethodOwner(
+    structName: string,
+    methodName: string,
+  ): AST.StructDecl | null {
+    const decl = this.structMap.get(structName);
+    if (!decl) return null;
+
+    // Check members
+    if (
+      decl.members.some(
+        (m) => m.kind === "FunctionDecl" && m.name === methodName,
+      )
+    ) {
+      return decl;
+    }
+
+    // Check parents
+    for (const parent of decl.inheritanceList) {
+      if (parent.kind === "BasicType") {
+        let parentName = parent.name;
+        // Use resolved declaration if available (handles imports)
+        if (
+          parent.resolvedDeclaration &&
+          (parent.resolvedDeclaration as any).kind === "StructDecl"
+        ) {
+          parentName = (parent.resolvedDeclaration as any).name;
+        }
+
+        const owner = this.findMethodOwner(parentName, methodName);
+        if (owner) return owner;
+      }
+    }
+
+    return null;
+  }
+
   private generateCall(expr: AST.CallExpr): string {
     // Check for enum variant constructor
     const enumVariantInfo = (expr as any).enumVariantInfo;
@@ -3496,9 +3560,69 @@ export class CodeGenerator {
           throw new Error("Member access on non-struct type");
         }
 
+        // Check for inherited method
+        const ownerDecl = this.findMethodOwner(structName, memberExpr.property);
+        if (
+          ownerDecl &&
+          ownerDecl.name !== (objType as AST.BasicTypeNode).name
+        ) {
+          // Inherited method
+          if (ownerDecl.genericParams.length === 0) {
+            // Parent is not generic, use its name directly
+            structName = ownerDecl.name;
+          }
+          // TODO: Handle generic parent inheritance
+        }
+
         funcName = `${structName}_${memberExpr.property}`;
 
         let decl = expr.resolvedDeclaration;
+
+        // If we found a concrete owner, try to find the method declaration there
+        // This fixes issues where TypeChecker resolved to interface/parent method
+        // but we are calling a concrete implementation with different signature (e.g. 'this' type)
+        if (ownerDecl) {
+          // Check if the resolved declaration is already in the owner
+          // If it is, we respect the TypeChecker's choice (handles overloads)
+          const isDeclaredInOwner =
+            decl && ownerDecl.members.includes(decl as any);
+
+          if (!isDeclaredInOwner) {
+            const candidates = ownerDecl.members.filter(
+              (m) =>
+                m.kind === "FunctionDecl" && m.name === memberExpr.property,
+            ) as AST.FunctionDecl[];
+
+            if (candidates.length === 1) {
+              decl = candidates[0];
+            } else if (
+              candidates.length > 1 &&
+              decl &&
+              decl.kind === "FunctionDecl"
+            ) {
+              // Multiple overloads in owner - try to match signature of original decl
+              const targetParams = (decl as AST.FunctionDecl).params;
+              // Skip 'this' (first param)
+              const targetParamTypes = targetParams.slice(1).map((p) => p.type);
+
+              const match = candidates.find((c) => {
+                const cParams = c.params.slice(1).map((p) => p.type);
+                if (cParams.length !== targetParamTypes.length) return false;
+                // Compare resolved types
+                return cParams.every(
+                  (t, i) =>
+                    this.resolveType(t) ===
+                    this.resolveType(targetParamTypes[i]!),
+                );
+              });
+
+              if (match) {
+                decl = match;
+              }
+            }
+          }
+        }
+
         if (
           !decl &&
           callee.resolvedType &&
@@ -3794,15 +3918,24 @@ export class CodeGenerator {
             : funcType.returnType,
         );
 
-        let decl = `declare ${retTypeStr} @${targetName}(${paramTypes.join(", ")}`;
-        if (funcType.isVariadic) {
-          if (paramTypes.length > 0) decl += ", ...";
-          else decl += "...";
-        }
-        decl += ")";
+        // Check if function is already declared or defined
+        if (
+          !this.declaredFunctions.has(targetName) &&
+          !this.definedFunctions.has(targetName)
+        ) {
+          let decl = `declare ${retTypeStr} @${targetName}(${paramTypes.join(", ")}`;
+          if (funcType.isVariadic) {
+            if (paramTypes.length > 0) decl += ", ...";
+            else decl += "...";
+          }
+          decl += ")";
 
-        this.emitDeclaration(decl);
-        this.declaredFunctions.add(targetName);
+          // Check if this is a method of Type struct, which is defined internally
+          if (!targetName.startsWith("Type_")) {
+            this.emitDeclaration(decl);
+            this.declaredFunctions.add(targetName);
+          }
+        }
       }
     }
 
@@ -5640,12 +5773,26 @@ export class CodeGenerator {
     if (!parentTypeNode) return;
 
     let parentName = parentTypeNode.name;
-    const parentDestroy = `${parentName}_destroy`;
+
+    // Find parent struct and destroy method to get correct mangled name
+    const parentStruct = this.structMap.get(parentName);
+    if (!parentStruct) return;
+
+    const destroyMethod = parentStruct.members.find(
+      (m) => m.kind === "FunctionDecl" && m.name === "destroy",
+    ) as AST.FunctionDecl | undefined;
+
+    if (!destroyMethod) return;
+
+    const funcName = `${parentName}_destroy`;
+    const funcType = destroyMethod.resolvedType as AST.FunctionTypeNode;
+    const mangledName = this.getMangledName(funcName, funcType);
 
     const thisParam = funcDecl.params.find((p) => p.name === "this");
     if (!thisParam) return;
 
-    const thisPtr = `%${thisParam.name}_ptr`;
+    const thisPtr =
+      this.localPointers.get(thisParam.name) || `%${thisParam.name}_ptr`;
     const thisType = this.resolveType(thisParam.type);
 
     const thisVal = this.newRegister();
@@ -5659,7 +5806,7 @@ export class CodeGenerator {
       `  ${parentPtr} = bitcast ${thisType} ${thisVal} to ${parentPtrType}`,
     );
 
-    this.emit(`  call void @${parentDestroy}(${parentPtrType} ${parentPtr})`);
+    this.emit(`  call void @${mangledName}(${parentPtrType} ${parentPtr})`);
   }
 
   private emitThrow(value: string, type: string) {

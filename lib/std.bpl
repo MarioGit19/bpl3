@@ -1,6 +1,10 @@
 # BPL Standard Library
 # This module re-exports all standard library components for easy access.
 
+# Core Type System
+import [Type] from "std/type.bpl";
+export [Type];
+
 # Data Structures
 import [Array] from "std/array.bpl";
 export [Array];

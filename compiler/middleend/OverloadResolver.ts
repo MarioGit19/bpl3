@@ -300,9 +300,9 @@ export class OverloadResolver {
       memberName: string,
     ) =>
       | {
-          members: (AST.StructField | AST.FunctionDecl)[];
-          contextType: AST.BasicTypeNode;
-          contextDecl: AST.StructDecl;
+          decl: AST.StructDecl | AST.SpecDecl;
+          members: (AST.StructField | AST.FunctionDecl | AST.SpecMethod)[];
+          genericMap: Map<string, AST.TypeNode>;
         }
       | undefined,
   ): AST.FunctionDecl | undefined {

@@ -44,7 +44,8 @@ export interface CallCheckerContext {
     memberName: string,
   ):
     | {
-        members: (AST.FunctionDecl | AST.StructField)[];
+        decl: AST.StructDecl | AST.SpecDecl;
+        members: (AST.FunctionDecl | AST.StructField | AST.SpecMethod)[];
         genericMap: Map<string, AST.TypeNode>;
       }
     | undefined;

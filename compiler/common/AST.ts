@@ -11,6 +11,7 @@ export interface ASTNode {
 export interface GenericParam {
   name: string;
   constraint?: TypeNode;
+  location?: SourceLocation;
 }
 
 // --- Types ---
@@ -27,7 +28,7 @@ export interface BasicTypeNode extends ASTNode {
   genericArgs: TypeNode[];
   pointerDepth: number;
   arrayDimensions: (number | null)[];
-  resolvedDeclaration?: StructDecl | EnumDecl;
+  resolvedDeclaration?: StructDecl | EnumDecl | SpecDecl;
 }
 
 export interface TupleTypeNode extends ASTNode {

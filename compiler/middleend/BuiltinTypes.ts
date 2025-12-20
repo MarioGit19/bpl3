@@ -109,6 +109,135 @@ export function createNullAccessErrorDecl(): AST.StructDecl {
 }
 
 /**
+ * Create the Type struct declaration (Root of type hierarchy)
+ */
+export function createTypeStructDecl(): AST.StructDecl {
+  const typeType = createBasicType("Type", { pointerDepth: 1 });
+  const stringType = createBasicType("string");
+
+  // getTypeName method
+  const getTypeNameMethod: AST.FunctionDecl = {
+    kind: "FunctionDecl",
+    isFrame: true,
+    isStatic: false,
+    name: "getTypeName",
+    genericParams: [],
+    params: [{ name: "this", type: typeType }],
+    returnType: stringType,
+    resolvedType: {
+      kind: "FunctionType",
+      returnType: stringType,
+      paramTypes: [typeType],
+      location: INTERNAL_LOCATION,
+    },
+    body: {
+      kind: "Block",
+      statements: [
+        {
+          kind: "Return",
+          value: {
+            kind: "Literal",
+            value: "Type",
+            raw: '"Type"',
+            type: "string",
+            location: INTERNAL_LOCATION,
+            resolvedType: stringType,
+          },
+          location: INTERNAL_LOCATION,
+        },
+      ],
+      location: INTERNAL_LOCATION,
+    },
+    location: INTERNAL_LOCATION,
+  };
+
+  // toString method
+  const toStringMethod: AST.FunctionDecl = {
+    kind: "FunctionDecl",
+    isFrame: true,
+    isStatic: false,
+    name: "toString",
+    genericParams: [],
+    params: [{ name: "this", type: typeType }],
+    returnType: stringType,
+    resolvedType: {
+      kind: "FunctionType",
+      returnType: stringType,
+      paramTypes: [typeType],
+      location: INTERNAL_LOCATION,
+    },
+    body: {
+      kind: "Block",
+      statements: [
+        {
+          kind: "Return",
+          value: {
+            kind: "Call",
+            callee: {
+              kind: "Member",
+              object: {
+                kind: "Identifier",
+                name: "this",
+                location: INTERNAL_LOCATION,
+                resolvedType: typeType,
+              },
+              property: "getTypeName",
+              location: INTERNAL_LOCATION,
+              resolvedType: {
+                kind: "FunctionType",
+                returnType: stringType,
+                paramTypes: [typeType],
+                location: INTERNAL_LOCATION,
+              },
+            },
+            args: [],
+            genericArgs: [],
+            location: INTERNAL_LOCATION,
+            resolvedType: stringType,
+            resolvedDeclaration: getTypeNameMethod,
+          },
+          location: INTERNAL_LOCATION,
+        },
+      ],
+      location: INTERNAL_LOCATION,
+    },
+    location: INTERNAL_LOCATION,
+  };
+
+  // destroy method
+  const destroyMethod: AST.FunctionDecl = {
+    kind: "FunctionDecl",
+    isFrame: true,
+    isStatic: false,
+    name: "destroy",
+    genericParams: [],
+    params: [{ name: "this", type: typeType }],
+    returnType: createBasicType("void"),
+    resolvedType: {
+      kind: "FunctionType",
+      returnType: createBasicType("void"),
+      paramTypes: [typeType],
+      location: INTERNAL_LOCATION,
+    },
+    body: {
+      kind: "Block",
+      statements: [],
+      location: INTERNAL_LOCATION,
+    },
+    location: INTERNAL_LOCATION,
+  };
+
+  return {
+    kind: "StructDecl",
+    name: "Type",
+    genericParams: [],
+    inheritanceList: [],
+    members: [getTypeNameMethod, toStringMethod, destroyMethod],
+    location: INTERNAL_LOCATION,
+  };
+}
+
+/**
  * Initialize all builtin types in a symbol table scope
  */
 export function initializeBuiltinsInScope(scope: SymbolTable): void {
@@ -165,5 +294,14 @@ export function initializeBuiltinsInScope(scope: SymbolTable): void {
     kind: "Struct",
     type: createBasicType("NullAccessError"),
     declaration: nullAccessErrorDecl,
+  });
+
+  // Register Type struct (Root of type hierarchy)
+  const typeDecl = createTypeStructDecl();
+  scope.define({
+    name: "Type",
+    kind: "Struct",
+    type: createBasicType("Type"),
+    declaration: typeDecl,
   });
 }

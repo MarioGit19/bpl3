@@ -123,12 +123,14 @@ export abstract class TypeCheckerBase {
         symbol &&
         (symbol.kind === "Struct" ||
           symbol.kind === "Enum" ||
-          symbol.kind === "TypeAlias")
+          symbol.kind === "TypeAlias" ||
+          symbol.kind === "Spec")
       ) {
         const decl = symbol.declaration as
           | AST.StructDecl
           | AST.EnumDecl
-          | AST.TypeAliasDecl;
+          | AST.TypeAliasDecl
+          | AST.SpecDecl;
         if (
           decl &&
           (decl as any).genericParams &&
@@ -190,6 +192,18 @@ export abstract class TypeCheckerBase {
 
         const basicType = type as AST.BasicTypeNode;
         basicType.resolvedDeclaration = symbol.declaration as any;
+        basicType.genericArgs = resolvedArgs;
+
+        return basicType;
+      }
+
+      if (symbol && symbol.kind === "Spec") {
+        const resolvedArgs = type.genericArgs.map((t) =>
+          this.resolveType(t, checkConstraints),
+        );
+
+        const basicType = type as AST.BasicTypeNode;
+        basicType.resolvedDeclaration = symbol.declaration as AST.SpecDecl;
         basicType.genericArgs = resolvedArgs;
 
         return basicType;
@@ -333,13 +347,6 @@ export abstract class TypeCheckerBase {
     return TypeUtils.getIntegerSize(type);
   }
 
-  protected substituteType(
-    type: AST.TypeNode,
-    map: Map<string, AST.TypeNode>,
-  ): AST.TypeNode {
-    return TypeSubstitution.substituteType(type, map);
-  }
-
   // ========== Symbol Management ==========
 
   protected defineSymbol(
@@ -415,154 +422,6 @@ export abstract class TypeCheckerBase {
   }
 
   // ========== Type Resolution ==========
-
-  protected resolveType(
-    type: AST.TypeNode,
-    checkConstraints: boolean = true,
-  ): AST.TypeNode {
-    if (type.kind === "BasicType") {
-      const symbol = this.currentScope.resolve(type.name);
-
-      if (
-        checkConstraints &&
-        symbol &&
-        (symbol.kind === "Struct" ||
-          symbol.kind === "Enum" ||
-          symbol.kind === "TypeAlias")
-      ) {
-        const decl = symbol.declaration as
-          | AST.StructDecl
-          | AST.EnumDecl
-          | AST.TypeAliasDecl;
-        if (
-          decl &&
-          (decl as any).genericParams &&
-          (decl as any).genericParams.length > 0
-        ) {
-          const genericParams = (decl as any)
-            .genericParams as AST.GenericParam[];
-          if (type.genericArgs.length === genericParams.length) {
-            const resolvedArgs = type.genericArgs.map((t) =>
-              this.resolveType(t, true),
-            );
-
-            const mapping = new Map<string, AST.TypeNode>();
-            for (let i = 0; i < genericParams.length; i++) {
-              mapping.set(genericParams[i]!.name, resolvedArgs[i]!);
-            }
-
-            for (let i = 0; i < genericParams.length; i++) {
-              const param = genericParams[i]!;
-              const arg = resolvedArgs[i]!;
-              if (param.constraint) {
-                const substitutedConstraint = this.substituteType(
-                  param.constraint,
-                  mapping,
-                );
-                if (
-                  !this.areTypesCompatible(substitutedConstraint, arg, false)
-                ) {
-                  throw new CompilerError(
-                    `Type '${this.typeToString(
-                      arg,
-                    )}' does not satisfy constraint '${this.typeToString(substitutedConstraint)}'`,
-                    `Ensure the type argument satisfies the constraint.`,
-                    type.location,
-                  );
-                }
-              }
-            }
-          }
-        }
-      }
-
-      if (symbol && symbol.kind === "Struct") {
-        const resolvedArgs = type.genericArgs.map((t) =>
-          this.resolveType(t, checkConstraints),
-        );
-        const basicType = type as AST.BasicTypeNode;
-        basicType.resolvedDeclaration = symbol.declaration as AST.StructDecl;
-        basicType.genericArgs = resolvedArgs;
-        return basicType;
-      }
-
-      if (symbol && symbol.kind === "Enum") {
-        const resolvedArgs = type.genericArgs.map((t) =>
-          this.resolveType(t, checkConstraints),
-        );
-        const basicType = type as AST.BasicTypeNode;
-        basicType.resolvedDeclaration = symbol.declaration as any;
-        basicType.genericArgs = resolvedArgs;
-        return basicType;
-      }
-
-      if (symbol && symbol.kind === "Spec") {
-        const resolvedArgs = type.genericArgs.map((t) =>
-          this.resolveType(t, checkConstraints),
-        );
-        const basicType = type as AST.BasicTypeNode;
-        basicType.resolvedDeclaration = symbol.declaration as any;
-        basicType.genericArgs = resolvedArgs;
-        return basicType;
-      }
-
-      if (symbol && symbol.kind === "TypeAlias" && symbol.type) {
-        if (
-          symbol.type.kind === "BasicType" &&
-          symbol.type.name === type.name
-        ) {
-          return type;
-        }
-
-        const resolvedBase = this.resolveType(symbol.type, checkConstraints);
-
-        if (resolvedBase.kind === "BasicType") {
-          return {
-            ...resolvedBase,
-            genericArgs: [
-              ...resolvedBase.genericArgs,
-              ...type.genericArgs.map((t) =>
-                this.resolveType(t, checkConstraints),
-              ),
-            ],
-            pointerDepth: resolvedBase.pointerDepth + type.pointerDepth,
-            arrayDimensions: [
-              ...resolvedBase.arrayDimensions,
-              ...type.arrayDimensions,
-            ],
-          };
-        }
-
-        return resolvedBase;
-      }
-
-      if (type.genericArgs.length > 0) {
-        return {
-          ...type,
-          genericArgs: type.genericArgs.map((t) =>
-            this.resolveType(t, checkConstraints),
-          ),
-        };
-      }
-
-      return type;
-    } else if (type.kind === "TupleType") {
-      return {
-        ...type,
-        types: type.types.map((t) => this.resolveType(t, checkConstraints)),
-      };
-    } else if (type.kind === "FunctionType") {
-      return {
-        ...type,
-        returnType: this.resolveType(type.returnType, checkConstraints),
-        paramTypes: type.paramTypes.map((t) =>
-          this.resolveType(t, checkConstraints),
-        ),
-      };
-    }
-
-    return type;
-  }
 
   // ========== Type Compatibility ==========
 
@@ -801,7 +660,24 @@ export abstract class TypeCheckerBase {
     if (child.name === parent.name) return true;
 
     const childSymbol = this.currentScope.resolve(child.name);
-    if (!childSymbol || childSymbol.kind !== "Struct") return false;
+    if (!childSymbol) return false;
+
+    if (childSymbol.kind === "TypeAlias") {
+      const aliasDecl = childSymbol.declaration as any;
+      if (
+        (!aliasDecl.kind || aliasDecl.kind === "GenericParam") &&
+        aliasDecl.constraint
+      ) {
+        if (aliasDecl.constraint.kind === "BasicType") {
+          return this.isSubtype(
+            aliasDecl.constraint as AST.BasicTypeNode,
+            parent,
+          );
+        }
+      }
+    }
+
+    if (childSymbol.kind !== "Struct") return false;
 
     const childDecl = childSymbol.declaration as AST.StructDecl;
     if (!childDecl.inheritanceList || childDecl.inheritanceList.length === 0)
@@ -883,7 +759,12 @@ export abstract class TypeCheckerBase {
         } else if (symbol.kind === "TypeAlias") {
           // Check if it's a generic parameter with a constraint
           const aliasDecl = symbol.declaration as any;
-          if (aliasDecl.kind === "GenericParam" && aliasDecl.constraint) {
+          // GenericParam interface doesn't have 'kind' property, so we check for constraint existence
+          // or if it happens to have kind="GenericParam" (future proofing)
+          if (
+            (aliasDecl.kind === "GenericParam" || !aliasDecl.kind) &&
+            aliasDecl.constraint
+          ) {
             if (aliasDecl.constraint.kind === "BasicType") {
               return this.resolveMemberWithContext(
                 aliasDecl.constraint as AST.BasicTypeNode,

@@ -1,0 +1,4 @@
+{
+  "description": "Test for Root Global Type Struct inheritance and method calls",
+  "expectedOutput": ["Type name: MyStruct", "ToString: Type"]
+}

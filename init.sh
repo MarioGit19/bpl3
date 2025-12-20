@@ -10,9 +10,6 @@ bun run build
 # Make the wrapper script executable
 chmod +x ./bpl-wrapper.sh
 
-# Create a symlink named 'bpl' pointing to the wrapper
-ln -sf ./bpl-wrapper.sh ./bpl
-
 # Install system-wide symlink
 sudo ln -srf ./bpl-wrapper.sh /usr/bin/bpl
 
