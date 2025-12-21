@@ -1,0 +1,2 @@
+Hello from BPL HTTP Server!
+This is a test file.
