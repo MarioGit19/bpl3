@@ -75,7 +75,7 @@ extern printf(fmt: string, ...);
 
 ```bpl
 frame main() ret int {
-    // ...
+    # ...
 }
 ```
 
@@ -421,12 +421,12 @@ local x: int = 5;
 ```bpl
 # ❌ Wrong
 if x > 5 {
-    // ...
+    # ...
 }
 
 # ✅ Correct
 if (x > 5) {
-    // ...
+    # ...
 }
 ```
 
@@ -435,13 +435,13 @@ if (x > 5) {
 ```bpl
 # ❌ Wrong (C-style for loop doesn't exist)
 for (i = 0; i < 10; i++) {
-    // ...
+    # ...
 }
 
 # ✅ Correct
 local i: int = 0;
 loop (i < 10) {
-    // ...
+    # ...
     i = i + 1;
 }
 ```

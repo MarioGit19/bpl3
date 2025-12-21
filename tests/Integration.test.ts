@@ -21,11 +21,12 @@ function getExampleDirectories(dir = EXAMPLES_DIR): string[] {
       results = results.concat(getExampleDirectories(fullPath));
     }
   }
-  return results;
+  return results.sort();
 }
 
 describe("Integration Tests", () => {
   const examples = getExampleDirectories();
+  const testOnly: string[] = [""].filter(Boolean); // Specify example names to test only
 
   for (const example of examples) {
     const exampleDir = path.join(EXAMPLES_DIR, example);
@@ -40,6 +41,11 @@ describe("Integration Tests", () => {
       fs.existsSync(configFile)
     ) {
       const config = JSON.parse(fs.readFileSync(configFile, "utf-8"));
+
+      // If testOnly is set, skip other tests
+      if (testOnly.length > 0 && !testOnly.includes(example)) {
+        config.skip_compilation = true;
+      }
 
       if (config.skip_compilation) {
         it.skip(`should run example: ${example}`, () => {});

@@ -151,8 +151,8 @@
     return { kind: "Block", statements: statements || [], location: makeLoc(loc) };
   }
 
-  function variableDecl(isGlobal, name, typeAnnotation, initializer, loc) {
-    return { kind: "VariableDecl", isGlobal, name, typeAnnotation, initializer, location: makeLoc(loc) };
+  function variableDecl(isGlobal, isConst, name, typeAnnotation, initializer, loc) {
+    return { kind: "VariableDecl", isGlobal, isConst, name, typeAnnotation, initializer, location: makeLoc(loc) };
   }
 
   function functionDecl(isFrame, isStatic, name, genericParams, params, returnType, body, loc) {
@@ -175,8 +175,8 @@
     return { kind: "Import", items, source, importAll: !!importAll, namespace: namespace || undefined, location: makeLoc(loc) };
   }
 
-  function exportStmt(item, isType, loc) {
-    return { kind: "Export", item, isType, location: makeLoc(loc) };
+  function exportStmt(items, loc) {
+    return { kind: "Export", items, location: makeLoc(loc) };
   }
 
   function externDecl(name, params, isVariadic, returnType, loc) {
@@ -370,19 +370,25 @@ Statement
   / ExpressionStatement
 
 VariableDeclaration
-  = K_global _ "(" _ targets:DestructTargetList _ ")" _ "=" _ init:Expression _ ";" {
-      return variableDecl(true, targets, undefined, init, location());
+  = K_global _ K_const _ name:Identifier _ ":" _ type:Type _ "=" _ init:Expression _ ";" {
+      return variableDecl(true, true, name.name, type, init, location());
+    }
+  / K_local _ K_const _ name:Identifier _ ":" _ type:Type _ "=" _ init:Expression _ ";" {
+      return variableDecl(false, true, name.name, type, init, location());
+    }
+  / K_global _ "(" _ targets:DestructTargetList _ ")" _ "=" _ init:Expression _ ";" {
+      return variableDecl(true, false, targets, undefined, init, location());
     }
   / K_local _ "(" _ targets:DestructTargetList _ ")" _ "=" _ init:Expression _ ";" {
-      return variableDecl(false, targets, undefined, init, location());
+      return variableDecl(false, false, targets, undefined, init, location());
     }
   / K_global _ name:Identifier _ ":" _ type:Type _ init:(_ "=" _ Expression)? _ ";" {
       const initializer = init ? init[3] : undefined;
-      return variableDecl(true, name.name, type, initializer, location());
+      return variableDecl(true, false, name.name, type, initializer, location());
     }
   / K_local _ name:Identifier _ ":" _ type:Type _ init:(_ "=" _ Expression)? _ ";" {
       const initializer = init ? init[3] : undefined;
-      return variableDecl(false, name.name, type, initializer, location());
+      return variableDecl(false, false, name.name, type, initializer, location());
     }
 
 DestructTargetList
@@ -498,15 +504,14 @@ TypeAlias
     }
 
 ImportStatement
-  = K_import _ "*" _ K_as _ ns:Identifier _ K_from _ src:StringLiteral _ ";" {
+  = K_import _ items:ImportList _ K_from _ src:StringLiteral _ ";" {
+      const normalized = items.map(it => ({ name: it.name, alias: it.alias, isType: it.isType || false, isWrapped: it.isWrapped }));
+      return importStmt(normalized, src.value, false, undefined, location());
+    }
+  / K_import _ "*" _ K_as _ ns:Identifier _ K_from _ src:StringLiteral _ ";" {
       return importStmt([], src.value, true, ns.name, location());
     }
   / K_import _ src:StringLiteral _ ";" { return importStmt([], src.value, true, undefined, location()); }
-  / K_import _ id:Identifier _ ";" { return importStmt([{ name: id.name, isType: false }], id.name, false, undefined, location()); }
-  / K_import _ items:ImportList _ K_from _ src:StringLiteral _ ";" {
-      const normalized = items.map(it => ({ name: it.name, alias: it.alias, isType: it.isType || false }));
-      return importStmt(normalized, src.value, false, undefined, location());
-    }
 
 ImportList
   = head:ImportItem tail:(_ "," _ ImportItem)* {
@@ -514,13 +519,21 @@ ImportList
     }
 
 ImportItem
-  = "[" _ name:Identifier _ "]" { return { name: name.name, isType: true }; }
+  = "[" _ name:Identifier _ "]" { return { name: name.name, isType: true, isWrapped: false }; }
+  / "{" _ name:Identifier _ "}" { return { name: name.name, isType: false, isWrapped: true }; }
   / name:Identifier _ alias:(_ K_as _ Identifier)? {
-      return { name: name.name, alias: alias ? alias[3].name : undefined, isType: false };
+      return { name: name.name, alias: alias ? alias[3].name : undefined, isType: false, isWrapped: false };
     }
 
 ExportStatement
-  = K_export _ item:ImportItem _ ";" { return exportStmt(item.name, !!item.isType, location()); }
+  = K_export _ item:ExportItem _ ";" {
+      return exportStmt([item], location());
+    }
+
+ExportItem
+  = "[" _ name:Identifier _ "]" { return { name: name.name, isType: true, isWrapped: false }; }
+  / "{" _ name:Identifier _ "}" { return { name: name.name, isType: false, isWrapped: true }; }
+  / name:Identifier { return { name: name.name, isType: false, isWrapped: false }; }
 
 ExternDeclaration
   = K_extern _ name:Identifier _ "(" _ params:ExternParameterList? _ ")" _ ret:ReturnType? _ ";" {

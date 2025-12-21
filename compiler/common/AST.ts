@@ -282,6 +282,7 @@ export type Statement =
 export interface VariableDecl extends ASTNode {
   kind: "VariableDecl";
   isGlobal: boolean;
+  isConst: boolean;
   name: string | { name: string; type?: TypeNode }[]; // Simple name or destructuring
   typeAnnotation?: TypeNode;
   initializer?: Expression;
@@ -406,7 +407,12 @@ export interface ExpressionStmt extends ASTNode {
 
 export interface ImportStmt extends ASTNode {
   kind: "Import";
-  items: { name: string; alias?: string; isType: boolean }[];
+  items: {
+    name: string;
+    alias?: string;
+    isType: boolean;
+    isWrapped?: boolean;
+  }[];
   source: string;
   importAll?: boolean; // If true, import all exported symbols
   namespace?: string; // If set, import into this namespace
@@ -414,8 +420,7 @@ export interface ImportStmt extends ASTNode {
 
 export interface ExportStmt extends ASTNode {
   kind: "Export";
-  item: string;
-  isType: boolean;
+  items: { name: string; isType: boolean; isWrapped?: boolean }[];
 }
 
 export interface ExternDecl extends ASTNode {

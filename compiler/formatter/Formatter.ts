@@ -157,6 +157,10 @@ export class Formatter {
     const keyword = decl.isGlobal ? "global" : "local";
     let output = `${indent}${keyword} `;
 
+    if (decl.isConst) {
+      output += "const ";
+    }
+
     if (typeof decl.name === "string") {
       output += decl.name;
       if (decl.typeAnnotation) {
@@ -449,9 +453,22 @@ export class Formatter {
         output += ` as ${stmt.namespace}`;
       }
     } else {
-      output += stmt.items
-        .map((item) => (item.isType ? `[${item.name}]` : item.name))
+      const items = stmt.items
+        .map((item) => {
+          let s = "";
+          if (item.isType) {
+            s = `[${item.name}]`;
+          } else if (item.isWrapped) {
+            s = `{${item.name}}`;
+          } else {
+            s = item.name;
+          }
+
+          if (item.alias) s += ` as ${item.alias}`;
+          return s;
+        })
         .join(", ");
+      output += `${items}`;
     }
 
     output += ` from "${stmt.source}";`;
@@ -461,11 +478,18 @@ export class Formatter {
   private formatExport(stmt: AST.ExportStmt): string {
     const indent = this.getIndent();
     let output = `${indent}export `;
-    if (stmt.isType) {
-      output += `[${stmt.item}]`;
-    } else {
-      output += stmt.item;
+
+    if (stmt.items.length > 0) {
+      const item = stmt.items[0]!;
+      if (item.isType) {
+        output += `[${item.name}]`;
+      } else if (item.isWrapped) {
+        output += `{${item.name}}`;
+      } else {
+        output += item.name;
+      }
     }
+
     output += ";";
     return output;
   }

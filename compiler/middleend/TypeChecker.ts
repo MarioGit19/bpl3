@@ -775,6 +775,24 @@ export class TypeChecker extends TypeCheckerBase {
 
   private checkAssignment(expr: AST.AssignmentExpr): AST.TypeNode | undefined {
     const targetType = this.checkExpression(expr.assignee);
+
+    if (expr.assignee.kind === "Identifier") {
+      const id = expr.assignee as AST.IdentifierExpr;
+      if (
+        id.resolvedDeclaration &&
+        id.resolvedDeclaration.kind === "VariableDecl"
+      ) {
+        const decl = id.resolvedDeclaration as AST.VariableDecl;
+        if (decl.isConst) {
+          throw new CompilerError(
+            `Cannot assign to constant variable '${id.name}'`,
+            "Constants cannot be modified after initialization.",
+            expr.location,
+          );
+        }
+      }
+    }
+
     const valueType = this.checkExpression(expr.value);
 
     if (targetType && valueType) {

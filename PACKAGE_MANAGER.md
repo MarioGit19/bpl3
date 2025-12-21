@@ -36,7 +36,7 @@ A BPL package is defined by a `bpl.json` manifest file in the package root direc
 ### Initialize a New Package
 
 ```bash
-bun index.ts init
+bpl init
 ```
 
 Creates a new `bpl.json` file in the current directory with default values.
@@ -44,7 +44,7 @@ Creates a new `bpl.json` file in the current directory with default values.
 ### Pack a Package
 
 ```bash
-bun index.ts pack [directory]
+bpl pack [directory]
 ```
 
 Creates a `.tgz` archive of the package. If no directory is specified, uses the current directory.
@@ -53,7 +53,7 @@ Example:
 
 ```bash
 cd my-package
-bun index.ts pack
+bpl pack
 # Creates: my-package-1.0.0.tgz
 ```
 
@@ -62,13 +62,13 @@ bun index.ts pack
 Install from a local tarball:
 
 ```bash
-bun index.ts install ./my-package-1.0.0.tgz
+bpl install ./my-package-1.0.0.tgz
 ```
 
 Install to global location:
 
 ```bash
-bun index.ts install ./my-package-1.0.0.tgz --global
+bpl install ./my-package-1.0.0.tgz --global
 ```
 
 Installation locations:
@@ -81,13 +81,13 @@ Installation locations:
 List local packages:
 
 ```bash
-bun index.ts list
+bpl list
 ```
 
 List global packages:
 
 ```bash
-bun index.ts list --global
+bpl list --global
 ```
 
 ### Uninstall a Package
@@ -95,23 +95,23 @@ bun index.ts list --global
 Uninstall a local package:
 
 ```bash
-bun index.ts uninstall <package-name>
+bpl uninstall <package-name>
 # or use the alias
-bun index.ts remove <package-name>
+bpl remove <package-name>
 ```
 
 Uninstall a global package:
 
 ```bash
-bun index.ts uninstall <package-name> --global
+bpl uninstall <package-name> --global
 # or
-bun index.ts remove <package-name> --global
+bpl remove <package-name> --global
 ```
 
 Example:
 
 ```bash
-bun index.ts uninstall math-utils --global
+bpl uninstall math-utils --global
 ```
 
 ## Using Packages
@@ -119,7 +119,7 @@ bun index.ts uninstall math-utils --global
 Once a package is installed, you can import from it using the package name:
 
 ```bpl
-// Import from installed package
+# Import from installed package
 import add, subtract from "math-utils";
 
 extern printf(fmt: string, ...) ret int;
@@ -195,8 +195,8 @@ frame divide(a: int, b: int) ret int {
 
 ```bash
 cd math-utils
-bun index.ts pack
-bun index.ts install ./math-utils-1.0.0.tgz --global
+bpl pack
+bpl install ./math-utils-1.0.0.tgz --global
 ```
 
 ### 5. Use in Your Project
@@ -207,7 +207,7 @@ import add, multiply from "math-utils";
 frame main() ret int {
     local x: int = add(2, 3);
     local y: int = multiply(x, 4);
-    return y;  // Returns 20
+    return y;  # Returns 20
 }
 ```
 
@@ -216,7 +216,7 @@ frame main() ret int {
 When compiling with the `--cache` flag, the package resolution and compilation are cached for faster subsequent builds:
 
 ```bash
-bun index.ts main.bpl --cache
+bpl main.bpl --cache
 ```
 
 ## Best Practices
@@ -233,7 +233,7 @@ bun index.ts main.bpl --cache
 
 If you get a "Module not found" error:
 
-- Verify the package is installed (`bun index.ts list`)
+- Verify the package is installed (`bpl list`)
 - Check the import name matches the package name exactly
 - Try reinstalling the package
 

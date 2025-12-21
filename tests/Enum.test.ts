@@ -1282,7 +1282,7 @@ describe("Enum Import/Export", () => {
     expect(program.statements[0]!.kind).toBe("EnumDecl");
     expect(program.statements[1]!.kind).toBe("Export");
     if (program.statements[1]!.kind === "Export") {
-      expect(program.statements[1]!.item).toBe("Color");
+      expect(program.statements[1]!.items[0]!.name).toBe("Color");
     }
   });
 

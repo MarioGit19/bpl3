@@ -5,7 +5,7 @@ SCRIPT_DIR=$(dirname "$0");
 FILENAME=$(echo "$1" | sed 's/\.x$/.ll/' | sed 's/\.bpl$/.ll/');
 EXEC_NAME=$(echo "$FILENAME" | sed 's/\.ll$//');
 
-bun "$SCRIPT_DIR/index.ts" $1
+bun "$SCRIPT_DIR/index.ts" "$@"
 if [ $? -ne 0 ]; then
     exit 1;
 fi

@@ -25,7 +25,7 @@ struct Long {
     value: i64,
     frame toString(this: *Long) ret String {
         local buf: *char = malloc(32);
-        sprintf(buf, "%lld", this.value); // Use %lld for long long (i64)
+        sprintf(buf, "%lld", this.value); # Use %lld for long long (i64)
         local s: String = String.new(buf);
         free(buf);
         return s;

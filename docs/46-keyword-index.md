@@ -3,13 +3,15 @@
 Reserved words in BPL.
 
 - `frame`
-- `struct`
+- `struct`, `spec`, `enum`
 - `return`
 - `if`, `else`
-- `while`, `for`
+- `loop`
 - `break`, `continue`
 - `switch`, `case`, `default`
 - `import`, `export`
 - `try`, `catch`, `throw`
-- `local`, `global`
+- `local`, `global`, `const`
 - `null`, `true`, `false`
+- `match`, `type`, `cast`, `sizeof`
+- `extern`, `from`, `as`

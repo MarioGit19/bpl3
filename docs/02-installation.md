@@ -8,7 +8,7 @@ Before installing BPL, ensure you have the following installed:
 
 ### Required
 
-1. **Clang/LLVM** (version 11 or higher)
+1. **Clang/LLVM** (version 13 or higher)
 
    - Used to compile LLVM IR to native executables
    - Provides the LLVM toolchain
@@ -87,23 +87,7 @@ brew install node
 
 ## Installing BPL
 
-### Method 1: Install from npm/Bun (Recommended)
-
-```bash
-# Using npm
-npm install -g the-best-programming-language-v3
-
-# Or using Bun
-bun install -g the-best-programming-language-v3
-```
-
-After installation, the `bpl` command should be available:
-
-```bash
-bpl --version
-```
-
-### Method 2: Build from Source
+### Installing from Source
 
 This method gives you the latest development version:
 
@@ -112,19 +96,11 @@ This method gives you the latest development version:
 git clone https://github.com/pr0h0/bpl3.git
 cd bpl3
 
-# Install dependencies
-bun install
-# Or: npm install
+# Initialize and build
+./init.sh
 
-# Build the compiler
-bun run build
-# Or: npm run build
-
-# The executable will be created as './bpl'
-./bpl --version
-
-# Optionally, add to PATH or create symlink
-sudo ln -s $(pwd)/bpl /usr/local/bin/bpl
+# Verify installation
+bpl --version
 ```
 
 ## Verifying Installation
@@ -272,12 +248,10 @@ contexts:
 
 **Solution**: Ensure the installation directory is in your PATH.
 
-```bash
-# For npm global installs, check npm prefix
-npm config get prefix
+If you installed via `./init.sh`, it should have added `BPL_HOME` to your `~/.bashrc`. Try reloading your shell:
 
-# Add to PATH in ~/.bashrc or ~/.zshrc
-export PATH="$PATH:$(npm config get prefix)/bin"
+```bash
+source ~/.bashrc
 ```
 
 ### "clang: command not found"
@@ -316,42 +290,20 @@ clang main.ll -o main.exe
 
 ## Updating BPL
 
-### Global Installation
-
-```bash
-# Using npm
-npm update -g the-best-programming-language-v3
-
-# Or using Bun
-bun update -g the-best-programming-language-v3
-```
-
-### Source Build
-
 ```bash
 cd bpl3
 git pull
-bun install
-bun run build
+./init.sh
 ```
 
 ## Uninstalling
 
-### Global Installation
-
-```bash
-# Using npm
-npm uninstall -g the-best-programming-language-v3
-
-# Or using Bun
-bun remove -g the-best-programming-language-v3
-```
-
-### Source Build
-
 ```bash
 # Remove symlink (if created)
-sudo rm /usr/local/bin/bpl
+sudo rm /usr/bin/bpl
+
+# Remove BPL_HOME from .bashrc
+sed -i '/BPL_HOME/d' ~/.bashrc
 
 # Delete the cloned directory
 rm -rf bpl3

@@ -1,7 +1,6 @@
 # BPL (Best Programming Language) v3
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![npm](https://img.shields.io/npm/v/the-best-programming-language-v3)](https://www.npmjs.com/package/the-best-programming-language-v3)
 
 **BPL** is a statically-typed, compiled programming language that transpiles to LLVM IR. It combines the performance and control of systems languages with modern language features, making it ideal for performance-critical applications, systems programming, and educational purposes.
 
@@ -58,22 +57,21 @@ frame main() ret int {
 
 ## 📦 Installation
 
-### Quick Install
+### Build from Source
 
 ```bash
-# Using npm
-npm install -g the-best-programming-language-v3
-
-# Using Bun (recommended)
-bun install -g the-best-programming-language-v3
+git clone https://github.com/pr0h0/bpl3.git
+cd bpl3
+./init.sh
+bpl --version
 ```
 
 ### Prerequisites
 
 You'll need:
 
-1. **Clang/LLVM** (11+) - for compiling LLVM IR to native code
-2. **Bun** or **Node.js** (16+) - for running the compiler
+1. **Clang/LLVM** (13+) - for compiling LLVM IR to native code
+2. **Bun** - for running the compiler
 
 **Linux (Ubuntu/Debian):**
 
@@ -91,16 +89,6 @@ curl -fsSL https://bun.sh/install | bash
 
 **Windows:**
 Download LLVM from [releases.llvm.org](https://releases.llvm.org/) or use WSL.
-
-### Build from Source
-
-```bash
-git clone https://github.com/pr0h0/bpl3.git
-cd bpl3
-bun install
-bun run build
-# ./bpl is now available
-```
 
 ### Verify Installation
 
@@ -807,7 +795,6 @@ Need help?
 ## 🔗 Links
 
 - **GitHub Repository**: https://github.com/pr0h0/bpl3
-- **npm Package**: https://www.npmjs.com/package/the-best-programming-language-v3
 - **Documentation**: [docs/](docs/)
 - **Examples**: [examples/](examples/)
 - **Language Spec**: [LANGUAGE_SPEC.md](LANGUAGE_SPEC.md)

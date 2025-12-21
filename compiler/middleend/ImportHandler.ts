@@ -342,9 +342,11 @@ export class ImportHandler {
       for (const s of ast.statements) {
         if (s.kind === "Export") {
           const exportStmt = s as AST.ExportStmt;
-          const symbol = moduleScope.resolve(exportStmt.item);
-          if (symbol) {
-            this.defineImportedSymbol(symbol.name, symbol, exportedScope);
+          for (const item of exportStmt.items) {
+            const symbol = moduleScope.resolve(item.name);
+            if (symbol) {
+              this.defineImportedSymbol(symbol.name, symbol, exportedScope);
+            }
           }
         }
       }
@@ -355,15 +357,17 @@ export class ImportHandler {
         for (const s of moduleAst.statements) {
           if (s.kind === "Export") {
             const exportStmt = s as AST.ExportStmt;
-            const symbol = moduleScope.resolve(exportStmt.item);
-            if (symbol) {
-              exportedScope.define({
-                name: symbol.name,
-                kind: symbol.kind,
-                type: symbol.type,
-                declaration: symbol.declaration,
-                moduleScope: symbol.moduleScope,
-              });
+            for (const item of exportStmt.items) {
+              const symbol = moduleScope.resolve(item.name);
+              if (symbol) {
+                exportedScope.define({
+                  name: symbol.name,
+                  kind: symbol.kind,
+                  type: symbol.type,
+                  declaration: symbol.declaration,
+                  moduleScope: symbol.moduleScope,
+                });
+              }
             }
           }
         }
@@ -399,9 +403,11 @@ export class ImportHandler {
       for (const s of moduleAst.statements) {
         if (s.kind === "Export") {
           const exportStmt = s as AST.ExportStmt;
-          const symbol = moduleScope.resolve(exportStmt.item);
-          if (symbol) {
-            this.defineImportedSymbol(symbol.name, symbol);
+          for (const item of exportStmt.items) {
+            const symbol = moduleScope.resolve(item.name);
+            if (symbol) {
+              this.defineImportedSymbol(symbol.name, symbol);
+            }
           }
         }
       }
@@ -426,22 +432,25 @@ export class ImportHandler {
         if (s.kind === "Export") {
           const exportStmt = s as AST.ExportStmt;
           // console.log(
-          //   `Checking export: '${exportStmt.item}' vs '${item.name}'`,
+          //   `Checking export: '${exportStmt.items.map(i => i.name).join(", ")}' vs '${item.name}'`,
           // );
-          if (exportStmt.item === item.name) {
-            isExported = true;
-            exportedSymbol = moduleScope.resolve(item.name);
-            if (!exportedSymbol) {
-              // console.log(
-              //   `Failed to resolve exported symbol '${item}' in module scope.`,
-              // );
-              // console.log(
-              //   "Available symbols:",
-              //   Array.from((moduleScope as any).symbols.keys()),
-              // );
+          for (const exportedItem of exportStmt.items) {
+            if (exportedItem.name === item.name) {
+              isExported = true;
+              exportedSymbol = moduleScope.resolve(item.name);
+              if (!exportedSymbol) {
+                // console.log(
+                //   `Failed to resolve exported symbol '${item}' in module scope.`,
+                // );
+                // console.log(
+                //   "Available symbols:",
+                //   Array.from((moduleScope as any).symbols.keys()),
+                // );
+              }
+              break;
             }
-            break;
           }
+          if (isExported) break;
         }
       }
     }

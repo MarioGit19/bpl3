@@ -190,14 +190,6 @@ loop (count < 10) {
 }
 ```
 
-### C-Style For Loop
-
-```bpl
-loop (initialization; condition; increment) {
-    # Execute while condition is true
-}
-```
-
 Example:
 
 ```bpl

@@ -7,7 +7,7 @@ Consistent code style is important.
 BPL provides a built-in formatter.
 
 ```bash
-bpl fmt src/
+bpl format src/*.bpl
 ```
 
 ## Style Guide

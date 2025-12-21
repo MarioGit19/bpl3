@@ -4246,6 +4246,32 @@ export class CodeGenerator {
       } else if (this.globals.has(name)) {
         return `@${name}`;
       } else {
+        // Check if it is an imported global variable
+        const id = expr as AST.IdentifierExpr;
+        if (
+          id.resolvedDeclaration &&
+          id.resolvedDeclaration.kind === "VariableDecl"
+        ) {
+          const decl = id.resolvedDeclaration as AST.VariableDecl;
+          if (decl.isGlobal) {
+            // It is a global variable, but not in this.globals (so not defined in this module)
+            // We need to declare it as external
+            // Use declaredFunctions to track external globals too to avoid duplicates
+            // or just check if we already emitted it.
+            // Actually, if we add it to this.globals, we won't come here again.
+
+            const type = this.resolveType(
+              decl.typeAnnotation || decl.resolvedType!,
+            );
+            // LLVM IR: @name = external global type
+            // For constants: @name = external constant type
+            const keyword = decl.isConst ? "constant" : "global";
+            this.emitDeclaration(`@${name} = external ${keyword} ${type}`);
+            this.globals.add(name);
+            return `@${name}`;
+          }
+        }
+
         const ptr = this.localPointers.get(name);
         if (ptr) {
           return ptr;
@@ -4755,7 +4781,8 @@ export class CodeGenerator {
       else if (type === "double") init = "0.0";
       else if (type.endsWith("*")) init = "null";
     }
-    this.emitDeclaration(`@${decl.name} = global ${type} ${init}`);
+    const keyword = decl.isConst ? "constant" : "global";
+    this.emitDeclaration(`@${decl.name} = ${keyword} ${type} ${init}`);
     this.emitDeclaration("");
   }
 

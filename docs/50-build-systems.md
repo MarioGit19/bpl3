@@ -6,7 +6,7 @@ Integrating BPL with build tools.
 
 ```makefile
 all:
-    bpl build src/main.bpl -o app
+    bpl src/main.bpl -o app
 ```
 
 ## CMake

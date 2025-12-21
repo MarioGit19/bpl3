@@ -371,16 +371,22 @@ program
     }
 
     if (files.length > 1) {
-      console.error(
-        "Error: Multiple input files are only supported for formatting.",
-      );
-      process.exit(1);
+      if (options.emit === "formatted") {
+        console.error(
+          "Error: Multiple input files are only supported for formatting.",
+        );
+        process.exit(1);
+      }
+      // If not formatting, treat extra files as arguments for the program
+      const programArgs = files.slice(1);
+      processFile(files[0], options, programArgs);
+      return;
     }
 
     processFile(files[0], options);
   });
 
-function processFile(filePath: string, options: any) {
+function processFile(filePath: string, options: any, programArgs?: string[]) {
   try {
     if (!fs.existsSync(filePath)) {
       console.error(`Error: File not found: ${filePath}`);
@@ -388,7 +394,7 @@ function processFile(filePath: string, options: any) {
     }
 
     const content = fs.readFileSync(filePath, "utf-8");
-    processCodeInternal(content, filePath, options);
+    processCodeInternal(content, filePath, options, programArgs);
   } catch (e) {
     if (e instanceof CompilerError) {
       console.error(diagnosticFormatter.formatError(e));
@@ -402,9 +408,14 @@ function processFile(filePath: string, options: any) {
   }
 }
 
-function processCode(code: string, sourceLabel: string, options: any) {
+function processCode(
+  code: string,
+  sourceLabel: string,
+  options: any,
+  programArgs?: string[],
+) {
   try {
-    processCodeInternal(code, sourceLabel, options);
+    processCodeInternal(code, sourceLabel, options, programArgs);
   } catch (e) {
     if (e instanceof CompilerError) {
       console.error(diagnosticFormatter.formatError(e));
@@ -418,7 +429,12 @@ function processCode(code: string, sourceLabel: string, options: any) {
   }
 }
 
-function processCodeInternal(content: string, filePath: string, options: any) {
+function processCodeInternal(
+  content: string,
+  filePath: string,
+  options: any,
+  programArgs?: string[],
+) {
   // Check if file has imports - if so, use module resolution
   const hasImports = content.includes("import ");
 
@@ -476,7 +492,7 @@ function processCodeInternal(content: string, filePath: string, options: any) {
           ? execPathBase
           : path.resolve(execPathBase);
 
-        const runResult = spawnSync(execPath, [], {
+        const runResult = spawnSync(execPath, programArgs || [], {
           stdio: "inherit",
         });
 
@@ -497,7 +513,7 @@ function processCodeInternal(content: string, filePath: string, options: any) {
       }
 
       if (options.emit === "llvm") {
-        compileBinaryAndRun(outputPath, options);
+        compileBinaryAndRun(outputPath, options, programArgs);
       }
     }
 
@@ -574,11 +590,15 @@ function processCodeInternal(content: string, filePath: string, options: any) {
 
   // 5. Compile & Run
   if (options.emit === "llvm") {
-    compileBinaryAndRun(irPath, options);
+    compileBinaryAndRun(irPath, options, programArgs);
   }
 }
 
-function compileBinaryAndRun(outputPath: string, options: any) {
+function compileBinaryAndRun(
+  outputPath: string,
+  options: any,
+  programArgs?: string[],
+) {
   const execPathBase = outputPath.replace(/\.ll$/, "");
   const execPath = path.isAbsolute(execPathBase)
     ? execPathBase
@@ -668,7 +688,9 @@ function compileBinaryAndRun(outputPath: string, options: any) {
       console.log("---------------------------------------------");
     }
 
-    const runResult = spawnSync(execPath, [], { stdio: "inherit" });
+    const runResult = spawnSync(execPath, programArgs || [], {
+      stdio: "inherit",
+    });
 
     // Note: We no longer delete the executable after running,
     // so it remains available (like standard compilers).
