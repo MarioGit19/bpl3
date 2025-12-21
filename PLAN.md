@@ -45,6 +45,7 @@ The following features are recommended for implementation next:
 - ✅ Enum methods and equality operators
 - ✅ Recursive enums (via pointers)
 - ✅ LLVM IR generation for tagged unions
+- ✅ Explicit returns in match arms (blocks returning values)
 
 ---
 

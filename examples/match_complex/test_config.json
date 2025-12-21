@@ -1,0 +1,12 @@
+{
+  "args": [],
+  "expectedOutput": [
+    "Tree sum: 6",
+    "Printing: Hello",
+    "Adding 10 + 20",
+    "Add result: 30",
+    "Exiting...",
+    "Exit code: -1",
+    "Nested result: 0"
+  ]
+}

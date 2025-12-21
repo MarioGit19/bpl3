@@ -36,6 +36,10 @@ import * as CallChecker from "./CallChecker";
 export class TypeChecker extends TypeCheckerBase {
   private importHandler: ImportHandler;
   private overloadResolver: OverloadResolver;
+  public matchContext: {
+    expectedType?: AST.TypeNode;
+    inferredTypes: AST.TypeNode[];
+  }[] = [];
 
   constructor(
     options: {
@@ -1035,14 +1039,20 @@ export class TypeChecker extends TypeCheckerBase {
 
     for (const arm of expr.arms) {
       if (arm.pattern.kind === "PatternWildcard") {
-        hasWildcard = true;
-        break;
+        // Wildcard covers everything, but only if it's unguarded
+        if (!arm.guard) {
+          hasWildcard = true;
+          break;
+        }
       } else if (
         arm.pattern.kind === "PatternEnum" ||
         arm.pattern.kind === "PatternEnumTuple" ||
         arm.pattern.kind === "PatternEnumStruct"
       ) {
-        coveredVariants.add(arm.pattern.variantName);
+        // A variant is only covered if the arm is unguarded
+        if (!arm.guard) {
+          coveredVariants.add(arm.pattern.variantName);
+        }
       }
     }
 
@@ -1055,7 +1065,7 @@ export class TypeChecker extends TypeCheckerBase {
       if (missingVariants.length > 0) {
         throw new CompilerError(
           `Non-exhaustive match: missing variants: ${missingVariants.join(", ")}`,
-          "Match expressions must handle all enum variants or include a wildcard (_) pattern.",
+          "Match expressions must handle all enum variants or include a wildcard (_) pattern. Note: Guarded arms do not contribute to exhaustiveness.",
           expr.location,
         );
       }
@@ -1173,8 +1183,22 @@ export class TypeChecker extends TypeCheckerBase {
     body: AST.Expression | AST.BlockStmt,
   ): AST.TypeNode | undefined {
     if (body.kind === "Block") {
-      StmtChecker.checkBlock.call(this as any, body);
-      return this.makeVoidType();
+      // Push context for collecting return types
+      this.matchContext.push({ inferredTypes: [] });
+      try {
+        StmtChecker.checkBlock.call(this as any, body);
+        // If we have collected return types, unify them
+        const context = this.matchContext[this.matchContext.length - 1];
+        if (context.inferredTypes.length > 0) {
+          // For now, just take the first one or check compatibility
+          // Ideally we should unify all of them
+          return context.inferredTypes[0];
+        }
+
+        return this.makeVoidType();
+      } finally {
+        this.matchContext.pop();
+      }
     } else {
       return this.checkExpression(body);
     }

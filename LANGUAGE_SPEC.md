@@ -40,6 +40,7 @@ _Note: The grammar uses `Identifier` for types, implying these are defined in th
 - **Tuples**: `(T1, T2, ...)` (e.g., `(int, bool)`)
 - **Functions**: `Func<ReturnType>(ArgType1, ArgType2, ...)` (e.g., `Func<void>(int, int)`)
 - **Generics**: `List<T>`, `Map<K, V>`
+- **Enums**: `enum Name { Variant1, Variant2(Type) }`
 
 ## 2. Declarations
 
@@ -208,7 +209,7 @@ try {
 
 - **Cast**: `cast<int>(3.5)`
 - **Sizeof**: `sizeof(int)` or `sizeof(var)`
-- **Match**: `match<Type>(Expression | Type)` - Checks if the generic type matches the provided type or the type of the expression.
+- **Match**: `match(val) { ... }` (Pattern matching) or `match<Type>(val)` (Type check)
 - **Address/Dereference**: `&var`, `*ptr`
 
 ## 7. Known Limitations / Disallowed Constructs
@@ -217,7 +218,6 @@ The following are **NOT** currently supported by the grammar:
 
 - **For Loops**: No C-style `for(;;)` or `foreach`. Use `loop`.
 - **Postfix Increment/Decrement**: `i++` and `i--` are not supported. Use `++i` or `i += 1`.
-- **Enums**: No `enum` keyword.
 - **Type Aliases**: Aliases are defined via `type Name = ...`, check Type Aliases Section above.
 - **Visibility**: No `public` / `private` modifiers (all members are public).
 - **Do-While**: No `do { ... } while` loop.

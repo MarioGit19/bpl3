@@ -38,6 +38,7 @@ export interface StatementCheckerContext {
   getIntegerConstantValue(expr: AST.Expression): bigint | undefined;
   isIntegerTypeCompatible(val: bigint, targetType: AST.TypeNode): boolean;
   hoistDeclaration(stmt: AST.Statement): void;
+  matchContext?: { inferredTypes: AST.TypeNode[] }[];
 }
 
 /**
@@ -119,6 +120,19 @@ export function checkReturn(
   const returnType = stmt.value
     ? this.checkExpression(stmt.value)
     : this.makeVoidType();
+
+  // Check if we are in a match arm block
+  // We need to access the TypeChecker instance which has matchContext
+  // Since 'this' is StatementCheckerContext, we might need to cast or add it to context
+  const typeChecker = this as any;
+  if (typeChecker.matchContext && typeChecker.matchContext.length > 0) {
+    const context =
+      typeChecker.matchContext[typeChecker.matchContext.length - 1];
+    if (returnType) {
+      context.inferredTypes.push(returnType);
+    }
+    return;
+  }
 
   if (this.currentFunctionReturnType) {
     const resolvedExpected = this.resolveType(this.currentFunctionReturnType);

@@ -7,6 +7,7 @@ Control flow statements determine the execution order of code. BPL provides fami
 - [If Statements](#if-statements)
 - [Loop Statements](#loop-statements)
 - [Switch Statements](#switch-statements)
+- [Match Expressions](#match-expressions)
 - [Break and Continue](#break-and-continue)
 - [Return Statement](#return-statement)
 - [Goto and Labels](#goto-and-labels)
@@ -448,6 +449,60 @@ switch (option) {
     case x + 1:     # ERROR: not a constant expression
         break;
 }
+```
+
+## Match Expressions
+
+BPL supports powerful pattern matching using the `match` expression. Unlike `switch`, `match` is an expression that returns a value, and it supports destructuring of Enums.
+
+### Basic Match
+
+```bpl
+enum Status { Ok, Error(int) }
+
+local s: Status = Status.Ok;
+
+local msg: string = match(s) {
+    Status.Ok => "Success",
+    Status.Error(code) => "Failed with code",
+};
+```
+
+### Match Arms with Blocks and Explicit Returns
+
+Match arms can contain blocks of code. Inside these blocks, you can use the `return` statement to yield a value for the match expression. This is different from returning from the function.
+
+```bpl
+local result: string = match(s) {
+    Status.Ok => "All good",
+    Status.Error(code) => {
+        if (code == 404) {
+            return "Not Found"; // Returns "Not Found" as the value of the match expression
+        }
+        if (code == 500) {
+            return "Server Error";
+        }
+        return "Unknown Error";
+    }
+};
+```
+
+> **Note:** A `return` statement inside a match arm block returns a value to the `match` expression, NOT the enclosing function. To return from the function inside a match arm, you must use a control flow flag or structure your code differently.
+
+### Nested Matches
+
+You can nest match expressions. Explicit returns will yield to the nearest enclosing match expression.
+
+```bpl
+local res: int = match(opt) {
+    Option.None => 0,
+    Option.Some(val) => {
+        return match(val) {
+            Inner.Val(v) => { return v + 1; },
+            Inner.Empty => 0
+        };
+    }
+};
 ```
 
 ## Break and Continue

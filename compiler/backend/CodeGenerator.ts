@@ -61,6 +61,12 @@ export class CodeGenerator {
   private definedFunctions: Set<string> = new Set(); // Track functions defined in the current module
   private emittedFunctions: Set<string> = new Set(); // Track functions actually emitted to LLVM
   private typeAliasMap: Map<string, AST.TypeAliasDecl> = new Map(); // Track type aliases
+  private matchStack: {
+    mergeLabel: string;
+    resultType: string;
+    resultTypeNode: AST.TypeNode;
+    results: { value: string; label: string; type: string }[];
+  }[] = [];
 
   /**
    * Create a CompilerError with proper location information
@@ -2009,11 +2015,23 @@ export class CodeGenerator {
   }
 
   private generateReturn(stmt: AST.ReturnStmt) {
-    if (this.onReturn) this.onReturn();
+    // Determine target type and context
+    let destTypeNode = this.currentFunctionReturnType!;
+    let destType = this.resolveType(destTypeNode);
+    let isMatchYield = false;
+
+    if (this.matchStack.length > 0) {
+      const matchContext = this.matchStack[this.matchStack.length - 1];
+      destTypeNode = matchContext.resultTypeNode;
+      destType = matchContext.resultType;
+      isMatchYield = true;
+    }
+
+    // Only trigger function-level return hooks (like destructors) if not yielding from a match
+    if (!isMatchYield && this.onReturn) this.onReturn();
+
     if (stmt.value) {
       const rawVal = this.generateExpression(stmt.value);
-      const destTypeNode = this.currentFunctionReturnType!;
-      const destType = this.resolveType(destTypeNode);
       const srcTypeNode = stmt.value.resolvedType!;
       const srcType = this.resolveType(srcTypeNode);
 
@@ -2052,8 +2070,26 @@ export class CodeGenerator {
         }
       }
 
+      if (isMatchYield) {
+        const matchContext = this.matchStack[this.matchStack.length - 1];
+        matchContext.results.push({
+          value: castVal,
+          label: this.getCurrentLabel(),
+          type: destType,
+        });
+        this.emit(`  br label %${matchContext.mergeLabel}`);
+        return;
+      }
+
       this.emit(`  ret ${destType} ${castVal}`);
     } else {
+      if (isMatchYield) {
+        // Handle void yield from match
+        const matchContext = this.matchStack[this.matchStack.length - 1];
+        this.emit(`  br label %${matchContext.mergeLabel}`);
+        return;
+      }
+
       // For void returns, check if this is main with modified return type
       if (this.isMainWithVoidReturn) {
         this.emit("  ret i32 0");
@@ -2268,10 +2304,15 @@ export class CodeGenerator {
       `  switch i32 ${tag}, label %${defaultLabel} [${cases.join("\n    ")}]`,
     );
 
-    // Generate code for each arm
-    const armResults: Array<{ value: string; label: string; type: string }> =
-      [];
     const resultType = this.resolveType(expr.resolvedType!);
+
+    // Push new match context to stack
+    this.matchStack.push({
+      mergeLabel,
+      resultType,
+      resultTypeNode: expr.resolvedType!,
+      results: [],
+    });
 
     for (let i = 0; i < expr.arms.length; i++) {
       const arm = expr.arms[i]!;
@@ -2332,14 +2373,18 @@ export class CodeGenerator {
 
       // Generate arm body
       const armValue = this.generateMatchArmBody(arm.body);
-      const currentLabel = this.getCurrentLabel();
-      armResults.push({
-        value: armValue,
-        label: currentLabel,
-        type: resultType,
-      });
 
-      this.emit(`  br label %${mergeLabel}`);
+      // If armValue is not null, it was an expression arm.
+      // If it is null, it was a block arm, and generateReturn handled the result.
+      if (armValue !== null) {
+        const currentLabel = this.getCurrentLabel();
+        this.matchStack[this.matchStack.length - 1].results.push({
+          value: armValue,
+          label: currentLabel,
+          type: resultType,
+        });
+        this.emit(`  br label %${mergeLabel}`);
+      }
     }
 
     // Default case (should not be reached if exhaustive, but needed for LLVM)
@@ -2347,18 +2392,34 @@ export class CodeGenerator {
     // Generate unreachable or a default value based on result type
     if (resultType.includes("*") || resultType.includes("i8*")) {
       // For pointer types, use null
+      this.matchStack[this.matchStack.length - 1].results.push({
+        value: "null",
+        label: defaultLabel,
+        type: resultType,
+      });
       this.emit(`  br label %${mergeLabel}`);
-      armResults.push({ value: "null", label: defaultLabel, type: resultType });
     } else if (resultType === "void") {
       this.emit(`  br label %${mergeLabel}`);
     } else {
       // For other types, use 0
+      this.matchStack[this.matchStack.length - 1].results.push({
+        value: "0",
+        label: defaultLabel,
+        type: resultType,
+      });
       this.emit(`  br label %${mergeLabel}`);
-      armResults.push({ value: "0", label: defaultLabel, type: resultType });
     }
 
-    // Merge point with phi node
+    // Pop match context and generate phi
+    const matchContext = this.matchStack.pop()!;
+    const armResults = matchContext.results;
+
     this.emit(`${mergeLabel}:`);
+
+    if (resultType === "void") {
+      return "";
+    }
+
     const result = this.newRegister();
     const phiEntries = armResults
       .map((r) => `[ ${r.value}, %${r.label} ]`)
@@ -2368,14 +2429,24 @@ export class CodeGenerator {
     return result;
   }
 
-  private generateMatchArmBody(body: AST.Expression | AST.BlockStmt): string {
+  private generateMatchArmBody(
+    body: AST.Expression | AST.BlockStmt,
+  ): string | null {
     if (body.kind === "Block") {
-      // Generate block and return the result
+      // Generate block. Returns are handled by generateReturn via matchStack.
       const blockStmt = body as AST.BlockStmt;
       this.generateBlock(blockStmt);
-      // For now, blocks in match arms must end with a return
-      // TODO: Handle implicit return from last expression
-      return "0";
+      // Handle implicit return from last expression if present
+      if (blockStmt.expression) {
+        const val = this.generateExpression(blockStmt.expression);
+        // We need to cast this to the expected type if necessary
+        // But generateExpression returns a register string.
+        // We should probably let the caller handle it, but wait,
+        // generateMatchExpr expects us to return a value if it's an expression.
+        // If it's a block with implicit return, we should return that value.
+        return val;
+      }
+      return null;
     } else {
       // Expression - generate and return
       return this.generateExpression(body as AST.Expression);

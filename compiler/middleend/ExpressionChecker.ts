@@ -765,8 +765,6 @@ export function checkMatchExpr(
 
   const enumDecl = symbol.declaration as AST.EnumDecl;
 
-  this.checkMatchExhaustiveness(expr, enumDecl);
-
   let resultType: AST.TypeNode | undefined;
   for (const arm of expr.arms) {
     this.currentScope = this.currentScope.enterScope();
@@ -800,6 +798,8 @@ export function checkMatchExpr(
       );
     }
   }
+
+  this.checkMatchExhaustiveness(expr, enumDecl);
 
   return resultType || this.makeVoidType();
 }
