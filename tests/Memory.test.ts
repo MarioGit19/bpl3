@@ -50,8 +50,8 @@ describe("Memory Operations", () => {
     expect(stdout).toContain("i32: 4");
     expect(stdout).toContain("i64: 8");
     // Point has a hidden null-bit field (i1) which causes padding.
-    // { i32, i32, i1 } -> 4 + 4 + 1 = 9 -> aligned to 4 -> 12 bytes.
-    expect(stdout).toContain("Point: 12");
+    // { i8* (vtable), i32, i32, i1 } -> 8 + 4 + 4 + 1 = 17 -> aligned to 8 -> 24 bytes.
+    expect(stdout).toContain("Point: 24");
     expect(stdout).toContain("ptr: 8"); // 64-bit pointers
   });
 

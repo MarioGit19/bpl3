@@ -734,7 +734,6 @@ export abstract class TypeCheckerBase {
     child: AST.BasicTypeNode,
     parentName: string,
   ): AST.BasicTypeNode | undefined {
-    console.log(`getSuperType: ${child.name} -> ${parentName}`);
     if (child.name === parentName) return child;
 
     const childSymbol = this.currentScope.resolve(child.name);

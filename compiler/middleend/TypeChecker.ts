@@ -1263,7 +1263,7 @@ export class TypeChecker extends TypeCheckerBase {
       try {
         StmtChecker.checkBlock.call(this as any, body);
         // If we have collected return types, unify them
-        const context = this.matchContext[this.matchContext.length - 1];
+        const context = this.matchContext[this.matchContext.length - 1]!;
         if (context.inferredTypes.length > 0) {
           // For now, just take the first one or check compatibility
           // Ideally we should unify all of them

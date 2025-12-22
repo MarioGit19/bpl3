@@ -6,8 +6,8 @@ This file tracks bugs and edge cases found during comprehensive testing.
 
 | ID      | Category            | Description                                                                                                              | Status  |
 | ------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------- | ---------------------------------------------------------------- |
-| BUG-001 | Primitive Types     | Integer literal overflow is not detected (e.g., `i8 = 128`).                                                             | Open    |
-| BUG-002 | Arithmetic          | Division by zero in constant expressions is not detected (e.g., `1 / 0`).                                                | Open    |
+| BUG-001 | Primitive Types     | Integer literal overflow is not detected (e.g., `i8 = 128`).                                                             | Fixed   |
+| BUG-002 | Arithmetic          | Division by zero in constant expressions is not detected (e.g., `1 / 0`).                                                | Fixed   |
 | BUG-003 | Structs             | Recursive structs without pointers are accepted (infinite size).                                                         | Fixed   |
 | BUG-004 | Functions           | Duplicate parameter names are accepted in function declarations.                                                         | Fixed   |
 | BUG-005 | Arrays              | Zero-sized arrays are accepted (`Type[0]`).                                                                              | Fixed   |
@@ -28,15 +28,15 @@ This file tracks bugs and edge cases found during comprehensive testing.
 | BUG-020 | Runtime             | Array out of bounds access returns garbage instead of crashing or erroring.                                              | Fixed   |
 | BUG-021 | Runtime             | Division by zero causes silent crash (exit code 1) without error message.                                                | Fixed   |
 | BUG-022 | Runtime             | Stack overflow causes silent crash (exit code 1) without error message.                                                  | Fixed   |
-| BUG-023 | Syntax              | Struct definitions require a trailing comma for the last field.                                                          | Open    |
-| BUG-024 | Syntax              | Generic struct literals `Box<i32> { ... }` are not supported.                                                            | Open    |
-| BUG-025 | Syntax              | Trailing commas in function calls `foo(1, 2,)` are not supported.                                                        | Open    |
+| BUG-023 | Syntax              | Struct definitions require a trailing comma for the last field.                                                          | Fixed   |
+| BUG-024 | Syntax              | Generic struct literals `Box<i32> { ... }` are not supported.                                                            | Fixed   |
+| BUG-025 | Syntax              | Trailing commas in function calls `foo(1, 2,)` are not supported.                                                        | Fixed   |
 | BUG-026 | Runtime             | Structs have hidden overhead (null bit) increasing `sizeof` unexpectedly.                                                | Ignored | # this is not error, this is used for tracking if object is null |
 | BUG-027 | Codegen             | Match statements with data variants cause LLVM IR generation failure.                                                    | Fixed   |
 | BUG-028 | Analysis            | Generic Enum type inference fails for constructors (e.g., `Option.Some(42)`).                                            | Fixed   |
-| BUG-029 | Parser              | Calling a function pointer field directly `obj.ptr()` fails.                                                             | Open    |
-| BUG-030 | No Dynamic Dispatch | BPL does not support dynamic dispatch (virtual methods). Method calls are statically resolved based on the pointer type. | Open    |
-| BUG-031 | Codegen             | Comparison operators `!=` on structs generate invalid LLVM IR (`icmp` requires integer operands).                        | Open    |
+| BUG-029 | Parser              | Calling a function pointer field directly `obj.ptr()` fails.                                                             | Fixed   |
+| BUG-030 | No Dynamic Dispatch | BPL does not support dynamic dispatch (virtual methods). Method calls are statically resolved based on the pointer type. | Fixed   |
+| BUG-031 | Codegen             | Comparison operators `!=` on structs generate invalid LLVM IR (`icmp` requires integer operands).                        | Fixed   |
 
 ## Details
 

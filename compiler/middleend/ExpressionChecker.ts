@@ -609,6 +609,25 @@ export function checkStructLiteral(
 
   const decl = symbol.declaration as AST.StructDecl;
 
+  // Handle generics
+  const genericMap = new Map<string, AST.TypeNode>();
+  if (decl.genericParams.length > 0) {
+    const providedArgs = expr.genericArgs || [];
+    // If args are provided, check count
+    if (providedArgs.length > 0) {
+      if (providedArgs.length !== decl.genericParams.length) {
+        throw new CompilerError(
+          `Generic type '${expr.structName}' expects ${decl.genericParams.length} arguments, but got ${providedArgs.length}`,
+          "Provide the correct number of generic arguments.",
+          expr.location,
+        );
+      }
+      for (let i = 0; i < decl.genericParams.length; i++) {
+        genericMap.set(decl.genericParams[i]!.name, providedArgs[i]!);
+      }
+    }
+  }
+
   // Check for missing fields
   const providedFields = new Set(expr.fields.map((f) => f.name));
   for (const member of decl.members) {
@@ -637,7 +656,13 @@ export function checkStructLiteral(
 
     const valueType = this.checkExpression(field.value);
     if (valueType) {
-      const resolvedMemberType = this.resolveType(memberType);
+      let resolvedMemberType = this.resolveType(memberType);
+      if (genericMap.size > 0) {
+        resolvedMemberType = this.substituteType(
+          resolvedMemberType,
+          genericMap,
+        );
+      }
       const resolvedValueType = this.resolveType(valueType);
 
       if (!this.areTypesCompatible(resolvedMemberType, resolvedValueType)) {
@@ -655,7 +680,7 @@ export function checkStructLiteral(
   return {
     kind: "BasicType",
     name: expr.structName,
-    genericArgs: [],
+    genericArgs: expr.genericArgs || [],
     pointerDepth: 0,
     arrayDimensions: [],
     location: expr.location,

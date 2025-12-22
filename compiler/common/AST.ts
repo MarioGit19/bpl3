@@ -297,7 +297,7 @@ export interface FunctionDecl extends ASTNode {
   isStatic: boolean;
   name: string;
   genericParams: GenericParam[];
-  params: { name: string; type: TypeNode }[];
+  params: { name: string; type: TypeNode; location: SourceLocation }[];
   returnType: TypeNode;
   body: BlockStmt;
 }
@@ -328,7 +328,7 @@ export interface SpecMethod extends ASTNode {
   kind: "SpecMethod";
   name: string;
   genericParams: GenericParam[];
-  params: { name: string; type: TypeNode }[];
+  params: { name: string; type: TypeNode; location: SourceLocation }[];
   returnType?: TypeNode;
 }
 
