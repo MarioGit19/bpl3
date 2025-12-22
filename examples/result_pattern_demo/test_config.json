@@ -1,0 +1,7 @@
+{
+  "expectedOutput": "Success: 5\nGot expected error\n",
+  "args": [],
+  "env": {},
+  "input": "",
+  "skip_compilation": false
+}

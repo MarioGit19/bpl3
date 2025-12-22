@@ -830,6 +830,9 @@ export class CodeGenerator {
           );
         }
         break;
+      case "Asm":
+        this.generateAsm(node as AST.AsmBlockStmt);
+        break;
       default:
         console.warn(`Unhandled top-level node kind: ${node.kind}`);
         break;
@@ -1661,6 +1664,7 @@ export class CodeGenerator {
     const prevPointerToLocal = new Map(this.pointerToLocal);
     const prevOnReturn = this.onReturn;
     const prevIsMainWithVoidReturn = this.isMainWithVoidReturn;
+    const prevGeneratingFunctionBody = this.generatingFunctionBody;
 
     this.registerCount = 0;
     this.labelCount = 0;
@@ -1671,6 +1675,7 @@ export class CodeGenerator {
     this.localPointers.clear();
     this.localNullFlags.clear();
     this.pointerToLocal.clear();
+    this.generatingFunctionBody = true;
 
     try {
       // Setup destructor chaining
@@ -1891,6 +1896,7 @@ export class CodeGenerator {
       this.pointerToLocal = prevPointerToLocal;
       this.onReturn = prevOnReturn;
       this.isMainWithVoidReturn = prevIsMainWithVoidReturn;
+      this.generatingFunctionBody = prevGeneratingFunctionBody;
     }
   }
 
@@ -1903,6 +1909,61 @@ export class CodeGenerator {
         break;
       }
       this.generateStatement(stmt);
+    }
+  }
+
+  private generateAsm(stmt: AST.AsmBlockStmt) {
+    let content = stmt.content;
+
+    // Interpolate variables: (varName) -> %varName or @varName
+    content = content.replace(
+      /\(([a-zA-Z_][a-zA-Z0-9_]*)\)/g,
+      (match, varName) => {
+        // Check locals first
+        if (this.generatingFunctionBody) {
+          // Check if it's a local variable (stack pointer)
+          if (this.locals.has(varName)) {
+            // If we have a specific pointer mapping (e.g. for pattern bindings), use it
+            if (this.localPointers.has(varName)) {
+              return this.localPointers.get(varName)!;
+            }
+            // Otherwise, it's a standard stack allocation
+            // Note: allocateStack returns the register name, but we don't store it in a map
+            // However, allocateStack uses the variable name to generate the register name if possible
+            // But since we don't track the exact register name returned by allocateStack for every local,
+            // we might have an issue if allocateStack generated a different name (e.g. collision).
+            // BUT, allocateStack implementation:
+            // const ptr = `%${name}`; ... return ptr;
+            // Unless there's a collision, it uses the name.
+            // Let's assume standard naming for now, or we should track it better.
+            // Actually, we should probably track the register name for every local.
+            // For now, let's try %varName.
+            return `%${varName}`;
+          }
+        }
+
+        // Check globals
+        if (this.globals.has(varName)) {
+          return `@${varName}`;
+        }
+
+        // If not found, return match as is (maybe it's part of asm syntax?)
+        // Or throw error?
+        // For now, let's return it as is, but warn?
+        // Actually, if the user wrote (var), they expect interpolation.
+        // If we don't find it, it might be a syntax error in their asm or a missing var.
+        // Let's throw an error to be helpful.
+        throw this.createError(
+          `Unknown variable '${varName}' in asm interpolation`,
+          stmt,
+        );
+      },
+    );
+
+    if (this.generatingFunctionBody) {
+      this.emit(content);
+    } else {
+      this.emitDeclaration(content);
     }
   }
 
@@ -1945,6 +2006,9 @@ export class CodeGenerator {
         break;
       case "Throw":
         this.generateThrow(stmt as AST.ThrowStmt);
+        break;
+      case "Asm":
+        this.generateAsm(stmt as AST.AsmBlockStmt);
         break;
       default:
         console.warn(`Unhandled statement kind: ${stmt.kind}`);

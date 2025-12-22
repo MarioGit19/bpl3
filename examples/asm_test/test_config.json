@@ -1,0 +1,6 @@
+{
+  "expectedOutput": "Before asm\nInside asm\nAfter asm\n",
+  "args": [],
+  "env": {},
+  "input": ""
+}

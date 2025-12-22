@@ -183,8 +183,8 @@
     return { kind: "Extern", name, params, isVariadic, returnType, location: makeLoc(loc) };
   }
 
-  function asmBlock(content, loc) {
-    return { kind: "Asm", content, location: makeLoc(loc) };
+  function asmBlock(content, loc, flavor) {
+    return { kind: "Asm", content, flavor, location: makeLoc(loc) };
   }
 
   function tryStmt(tryBlock, catchClauses, catchOther, loc) {
@@ -551,8 +551,8 @@ ExternParameterList
     }
 
 AsmBlock
-  = K_asm _ "{" content:AsmContent "}" {
-      return asmBlock(content, location());
+  = K_asm _ flavor:("(" _ s:StringLiteral _ ")" { return s.value; })? _ "{" content:AsmContent "}" {
+      return asmBlock(content, location(), flavor || undefined);
     }
 
 Block
@@ -562,7 +562,29 @@ Block
     }
 
 AsmContent
-  = chars:(!"}" [\s\S])* { return chars.join(""); }
+  = parts:(AsmPart)* { return parts.join(""); }
+
+AsmPart
+  = AsmString
+  / AsmCharLiteral
+  / AsmComment
+  / AsmNestedBlock
+  / AsmText
+
+AsmString
+  = s:$("\"" ("\\" . / [^"\n\r])* "\"") { return s; }
+
+AsmCharLiteral
+  = s:$("'" ("\\" . / [^'\n\r]) "'") { return s; }
+
+AsmComment
+  = s:$("#" [^\n\r]*) { return s; }
+
+AsmNestedBlock
+  = "{" body:AsmContent "}" { return "{" + body + "}"; }
+
+AsmText
+  = s:$([^{}"'#]+) { return s; }
 
 LoopStatement
   = K_loop _ cond:LoopCondition? _ body:Block {

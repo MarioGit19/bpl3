@@ -1,0 +1,6 @@
+{
+  "expectedOutput": "Before: a=10, res=0\nAfter: a=10, res=11\n",
+  "args": [],
+  "env": {},
+  "input": ""
+}

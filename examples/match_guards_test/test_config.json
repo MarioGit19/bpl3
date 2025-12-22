@@ -1,0 +1,7 @@
+{
+  "expectedOutput": "Int > 5: 10\n",
+  "args": [],
+  "env": {},
+  "input": "",
+  "skip_compilation": false
+}

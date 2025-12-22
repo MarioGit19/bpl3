@@ -181,14 +181,14 @@ frame printNumber(n: int) {
 struct Point {
     x: int,
     y: int,
-    
+
     frame new(x: int, y: int) ret Point {
         local p: Point;
         p.x = x;
         p.y = y;
         return p;
     }
-    
+
     frame distance(this: Point) ret float {
         return sqrt(cast<float>(this.x * this.x + this.y * this.y));
     }
@@ -209,17 +209,17 @@ frame main() ret int {
 ```bpl
 struct Box<T> {
     value: T,
-    
+
     frame new(val: T) ret Box<T> {
         local b: Box<T>;
         b.value = val;
         return b;
     }
-    
+
     frame get(this: Box<T>) ret T {
         return this.value;
     }
-    
+
     frame map<U>(this: Box<T>, transform: Func<U>(T)) ret Box<U> {
         local result: Box<U>;
         result.value = transform(this.value);
@@ -242,7 +242,7 @@ frame main() ret int {
 ```bpl
 struct Animal {
     name: string,
-    
+
     frame make_sound(this: Animal) {
         printf("%s makes a sound\n", this.name);
     }
@@ -250,7 +250,7 @@ struct Animal {
 
 struct Dog extends Animal {
     breed: string,
-    
+
     frame make_sound(this: Dog) {
         printf("%s barks!\n", this.name);
     }
@@ -288,7 +288,7 @@ frame main() ret int {
 enum Option<T> {
     Some(T),
     None,
-    
+
     # Enums can have methods too
     frame is_some(this: Option<T>) ret bool {
         return match<Option.Some>(this);
@@ -588,14 +588,14 @@ frame main() ret int {
     # Allocate memory
     local size: int = sizeof(int) * 10;
     local ptr: *int = cast<*int>(malloc(size));
-    
+
     # Use memory
     *ptr = 42;
     *(ptr + 1) = 100;
-    
+
     # Free memory
     free(cast<*void>(ptr));
-    
+
     return 0;
 }
 ```
@@ -657,14 +657,14 @@ Construct complex objects step by step:
 struct ConfigBuilder {
     timeout: int,
     retries: int,
-    
+
     frame new() ret ConfigBuilder {
         local b: ConfigBuilder;
         b.timeout = 30;
         b.retries = 3;
         return b;
     }
-    
+
     frame with_timeout(this: ConfigBuilder, t: int) ret ConfigBuilder {
         this.timeout = t;
         return this;
@@ -732,11 +732,13 @@ With test configuration:
 ### Two Paths for Testing
 
 **Path 1: Simple Test (Recommended)**
+
 - Single `main.bpl` + `test_config.json`
 - Used by Integration test runner
 - Fastest, simplest approach
 
 **Path 2: Complex Test**
+
 - Custom `test.sh` script in example directory
 - For multi-file orchestration or complex scenarios
 - Must exit with code 0 on success, non-zero on failure
@@ -764,11 +766,13 @@ bun index.ts examples/path/to/file.bpl --emit llvm
 ### Test Workflow
 
 **For simple examples:**
+
 1. Write `main.bpl` in `examples/<name>/`.
 2. Create `test_config.json` with expected output.
 3. Run `bun test tests/Integration.test.ts` to verify.
 
 **For complex examples:**
+
 1. Write `main.bpl` and supporting `.bpl` files.
 2. Create `test.sh` script to orchestrate testing.
 3. Add `test_config.json` with `"skip_compilation": true` if needed.
@@ -777,6 +781,7 @@ bun index.ts examples/path/to/file.bpl --emit llvm
 ### Test Configuration Examples
 
 **Basic output test:**
+
 ```json
 {
   "expectedOutput": "Result: 42\n",
@@ -787,6 +792,7 @@ bun index.ts examples/path/to/file.bpl --emit llvm
 ```
 
 **With command-line arguments:**
+
 ```json
 {
   "expectedOutput": "Sum: 15\n",
@@ -797,6 +803,7 @@ bun index.ts examples/path/to/file.bpl --emit llvm
 ```
 
 **With stdin input:**
+
 ```json
 {
   "expectedOutput": "You entered: hello\n",
@@ -807,11 +814,12 @@ bun index.ts examples/path/to/file.bpl --emit llvm
 ```
 
 **With environment variables:**
+
 ```json
 {
   "expectedOutput": "Debug mode: on\n",
   "args": [],
-  "env": {"DEBUG": "1"}
+  "env": { "DEBUG": "1" }
 }
 ```
 

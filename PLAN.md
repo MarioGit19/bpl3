@@ -380,23 +380,25 @@ The following features are recommended for implementation next:
 
 ## [8] Inline Assembly Blocks
 
-**Description:** Allow embedding inline assembly with explicit register lists and integration with calling conventions. This enables developers to write performance-critical code or access CPU features that aren't exposed through the language.
+**Description:** Allow embedding inline assembly with explicit register lists and integration with calling conventions. This enables developers to write performance-critical code or access CPU features that aren't exposed through the language. Support `asm("flavor") { ... }` syntax for different assembly dialects (e.g., "intel", "att") or targets.
 
 **Implementation Notes:**
 
-- Add parser support for inline assembly syntax
+- Add parser support for inline assembly syntax with optional flavor string
 - Create safe lowered representation for assembly blocks
 - Implement proper integration with calling conventions
 - Support explicit register constraints and clobber lists
 - Validate register usage and detect conflicts
 - Generate correct inline assembly in LLVM IR or native codegen
-- Support input/output constraints for variables
+- Support input/output constraints for variables via interpolation `(var)`
+- Implement flavor-based wrapping (e.g. automatically wrapping x86 asm in LLVM `call asm`)
 - Implement proper type checking for assembly operands
 - Generate warnings for platform-specific assembly
 
 **Acceptance Criteria:**
 
-- `asm [rax, rbx] { ... }` syntax compiles correctly
+- `asm("intel") { ... }` syntax compiles correctly
+- `asm { ... (var) ... }` correctly interpolates variables
 - Inline assembly is properly injected into compiled code
 - Register constraints are validated
 - Inline assembly interoperates with normal code

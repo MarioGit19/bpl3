@@ -186,9 +186,9 @@
 
 - [8] Inline Assembly Blocks
 
-  - Description: Allow embedding inline assembly with explicit register lists and integration with calling conventions.
-  - Implementation notes: Add parser support and a safe lowered representation. During codegen, inject asm inline properly and validate register usage.
-  - Acceptance criteria: `asm [rax, rbx] { rdrand rax\n mov rbx, rax\n mov (variable), rbx }` compiles and emits inline assembly; constraints are documented.
+  - Description: Allow embedding inline assembly with explicit register lists and integration with calling conventions. Support `asm("flavor") { ... }` syntax for different assembly dialects (e.g., "intel", "att") or targets.
+  - Implementation notes: Add parser support and a safe lowered representation. During codegen, inject asm inline properly and validate register usage. Implement variable interpolation `(var)` and flavor-based wrapping (e.g. automatically wrapping x86 asm in LLVM `call asm`).
+  - Acceptance criteria: `asm("intel") { mov rax, 42 }` compiles and emits correct inline assembly; `asm { ... (var) ... }` correctly interpolates variables.
 
 - [9] Semantic Analysis Improvements
 

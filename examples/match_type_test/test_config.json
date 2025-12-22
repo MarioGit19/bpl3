@@ -1,0 +1,7 @@
+{
+  "expectedOutput": "Is Some\nIs not None\n",
+  "args": [],
+  "env": {},
+  "input": "",
+  "skip_compilation": false
+}

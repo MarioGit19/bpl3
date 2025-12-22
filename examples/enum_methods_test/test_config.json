@@ -1,0 +1,7 @@
+{
+  "expectedOutput": "Status is active\nStatus code: 1\n",
+  "args": [],
+  "env": {},
+  "input": "",
+  "skip_compilation": false
+}

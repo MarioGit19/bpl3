@@ -437,6 +437,7 @@ export interface ExternDecl extends ASTNode {
 export interface AsmBlockStmt extends ASTNode {
   kind: "Asm";
   content: string;
+  flavor?: string;
 }
 
 export interface TryStmt extends ASTNode {
