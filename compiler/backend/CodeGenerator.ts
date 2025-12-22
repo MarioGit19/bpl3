@@ -110,13 +110,15 @@ export class CodeGenerator {
     this.emittedFunctions.clear();
     this.typeAliasMap.clear();
 
-    // Populate structMap with user-defined structs first
+    // Populate structMap and enumDeclMap with user-defined types first
     for (const stmt of program.statements) {
       if (stmt.kind === "StructDecl") {
         this.structMap.set(
           (stmt as AST.StructDecl).name,
           stmt as AST.StructDecl,
         );
+      } else if (stmt.kind === "EnumDecl") {
+        this.enumDeclMap.set((stmt as AST.EnumDecl).name, stmt as AST.EnumDecl);
       }
     }
 
@@ -292,6 +294,113 @@ export class CodeGenerator {
     nullAccessErrorLayout.set("expression", 2);
     this.structLayouts.set("NullAccessError", nullAccessErrorLayout);
 
+    // Register built-in IndexOutOfBoundsError struct
+    const indexOutOfBoundsErrorDecl: AST.StructDecl = {
+      kind: "StructDecl",
+      name: "IndexOutOfBoundsError",
+      genericParams: [],
+      inheritanceList: [],
+      members: [
+        {
+          kind: "StructField",
+          name: "index",
+          type: {
+            kind: "BasicType",
+            name: "i64",
+            genericArgs: [],
+            pointerDepth: 0,
+            arrayDimensions: [],
+            location: internalLoc,
+          },
+          location: internalLoc,
+        },
+        {
+          kind: "StructField",
+          name: "size",
+          type: {
+            kind: "BasicType",
+            name: "i64",
+            genericArgs: [],
+            pointerDepth: 0,
+            arrayDimensions: [],
+            location: internalLoc,
+          },
+          location: internalLoc,
+        },
+      ],
+      location: internalLoc,
+    };
+    this.structMap.set("IndexOutOfBoundsError", indexOutOfBoundsErrorDecl);
+
+    // Add IndexOutOfBoundsError to struct layouts
+    const indexOutOfBoundsErrorLayout = new Map<string, number>();
+    indexOutOfBoundsErrorLayout.set("index", 0);
+    indexOutOfBoundsErrorLayout.set("size", 1);
+    this.structLayouts.set(
+      "IndexOutOfBoundsError",
+      indexOutOfBoundsErrorLayout,
+    );
+
+    // Register built-in DivisionByZeroError struct
+    const divisionByZeroErrorDecl: AST.StructDecl = {
+      kind: "StructDecl",
+      name: "DivisionByZeroError",
+      genericParams: [],
+      inheritanceList: [],
+      members: [
+        {
+          kind: "StructField",
+          name: "dummy",
+          type: {
+            kind: "BasicType",
+            name: "i8",
+            genericArgs: [],
+            pointerDepth: 0,
+            arrayDimensions: [],
+            location: internalLoc,
+          },
+          location: internalLoc,
+        },
+      ],
+      location: internalLoc,
+    };
+    this.structMap.set("DivisionByZeroError", divisionByZeroErrorDecl);
+
+    // Add DivisionByZeroError to struct layouts
+    const divisionByZeroErrorLayout = new Map<string, number>();
+    divisionByZeroErrorLayout.set("dummy", 0);
+    this.structLayouts.set("DivisionByZeroError", divisionByZeroErrorLayout);
+
+    // Register built-in StackOverflowError struct
+    const stackOverflowErrorDecl: AST.StructDecl = {
+      kind: "StructDecl",
+      name: "StackOverflowError",
+      genericParams: [],
+      inheritanceList: [],
+      members: [
+        {
+          kind: "StructField",
+          name: "dummy",
+          type: {
+            kind: "BasicType",
+            name: "i8",
+            genericArgs: [],
+            pointerDepth: 0,
+            arrayDimensions: [],
+            location: internalLoc,
+          },
+          location: internalLoc,
+        },
+      ],
+      location: internalLoc,
+    };
+    this.structMap.set("StackOverflowError", stackOverflowErrorDecl);
+
+    // Add StackOverflowError to struct layouts
+    const stackOverflowErrorLayout = new Map<string, number>();
+    stackOverflowErrorLayout.set("dummy", 0);
+    this.structLayouts.set("StackOverflowError", stackOverflowErrorLayout);
+
     // Index Structs for inheritance lookup
     for (const stmt of program.statements) {
       if (stmt.kind === "StructDecl") {
@@ -328,6 +437,24 @@ export class CodeGenerator {
       ]),
     );
 
+    // IndexOutOfBoundsError struct for array access exceptions
+    this.emitDeclaration("%struct.IndexOutOfBoundsError = type { i64, i64 }");
+    this.structLayouts.set(
+      "IndexOutOfBoundsError",
+      new Map([
+        ["index", 0],
+        ["size", 1],
+      ]),
+    );
+
+    // DivisionByZeroError struct
+    this.emitDeclaration("%struct.DivisionByZeroError = type { i8 }");
+    this.structLayouts.set("DivisionByZeroError", new Map([["dummy", 0]]));
+
+    // StackOverflowError struct
+    this.emitDeclaration("%struct.StackOverflowError = type { i8 }");
+    this.structLayouts.set("StackOverflowError", new Map([["dummy", 0]]));
+
     // fprintf and stderr for null trap error messages (kept for backward compatibility)
     this.emitDeclaration("%struct._IO_FILE = type opaque");
     this.emitDeclaration("@stderr = external global %struct._IO_FILE*");
@@ -344,6 +471,7 @@ export class CodeGenerator {
     );
     this.emitDeclaration(`@exception_value = weak global i64 0`);
     this.emitDeclaration(`@exception_type = weak global i32 0`);
+    this.emitDeclaration(`@__bpl_stack_depth = weak global i32 0`);
 
     // Global argc/argv for Args library
     this.emitDeclaration(`@__bpl_argc_value = weak global i32 0`);
@@ -420,13 +548,19 @@ export class CodeGenerator {
       header += `${varName} = private unnamed_addr constant [${len} x i8] c"${escaped}\\00", align 1\n`;
     }
 
-    return (
+    const result =
       header +
       "\n" +
       this.declarationsOutput.join("\n") +
       "\n" +
-      this.output.join("\n")
-    );
+      this.output.join("\n");
+
+    try {
+      const fs = require("fs");
+      fs.writeFileSync("ir.ll", result);
+    } catch (e) {}
+
+    return result;
   }
 
   private emit(line: string) {
@@ -663,9 +797,20 @@ export class CodeGenerator {
 
       for (const method of methods) {
         const originalName = method.name;
-        method.name = `${structName}_${method.name}`;
-        this.generateFunction(method, decl);
-        method.name = originalName;
+        const mangledName = `${structName}_${method.name}`;
+
+        if (this.currentFunctionName) {
+          this.pendingGenerations.push(() => {
+            const oldName = method.name;
+            method.name = mangledName;
+            this.generateFunction(method, decl);
+            method.name = oldName;
+          });
+        } else {
+          method.name = mangledName;
+          this.generateFunction(method, decl);
+          method.name = originalName;
+        }
       }
     }
   }
@@ -766,9 +911,20 @@ export class CodeGenerator {
     if (decl.genericParams.length === 0 && !mangledName && decl.methods) {
       for (const method of decl.methods) {
         const originalName = method.name;
-        method.name = `${enumName}_${method.name}`;
-        this.generateFunction(method, decl);
-        method.name = originalName;
+        const mangledName = `${enumName}_${method.name}`;
+
+        if (this.currentFunctionName) {
+          this.pendingGenerations.push(() => {
+            const oldName = method.name;
+            method.name = mangledName;
+            this.generateFunction(method, decl);
+            method.name = oldName;
+          });
+        } else {
+          method.name = mangledName;
+          this.generateFunction(method, decl);
+          method.name = originalName;
+        }
       }
     }
   }
@@ -1303,6 +1459,25 @@ export class CodeGenerator {
       if (!isInstantiating) return;
     }
 
+    if (this.currentFunctionName) {
+      console.log(`[DEBUG] RECURSIVE generateFunction detected!`);
+      console.log(`[DEBUG] Outer: ${this.currentFunctionName}`);
+      console.log(`[DEBUG] Inner: ${decl.name}`);
+    }
+
+    // Save state for re-entrancy (e.g. when resolving types triggers monomorphization)
+    const prevRegisterCount = this.registerCount;
+    const prevLabelCount = this.labelCount;
+    const prevStackAllocCount = this.stackAllocCount;
+    const prevCurrentFunctionReturnType = this.currentFunctionReturnType;
+    const prevCurrentFunctionName = this.currentFunctionName;
+    const prevLocals = new Set(this.locals);
+    const prevLocalPointers = new Map(this.localPointers);
+    const prevLocalNullFlags = new Map(this.localNullFlags);
+    const prevPointerToLocal = new Map(this.pointerToLocal);
+    const prevOnReturn = this.onReturn;
+    const prevIsMainWithVoidReturn = this.isMainWithVoidReturn;
+
     this.registerCount = 0;
     this.labelCount = 0;
     this.stackAllocCount = 0;
@@ -1313,171 +1488,236 @@ export class CodeGenerator {
     this.localNullFlags.clear();
     this.pointerToLocal.clear();
 
-    // Setup destructor chaining
-    let parentStructType: AST.TypeNode | undefined;
-    if (
-      parentStruct &&
-      parentStruct.kind === "StructDecl" &&
-      parentStruct.inheritanceList
-    ) {
-      for (const t of parentStruct.inheritanceList) {
-        if (t.kind === "BasicType" && this.structMap.has(t.name)) {
-          parentStructType = t;
+    try {
+      // Setup destructor chaining
+      let parentStructType: AST.TypeNode | undefined;
+      if (
+        parentStruct &&
+        parentStruct.kind === "StructDecl" &&
+        parentStruct.inheritanceList
+      ) {
+        for (const t of parentStruct.inheritanceList) {
+          if (t.kind === "BasicType" && this.structMap.has(t.name)) {
+            parentStructType = t;
+            break;
+          }
+        }
+      }
+
+      if (
+        parentStruct &&
+        parentStruct.kind === "StructDecl" &&
+        decl.name === `${parentStruct.name}_destroy` &&
+        parentStructType
+      ) {
+        this.onReturn = () => {
+          this.emitParentDestroy(parentStruct as AST.StructDecl, decl);
+        };
+      } else {
+        this.onReturn = undefined;
+      }
+
+      let name = decl.name;
+      const funcType = decl.resolvedType as AST.FunctionTypeNode;
+      if (decl.resolvedType && decl.resolvedType.kind === "FunctionType") {
+        let genericArgs: AST.TypeNode[] = [];
+        if (decl.genericParams.length > 0) {
+          genericArgs = decl.genericParams.map(
+            (p) => this.currentTypeMap.get(p.name)!,
+          );
+        }
+        // Substitute generic types in function signature before mangling
+        const substitutedFuncType = this.substituteType(
+          funcType,
+          this.currentTypeMap,
+        ) as AST.FunctionTypeNode;
+        name = this.getMangledName(
+          decl.name,
+          substitutedFuncType,
+          false,
+          genericArgs,
+        );
+      }
+
+      // Prevent duplicate generation
+      if (this.emittedFunctions.has(name)) {
+        return;
+      }
+      this.emittedFunctions.add(name);
+
+      let retType = this.resolveType(funcType.returnType);
+
+      // Special case: if this is main with void return, change to i32 for exit code
+      this.isMainWithVoidReturn = decl.name === "main" && retType === "void";
+      if (this.isMainWithVoidReturn) {
+        retType = "i32";
+      }
+
+      // Special handling for main function to accept argc/argv
+      let params: string;
+      if (decl.name === "main") {
+        params = "i32 %argc, i8** %argv";
+      } else {
+        params = decl.params
+          .map((p, i) => {
+            const type = this.resolveType(funcType.paramTypes[i]!);
+            const name = `%${p.name}`;
+            return `${type} ${name}`;
+          })
+          .join(", ");
+      }
+
+      let linkage = "";
+      if (name.startsWith("Type_")) {
+        linkage = "linkonce_odr ";
+      } else if (
+        this.useLinkOnceOdrForStdLib &&
+        this.stdLibPath &&
+        decl.location &&
+        decl.location.file &&
+        decl.location.file.startsWith(this.stdLibPath)
+      ) {
+        linkage = "linkonce_odr ";
+      }
+      this.emit(`define ${linkage}${retType} @${name}(${params}) {`);
+      this.emit("entry:");
+
+      // Stack overflow check
+      const depth = this.newRegister();
+      this.emit(`  ${depth} = load i32, i32* @__bpl_stack_depth`);
+      const newDepth = this.newRegister();
+      this.emit(`  ${newDepth} = add i32 ${depth}, 1`);
+      this.emit(`  store i32 ${newDepth}, i32* @__bpl_stack_depth`);
+
+      const isOverflow = this.newRegister();
+      this.emit(`  ${isOverflow} = icmp ugt i32 ${newDepth}, 10000`);
+
+      const stackOk = this.newLabel("stack_ok");
+      const stackErr = this.newLabel("stack_err");
+
+      this.emit(`  br i1 ${isOverflow}, label %${stackErr}, label %${stackOk}`);
+
+      this.emit(`${stackErr}:`);
+      const errorStruct = this.newRegister();
+      this.emit(
+        `  ${errorStruct} = insertvalue %struct.StackOverflowError undef, i8 0, 0`,
+      );
+      this.emitThrow(errorStruct, "%struct.StackOverflowError");
+      // this.emit("  unreachable");
+
+      this.emit(`${stackOk}:`);
+
+      // Store argc/argv in global variables for main function
+      if (name === "main") {
+        this.emit(`  store i32 %argc, i32* @__bpl_argc_value`);
+        this.emit(`  store i8** %argv, i8*** @__bpl_argv_value`);
+      }
+
+      // Allocate stack space for parameters to make them mutable
+      for (let i = 0; i < decl.params.length; i++) {
+        const param = decl.params[i]!;
+        this.locals.add(param.name);
+        const type = this.resolveType(funcType.paramTypes[i]!);
+        const paramReg = `%${param.name}`;
+        const stackAddr = this.allocateStack(param.name, type);
+        this.emit(`  store ${type} ${paramReg}, ${type}* ${stackAddr}`);
+
+        // For struct-value parameters, extract the __null_bit__ field to detect if null was passed
+        const flagPtr = this.localNullFlags.get(param.name);
+        if (flagPtr) {
+          // Load the struct and extract __null_bit__ field
+          // __null_bit__ = 1 means valid, 0 means null
+          // The flag stores the validity directly (1=valid, 0=null)
+          const loaded = this.newRegister();
+          this.emit(`  ${loaded} = load ${type}, ${type}* ${stackAddr}`);
+
+          // Get the struct layout to find __null_bit__ index
+          const structName = (funcType.paramTypes[i] as AST.BasicTypeNode)
+            ?.name;
+          const layout = this.structLayouts.get(structName);
+          const nullBitIndex = layout ? layout.get("__null_bit__") : -1;
+
+          if (nullBitIndex !== undefined && nullBitIndex >= 0) {
+            const extracted = this.newRegister();
+            this.emit(
+              `  ${extracted} = extractvalue ${type} ${loaded}, ${nullBitIndex}`,
+            );
+            // Store __null_bit__ directly (1=valid, 0=null)
+            this.emit(`  store i1 ${extracted}, i1* ${flagPtr}`);
+          }
+        }
+      }
+
+      this.generateBlock(decl.body);
+
+      // Add implicit return for void functions if missing
+      let lastLine = "";
+      for (let i = this.output.length - 1; i >= 0; i--) {
+        if (this.output[i].trim() !== "") {
+          lastLine = this.output[i].trim();
           break;
         }
       }
-    }
 
-    if (
-      parentStruct &&
-      parentStruct.kind === "StructDecl" &&
-      decl.name === `${parentStruct.name}_destroy` &&
-      parentStructType
-    ) {
-      this.onReturn = () => {
-        this.emitParentDestroy(parentStruct as AST.StructDecl, decl);
-      };
-    } else {
-      this.onReturn = undefined;
-    }
+      // Handle implicit returns based on function type
+      // Don't emit implicit return if the block is already terminated
+      const isTerminator =
+        lastLine.startsWith("ret") ||
+        lastLine.startsWith("br") ||
+        lastLine === "unreachable";
 
-    let name = decl.name;
-    const funcType = decl.resolvedType as AST.FunctionTypeNode;
-    if (decl.resolvedType && decl.resolvedType.kind === "FunctionType") {
-      let genericArgs: AST.TypeNode[] = [];
-      if (decl.genericParams.length > 0) {
-        genericArgs = decl.genericParams.map(
-          (p) => this.currentTypeMap.get(p.name)!,
-        );
-      }
-      // Substitute generic types in function signature before mangling
-      const substitutedFuncType = this.substituteType(
-        funcType,
-        this.currentTypeMap,
-      ) as AST.FunctionTypeNode;
-      name = this.getMangledName(
-        decl.name,
-        substitutedFuncType,
-        false,
-        genericArgs,
-      );
-    }
+      if (!isTerminator) {
+        // Decrement stack depth
+        const depth = this.newRegister();
+        this.emit(`  ${depth} = load i32, i32* @__bpl_stack_depth`);
+        const newDepth = this.newRegister();
+        this.emit(`  ${newDepth} = sub i32 ${depth}, 1`);
+        this.emit(`  store i32 ${newDepth}, i32* @__bpl_stack_depth`);
 
-    // Prevent duplicate generation
-    if (this.emittedFunctions.has(name)) {
-      return;
-    }
-    this.emittedFunctions.add(name);
+        if (this.onReturn) this.onReturn();
 
-    let retType = this.resolveType(funcType.returnType);
-
-    // Special case: if this is main with void return, change to i32 for exit code
-    this.isMainWithVoidReturn = decl.name === "main" && retType === "void";
-    if (this.isMainWithVoidReturn) {
-      retType = "i32";
-    }
-
-    // Special handling for main function to accept argc/argv
-    let params: string;
-    if (decl.name === "main") {
-      params = "i32 %argc, i8** %argv";
-    } else {
-      params = decl.params
-        .map((p, i) => {
-          const type = this.resolveType(funcType.paramTypes[i]!);
-          const name = `%${p.name}`;
-          return `${type} ${name}`;
-        })
-        .join(", ");
-    }
-
-    let linkage = "";
-    if (name.startsWith("Type_")) {
-      linkage = "linkonce_odr ";
-    } else if (
-      this.useLinkOnceOdrForStdLib &&
-      this.stdLibPath &&
-      decl.location &&
-      decl.location.file &&
-      decl.location.file.startsWith(this.stdLibPath)
-    ) {
-      linkage = "linkonce_odr ";
-    }
-    this.emit(`define ${linkage}${retType} @${name}(${params}) {`);
-    this.emit("entry:");
-
-    // Store argc/argv in global variables for main function
-    if (name === "main") {
-      this.emit(`  store i32 %argc, i32* @__bpl_argc_value`);
-      this.emit(`  store i8** %argv, i8*** @__bpl_argv_value`);
-    }
-
-    // Allocate stack space for parameters to make them mutable
-    for (let i = 0; i < decl.params.length; i++) {
-      const param = decl.params[i]!;
-      this.locals.add(param.name);
-      const type = this.resolveType(funcType.paramTypes[i]!);
-      const paramReg = `%${param.name}`;
-      const stackAddr = this.allocateStack(param.name, type);
-      this.emit(`  store ${type} ${paramReg}, ${type}* ${stackAddr}`);
-
-      // For struct-value parameters, extract the __null_bit__ field to detect if null was passed
-      const flagPtr = this.localNullFlags.get(param.name);
-      if (flagPtr) {
-        // Load the struct and extract __null_bit__ field
-        // __null_bit__ = 1 means valid, 0 means null
-        // The flag stores the validity directly (1=valid, 0=null)
-        const loaded = this.newRegister();
-        this.emit(`  ${loaded} = load ${type}, ${type}* ${stackAddr}`);
-
-        // Get the struct layout to find __null_bit__ index
-        const structName = (funcType.paramTypes[i] as AST.BasicTypeNode)?.name;
-        const layout = this.structLayouts.get(structName);
-        const nullBitIndex = layout ? layout.get("__null_bit__") : -1;
-
-        if (nullBitIndex !== undefined && nullBitIndex >= 0) {
-          const extracted = this.newRegister();
-          this.emit(
-            `  ${extracted} = extractvalue ${type} ${loaded}, ${nullBitIndex}`,
-          );
-          // Store __null_bit__ directly (1=valid, 0=null)
-          this.emit(`  store i1 ${extracted}, i1* ${flagPtr}`);
+        if (this.isMainWithVoidReturn) {
+          // Main was declared void but we changed it to i32, return 0
+          this.emit("  ret i32 0");
+        } else if (retType === "void") {
+          this.emit("  ret void");
+        } else if (retType.endsWith("*")) {
+          // Pointer type - return null
+          this.emit(`  ret ${retType} null`);
+        } else if (retType === "i32" || retType === "i64") {
+          // Non-void function without explicit return, return 0 as default
+          this.emit(`  ret ${retType} 0`);
+        } else {
+          this.emit("  unreachable");
         }
       }
+
+      this.emit("}");
+      this.emit("");
+    } finally {
+      // Restore state
+      this.registerCount = prevRegisterCount;
+      this.labelCount = prevLabelCount;
+      this.stackAllocCount = prevStackAllocCount;
+      this.currentFunctionReturnType = prevCurrentFunctionReturnType;
+      this.currentFunctionName = prevCurrentFunctionName;
+      this.locals = prevLocals;
+      this.localPointers = prevLocalPointers;
+      this.localNullFlags = prevLocalNullFlags;
+      this.pointerToLocal = prevPointerToLocal;
+      this.onReturn = prevOnReturn;
+      this.isMainWithVoidReturn = prevIsMainWithVoidReturn;
     }
-
-    this.generateBlock(decl.body);
-
-    // Add implicit return for void functions if missing
-    const lastLine =
-      this.output.length > 0 ? this.output[this.output.length - 1]! : "";
-
-    // Handle implicit returns based on function type
-    if (!lastLine.trim().startsWith("ret")) {
-      if (this.onReturn) this.onReturn();
-
-      if (this.isMainWithVoidReturn) {
-        // Main was declared void but we changed it to i32, return 0
-        this.emit("  ret i32 0");
-      } else if (retType === "void") {
-        this.emit("  ret void");
-      } else if (retType.endsWith("*")) {
-        // Pointer type - return null
-        this.emit(`  ret ${retType} null`);
-      } else if (retType === "i32" || retType === "i64") {
-        // Non-void function without explicit return, return 0 as default
-        this.emit(`  ret ${retType} 0`);
-      } else {
-        this.emit("  unreachable");
-      }
-    }
-
-    this.emit("}");
-    this.emit("");
   }
 
   private generateBlock(block: AST.BlockStmt) {
     for (const stmt of block.statements) {
+      if (
+        this.output.length > 0 &&
+        this.isTerminator(this.output[this.output.length - 1])
+      ) {
+        break;
+      }
       this.generateStatement(stmt);
     }
   }
@@ -2028,7 +2268,16 @@ export class CodeGenerator {
     }
 
     // Only trigger function-level return hooks (like destructors) if not yielding from a match
-    if (!isMatchYield && this.onReturn) this.onReturn();
+    if (!isMatchYield) {
+      // Decrement stack depth
+      const depth = this.newRegister();
+      this.emit(`  ${depth} = load i32, i32* @__bpl_stack_depth`);
+      const newDepth = this.newRegister();
+      this.emit(`  ${newDepth} = sub i32 ${depth}, 1`);
+      this.emit(`  store i32 ${newDepth}, i32* @__bpl_stack_depth`);
+
+      if (this.onReturn) this.onReturn();
+    }
 
     if (stmt.value) {
       const rawVal = this.generateExpression(stmt.value);
@@ -2384,6 +2633,19 @@ export class CodeGenerator {
           type: resultType,
         });
         this.emit(`  br label %${mergeLabel}`);
+      } else {
+        // Block arm - check if terminated
+        const lastLine = this.output[this.output.length - 1]?.trim();
+        const isTerminated =
+          lastLine &&
+          (lastLine.startsWith("ret ") ||
+            lastLine.startsWith("br ") ||
+            lastLine.startsWith("switch ") ||
+            lastLine === "unreachable");
+
+        if (!isTerminated) {
+          this.emit(`  br label %${mergeLabel}`);
+        }
       }
     }
 
@@ -3004,29 +3266,43 @@ export class CodeGenerator {
       const leftType = this.resolveType(expr.left.resolvedType!);
       const rightType = this.resolveType(expr.right.resolvedType!);
 
+      let thisVal = leftRaw;
+      let thisType = leftType;
+      let otherVal = rightRaw;
+      let otherType = rightType;
+      let thisExpr = expr.left;
+
+      if (overload.swapOperands) {
+        thisVal = rightRaw;
+        thisType = rightType;
+        otherVal = leftRaw;
+        otherType = leftType;
+        thisExpr = expr.right;
+      }
+
       // For operator overloads on pointers (like &arr << value), pass the pointer value directly
       // The left expression type should match the method's first parameter type
       let thisArg: string;
-      if (leftType.endsWith("*")) {
+      if (thisType.endsWith("*")) {
         // Left is a pointer - pass it directly as the 'this' parameter
-        thisArg = `${leftType} ${leftRaw}`;
+        thisArg = `${thisType} ${thisVal}`;
       } else {
         // Left is a value - need to get its address
         let thisPtr: string;
         try {
-          thisPtr = this.generateAddress(expr.left);
+          thisPtr = this.generateAddress(thisExpr);
         } catch {
           // If we can't get address, spill to stack
           const spillAddr = this.allocateStack(
             `op_spill_${this.labelCount++}`,
-            leftType,
+            thisType,
           );
           this.emit(
-            `  store ${leftType} ${leftRaw}, ${leftType}* ${spillAddr}`,
+            `  store ${thisType} ${thisVal}, ${thisType}* ${spillAddr}`,
           );
           thisPtr = spillAddr;
         }
-        thisArg = `${leftType}* ${thisPtr}`;
+        thisArg = `${thisType}* ${thisPtr}`;
       }
 
       // Call the operator method
@@ -3035,8 +3311,15 @@ export class CodeGenerator {
       const returnType = this.resolveType(expr.resolvedType!);
       const resultReg = this.newRegister();
       this.emit(
-        `  ${resultReg} = call ${returnType} @${mangledName}(${thisArg}, ${rightType} ${rightRaw})`,
+        `  ${resultReg} = call ${returnType} @${mangledName}(${thisArg}, ${otherType} ${otherVal})`,
       );
+
+      if (overload.negateResult) {
+        const negated = this.newRegister();
+        this.emit(`  ${negated} = xor i1 ${resultReg}, true`);
+        return negated;
+      }
+
       return resultReg;
     }
 
@@ -3328,8 +3611,27 @@ export class CodeGenerator {
         op = isFloat ? "fmul" : "mul";
         break;
       case TokenType.Slash:
-        if (isFloat) op = "fdiv";
-        else op = isUnsigned ? "udiv" : "sdiv";
+        if (isFloat) {
+          op = "fdiv";
+        } else {
+          op = isUnsigned ? "udiv" : "sdiv";
+          // Check for zero
+          const isZero = this.newRegister();
+          this.emit(`  ${isZero} = icmp eq ${rightType} ${right}, 0`);
+          const okLabel = this.newLabel("div_ok");
+          const errLabel = this.newLabel("div_err");
+          this.emit(`  br i1 ${isZero}, label %${errLabel}, label %${okLabel}`);
+
+          this.emit(`${errLabel}:`);
+          const errorStruct = this.newRegister();
+          this.emit(
+            `  ${errorStruct} = insertvalue %struct.DivisionByZeroError undef, i8 0, 0`,
+          );
+          this.emitThrow(errorStruct, "%struct.DivisionByZeroError");
+          // this.emit("  unreachable");
+
+          this.emit(`${okLabel}:`);
+        }
         break;
       case TokenType.EqualEqual:
         op = isFloat ? "fcmp oeq" : "icmp eq";
@@ -3354,8 +3656,27 @@ export class CodeGenerator {
         else op = isUnsigned ? "icmp uge" : "icmp sge";
         break;
       case TokenType.Percent:
-        if (isFloat) op = "frem";
-        else op = isUnsigned ? "urem" : "srem";
+        if (isFloat) {
+          op = "frem";
+        } else {
+          op = isUnsigned ? "urem" : "srem";
+          // Check for zero
+          const isZero = this.newRegister();
+          this.emit(`  ${isZero} = icmp eq ${rightType} ${right}, 0`);
+          const okLabel = this.newLabel("mod_ok");
+          const errLabel = this.newLabel("mod_err");
+          this.emit(`  br i1 ${isZero}, label %${errLabel}, label %${okLabel}`);
+
+          this.emit(`${errLabel}:`);
+          const errorStruct = this.newRegister();
+          this.emit(
+            `  ${errorStruct} = insertvalue %struct.DivisionByZeroError undef, i8 0, 0`,
+          );
+          this.emitThrow(errorStruct, "%struct.DivisionByZeroError");
+          // this.emit("  unreachable");
+
+          this.emit(`${okLabel}:`);
+        }
         break;
       case TokenType.Ampersand:
         op = "and";
@@ -3428,7 +3749,7 @@ export class CodeGenerator {
       const variantIndex = enumVariantInfo.variantIndex as number;
 
       // Generate code to construct the enum value
-      const enumType = this.resolveType(expr.callee.resolvedType!);
+      const enumType = this.resolveType(expr.resolvedType!);
 
       // Allocate space on stack to build the enum value
       const enumPtr = this.newRegister();
@@ -4701,6 +5022,41 @@ export class CodeGenerator {
       let addr: string;
       if (objType.arrayDimensions.length > 0) {
         const llvmType = this.resolveType(objType);
+
+        // Bounds check for fixed-size arrays
+        if (llvmType.startsWith("[")) {
+          const match = llvmType.match(/^\[(\d+) x/);
+          if (match) {
+            const size = parseInt(match[1]!);
+
+            // Check if index < size (unsigned comparison handles negative indices as large positive)
+            const inBounds = this.newRegister();
+            this.emit(`  ${inBounds} = icmp ult i64 ${indexVal}, ${size}`);
+
+            const throwLabel = this.newLabel("bounds.throw");
+            const passLabel = this.newLabel("bounds.pass");
+            this.emit(
+              `  br i1 ${inBounds}, label %${passLabel}, label %${throwLabel}`,
+            );
+
+            this.emit(`${throwLabel}:`);
+            // Construct IndexOutOfBoundsError
+            const errorStruct = this.newRegister();
+            const errorWithIndex = this.newRegister();
+
+            this.emit(
+              `  ${errorStruct} = insertvalue %struct.IndexOutOfBoundsError undef, i64 ${indexVal}, 0`,
+            );
+            this.emit(
+              `  ${errorWithIndex} = insertvalue %struct.IndexOutOfBoundsError ${errorStruct}, i64 ${size}, 1`,
+            );
+
+            this.emitThrow(errorWithIndex, "%struct.IndexOutOfBoundsError");
+
+            this.emit(`${passLabel}:`);
+          }
+        }
+
         addr = this.newRegister();
         if (llvmType.startsWith("[")) {
           this.emit(
@@ -4909,8 +5265,6 @@ export class CodeGenerator {
     srcTypeNode: AST.TypeNode,
     destTypeNode: AST.TypeNode,
   ): string {
-    const reg = this.newRegister();
-
     if (srcType === destType) return val;
 
     // Special: casting literal null to a struct/object value should become zeroinitializer
@@ -4937,6 +5291,8 @@ export class CodeGenerator {
       this.emit(`  ${reg} = load ${destType}, ${srcType} ${val}`);
       return reg;
     }
+
+    const reg = this.newRegister();
 
     // Void pointer compatibility: i8* (void*) <-> any pointer type
     // Allow bidirectional casting between void* and any other pointer
@@ -4995,8 +5351,33 @@ export class CodeGenerator {
         this.emit(`  ${reg} = ${op} ${srcType} ${val} to ${destType}`);
         return reg;
       } else {
+        // Widths are equal, but types might differ (e.g. i32 vs u32) - no-op in LLVM
+        // But we allocated a register!
+        // We should have returned earlier if srcType === destType.
+        // If srcType is i32 and destType is i32, we returned.
+        // If srcType is i32 and destType is u32 (which is also i32 in LLVM), we returned.
+        // So this block is unreachable if widths are equal.
+        // But let's be safe.
         return val;
       }
+    }
+
+    // Enum/Struct casts (e.g. Option -> Option<i32>)
+    if (
+      (srcType.startsWith("%enum.") || srcType.startsWith("%struct.")) &&
+      (destType.startsWith("%enum.") || destType.startsWith("%struct."))
+    ) {
+      // Extract tag (index 0) from source
+      const tag = this.newRegister();
+      this.emit(`  ${tag} = extractvalue ${srcType} ${val}, 0`);
+
+      // Create destination value with the same tag
+      const destWithTag = this.newRegister();
+      this.emit(
+        `  ${destWithTag} = insertvalue ${destType} undef, i32 ${tag}, 0`,
+      );
+
+      return destWithTag;
     }
 
     throw new Error(`Unsupported cast from ${srcType} to ${destType}`);

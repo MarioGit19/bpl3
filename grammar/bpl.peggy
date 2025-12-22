@@ -79,8 +79,8 @@
     return { kind: "ArrayLiteral", elements: elements || [], location: makeLoc(loc) };
   }
 
-  function structLiteral(structName, fields, loc) {
-    return { kind: "StructLiteral", structName, fields: fields || [], location: makeLoc(loc) };
+  function structLiteral(structName, fields, loc, genericArgs) {
+    return { kind: "StructLiteral", structName, fields: fields || [], genericArgs: genericArgs || [], location: makeLoc(loc) };
   }
 
   function tupleLiteral(elements, loc) {
@@ -496,6 +496,7 @@ StructMemberList
 StructMember
   = fd:FunctionDeclaration { return fd; }
   / name:Identifier _ ":" _ type:Type _ "," { return { kind: "StructField", name: name.name, type, location: location() }; }
+  / name:Identifier _ ":" _ type:Type &(_ "}") { return { kind: "StructField", name: name.name, type, location: location() }; }
 
 TypeAlias
   = K_type _ name:Identifier _ gen:GenericParamList? _ "=" _ type:Type _ ";" {
@@ -789,7 +790,7 @@ PostfixTail
     }
 
 ArgumentList
-  = head:Expression tail:(_ "," _ Expression)* {
+  = head:Expression tail:(_ "," _ Expression)* _ ","? {
       return [head, ...tail.map(t => t[3])];
     }
 
@@ -932,8 +933,8 @@ ArrayElements
   = head:Expression tail:(_ "," _ Expression)* _ ","? { return [head, ...tail.map(t => t[3])]; }
 
 StructLiteral
-  = name:Identifier _ "{" _ fields:StructLiteralFields? _ "}" {
-      return structLiteral(name.name, fields || [], location());
+  = name:Identifier _ gen:GenericArgs? _ "{" _ fields:StructLiteralFields? _ "}" {
+      return structLiteral(name.name, fields || [], location(), gen || []);
     }
 
 StructLiteralFields
@@ -984,7 +985,7 @@ ParameterList
     }
 
 Parameter
-  = name:Identifier _ ":" _ type:Type { return { name: name.name, type }; }
+  = name:Identifier _ ":" _ type:Type { return { name: name.name, type, location: makeLoc(location()) }; }
 
 GenericParamList
   = "<" _ head:GenericParam tail:(_ "," _ GenericParam)* _ ">" {
@@ -1039,7 +1040,8 @@ QualifiedIdentifier
   = head:IdentToken tail:(_ "." _ IdentToken)* { return [head, ...tail.map(t => t[3])].join("."); }
 
 ArraySuffix
-  = "[" _ size:NumberLiteral? _ "]" { return size ? size.value : null; }
+  = "[" _ sign:"-"? _ size:NumberLiteral _ "]" { return sign ? -size.value : size.value; }
+  / "[" _ "]" { return null; }
 
 ImportWhitespace
   = [ \t]*

@@ -81,6 +81,15 @@ export const KNOWN_TYPES = [
  */
 export class TypeUtils {
   /**
+   * Check if a type is a numeric type (integer or float)
+   */
+  static isNumericType(type: AST.TypeNode): boolean {
+    if (type.kind !== "BasicType") return false;
+    if (type.pointerDepth > 0 || type.arrayDimensions.length > 0) return false;
+    return NUMERIC_TYPES.includes(type.name);
+  }
+
+  /**
    * Convert a type node to a human-readable string representation
    */
   static typeToString(type: AST.TypeNode | undefined): string {

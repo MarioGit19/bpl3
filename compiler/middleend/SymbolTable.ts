@@ -17,6 +17,7 @@ export interface Symbol {
   declaration: AST.ASTNode;
   moduleScope?: SymbolTable;
   overloads?: Symbol[];
+  used?: boolean;
 }
 
 export class SymbolTable {
@@ -49,9 +50,22 @@ export class SymbolTable {
 
   public resolve(name: string): Symbol | undefined {
     const symbol = this.symbols.get(name);
-    if (symbol) return symbol;
+    if (symbol) {
+      symbol.used = true;
+      return symbol;
+    }
     if (this.parent) return this.parent.resolve(name);
     return undefined;
+  }
+
+  public getUnusedVariables(): Symbol[] {
+    const unused: Symbol[] = [];
+    for (const symbol of this.symbols.values()) {
+      if (symbol.kind === "Variable" && !symbol.used) {
+        unused.push(symbol);
+      }
+    }
+    return unused;
   }
 
   public enterScope(): SymbolTable {

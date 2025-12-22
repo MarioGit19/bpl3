@@ -88,6 +88,8 @@ export interface BinaryExpr extends ASTNode {
     methodName: string;
     targetType: TypeNode;
     methodDeclaration: FunctionDecl;
+    swapOperands?: boolean;
+    negateResult?: boolean;
   };
 }
 
@@ -142,6 +144,7 @@ export interface StructLiteralExpr extends ASTNode {
   kind: "StructLiteral";
   structName: string; // Added
   fields: { name: string; value: Expression }[];
+  genericArgs?: TypeNode[];
 }
 
 export interface TupleLiteralExpr extends ASTNode {

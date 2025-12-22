@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
-import { CompilerError } from "../compiler/common/CompilerError";
+import {
+  CompilerError,
+  DiagnosticSeverity,
+} from "../compiler/common/CompilerError";
 import { lexWithGrammar } from "../compiler/frontend/GrammarLexer";
 import { Parser } from "../compiler/frontend/Parser";
 import { TypeChecker } from "../compiler/middleend/TypeChecker";
@@ -11,7 +14,9 @@ function check(source: string) {
   const program = parser.parse();
   const typeChecker = new TypeChecker();
   typeChecker.checkProgram(program);
-  const typeErrors = typeChecker.getErrors();
+  const typeErrors = typeChecker
+    .getErrors()
+    .filter((e) => e.toDiagnostic().severity === DiagnosticSeverity.Error);
   if (typeErrors.length > 0) {
     throw typeErrors[0];
   }

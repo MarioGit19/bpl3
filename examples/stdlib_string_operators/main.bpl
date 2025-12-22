@@ -62,39 +62,45 @@ frame main() ret int {
 
     s2.destroy();
     s3.destroy();
+    s1.destroy();
 
     # Test string equality with ==
     printf("--- String Equality (==) ---\n");
-    local s1: String = String.new("test");
-    local s2: String = String.new("test");
-    local s3: String = String.new("other");
+    local eq1: String = String.new("test");
+    local eq2: String = String.new("test");
+    local eq3: String = String.new("other");
 
-    if (s1 == s2) {
-        printf("'%s' == '%s': true\n", s1.cstr(), s2.cstr());
+    if (eq1 == eq2) {
+        printf("'%s' == '%s': true\n", eq1.cstr(), eq2.cstr());
     } else {
-        printf("'%s' == '%s': false\n", s1.cstr(), s2.cstr());
+        printf("'%s' == '%s': false\n", eq1.cstr(), eq2.cstr());
     }
 
-    if (s1 == s3) {
-        printf("'%s' == '%s': true\n", s1.cstr(), s3.cstr());
+    if (eq1 == eq3) {
+        printf("'%s' == '%s': true\n", eq1.cstr(), eq3.cstr());
     } else {
-        printf("'%s' == '%s': false\n", s1.cstr(), s3.cstr());
+        printf("'%s' == '%s': false\n", eq1.cstr(), eq3.cstr());
     }
     printf("\n");
 
     # Test string inequality with !=
     printf("--- String Inequality (!=) ---\n");
-    if (s1 != s3) {
-        printf("'%s' != '%s': true\n", s1.cstr(), s3.cstr());
+    if (eq1 != eq3) {
+        printf("'%s' != '%s': true\n", eq1.cstr(), eq3.cstr());
     } else {
-        printf("'%s' != '%s': false\n", s1.cstr(), s3.cstr());
+        printf("'%s' != '%s': false\n", eq1.cstr(), eq3.cstr());
     }
 
-    if (s1 != s2) {
-        printf("'%s' != '%s': true\n", s1.cstr(), s2.cstr());
+    if (eq1 != eq2) {
+        printf("'%s' != '%s': true\n", eq1.cstr(), eq2.cstr());
     } else {
-        printf("'%s' != '%s': false\n", s1.cstr(), s2.cstr());
+        printf("'%s' != '%s': false\n", eq1.cstr(), eq2.cstr());
     }
+
+    eq1.destroy();
+    eq2.destroy();
+    eq3.destroy();
+
     printf("\n");
 
     # Test string comparison with <, >, <=, >=
@@ -150,7 +156,6 @@ frame main() ret int {
     second.destroy();
     third.destroy();
     builder.destroy();
-    s1.destroy();
     apple.destroy();
     banana.destroy();
     a.destroy();

@@ -108,6 +108,10 @@ export abstract class TypeCheckerBase {
     this.initializeBuiltins();
   }
 
+  public getCurrentScope(): SymbolTable {
+    return this.currentScope;
+  }
+
   // ========== Abstract methods - implemented by checker modules ==========
   abstract checkExpression(expr: AST.Expression): AST.TypeNode | undefined;
   abstract checkStatement(stmt: AST.Statement): void;
@@ -119,6 +123,18 @@ export abstract class TypeCheckerBase {
     checkConstraints: boolean = true,
   ): AST.TypeNode {
     if (type.kind === "BasicType") {
+      if (type.arrayDimensions) {
+        for (const dim of type.arrayDimensions) {
+          if (dim !== null && dim <= 0) {
+            throw new CompilerError(
+              "Array size must be greater than zero.",
+              "Arrays cannot have zero or negative size.",
+              type.location,
+            );
+          }
+        }
+      }
+
       const symbol = this.currentScope.resolve(type.name);
 
       if (
@@ -134,13 +150,47 @@ export abstract class TypeCheckerBase {
           | AST.EnumDecl
           | AST.TypeAliasDecl
           | AST.SpecDecl;
-        if (
-          decl &&
-          (decl as any).genericParams &&
-          (decl as any).genericParams.length > 0
-        ) {
-          const genericParams = (decl as any)
-            .genericParams as AST.GenericParam[];
+
+        const genericParams =
+          ((decl as any).genericParams as AST.GenericParam[]) || [];
+
+        if (type.genericArgs.length !== genericParams.length) {
+          // Special case for Option.Some(42) where generic args are inferred later
+          // If this is a raw type usage (no generic args) and it's an enum variant constructor context,
+          // we might want to allow it temporarily if we can infer it.
+          // However, resolveType is general purpose.
+
+          // If we are resolving a type that is part of an expression that will be inferred,
+          // we might not have generic args yet.
+
+          // For now, let's only enforce this if we have SOME generic args but wrong count,
+          // OR if it's a struct/type alias which must always be explicit.
+          // Enums in constructor calls might be inferred.
+
+          // Actually, the issue is that Option.Some(42) creates a Member expression where 'Option' is resolved.
+          // 'Option' as a namespace/value doesn't have generic args.
+          // 'Option' as a type DOES.
+
+          // If we are resolving the type of the Enum DECLARATION itself (e.g. in a variable decl), it must have args.
+          // But if we are resolving the type of the Enum SYMBOL used as a value (e.g. Option.Some), it might not.
+
+          // Let's check if we are in a context where inference is possible?
+          // No, resolveType doesn't know context.
+
+          // Revert to strict check but allow 0 args if it's an Enum (to support Option.Some syntax)
+          // The StatementChecker will patch it up later.
+          if (symbol.kind === "Enum" && type.genericArgs.length === 0) {
+            // Allow raw enum type for now, assuming it will be inferred or is used as namespace
+          } else {
+            throw new CompilerError(
+              `Generic type '${type.name}' expects ${genericParams.length} type arguments, but got ${type.genericArgs.length}.`,
+              "Check generic argument count.",
+              type.location,
+            );
+          }
+        }
+
+        if (genericParams.length > 0) {
           if (type.genericArgs.length === genericParams.length) {
             const resolvedArgs = type.genericArgs.map((t) =>
               this.resolveType(t, true),
@@ -553,13 +603,13 @@ export abstract class TypeCheckerBase {
       // Check generic arguments compatibility
       const symbol1 = this.currentScope.resolve(rt1.name);
       let isWildcard = false;
-      if (
-        symbol1 &&
-        symbol1.kind === "Struct" &&
-        (symbol1.declaration as AST.StructDecl).genericParams.length > 0 &&
-        rt1.genericArgs.length === 0
-      ) {
-        isWildcard = true;
+      if (symbol1 && (symbol1.kind === "Struct" || symbol1.kind === "Enum")) {
+        const decl = symbol1.declaration as AST.StructDecl | AST.EnumDecl;
+        if (decl.genericParams && decl.genericParams.length > 0) {
+          if (rt1.genericArgs.length === 0 || rt2.genericArgs.length === 0) {
+            isWildcard = true;
+          }
+        }
       }
 
       // Pointer depth match

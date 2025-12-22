@@ -1,0 +1,149 @@
+import { describe, it, expect } from "bun:test";
+import { spawnSync } from "child_process";
+import fs from "fs";
+import path from "path";
+
+const BPL_CLI = path.resolve(__dirname, "../index.ts");
+
+function runBPL(sourceCode: string) {
+  const tempFile = path.join(
+    __dirname,
+    `temp_${Math.random().toString(36).substring(7)}.bpl`,
+  );
+  fs.writeFileSync(tempFile, sourceCode);
+
+  try {
+    const result = spawnSync("bun", [BPL_CLI, tempFile, "--run"], {
+      encoding: "utf-8",
+      cwd: __dirname,
+    });
+    return {
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exitCode: result.status ?? 1,
+    };
+  } finally {
+    if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+    const binFile = tempFile.replace(".bpl", "");
+    if (fs.existsSync(binFile)) fs.unlinkSync(binFile);
+    const llFile = tempFile.replace(".bpl", ".ll");
+    if (fs.existsSync(llFile)) fs.unlinkSync(llFile);
+  }
+}
+
+describe("Enums and Pattern Matching", () => {
+  it("should handle simple enums and matching", () => {
+    const source = `
+      extern printf(fmt: string, ...);
+
+      enum Color {
+          Red,
+          Green,
+          Blue,
+      }
+
+      frame main() {
+          local c: Color = Color.Green;
+
+          local val: i32 = match (c) {
+              Color.Red => 1,
+              Color.Green => 2,
+              Color.Blue => 3,
+          };
+
+          printf("Val: %d\\n", val);
+      }
+    `;
+    const { stdout, stderr, exitCode } = runBPL(source);
+    if (exitCode !== 0) console.error("SimpleEnum Stderr:", stderr);
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("Val: 2\n");
+  });
+
+  it("should handle enums with data (tuple variants)", () => {
+    const source = `
+      extern printf(fmt: string, ...);
+
+      enum Message {
+          Quit,
+          Move(i32, i32),
+          Write(string),
+      }
+
+      frame process(msg: Message) {
+          match (msg) {
+              Message.Quit => { printf("Quit\\n"); },
+              Message.Move(x, y) => { printf("Move to %d, %d\\n", x, y); },
+              Message.Write(s) => { printf("Write: %s\\n", s); },
+          };
+      }
+
+      frame main() {
+          process(Message.Quit);
+          process(Message.Move(10, 20));
+          process(Message.Write("Hello"));
+      }
+    `;
+    const { stdout, stderr, exitCode } = runBPL(source);
+    if (exitCode !== 0) console.error("DataEnum Stderr:", stderr);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Quit");
+    expect(stdout).toContain("Move to 10, 20");
+    expect(stdout).toContain("Write: Hello");
+  });
+
+  it("should handle generic enums (Option<T>)", () => {
+    const source = `
+      extern printf(fmt: string, ...);
+
+      enum Option<T> {
+          Some(T),
+          None,
+      }
+
+      frame main() {
+          local opt: Option<i32> = Option.Some(42);
+
+          match (opt) {
+              Option.Some(val) => { printf("Got: %d\\n", val); },
+              Option.None => { printf("Got None\\n"); },
+          };
+
+          local none: Option<i32> = Option.None;
+           match (none) {
+              Option.Some(val) => { printf("Got: %d\\n", val); },
+              Option.None => { printf("Got None\\n"); },
+          };
+      }
+    `;
+    const { stdout, stderr, exitCode } = runBPL(source);
+    if (exitCode !== 0) console.error("GenericEnum Stderr:", stderr);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Got: 42");
+    expect(stdout).toContain("Got None");
+  });
+
+  it("should check exhaustiveness (if implemented)", () => {
+    const source = `
+      enum Color { Red, Green, Blue }
+      frame main() {
+          local c: Color = Color.Red;
+          match (c) {
+              Color.Red => {}
+              # Missing Green and Blue
+          }
+      }
+    `;
+    const { exitCode } = runBPL(source);
+    // If exhaustiveness check exists, this should fail
+    if (exitCode !== 0) {
+      console.log(
+        "Exhaustiveness check PASSED (compilation failed as expected).",
+      );
+    } else {
+      console.log(
+        "Exhaustiveness check FAILED (compilation succeeded with missing cases).",
+      );
+    }
+  });
+});

@@ -197,18 +197,40 @@ export function checkBinary(
   // Try operator overload first (for user-defined types)
   const methodName = OPERATOR_METHOD_MAP[expr.operator.lexeme];
   if (methodName) {
-    const method = this.findOperatorOverload(leftType, methodName, [rightType]);
+    let method = this.findOperatorOverload(leftType, methodName, [rightType]);
+    let swapOperands = false;
+    let negateResult = false;
+    let targetType = leftType;
+
+    // Synthesis logic for missing operators
+    if (!method) {
+      if (op === TokenType.BangEqual) {
+        // != -> !(__eq__)
+        method = this.findOperatorOverload(leftType, "__eq__", [rightType]);
+        if (method) negateResult = true;
+      } else if (op === TokenType.Greater) {
+        // > -> < (swapped)
+        method = this.findOperatorOverload(rightType, "__lt__", [leftType]);
+        if (method) {
+          swapOperands = true;
+          targetType = rightType;
+        }
+      }
+    }
 
     if (method) {
       // Build type substitution map for return type resolution (for generics)
       const typeSubstitutionMap = new Map<string, AST.TypeNode>();
-      if (leftType.kind === "BasicType" && leftType.genericArgs.length > 0) {
-        const decl = leftType.resolvedDeclaration;
+      if (
+        targetType.kind === "BasicType" &&
+        targetType.genericArgs.length > 0
+      ) {
+        const decl = targetType.resolvedDeclaration;
         if (decl && decl.genericParams && decl.genericParams.length > 0) {
           for (let i = 0; i < decl.genericParams.length; i++) {
             typeSubstitutionMap.set(
               decl.genericParams[i]!.name,
-              leftType.genericArgs[i]!,
+              targetType.genericArgs[i]!,
             );
           }
         }
@@ -216,9 +238,11 @@ export function checkBinary(
 
       // Found operator overload! Annotate the node
       expr.operatorOverload = {
-        methodName,
-        targetType: leftType,
+        methodName: method.name,
+        targetType,
         methodDeclaration: method,
+        swapOperands,
+        negateResult,
       };
 
       // Return the method's return type with generic substitution if needed
@@ -328,6 +352,31 @@ export function checkBinary(
     return leftType;
   }
 
+  // Modulo operator
+  if (op === TokenType.Percent) {
+    if (
+      !TypeUtils.isIntegerType(leftType) ||
+      !TypeUtils.isIntegerType(rightType)
+    ) {
+      throw new CompilerError(
+        `Modulo operator requires integer operands, got ${this.typeToString(
+          leftType,
+        )} and ${this.typeToString(rightType)}`,
+        "Ensure both operands are integers.",
+        expr.location,
+      );
+    }
+
+    const rightVal = this.getIntegerConstantValue(expr.right);
+    if (rightVal === 0n) {
+      throw new CompilerError(
+        "Division by zero",
+        "The divisor in a modulo operation cannot be zero.",
+        expr.right.location,
+      );
+    }
+  }
+
   // Arithmetic operators
   if (!this.areTypesCompatible(leftType, rightType)) {
     throw new CompilerError(
@@ -335,6 +384,34 @@ export function checkBinary(
       "Ensure operands have compatible types.",
       expr.location,
     );
+  }
+
+  // Ensure arithmetic operators are only applied to numeric types (unless overloaded)
+  if ([TokenType.Minus, TokenType.Star, TokenType.Slash].includes(op)) {
+    if (
+      !TypeUtils.isNumericType(leftType) ||
+      !TypeUtils.isNumericType(rightType)
+    ) {
+      throw new CompilerError(
+        `Operator '${expr.operator.lexeme}' cannot be applied to types '${this.typeToString(
+          leftType,
+        )}' and '${this.typeToString(rightType)}'`,
+        "Arithmetic operators require numeric types.",
+        expr.location,
+      );
+    }
+
+    // Check for division by zero
+    if (op === TokenType.Slash) {
+      const rightVal = this.getIntegerConstantValue(expr.right);
+      if (rightVal === 0n) {
+        throw new CompilerError(
+          "Division by zero",
+          "The divisor in a division operation cannot be zero.",
+          expr.right.location,
+        );
+      }
+    }
   }
 
   return leftType;
@@ -458,9 +535,16 @@ export function checkUnary(
 
   // Numeric negation (-)
   if (op === TokenType.Minus) {
-    if (operandType.kind !== "BasicType") {
+    if (
+      operandType.kind !== "BasicType" ||
+      (!TypeUtils.isNumericType(operandType) &&
+        operandType.name !== "float" &&
+        operandType.name !== "double")
+    ) {
       throw new CompilerError(
-        `Cannot negate ${this.typeToString(operandType)}`,
+        `Unary operator '-' cannot be applied to type '${this.typeToString(
+          operandType,
+        )}'`,
         "Negation requires a numeric type.",
         expr.location,
       );
@@ -524,6 +608,20 @@ export function checkStructLiteral(
   }
 
   const decl = symbol.declaration as AST.StructDecl;
+
+  // Check for missing fields
+  const providedFields = new Set(expr.fields.map((f) => f.name));
+  for (const member of decl.members) {
+    if (member.kind === "StructField") {
+      if (!providedFields.has(member.name)) {
+        throw new CompilerError(
+          `Missing field '${member.name}' in struct literal for '${expr.structName}'`,
+          `Field '${member.name}' is required.`,
+          expr.location,
+        );
+      }
+    }
+  }
 
   for (const field of expr.fields) {
     const memberResult = this.resolveStructField(decl, field.name);
@@ -631,6 +729,26 @@ export function checkCast(
   const exprType = this.checkExpression(expr.expression);
 
   if (exprType) {
+    // Disallow casting integers to string
+    if (
+      expr.targetType.kind === "BasicType" &&
+      expr.targetType.name === "string"
+    ) {
+      const resolvedSource = this.resolveType(exprType);
+      // Check if source is integer and not a pointer
+      if (
+        resolvedSource.kind === "BasicType" &&
+        resolvedSource.pointerDepth === 0 &&
+        (this as any).isIntegerType(resolvedSource)
+      ) {
+        throw new CompilerError(
+          `Cannot cast integer type '${this.typeToString(resolvedSource)}' to 'string'`,
+          "Casting integers to string is not allowed. Use .toString() or similar conversion methods.",
+          expr.location,
+        );
+      }
+    }
+
     const resolved = this.resolveType(exprType);
     const target = this.resolveType(expr.targetType);
 
@@ -654,9 +772,32 @@ export function checkSizeof(
   this: ExpressionCheckerContext,
   expr: AST.SizeofExpr,
 ): AST.TypeNode {
-  if ("kind" in expr.target && (expr.target.kind as string) !== "BasicType") {
-    this.checkExpression(expr.target as AST.Expression);
+  let targetType: AST.TypeNode | undefined;
+  const target = expr.target as AST.ASTNode;
+
+  if (
+    target.kind === "BasicType" ||
+    target.kind === "TupleType" ||
+    target.kind === "FunctionType"
+  ) {
+    targetType = this.resolveType(target as AST.TypeNode);
+  } else {
+    targetType = this.checkExpression(target as AST.Expression);
   }
+
+  if (
+    targetType &&
+    targetType.kind === "BasicType" &&
+    targetType.name === "void" &&
+    targetType.pointerDepth === 0
+  ) {
+    throw new CompilerError(
+      "Cannot take size of void",
+      "Void type has no size.",
+      expr.location,
+    );
+  }
+
   return {
     kind: "BasicType",
     name: "i64",

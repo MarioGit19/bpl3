@@ -4,8 +4,13 @@
  */
 
 import * as AST from "../common/AST";
-import { CompilerError, type SourceLocation } from "../common/CompilerError";
+import {
+  CompilerError,
+  DiagnosticSeverity,
+  type SourceLocation,
+} from "../common/CompilerError";
 import type { Symbol, SymbolKind } from "./SymbolTable";
+import { INTEGER_TYPES } from "./TypeUtils";
 
 /**
  * Type for the TypeChecker context that statement checkers need access to
@@ -53,7 +58,21 @@ export function checkBlock(
     this.currentScope = this.currentScope.enterScope();
   }
 
+  let terminated = false;
   for (const s of stmt.statements) {
+    if (terminated) {
+      const error = new CompilerError(
+        "Unreachable code detected.",
+        "This statement follows a return, break, continue, or throw statement and will never be executed.",
+        s.location,
+      ).setSeverity(DiagnosticSeverity.Warning);
+      if (this.collectAllErrors) {
+        this.errors.push(error);
+      } else {
+        throw error;
+      }
+    }
+
     try {
       this.checkStatement(s);
     } catch (e) {
@@ -63,9 +82,31 @@ export function checkBlock(
       }
       throw e;
     }
+
+    if (
+      s.kind === "Return" ||
+      s.kind === "Break" ||
+      s.kind === "Continue" ||
+      s.kind === "Throw"
+    ) {
+      terminated = true;
+    }
   }
 
   if (newScope) {
+    // const unused = this.currentScope.getUnusedVariables();
+    // for (const symbol of unused) {
+    //   const error = new CompilerError(
+    //     `Unused variable '${symbol.name}'`,
+    //     "Variable is declared but never used.",
+    //     symbol.declaration.location,
+    //   );
+    //   if (this.collectAllErrors) {
+    //     this.errors.push(error);
+    //   } else {
+    //     throw error;
+    //   }
+    // }
     this.currentScope = this.currentScope.exitScope();
   }
 }
@@ -209,6 +250,34 @@ export function checkSwitch(
 ): void {
   const valueType = this.checkExpression(stmt.expression);
 
+  if (valueType) {
+    const resolvedType = this.resolveType(valueType);
+    let isValid = false;
+
+    if (resolvedType.kind === "BasicType") {
+      if (INTEGER_TYPES.includes(resolvedType.name)) {
+        isValid = true;
+      } else {
+        const symbol = this.currentScope.resolve(resolvedType.name);
+        if (symbol && symbol.kind === "Enum") {
+          isValid = true;
+        }
+      }
+    }
+
+    if (!isValid) {
+      throw new CompilerError(
+        `Switch value must be an integer or enum type, got ${this.typeToString(
+          valueType,
+        )}`,
+        "Ensure the switch expression evaluates to an integer or enum.",
+        stmt.expression.location,
+      );
+    }
+  }
+
+  const seenValues = new Set<string>();
+
   for (const caseItem of stmt.cases) {
     const patternType = this.checkExpression(caseItem.value);
     if (
@@ -224,6 +293,22 @@ export function checkSwitch(
         caseItem.value.location,
       );
     }
+
+    // Check for duplicate cases
+    // We need to evaluate the constant value of the case expression
+    const constVal = this.getIntegerConstantValue(caseItem.value);
+    if (constVal !== undefined) {
+      const valStr = constVal.toString();
+      if (seenValues.has(valStr)) {
+        throw new CompilerError(
+          `Duplicate case value '${valStr}'`,
+          "Switch cases must have unique values.",
+          caseItem.value.location,
+        );
+      }
+      seenValues.add(valStr);
+    }
+
     checkBlock.call(this, caseItem.body);
   }
 
@@ -366,27 +451,67 @@ export function checkVariableDecl(
 
     if (initType) {
       if (declaredType) {
+        // Infer generic arguments for enum variants if target type has them
+        if (
+          declaredType.kind === "BasicType" &&
+          declaredType.genericArgs.length > 0 &&
+          initType.kind === "BasicType" &&
+          initType.name === declaredType.name &&
+          (!initType.genericArgs || initType.genericArgs.length === 0)
+        ) {
+          // Check if initializer is an enum variant
+          const enumVariantInfo = (decl.initializer as any).enumVariantInfo;
+          if (enumVariantInfo) {
+            // Update generic args
+            enumVariantInfo.genericArgs = declaredType.genericArgs;
+            // Also update initType to match declaredType
+            initType = declaredType;
+            // Update resolvedType on initializer
+            decl.initializer.resolvedType = declaredType;
+          }
+        }
+
         const resolvedInit = this.resolveType(initType);
         const resolvedDecl = this.resolveType(declaredType);
 
         // Check for integer constant compatibility
         const constVal = this.getIntegerConstantValue(decl.initializer);
-        if (
-          constVal !== undefined &&
-          this.isIntegerTypeCompatible(constVal, resolvedDecl)
-        ) {
-          // Annotate the literal for codegen
-          if (
-            decl.initializer.kind === "Literal" ||
-            decl.initializer.kind === "Unary"
+        if (constVal !== undefined) {
+          if (this.isIntegerTypeCompatible(constVal, resolvedDecl)) {
+            // Annotate the literal for codegen
+            if (
+              decl.initializer.kind === "Literal" ||
+              decl.initializer.kind === "Unary"
+            ) {
+              decl.initializer.resolvedType = resolvedDecl;
+            }
+          } else if (
+            resolvedDecl.kind === "BasicType" &&
+            INTEGER_TYPES.includes(resolvedDecl.name)
           ) {
-            decl.initializer.resolvedType = resolvedDecl;
+            throw new CompilerError(
+              `Integer overflow: value ${constVal} does not fit in type ${this.typeToString(
+                resolvedDecl,
+              )}`,
+              `Ensure the value is within the range of ${this.typeToString(
+                resolvedDecl,
+              )}.`,
+              decl.location,
+            );
+          } else if (!this.areTypesCompatible(resolvedDecl, resolvedInit)) {
+            throw new CompilerError(
+              `Type mismatch: cannot assign ${this.typeToString(
+                resolvedInit,
+              )} to ${this.typeToString(resolvedDecl)}`,
+              "Ensure the initializer type matches the declared type.",
+              decl.location,
+            );
           }
         } else if (!this.areTypesCompatible(resolvedDecl, resolvedInit)) {
           throw new CompilerError(
-            `Type mismatch: cannot assign ${this.typeToString(resolvedInit)} to ${this.typeToString(
-              resolvedDecl,
-            )}`,
+            `Type mismatch: cannot assign ${this.typeToString(
+              resolvedInit,
+            )} to ${this.typeToString(resolvedDecl)}`,
             "Ensure the initializer type matches the declared type.",
             decl.location,
           );
@@ -401,6 +526,16 @@ export function checkVariableDecl(
     throw new CompilerError(
       `Cannot infer type for variable '${decl.name}'`,
       "Either provide a type annotation or an initializer.",
+      decl.location,
+    );
+  }
+
+  // Check for shadowing in current scope
+  const existing = this.currentScope.getInCurrentScope(decl.name as string);
+  if (existing) {
+    throw new CompilerError(
+      `Variable '${decl.name}' is already declared in this scope`,
+      `Cannot redeclare '${decl.name}' in the same scope.`,
       decl.location,
     );
   }

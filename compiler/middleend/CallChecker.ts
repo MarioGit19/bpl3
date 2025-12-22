@@ -4,6 +4,7 @@
 import * as AST from "../common/AST";
 import { CompilerError, type SourceLocation } from "../common/CompilerError";
 import type { Symbol } from "./SymbolTable";
+import { TypeUtils } from "./TypeUtils";
 
 /**
  * Context interface that call checker functions expect
@@ -226,6 +227,19 @@ function handleEnumVariantCall(
     ) {
       typeMap.set(enumDecl.genericParams[i]!.name, genericArgs[i]!);
     }
+  } else if (enumDecl.genericParams && genericArgs.length === 0) {
+    // Try to infer generic arguments from arguments
+    if (variant.dataType && variant.dataType.kind === "EnumVariantTuple") {
+      const expectedTypes = variant.dataType.types;
+      for (let i = 0; i < expectedTypes.length && i < argTypes.length; i++) {
+        const paramType = expectedTypes[i]!;
+        const argType = argTypes[i];
+        if (!argType) continue;
+
+        // Use recursive inference
+        inferGenericArgs(paramType, argType, enumDecl.genericParams, typeMap);
+      }
+    }
   }
 
   if (variant.dataType) {
@@ -269,6 +283,27 @@ function handleEnumVariantCall(
   }
 
   (expr as any).enumVariantInfo = enumVariantInfo;
+
+  // Return specialized type if generics were inferred
+  if (enumDecl.genericParams && typeMap.size > 0) {
+    return {
+      kind: "BasicType",
+      name: enumDecl.name,
+      genericArgs: enumDecl.genericParams.map(
+        (p) =>
+          typeMap.get(p.name) ||
+          ({
+            kind: "BasicType",
+            name: p.name,
+            location: expr.location,
+          } as AST.TypeNode),
+      ),
+      pointerDepth: 0,
+      arrayDimensions: [],
+      location: expr.location,
+    };
+  }
+
   return calleeType;
 }
 
@@ -799,6 +834,13 @@ export function checkIndex(
     objectType.arrayDimensions &&
     objectType.arrayDimensions.length > 0
   ) {
+    if (indexType && !TypeUtils.isIntegerType(indexType)) {
+      throw new CompilerError(
+        `Array index must be an integer, got ${this.typeToString(indexType)}`,
+        "Ensure the index expression evaluates to an integer.",
+        expr.index.location,
+      );
+    }
     const innerType = { ...objectType };
     innerType.arrayDimensions = innerType.arrayDimensions.slice(1);
     return innerType;
@@ -806,6 +848,13 @@ export function checkIndex(
 
   // Handle pointer indexing
   if (objectType.kind === "BasicType" && objectType.pointerDepth > 0) {
+    if (indexType && !TypeUtils.isIntegerType(indexType)) {
+      throw new CompilerError(
+        `Pointer index must be an integer, got ${this.typeToString(indexType)}`,
+        "Ensure the index expression evaluates to an integer.",
+        expr.index.location,
+      );
+    }
     return {
       ...objectType,
       pointerDepth: objectType.pointerDepth - 1,
@@ -832,4 +881,51 @@ export function checkIndex(
     "Only arrays, pointers, or types with __get__ operator can be indexed.",
     expr.location,
   );
+}
+
+function inferGenericArgs(
+  paramType: AST.TypeNode,
+  argType: AST.TypeNode,
+  genericParams: AST.GenericParam[],
+  typeMap: Map<string, AST.TypeNode>,
+): void {
+  if (paramType.kind === "BasicType") {
+    // Direct match: paramType is T
+    if (genericParams.some((p) => p.name === paramType.name)) {
+      if (!typeMap.has(paramType.name)) {
+        typeMap.set(paramType.name, argType);
+      }
+      return;
+    }
+
+    // Nested match: paramType is Option<T>, argType is Option<int>
+    if (argType.kind === "BasicType" && paramType.name === argType.name) {
+      // Check generic args
+      for (
+        let i = 0;
+        i < paramType.genericArgs.length && i < argType.genericArgs.length;
+        i++
+      ) {
+        inferGenericArgs(
+          paramType.genericArgs[i]!,
+          argType.genericArgs[i]!,
+          genericParams,
+          typeMap,
+        );
+      }
+    }
+  } else if (paramType.kind === "TupleType" && argType.kind === "TupleType") {
+    for (
+      let i = 0;
+      i < paramType.types.length && i < argType.types.length;
+      i++
+    ) {
+      inferGenericArgs(
+        paramType.types[i]!,
+        argType.types[i]!,
+        genericParams,
+        typeMap,
+      );
+    }
+  }
 }

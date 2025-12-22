@@ -59,7 +59,7 @@ export interface OverloadResolutionContext {
     map: Map<string, AST.TypeNode>,
   ) => AST.TypeNode;
   typeToString: (type: AST.TypeNode | undefined) => string;
-  currentScope: SymbolTable;
+  getCurrentScope: () => SymbolTable;
 }
 
 /**
@@ -324,7 +324,7 @@ export class OverloadResolver {
     } else {
       // Look up by base name (works for both "Array" and "Array<T>")
       const baseName = basicType.name;
-      const symbol = this.ctx.currentScope.resolve(baseName);
+      const symbol = this.ctx.getCurrentScope().resolve(baseName);
       if (
         symbol &&
         symbol.kind === "Struct" &&

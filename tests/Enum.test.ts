@@ -1251,7 +1251,7 @@ describe("Enum Generic Instantiation", () => {
   // Currently, type inference from context is not yet implemented
   // The parser and AST support generics, but type resolution needs enhancement
 
-  it("should reject generic enum without explicit type parameters (expected limitation)", () => {
+  it("should accept generic enum with inferred type parameters", () => {
     const source = `
       enum Option<T> {
         Some(T),
@@ -1261,8 +1261,8 @@ describe("Enum Generic Instantiation", () => {
         local x: Option<int> = Option.Some(42);
       }
     `;
-    // This is expected to fail until we implement bidirectional type checking
-    expect(() => check(source)).toThrow(CompilerError);
+    // This now works due to improved type inference
+    expect(() => check(source)).not.toThrow();
   });
 });
 

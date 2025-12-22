@@ -8,8 +8,6 @@ import * as path from "path";
 
 import * as AST from "../common/AST";
 import { CompilerError, type SourceLocation } from "../common/CompilerError";
-import { lexWithGrammar } from "../frontend/GrammarLexer";
-import { Parser } from "../frontend/Parser";
 import { TokenType } from "../frontend/TokenType";
 import type { Symbol, SymbolKind } from "./SymbolTable";
 import { SymbolTable } from "./SymbolTable";
@@ -429,7 +427,17 @@ export class TypeChecker extends TypeCheckerBase {
     }
 
     // Add params to scope
+    const paramNames = new Set<string>();
     for (const param of decl.params) {
+      if (paramNames.has(param.name)) {
+        throw new CompilerError(
+          `Duplicate parameter name '${param.name}'`,
+          `The parameter '${param.name}' is declared multiple times in function '${decl.name}'.`,
+          param.location,
+        );
+      }
+      paramNames.add(param.name);
+
       this.defineSymbol(
         param.name,
         "Variable",
@@ -456,6 +464,22 @@ export class TypeChecker extends TypeCheckerBase {
         );
       }
     }
+
+    // Check for unused variables in function scope
+    // const unused = this.currentScope.getUnusedVariables();
+    // for (const symbol of unused) {
+    //   if (symbol.name === "this") continue;
+    //   const error = new CompilerError(
+    //     `Unused variable '${symbol.name}'`,
+    //     "Variable is declared but never used.",
+    //     symbol.declaration.location,
+    //   );
+    //   if (this.collectAllErrors) {
+    //     this.errors.push(error);
+    //   } else {
+    //     throw error;
+    //   }
+    // }
 
     this.currentFunctionReturnType = prevReturnType;
     this.currentScope = this.currentScope.exitScope();
@@ -640,7 +664,7 @@ export class TypeChecker extends TypeCheckerBase {
       }
     }
 
-    // Check member methods
+    // Check member methods and fields
     for (const member of decl.members) {
       if (member.kind === "FunctionDecl") {
         // Set resolvedType for struct methods so CodeGenerator can use it
@@ -654,6 +678,21 @@ export class TypeChecker extends TypeCheckerBase {
         member.resolvedType = functionType;
 
         this.checkFunctionBody(member, decl);
+      } else if (member.kind === "StructField") {
+        // Check for recursive struct definition without pointer
+        const fieldType = this.resolveType(member.type);
+        if (
+          fieldType.kind === "BasicType" &&
+          fieldType.name === decl.name &&
+          fieldType.pointerDepth === 0 &&
+          fieldType.arrayDimensions.length === 0
+        ) {
+          throw new CompilerError(
+            `Recursive struct '${decl.name}' contains field '${member.name}' of type '${decl.name}' without pointer`,
+            "Recursive structs must use pointers for self-reference (e.g., *Node instead of Node) to have finite size.",
+            member.location,
+          );
+        }
       }
     }
 
@@ -778,6 +817,42 @@ export class TypeChecker extends TypeCheckerBase {
   // These need to remain in the main class due to complexity
 
   private checkAssignment(expr: AST.AssignmentExpr): AST.TypeNode | undefined {
+    // Check if assignee is an l-value
+    if (
+      expr.assignee.kind !== "Identifier" &&
+      expr.assignee.kind !== "Member" &&
+      expr.assignee.kind !== "Index" &&
+      expr.assignee.kind !== "TupleLiteral" &&
+      (expr.assignee.kind !== "Unary" ||
+        (expr.assignee as AST.UnaryExpr).operator.type !== TokenType.Star)
+    ) {
+      throw new CompilerError(
+        "Invalid assignment target",
+        "Left-hand side of assignment must be a variable, member, array element, pointer dereference, or tuple destructuring.",
+        expr.assignee.location,
+      );
+    }
+
+    // For tuple destructuring, verify all elements are l-values
+    if (expr.assignee.kind === "TupleLiteral") {
+      const tupleLit = expr.assignee as AST.TupleLiteralExpr;
+      for (const elem of tupleLit.elements) {
+        if (
+          elem.kind !== "Identifier" &&
+          elem.kind !== "Member" &&
+          elem.kind !== "Index" &&
+          (elem.kind !== "Unary" ||
+            (elem as AST.UnaryExpr).operator.type !== TokenType.Star)
+        ) {
+          throw new CompilerError(
+            "Invalid assignment target in tuple destructuring",
+            "Tuple elements in assignment must be valid l-values (variable, member, array element, or pointer dereference).",
+            elem.location,
+          );
+        }
+      }
+    }
+
     const targetType = this.checkExpression(expr.assignee);
 
     if (expr.assignee.kind === "Identifier") {
