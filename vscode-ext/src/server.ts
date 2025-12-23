@@ -38,6 +38,12 @@ const connection = createConnection(ProposedFeatures.all);
 // Create a simple text document manager.
 const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 
+interface AnalysisResult {
+  program: AST.Program;
+  checker: TypeChecker;
+}
+const documentAnalysis = new Map<string, AnalysisResult>();
+
 let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
 let hasDiagnosticRelatedInformationCapability = false;
@@ -348,6 +354,9 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
     });
 
     checker.checkProgram(program);
+
+    // Store analysis result
+    documentAnalysis.set(textDocument.uri, { program, checker });
 
     // Collect all errors from the type checker - report them as-is
     // No filtering: with import resolution enabled, errors are accurate
@@ -931,6 +940,40 @@ connection.onDefinition(
 );
 
 connection.onHover((params: TextDocumentPositionParams): Hover | null => {
+  // Try AST-based hover first
+  const analysis = documentAnalysis.get(params.textDocument.uri);
+  if (analysis) {
+    const line = params.position.line + 1;
+    const column = params.position.character + 1;
+    const node = findNodeAtPosition(analysis.program, line, column);
+
+    if (node) {
+      if (node.kind === "LambdaExpression") {
+        const lambda = node as AST.LambdaExpr;
+        const typeStr = lambda.resolvedType
+          ? analysis.checker.typeToString(lambda.resolvedType)
+          : "unknown";
+        return {
+          contents: {
+            kind: MarkupKind.Markdown,
+            value: `**Lambda Expression**\n\nType: \`${typeStr}\``,
+          },
+        };
+      } else if (node.kind === "Identifier") {
+        const ident = node as AST.IdentifierExpr;
+        if (ident.resolvedType) {
+          const typeStr = analysis.checker.typeToString(ident.resolvedType);
+          return {
+            contents: {
+              kind: MarkupKind.Markdown,
+              value: `**${ident.name}**\n\nType: \`${typeStr}\``,
+            },
+          };
+        }
+      }
+    }
+  }
+
   const document = documents.get(params.textDocument.uri);
   if (!document) {
     return null;
@@ -1290,3 +1333,45 @@ documents.listen(connection);
 
 // Listen on the connection
 connection.listen();
+
+function findNodeAtPosition(
+  node: AST.ASTNode,
+  line: number,
+  column: number,
+): AST.ASTNode | null {
+  if (!node || !node.location) return null;
+
+  // Check bounds
+  if (line < node.location.startLine || line > node.location.endLine)
+    return null;
+  if (line === node.location.startLine && column < node.location.startColumn)
+    return null;
+  if (line === node.location.endLine && column > node.location.endColumn)
+    return null;
+
+  // Try to find a child that contains the position
+  for (const key in node) {
+    if (
+      key === "location" ||
+      key === "resolvedType" ||
+      key === "resolvedDeclaration"
+    )
+      continue;
+    const child = (node as any)[key];
+
+    if (Array.isArray(child)) {
+      for (const item of child) {
+        if (item && typeof item === "object" && item.kind) {
+          const res = findNodeAtPosition(item, line, column);
+          if (res) return res;
+        }
+      }
+    } else if (child && typeof child === "object" && child.kind) {
+      const res = findNodeAtPosition(child, line, column);
+      if (res) return res;
+    }
+  }
+
+  // If no child contains the position, then 'node' is the most specific one
+  return node;
+}

@@ -43,7 +43,10 @@ export interface StatementCheckerContext {
   getIntegerConstantValue(expr: AST.Expression): bigint | undefined;
   isIntegerTypeCompatible(val: bigint, targetType: AST.TypeNode): boolean;
   hoistDeclaration(stmt: AST.Statement): void;
-  matchContext?: { inferredTypes: AST.TypeNode[] }[];
+  matchContext?: {
+    expectedType?: AST.TypeNode;
+    inferredTypes: AST.TypeNode[];
+  }[];
 }
 
 /**
@@ -447,7 +450,16 @@ export function checkVariableDecl(
   let initType: AST.TypeNode | undefined;
 
   if (decl.initializer) {
-    initType = this.checkExpression(decl.initializer);
+    if (declaredType && this.matchContext) {
+      this.matchContext.push({ expectedType: declaredType, inferredTypes: [] });
+    }
+    try {
+      initType = this.checkExpression(decl.initializer);
+    } finally {
+      if (declaredType && this.matchContext) {
+        this.matchContext.pop();
+      }
+    }
 
     if (initType) {
       if (declaredType) {

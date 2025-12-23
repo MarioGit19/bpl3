@@ -50,10 +50,125 @@ export abstract class ExpressionGenerator extends TypeGenerator {
         return this.generateMatchExpr(expr as AST.MatchExpr);
       case "TypeMatch":
         return this.generateTypeMatch(expr as AST.TypeMatchExpr);
+      case "LambdaExpression":
+        return this.generateLambda(expr as AST.LambdaExpr);
       default:
         console.warn(`Unhandled expression kind: ${expr.kind}`);
         return "0"; // Placeholder
     }
+  }
+
+  protected generateLambda(expr: AST.LambdaExpr): string {
+    if (!expr.resolvedType) {
+      console.error("Lambda expression has no resolved type!");
+      throw new Error("Lambda expression has no resolved type");
+    }
+    const lambdaName = `lambda_L${expr.location.startLine}_C${expr.location.startColumn}`;
+    this.pendingLambdas.push({ name: lambdaName, expr });
+
+    const funcType = expr.resolvedType as AST.FunctionTypeNode;
+    const mangledName = this.getMangledName(lambdaName, funcType);
+    const closureType = this.resolveType(funcType); // { func*, i8* }
+
+    let ctxPtr = "null";
+
+    if (expr.capturedVariables && expr.capturedVariables.length > 0) {
+      const captureStructName = `${lambdaName}_ctx`;
+      (expr as any).captureStructName = captureStructName;
+      const captureStructType = `%struct.${captureStructName}`;
+
+      // Create struct layout
+      const layout = new Map<string, number>();
+      const fieldTypes: string[] = [];
+
+      expr.capturedVariables.forEach((decl, i) => {
+        layout.set(decl.name as string, i);
+        if (decl.typeAnnotation) {
+          fieldTypes.push(this.resolveType(decl.typeAnnotation));
+        } else if ((decl as any).type) {
+          // Handle captured parameters which have 'type' instead of 'typeAnnotation'
+          fieldTypes.push(this.resolveType((decl as any).type));
+        } else if (decl.resolvedType) {
+          fieldTypes.push(this.resolveType(decl.resolvedType));
+        } else {
+          console.log(`Failed to resolve type for ${decl.name}`);
+          console.log(`Keys: ${Object.keys(decl)}`);
+          throw new Error(
+            `Cannot resolve type for captured variable ${decl.name}`,
+          );
+        }
+      });
+
+      this.structLayouts.set(captureStructName, layout);
+
+      // Emit struct declaration
+      const structBody = fieldTypes.join(", ");
+      this.emitDeclaration(`${captureStructType} = type { ${structBody} }`);
+
+      // Allocate Capture Struct (Heap)
+      const nullPtrReg = this.newRegister();
+      const sizeReg = this.newRegister();
+      this.emit(
+        `  ${nullPtrReg} = getelementptr ${captureStructType}, ${captureStructType}* null, i32 1`,
+      );
+      this.emit(
+        `  ${sizeReg} = ptrtoint ${captureStructType}* ${nullPtrReg} to i64`,
+      );
+
+      const mallocReg = this.newRegister();
+      this.emit(`  ${mallocReg} = call i8* @malloc(i64 ${sizeReg})`);
+      const structPtr = this.newRegister();
+      this.emit(
+        `  ${structPtr} = bitcast i8* ${mallocReg} to ${captureStructType}*`,
+      );
+
+      // Populate Struct
+      expr.capturedVariables.forEach((decl, i) => {
+        const varName = decl.name as string;
+        const resType =
+          decl.typeAnnotation || (decl as any).type || decl.resolvedType;
+        if (!resType) {
+          console.log(`Missing resolvedType for captured variable ${varName}`);
+          console.log(`Keys: ${Object.keys(decl)}`);
+        }
+        const ident: AST.IdentifierExpr = {
+          kind: "Identifier",
+          name: varName,
+          resolvedDeclaration: decl,
+          resolvedType: resType,
+          location: expr.location,
+        };
+        const val = this.generateExpression(ident);
+
+        const fieldPtr = this.newRegister();
+        this.emit(
+          `  ${fieldPtr} = getelementptr inbounds ${captureStructType}, ${captureStructType}* ${structPtr}, i32 0, i32 ${i}`,
+        );
+        const fieldType = fieldTypes[i];
+        this.emit(`  store ${fieldType} ${val}, ${fieldType}* ${fieldPtr}`);
+      });
+
+      ctxPtr = mallocReg;
+    }
+
+    // Create Closure Struct
+    const retTypeStr = this.resolveType(funcType.returnType);
+    const paramTypesStr = funcType.paramTypes
+      .map((t) => this.resolveType(t))
+      .join(", ");
+    const funcPtrType = `${retTypeStr} (i8*${paramTypesStr ? ", " + paramTypesStr : ""})*`;
+
+    const undef = this.newRegister();
+    this.emit(
+      `  ${undef} = insertvalue ${closureType} undef, ${funcPtrType} @${mangledName}, 0`,
+    );
+
+    const closure = this.newRegister();
+    this.emit(
+      `  ${closure} = insertvalue ${closureType} ${undef}, i8* ${ctxPtr}, 1`,
+    );
+
+    return closure;
   }
 
   protected generateLiteral(expr: AST.LiteralExpr): string {
@@ -110,16 +225,49 @@ export abstract class ExpressionGenerator extends TypeGenerator {
 
     // Special case: function identifiers (not local variables) evaluate to their address directly
     if (expr.resolvedType.kind === "FunctionType" && !this.locals.has(name)) {
+      let funcName = name;
+      let isExtern = false;
+
       if (
         expr.resolvedDeclaration &&
         expr.resolvedDeclaration.kind === "FunctionDecl"
       ) {
         const decl = expr.resolvedDeclaration as AST.FunctionDecl;
-        // If it's a generic function, we might need to handle it, but usually identifiers refer to specific instances or non-generics
-        // If it has a resolvedType that is a FunctionType, we can use that for mangling
-        return `@${this.getMangledName(decl.name, expr.resolvedType as AST.FunctionTypeNode)}`;
+        funcName = this.getMangledName(
+          decl.name,
+          expr.resolvedType as AST.FunctionTypeNode,
+        );
+      } else if (
+        expr.resolvedDeclaration &&
+        expr.resolvedDeclaration.kind === "Extern"
+      ) {
+        isExtern = true;
       }
-      return `@${name}`;
+
+      if (isExtern) {
+        return `@${funcName}`;
+      }
+
+      // Wrap in closure struct
+      const closureType = this.resolveType(expr.resolvedType);
+      const funcType = expr.resolvedType as AST.FunctionTypeNode;
+      const retTypeStr = this.resolveType(funcType.returnType);
+      const paramTypesStr = funcType.paramTypes
+        .map((t) => this.resolveType(t))
+        .join(", ");
+      const rawFuncPtrType = `${retTypeStr} (i8*${paramTypesStr ? ", " + paramTypesStr : ""})*`;
+
+      const undef = this.newRegister();
+      this.emit(
+        `  ${undef} = insertvalue ${closureType} undef, ${rawFuncPtrType} @${funcName}, 0`,
+      );
+
+      const closure = this.newRegister();
+      this.emit(
+        `  ${closure} = insertvalue ${closureType} ${undef}, i8* null, 1`,
+      );
+
+      return closure;
     }
 
     const type = this.resolveType(expr.resolvedType!);
@@ -922,7 +1070,7 @@ export abstract class ExpressionGenerator extends TypeGenerator {
       const returnType = this.resolveType(expr.resolvedType!);
       const resultReg = this.newRegister();
       this.emit(
-        `  ${resultReg} = call ${returnType} @${mangledName}(${thisArg}, ${otherType} ${otherVal})`,
+        `  ${resultReg} = call ${returnType} @${mangledName}(i8* null, ${thisArg}, ${otherType} ${otherVal})`,
       );
 
       if (overload.negateResult) {
@@ -1707,8 +1855,8 @@ export abstract class ExpressionGenerator extends TypeGenerator {
         argTypes.push(argType);
       }
 
-      // Build argument list for call: this pointer + actual args
-      const callArgs = [`${calleeType}* ${thisPtr}`];
+      // Build argument list for call: context + this pointer + actual args
+      const callArgs = [`i8* null`, `${calleeType}* ${thisPtr}`];
       for (let i = 0; i < argRegs.length; i++) {
         callArgs.push(`${argTypes[i]} ${argRegs[i]}`);
       }
@@ -2087,17 +2235,32 @@ export abstract class ExpressionGenerator extends TypeGenerator {
       }
     }
     let callTarget = "";
+    let closureCtx = "null";
+    let isIndirectCall = false;
+
     // If identifier and local, indirect call
     if (callee.kind === "Identifier") {
       const ident = callee as AST.IdentifierExpr;
       if (this.locals.has(ident.name)) {
-        // Indirect call
-        const funcSig = this.resolveType(ident.resolvedType!);
+        // Indirect call (closure)
+        isIndirectCall = true;
+        const closureType = this.resolveType(ident.resolvedType!);
         const addr = this.generateAddress(ident);
-        const loadedPtr = this.newRegister();
-        // addr is funcSig**
-        this.emit(`  ${loadedPtr} = load ${funcSig}, ${funcSig}* ${addr}`);
-        callTarget = loadedPtr;
+        const closureVal = this.newRegister();
+        // addr is closureType*
+        this.emit(
+          `  ${closureVal} = load ${closureType}, ${closureType}* ${addr}`,
+        );
+
+        const funcPtr = this.newRegister();
+        this.emit(
+          `  ${funcPtr} = extractvalue ${closureType} ${closureVal}, 0`,
+        );
+        callTarget = funcPtr;
+
+        const ctxPtr = this.newRegister();
+        this.emit(`  ${ctxPtr} = extractvalue ${closureType} ${closureVal}, 1`);
+        closureCtx = ctxPtr;
       } else {
         callTarget = `@${funcName}`;
       }
@@ -2119,9 +2282,22 @@ export abstract class ExpressionGenerator extends TypeGenerator {
         const layout = this.structLayouts.get(structName);
         if (layout && layout.has(memberExpr.property)) {
           // It IS a field! Indirect call.
-          // We should generate the member access to get the pointer.
-          const funcPtr = this.generateMember(memberExpr); // Get function pointer value
+          // We should generate the member access to get the closure struct.
+          const closureVal = this.generateMember(memberExpr); // Get closure struct value
+          isIndirectCall = true;
+          const closureType = this.resolveType(memberExpr.resolvedType!);
+
+          const funcPtr = this.newRegister();
+          this.emit(
+            `  ${funcPtr} = extractvalue ${closureType} ${closureVal}, 0`,
+          );
           callTarget = funcPtr;
+
+          const ctxPtr = this.newRegister();
+          this.emit(
+            `  ${ctxPtr} = extractvalue ${closureType} ${closureVal}, 1`,
+          );
+          closureCtx = ctxPtr;
 
           // Reset args (remove "this" injection done for methods)
           if (isInstanceCall) {
@@ -2197,7 +2373,14 @@ export abstract class ExpressionGenerator extends TypeGenerator {
               this.emit(`  ${funcPtrI8} = load i8*, i8** ${funcPtrPtr}`);
 
               const funcType = expr.callee.resolvedType as AST.FunctionTypeNode;
-              let targetFuncType = this.resolveType(funcType);
+              // Fix: resolveType returns closure struct type, but we need raw function pointer type
+              const retType = this.resolveType(funcType.returnType);
+              const paramTypes = funcType.paramTypes.map((p) =>
+                this.resolveType(p),
+              );
+              const paramsStr =
+                paramTypes.length > 0 ? `, ${paramTypes.join(", ")}` : "";
+              const targetFuncType = `${retType} (i8*${paramsStr})*`;
 
               const funcPtr = this.newRegister();
               this.emit(
@@ -2216,11 +2399,19 @@ export abstract class ExpressionGenerator extends TypeGenerator {
         callTarget = `@${funcName}`;
       }
     } else {
-      // Other expressions (Index, Call, etc) evaluating to function pointer
+      // Other expressions (Index, Call, etc) evaluating to closure struct
       // e.g. arr[0]()
-      const funcSig = this.resolveType(callee.resolvedType!);
-      const ptrVal = this.generateExpression(callee);
-      callTarget = ptrVal;
+      isIndirectCall = true;
+      const closureType = this.resolveType(callee.resolvedType!);
+      const closureVal = this.generateExpression(callee);
+
+      const funcPtr = this.newRegister();
+      this.emit(`  ${funcPtr} = extractvalue ${closureType} ${closureVal}, 0`);
+      callTarget = funcPtr;
+
+      const ctxPtr = this.newRegister();
+      this.emit(`  ${ctxPtr} = extractvalue ${closureType} ${closureVal}, 1`);
+      closureCtx = ctxPtr;
     }
 
     const funcType = expr.callee.resolvedType as AST.FunctionTypeNode;
@@ -2542,6 +2733,20 @@ export abstract class ExpressionGenerator extends TypeGenerator {
       })
       .join(", ");
 
+    // Prepend closure context if needed
+    let finalArgs = args;
+    const isExtern =
+      expr.resolvedDeclaration && expr.resolvedDeclaration.kind === "Extern";
+    const isMain = funcName === "main";
+
+    if (!isExtern && !isMain) {
+      if (finalArgs.length > 0) {
+        finalArgs = `i8* ${closureCtx}, ${finalArgs}`;
+      } else {
+        finalArgs = `i8* ${closureCtx}`;
+      }
+    }
+
     const retType = this.resolveType(expr.resolvedType!);
     const isVariadic = funcType.isVariadic === true;
 
@@ -2667,26 +2872,46 @@ export abstract class ExpressionGenerator extends TypeGenerator {
     if (retType === "void") {
       if (isVariadic) {
         // Build the full signature for variadic functions
-        const paramTypesStr = funcType.paramTypes
+        let paramTypesStr = funcType.paramTypes
           .map((t) => this.resolveType(t))
           .join(", ");
-        this.emit(`  call void (${paramTypesStr}, ...) ${callTarget}(${args})`);
+
+        if (!isExtern && !isMain) {
+          if (paramTypesStr.length > 0) {
+            paramTypesStr = `i8*, ${paramTypesStr}`;
+          } else {
+            paramTypesStr = `i8*`;
+          }
+        }
+
+        this.emit(
+          `  call void (${paramTypesStr}, ...) ${callTarget}(${finalArgs})`,
+        );
       } else {
-        this.emit(`  call void ${callTarget}(${args})`);
+        this.emit(`  call void ${callTarget}(${finalArgs})`);
       }
       return "";
     } else {
       const reg = this.newRegister();
       if (isVariadic) {
         // Build the full signature for variadic functions
-        const paramTypesStr = funcType.paramTypes
+        let paramTypesStr = funcType.paramTypes
           .map((t) => this.resolveType(t))
           .join(", ");
+
+        if (!isExtern && !isMain) {
+          if (paramTypesStr.length > 0) {
+            paramTypesStr = `i8*, ${paramTypesStr}`;
+          } else {
+            paramTypesStr = `i8*`;
+          }
+        }
+
         this.emit(
-          `  ${reg} = call ${retType} (${paramTypesStr}, ...) ${callTarget}(${args})`,
+          `  ${reg} = call ${retType} (${paramTypesStr}, ...) ${callTarget}(${finalArgs})`,
         );
       } else {
-        this.emit(`  ${reg} = call ${retType} ${callTarget}(${args})`);
+        this.emit(`  ${reg} = call ${retType} ${callTarget}(${finalArgs})`);
       }
       return reg;
     }
@@ -2791,12 +3016,12 @@ export abstract class ExpressionGenerator extends TypeGenerator {
             if (returnType !== "void") {
               const resultReg = this.newRegister();
               this.emit(
-                `  ${resultReg} = call ${returnType} @${mangledName}(${objectTypeStr}* ${thisPtr}, ${indexType} ${indexRaw}, ${valueType} ${valueRaw})`,
+                `  ${resultReg} = call ${returnType} @${mangledName}(i8* null, ${objectTypeStr}* ${thisPtr}, ${indexType} ${indexRaw}, ${valueType} ${valueRaw})`,
               );
               return resultReg;
             } else {
               this.emit(
-                `  call void @${mangledName}(${objectTypeStr}* ${thisPtr}, ${indexType} ${indexRaw}, ${valueType} ${valueRaw})`,
+                `  call void @${mangledName}(i8* null, ${objectTypeStr}* ${thisPtr}, ${indexType} ${indexRaw}, ${valueType} ${valueRaw})`,
               );
               return valueRaw; // Return the assigned value
             }
@@ -3118,7 +3343,7 @@ export abstract class ExpressionGenerator extends TypeGenerator {
       const returnType = this.resolveType(method.returnType);
       const resultReg = this.newRegister();
       this.emit(
-        `  ${resultReg} = call ${returnType} @${mangledName}(${objectType}* ${thisPtr}, ${indexType} ${indexRaw})`,
+        `  ${resultReg} = call ${returnType} @${mangledName}(i8* null, ${objectType}* ${thisPtr}, ${indexType} ${indexRaw})`,
       );
       return resultReg;
     }
@@ -3210,7 +3435,7 @@ export abstract class ExpressionGenerator extends TypeGenerator {
       const returnType = this.resolveType(method.returnType);
       const resultReg = this.newRegister();
       this.emit(
-        `  ${resultReg} = call ${returnType} @${mangledName}(${operandType}* ${thisPtr})`,
+        `  ${resultReg} = call ${returnType} @${mangledName}(i8* null, ${operandType}* ${thisPtr})`,
       );
       return resultReg;
     }
@@ -4075,8 +4300,18 @@ export abstract class ExpressionGenerator extends TypeGenerator {
 
       const valExpr = fieldValues.get(fieldName);
       if (valExpr) {
-        const val = this.generateExpression(valExpr);
+        let val = this.generateExpression(valExpr);
         const fieldType = this.resolveType(valExpr.resolvedType!);
+
+        // Handle null assignment to closure struct (function pointer)
+        if (
+          (val === "null" || val === "0") &&
+          fieldType.startsWith("{") &&
+          fieldType.endsWith("}")
+        ) {
+          val = "zeroinitializer";
+        }
+
         const nextVal = this.newRegister();
         this.emit(
           `  ${nextVal} = insertvalue ${type} ${structVal}, ${fieldType} ${val}, ${fieldIndex}`,

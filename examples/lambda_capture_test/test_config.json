@@ -1,0 +1,6 @@
+{
+  "expectedOutput": "Int Capture: 5\nStruct Capture: 100\nPointer Capture (Value): 2000\nPointer Capture (Ptr Change): 2000\n",
+  "args": [],
+  "env": {},
+  "input": ""
+}

@@ -708,6 +708,8 @@ export class Formatter {
         return this.formatGenericInstantiation(
           expr as AST.GenericInstantiationExpr,
         );
+      case "LambdaExpression":
+        return this.formatLambda(expr as AST.LambdaExpr);
       default:
         return `/* Unknown expr: ${(expr as AST.Expression).kind} */`;
     }
@@ -960,6 +962,28 @@ export class Formatter {
       output += " ";
     }
     output += "}";
+    return output;
+  }
+
+  private formatLambda(expr: AST.LambdaExpr): string {
+    let output = "|";
+    output += expr.params
+      .map((p) => {
+        let paramStr = p.name;
+        if (p.type) {
+          paramStr += `: ${this.formatType(p.type)}`;
+        }
+        return paramStr;
+      })
+      .join(", ");
+    output += "|";
+
+    if (expr.returnType) {
+      output += ` ret ${this.formatType(expr.returnType)}`;
+    }
+
+    output += " ";
+    output += this.formatBlock(expr.body, false);
     return output;
   }
 

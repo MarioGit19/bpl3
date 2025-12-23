@@ -131,7 +131,7 @@ async function compileAndRunExample(
   } catch (e: any) {
     return {
       success: false,
-      error: e.message || String(e),
+      error: (e.message || String(e)) + (e.stack ? `\n${e.stack}` : ""),
     };
   } finally {
     try {
@@ -225,6 +225,7 @@ describe("BPL Playground Examples", () => {
             passed: false,
             error: errorMsg,
           });
+          console.error(errorMsg); // Print full error
           throw new Error(`Compilation failed: ${errorMsg}`);
         }
 

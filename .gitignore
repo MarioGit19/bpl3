@@ -51,3 +51,6 @@ lib/*.ll
 
 .bpl-cache
 bpl
+
+ir.ll
+tests/ir.ll

@@ -64,7 +64,8 @@ export type Expression =
   | MatchExpr
   | AssignmentExpr
   | TernaryExpr
-  | GenericInstantiationExpr;
+  | GenericInstantiationExpr
+  | LambdaExpr;
 
 export interface LiteralExpr extends ASTNode {
   kind: "Literal";
@@ -256,6 +257,16 @@ export interface GenericInstantiationExpr extends ASTNode {
   kind: "GenericInstantiation";
   base: Expression;
   genericArgs: TypeNode[];
+}
+
+export interface LambdaExpr extends ASTNode {
+  kind: "LambdaExpression";
+  params: { name: string; type: TypeNode | null; location: SourceLocation }[];
+  returnType: TypeNode | null;
+  body: BlockStmt;
+  // For semantic analysis
+  capturedVariables?: VariableDecl[];
+  closureStructType?: BasicTypeNode;
 }
 
 // --- Statements ---

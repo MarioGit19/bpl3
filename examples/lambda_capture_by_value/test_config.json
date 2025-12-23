@@ -1,0 +1,6 @@
+{
+  "expectedOutput": "Captured: 10\nOuter: 20\n",
+  "args": [],
+  "env": {},
+  "input": ""
+}

@@ -345,6 +345,9 @@ export class TypeChecker extends TypeCheckerBase {
       case "GenericInstantiation":
         type = this.checkGenericInstantiation(expr);
         break;
+      case "LambdaExpression":
+        type = ExprChecker.checkLambda.call(this as any, expr);
+        break;
     }
 
     if (type) {

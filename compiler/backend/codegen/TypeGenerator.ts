@@ -5,6 +5,7 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
   protected abstract generateFunction(
     decl: AST.FunctionDecl,
     parentStruct?: AST.StructDecl | AST.EnumDecl,
+    captureInfo?: { name: string; fields: { name: string; type: string }[] },
   ): void;
 
   protected getMangledName(
@@ -245,8 +246,19 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
         );
       }
 
-      const funcTypeStr = this.resolveType(methodDecl.resolvedType!);
-      ptrs.push(`i8* bitcast (${funcTypeStr} @${mangled} to i8*)`);
+      // We need the raw function pointer type, not the closure struct type
+      // resolveType(FunctionTypeNode) returns { func_ptr, env_ptr }
+      // But @mangled is just the func_ptr.
+      const funcType = methodDecl.resolvedType as AST.FunctionTypeNode;
+      const retType = this.resolveType(funcType.returnType);
+      // All functions now take an implicit context pointer as first argument
+      // And methods take 'this' as the second argument (which is in paramTypes)
+      const paramTypes = funcType.paramTypes.map((p) => this.resolveType(p));
+      const paramsStr =
+        paramTypes.length > 0 ? `, ${paramTypes.join(", ")}` : "";
+      const rawFuncTypeStr = `${retType} (i8*${paramsStr})*`;
+
+      ptrs.push(`i8* bitcast (${rawFuncTypeStr} @${mangled} to i8*)`);
     }
 
     const arrayType = `[${methods.length} x i8*]`;
@@ -747,6 +759,8 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
     try {
       if (!type) {
         // Should not happen if TypeChecker did its job
+        console.error("resolveType called with undefined!");
+        console.error(new Error().stack);
         throw new Error("Cannot resolve undefined type");
       }
       if (type.kind === "BasicType") {
@@ -918,7 +932,11 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
         const params = funcType.paramTypes
           .map((p) => this.resolveType(p))
           .join(", ");
-        return `${ret} (${params})*`;
+        // Closure type: { function_ptr, context_ptr }
+        // Function signature: ret (i8*, params...)
+        // We use i8* for the context pointer (type erased)
+        const paramsStr = params ? `, ${params}` : "";
+        return `{ ${ret} (i8*${paramsStr})*, i8* }`;
       }
       return "void";
     } finally {

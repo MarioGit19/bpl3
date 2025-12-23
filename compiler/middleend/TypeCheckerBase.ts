@@ -363,7 +363,7 @@ export abstract class TypeCheckerBase {
 
   // ========== Type Utilities ==========
 
-  protected typeToString(type: AST.TypeNode | undefined): string {
+  public typeToString(type: AST.TypeNode | undefined): string {
     return TypeUtils.typeToString(type);
   }
 

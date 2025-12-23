@@ -58,6 +58,7 @@ export class BaseCodeGenerator {
     resultTypeNode: AST.TypeNode;
     results: { value: string; label: string; type: string }[];
   }[] = [];
+  protected pendingLambdas: { name: string; expr: AST.LambdaExpr }[] = [];
 
   /**
    * Create a CompilerError with proper location information

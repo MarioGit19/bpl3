@@ -99,6 +99,10 @@
     return { kind: "Sizeof", target, location: makeLoc(loc) };
   }
 
+  function lambdaExpression(params, returnType, body, loc) {
+    return { kind: "LambdaExpression", params, returnType, body, location: makeLoc(loc) };
+  }
+
   function matchNode(targetType, value, loc) {
     return { kind: "TypeMatch", targetType, value, location: makeLoc(loc) };
   }
@@ -836,6 +840,7 @@ Primary
   / TypeMatchExpression
   / PatternMatchExpression
   / ArrayLiteral
+  / LambdaExpression
 
 TupleOrGrouped
   = "(" _ elems:ExpressionList? _ ")" {
@@ -898,6 +903,31 @@ Pattern
 
 PatternWildcard
   = "_" { return patternWildcard(location()); }
+
+LambdaExpression
+  = "|" _ K_void _ "|" _ retType:("ret" _ Type)? _ body:LambdaBody {
+      return lambdaExpression([], retType ? retType[2] : null, body, location());
+    }
+  / "|" _ params:LambdaParams? _ "|" _ retType:("ret" _ Type)? _ body:LambdaBody {
+      return lambdaExpression(params || [], retType ? retType[2] : null, body, location());
+    }
+
+LambdaParams
+  = head:LambdaParam tail:(_ "," _ LambdaParam)* {
+      return [head, ...tail.map(t => t[3])];
+    }
+
+LambdaParam
+  = name:Identifier _ type:(":" _ Type)? {
+      return { name: name.name, type: type ? type[2] : null, location: makeLoc(location()) };
+    }
+
+LambdaBody
+  = Block
+  / expr:Expression {
+      // Wrap expression in a block with return statement
+      return { kind: "Block", statements: [{ kind: "Return", value: expr, location: makeLoc(location()) }], location: makeLoc(location()) };
+    }
 
 PatternLiteral
   = lit:(BoolLiteral / NumberLiteral / StringLiteral / CharLiteral / NullLiteral / NullptrLiteral) { 
@@ -1169,6 +1199,9 @@ K_match
 
 K_Func
   = $("Func") IdBoundary
+
+K_void
+  = $("void") IdBoundary
 
 K_true
   = $("true") IdBoundary

@@ -60,6 +60,9 @@ export class ModuleResolver {
   constructor(options: { stdLibPath?: string; searchPaths?: string[] } = {}) {
     // Use PathResolver to get the standard library path from BPL_HOME
     this.stdLibPath = options.stdLibPath || getLibPath();
+    if (!this.stdLibPath) {
+      console.error("stdLibPath is undefined!");
+    }
     this.searchPaths = options.searchPaths || [];
   }
 

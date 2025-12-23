@@ -2,6 +2,8 @@
 
 export [Array];
 
+import [Option] from "./option.bpl";
+
 extern malloc(size: i64) ret *void;
 extern free(ptr: *void) ret void;
 extern memcpy(dest: *void, src: *void, n: i64) ret *void;
@@ -107,6 +109,119 @@ struct Array<T> {
             i = i + 1;
         }
         this.length = this.length - 1;
+    }
+
+    ###
+        Functional methods
+    ###
+
+    # Maps elements to a new array using a transformation function
+    frame map<U>(this: *Array<T>, transform: Func<U>(T, int)) ret Array<U> {
+        local result: Array<U> = Array<U>.new(this.capacity);
+        local i: i32 = 0;
+        loop (i < this.length) {
+            result.push(transform(this.data[i], i));
+            i = i + 1;
+        }
+        return result;
+    }
+
+    # Filters elements based on a predicate function
+    frame filter(this: *Array<T>, predicate: Func<bool>(T, int)) ret Array<T> {
+        local result: Array<T> = Array<T>.new(this.capacity);
+        local i: i32 = 0;
+        loop (i < this.length) {
+            if (predicate(this.data[i], i)) {
+                result.push(this.data[i]);
+            }
+            i = i + 1;
+        }
+        return result;
+    }
+
+    # Reduces the array to a single value using a reducer function
+    frame reduce<U>(this: *Array<T>, initial: U, reducer: Func<U>(U, T, int)) ret U {
+        local accumulator: U = initial;
+        local i: i32 = 0;
+        loop (i < this.length) {
+            accumulator = reducer(accumulator, this.data[i], i);
+            i = i + 1;
+        }
+        return accumulator;
+    }
+
+    # Iterates over each element and applies an action
+    frame forEach(this: *Array<T>, action: Func<void>(T, int)) {
+        local i: i32 = 0;
+        loop (i < this.length) {
+            action(this.data[i], i);
+            i = i + 1;
+        }
+    }
+
+    # Finds the first element matching the predicate
+    frame find(this: *Array<T>, predicate: Func<bool>(T)) ret Option<T> {
+        local i: i32 = 0;
+        loop (i < this.length) {
+            if (predicate(this.data[i])) {
+                return Option<T>.some(this.data[i]);
+            }
+            i = i + 1;
+        }
+        return Option<T>.none();
+    }
+
+    # Checks if every element matches the predicate
+    frame every(this: *Array<T>, predicate: Func<bool>(T)) ret bool {
+        local i: i32 = 0;
+        loop (i < this.length) {
+            if (!predicate(this.data[i])) {
+                return false;
+            }
+            i = i + 1;
+        }
+        return true;
+    }
+
+    # Checks if at least one element matches the predicate
+    frame some(this: *Array<T>, predicate: Func<bool>(T)) ret bool {
+        local i: i32 = 0;
+        loop (i < this.length) {
+            if (predicate(this.data[i])) {
+                return true;
+            }
+            i = i + 1;
+        }
+        return false;
+    }
+
+    # Returns the index of the first occurrence of value, or -1 if not found
+    frame indexOf(this: *Array<T>, value: T) ret i32 {
+        local i: i32 = 0;
+        loop (i < this.length) {
+            if (this.data[i] == value) {
+                return i;
+            }
+            i = i + 1;
+        }
+        return -1;
+    }
+
+    # Checks if the array contains a specific value
+    frame contains(this: *Array<T>, value: T) ret bool {
+        return this.indexOf(value) != -1;
+    }
+
+    # Finds the first element matching the predicate
+    frame findIndex(this: *Array<T>, predicate: Func<bool>(T)) ret Option<int> {
+        local i: i32 = 0;
+        loop (i < this.length) {
+            if (predicate(this.data[i])) {
+                return Option<int>.some(i);
+            }
+            i = i + 1;
+        }
+        return Option<int>.none();
     }
 
     # Operator overloading: Push element with << (left shift)

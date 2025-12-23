@@ -66,8 +66,8 @@ describe("Error Formatting Demo", () => {
   });
 
   test("ERROR: Unknown/unexpected token", () => {
-    const code = `fn main() {
-  let x = 10$$$;
+    const code = `frame main() {
+  local x: int = 10$$$;
 }`;
 
     const filePath = createTestFile("unknown_token.bpl", code);
@@ -91,9 +91,9 @@ describe("Error Formatting Demo", () => {
   });
 
   test("ERROR: Missing semicolon", () => {
-    const code = `fn main() {
-  let x = 10
-  let y = 20;
+    const code = `frame main() {
+  local x: int = 10
+  local y: int = 20;
   println(x);
 }`;
 
@@ -115,14 +115,14 @@ describe("Error Formatting Demo", () => {
   });
 
   test("ERROR: Type mismatch", () => {
-    const code = `fn add(a: i32, b: i32) -> i32 {
+    const code = `frame add(a: i32, b: i32) ret i32 {
   return a + b;
 }
 
-fn main() {
-  let x: i32 = 10;
-  let y: f64 = 3.14;
-  let result: i32 = add(x, y);
+frame main() {
+  local x: i32 = 10;
+  local y: f64 = 3.14;
+  local result: i32 = add(x, y);
   println(result);
 }`;
 
@@ -144,9 +144,9 @@ fn main() {
   });
 
   test("ERROR: Undefined variable", () => {
-    const code = `fn main() {
-  let x = 10;
-  let y = z + 5;
+    const code = `frame main() {
+  local x: int = 10;
+  local y: int = z + 5;
   println(x + y);
 }`;
 
@@ -173,8 +173,8 @@ fn main() {
   age: i32,
 }
 
-fn main() {
-  let p = Person { name: "Alice", age: 30 };
+frame main() {
+  local p: Person = Person { name: "Alice", age: 30 };
   println(p.nonexistent);
 }`;
 
@@ -196,11 +196,11 @@ fn main() {
   });
 
   test("ERROR: Function argument count mismatch", () => {
-    const code = `fn greet(name: string, age: i32) -> void {
+    const code = `frame greet(name: string, age: i32) ret void {
   println("Hello, " + name);
 }
 
-fn main() {
+frame main() {
   greet("Alice");
   greet("Bob", 25, "extra");
 }`;
@@ -223,9 +223,9 @@ fn main() {
   });
 
   test("ERROR: Invalid array access", () => {
-    const code = `fn main() {
-  let arr: [i32; 5] = [1, 2, 3, 4, 5];
-  let x: string = arr[0];
+    const code = `frame main() {
+  local arr: i32[5] = [1, 2, 3, 4, 5];
+  local x: string = arr[0];
   println(x);
 }`;
 
@@ -247,9 +247,9 @@ fn main() {
   });
 
   test("ERROR: Duplicate declarations", () => {
-    const code = `fn main() {
-  let x = 10;
-  let x = 20;
+    const code = `frame main() {
+  local x: int = 10;
+  local x: int = 20;
   println(x);
 }`;
 
@@ -271,12 +271,12 @@ fn main() {
   });
 
   test("ERROR: Invalid return type", () => {
-    const code = `fn getValue() -> i32 {
+    const code = `frame getValue() ret i32 {
   return "not a number";
 }
 
-fn main() {
-  let x = getValue();
+frame main() {
+  local x: i32 = getValue();
   println(x);
 }`;
 
@@ -298,8 +298,8 @@ fn main() {
   });
 
   test("ERROR: Missing closing brace", () => {
-    const code = `fn main() {
-  let x = 10;
+    const code = `frame main() {
+  local x: int = 10;
   println(x);`;
 
     const filePath = createTestFile("missing_brace.bpl", code);
@@ -319,17 +319,17 @@ fn main() {
   });
 
   test("DEMO: Error with context lines and proper formatting", () => {
-    const code = `fn calculate(a: i32, b: i32) -> i32 {
+    const code = `frame calculate(a: i32, b: i32) ret i32 {
   // Line 2: comment
-  let sum = a + b;
-  let diff = a - b;
-  let product = a * b_undefined;  // ERROR: undefined variable
-  let quotient = a / b;
+  local sum: i32 = a + b;
+  local diff: i32 = a - b;
+  local product: i32 = a * b_undefined;  // ERROR: undefined variable
+  local quotient: i32 = a / b;
   return sum;
 }
 
-fn main() {
-  let result = calculate(10, 5);
+frame main() {
+  local result: i32 = calculate(10, 5);
   println(result);
 }`;
 
@@ -352,14 +352,14 @@ fn main() {
   });
 
   test("🟠 DEMO: Multiple related errors with hint messages", () => {
-    const code = `fn process() -> void {
-  let x = 10;
-  let y = x + undefined1;
-  let z = y + undefined2;
+    const code = `frame process() ret void {
+  local x: int = 10;
+  local y: int = x + undefined1;
+  local z: int = y + undefined2;
   println(z);
 }
 
-fn main() {
+frame main() {
   process();
 }`;
 
@@ -382,9 +382,9 @@ fn main() {
   });
 
   test("DEMO: Error with hint and suggestion", () => {
-    const code = `fn main() {
-  let x: i32 = 42;
-  let y: string = x;  // Type mismatch - trying to assign i32 to string
+    const code = `frame main() {
+  local x: i32 = 42;
+  local y: string = x;  // Type mismatch - trying to assign i32 to string
   println(y);
 }`;
 
@@ -417,10 +417,10 @@ fn main() {
     // Create a manual error with related location
     const mainFile = createTestFile(
       "main.bpl",
-      `import { calc } from "./lib";
+      `import  calc from "./lib";
 
-fn main() {
-  let result = calc(10, 20);
+frame main() {
+  local result: i32 = calc(10, 20);
   println(result);
 }`,
     );
@@ -463,20 +463,20 @@ fn main() {
 
     const testFile = createTestFile(
       "comprehensive.bpl",
-      `fn main() {
-  let x = 10;
-  let y = undefined_var;
-  let z: i32 = "string";
+      `frame main() {
+  local x: int = 10;
+  local y: int = undefined_var;
+  local z: i32 = "string";
   println(x + y + z);
 }`,
     );
 
     const errors = compileAndShowErrors(
       testFile,
-      `fn main() {
-  let x = 10;
-  let y = undefined_var;
-  let z: i32 = "string";
+      `frame main() {
+  local x: int = 10;
+  local y: int = undefined_var;
+  local z: i32 = "string";
   println(x + y + z);
 }`,
     );

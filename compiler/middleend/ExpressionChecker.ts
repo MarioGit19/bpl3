@@ -6,10 +6,11 @@
 import * as AST from "../common/AST";
 import { CompilerError, type SourceLocation } from "../common/CompilerError";
 import { TokenType } from "../frontend/TokenType";
-import type { Symbol, SymbolKind } from "./SymbolTable";
-import { TypeUtils, INTEGER_TYPES, KNOWN_TYPES } from "./TypeUtils";
+import type { Symbol } from "./SymbolTable";
+import { SymbolTable } from "./SymbolTable";
+import { TypeUtils, KNOWN_TYPES } from "./TypeUtils";
 import { OPERATOR_METHOD_MAP } from "./OverloadResolver";
-import type { TypeCheckerBase } from "./TypeCheckerBase";
+import { CaptureAnalyzer } from "./CaptureAnalyzer";
 
 /**
  * Type for the TypeChecker context that expression checkers need access to
@@ -63,6 +64,10 @@ export interface ExpressionCheckerContext {
   ): AST.TypeNode | undefined;
   checkBlock(stmt: AST.BlockStmt, newScope?: boolean): void;
   isCastAllowed(source: AST.TypeNode, target: AST.TypeNode): boolean;
+  matchContext?: {
+    expectedType?: AST.TypeNode;
+    inferredTypes: AST.TypeNode[];
+  }[];
 }
 
 /**
@@ -968,4 +973,99 @@ export function checkMatchExpr(
   this.checkMatchExhaustiveness(expr, enumDecl);
 
   return resultType || this.makeVoidType();
+}
+
+/**
+ * Check a lambda expression
+ */
+export function checkLambda(
+  this: ExpressionCheckerContext,
+  expr: AST.LambdaExpr,
+): AST.TypeNode {
+  // 0. Infer types from context
+  let expectedFuncType: AST.FunctionTypeNode | undefined;
+  if (this.matchContext && this.matchContext.length > 0) {
+    const ctx = this.matchContext[this.matchContext.length - 1]!;
+    if (ctx.expectedType && ctx.expectedType.kind === "FunctionType") {
+      expectedFuncType = ctx.expectedType as AST.FunctionTypeNode;
+    }
+  }
+
+  // 1. Create new scope
+  const lambdaScope = new SymbolTable(this.currentScope);
+  const previousScope = this.currentScope;
+  this.currentScope = lambdaScope;
+
+  // 2. Define parameters
+  const paramTypes: AST.TypeNode[] = [];
+  for (let i = 0; i < expr.params.length; i++) {
+    const param = expr.params[i]!;
+    let resolvedType: AST.TypeNode | undefined;
+
+    if (param.type) {
+      resolvedType = this.resolveType(param.type);
+    } else if (expectedFuncType && i < expectedFuncType.paramTypes.length) {
+      resolvedType = expectedFuncType.paramTypes[i];
+    } else {
+      throw new CompilerError(
+        "Lambda parameter types must be explicit or inferred from context",
+        "Mark all lambda parameters with explicit types or ensure context provides function type.",
+        param.location,
+      );
+    }
+
+    paramTypes.push(resolvedType!);
+
+    // Define parameter in scope (skip if _)
+    if (param.name !== "_") {
+      this.currentScope.define({
+        name: param.name,
+        kind: "Parameter",
+        type: resolvedType,
+        declaration: param as any,
+      });
+    }
+  }
+
+  // 3. Check body
+  const checker = this as any;
+  const prevReturnType = checker.currentFunctionReturnType;
+
+  if (expr.returnType) {
+    checker.currentFunctionReturnType = this.resolveType(expr.returnType);
+  } else if (expectedFuncType) {
+    checker.currentFunctionReturnType = expectedFuncType.returnType;
+  } else {
+    // Default to void if not specified for now
+    checker.currentFunctionReturnType = {
+      kind: "BasicType",
+      name: "void",
+      genericArgs: [],
+      pointerDepth: 0,
+      arrayDimensions: [],
+      location: expr.location,
+    };
+  }
+
+  // Check the body
+  this.checkBlock(expr.body, false); // false because we already created the scope
+
+  let returnType = checker.currentFunctionReturnType;
+
+  // Restore scope and return type
+  this.currentScope = previousScope;
+  checker.currentFunctionReturnType = prevReturnType;
+
+  // 4. Capture Analysis
+  const analyzer = new CaptureAnalyzer(expr);
+  const capturedVars = analyzer.analyze();
+  expr.capturedVariables = capturedVars as any[];
+
+  // 5. Construct Function Type
+  return {
+    kind: "FunctionType",
+    returnType: returnType,
+    paramTypes: paramTypes,
+    location: expr.location,
+  };
 }

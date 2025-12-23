@@ -466,6 +466,9 @@ export class CodeGenerator extends StatementGenerator {
       this.generateTopLevel(stmt);
     }
 
+    // Process pending lambdas
+    this.processPendingLambdas();
+
     // Process pending monomorphized functions
     while (this.pendingGenerations.length > 0) {
       const task = this.pendingGenerations.shift()!;
@@ -599,5 +602,51 @@ export class CodeGenerator extends StatementGenerator {
     const keyword = decl.isConst ? "constant" : "global";
     this.emitDeclaration(`@${decl.name} = ${keyword} ${type} ${init}`);
     this.emitDeclaration("");
+  }
+
+  private processPendingLambdas() {
+    while (this.pendingLambdas.length > 0) {
+      const { name, expr } = this.pendingLambdas.shift()!;
+      this.generateLambdaFunction(name, expr);
+    }
+  }
+
+  private generateLambdaFunction(name: string, expr: AST.LambdaExpr) {
+    const funcType = expr.resolvedType as AST.FunctionTypeNode;
+    const funcDecl: AST.FunctionDecl = {
+      kind: "FunctionDecl",
+      name: name,
+      isFrame: true,
+      isStatic: true,
+      genericParams: [],
+      params: expr.params.map((p) => ({
+        name: p.name,
+        type: p.type!,
+        location: p.location,
+      })),
+      returnType: funcType.returnType,
+      body: expr.body,
+      location: expr.location,
+      resolvedType: funcType,
+    };
+
+    let captureInfo:
+      | { name: string; fields: { name: string; type: string }[] }
+      | undefined;
+    const captureStructName = (expr as any).captureStructName;
+
+    if (captureStructName && expr.capturedVariables) {
+      captureInfo = {
+        name: captureStructName,
+        fields: expr.capturedVariables.map((decl) => ({
+          name: decl.name as string,
+          type: this.resolveType(
+            decl.typeAnnotation || (decl as any).type || decl.resolvedType,
+          ),
+        })),
+      };
+    }
+
+    this.generateFunction(funcDecl, undefined, captureInfo);
   }
 }

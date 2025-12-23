@@ -458,6 +458,8 @@ export abstract class StatementGenerator extends ExpressionGenerator {
 
     if (llvmType === "double" || llvmType === "float") return "0.0";
     if (llvmType.endsWith("*")) return "null";
+    if (llvmType.startsWith("{")) return "zeroinitializer";
+
     return "0";
   }
 
@@ -863,6 +865,7 @@ export abstract class StatementGenerator extends ExpressionGenerator {
   protected generateFunction(
     decl: AST.FunctionDecl,
     parentStruct?: AST.StructDecl | AST.EnumDecl,
+    captureInfo?: { name: string; fields: { name: string; type: string }[] },
   ) {
     // Skip generic templates unless we are instantiating them (map is populated)
     if (decl.genericParams.length > 0) {
@@ -973,13 +976,16 @@ export abstract class StatementGenerator extends ExpressionGenerator {
       if (decl.name === "main") {
         params = "i32 %argc, i8** %argv";
       } else {
-        params = decl.params
+        // Add implicit context parameter for closures
+        const ctxParam = "i8* %__closure_ctx";
+        const userParams = decl.params
           .map((p, i) => {
             const type = this.resolveType(funcType.paramTypes[i]!);
             const name = `%${p.name}`;
             return `${type} ${name}`;
           })
           .join(", ");
+        params = userParams ? `${ctxParam}, ${userParams}` : ctxParam;
       }
 
       let linkage = "";
@@ -996,6 +1002,31 @@ export abstract class StatementGenerator extends ExpressionGenerator {
       }
       this.emit(`define ${linkage}${retType} @${name}(${params}) {`);
       this.emit("entry:");
+
+      // Unpack closure context if present
+      if (captureInfo) {
+        const structType = `%struct.${captureInfo.name}`;
+        const ctxPtr = this.newRegister();
+        this.emit(`  ${ctxPtr} = bitcast i8* %__closure_ctx to ${structType}*`);
+
+        captureInfo.fields.forEach((field, index) => {
+          const fieldPtr = this.newRegister();
+          this.emit(
+            `  ${fieldPtr} = getelementptr inbounds ${structType}, ${structType}* ${ctxPtr}, i32 0, i32 ${index}`,
+          );
+
+          const val = this.newRegister();
+          this.emit(
+            `  ${val} = load ${field.type}, ${field.type}* ${fieldPtr}`,
+          );
+
+          const alloca = this.allocateStack(field.name, field.type);
+          this.emit(`  store ${field.type} ${val}, ${field.type}* ${alloca}`);
+
+          this.locals.add(field.name);
+          this.localPointers.set(field.name, alloca);
+        });
+      }
 
       // Stack overflow check
       const depth = this.newRegister();

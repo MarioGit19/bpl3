@@ -77,6 +77,11 @@
     - Generic enum type inference (e.g., `Option.Some(42)` → `Option<int>`) - requires bidirectional type checking
 - [x] Root Global `Type` Struct (Implicit inheritance for all structs)
 - [x] Primitive Types as Structs Inheriting `Primitive` (Wrapper structs for int, float, bool, char)
+- [x] Closures and Lambda Expressions ✅
+  - ✅ Lambda syntax `|args| body` implemented
+  - ✅ Capture by value semantics verified
+  - ✅ `Func<Ret>(Args...)` type support
+  - ✅ VS Code Extension support (Syntax Highlighting & Hover)
 
 ## Pending Features (expanded)
 
@@ -111,12 +116,6 @@
   - Description: Generate DWARF debug information to enable source-level debugging with tools like GDB and LLDB.
   - Implementation notes: Map BPL source locations to LLVM IR debug metadata, generate DWARF type descriptors, emit debug info for functions/variables.
   - Acceptance criteria: Can step through BPL code in GDB/LLDB, variables show correct values, breakpoints work.
-
-- [4] Closures and Lambda Expressions
-
-  - Description: Implement anonymous functions with capture of local variables from enclosing scope.
-  - Implementation notes: Add lambda syntax (e.g., `|x, y| x + y`), analyze captured variables, generate closure structs, support passing closures as function arguments.
-  - Acceptance criteria: Lambdas capture variables correctly, can be passed to higher-order functions, captured variables have correct lifetime.
 
 - [4] Enhanced Error Messages with Location Information
 

@@ -17,13 +17,6 @@ The following features are recommended for implementation next:
 - **Use cases:** Cross-compilation, embedded systems
 - **Complexity:** High (requires backend abstraction)
 
-### 2. **Closures and Lambda Expressions** [Priority 4] 🧩 FUNCTIONAL PROGRAMMING
-
-- **Why:** Essential for modern functional programming patterns
-- **Impact:** Cleaner callback APIs, higher-order functions
-- **Use cases:** Event handling, functional algorithms (map/filter/reduce)
-- **Complexity:** High (requires capture analysis and closure conversion)
-
 ---
 
 ## 📋 COMPLETED FEATURES
@@ -172,6 +165,33 @@ The following features are recommended for implementation next:
 - Code like `(42).toString()` and `3.14.abs()` compiles and runs correctly
 - Performance-sensitive paths maintain efficiency through compiler optimizations
 - Primitives follow the same method resolution rules as user-defined types
+
+---
+
+## [4] ✅ Closures and Lambda Expressions (COMPLETED)
+
+**Description:** Implement anonymous functions with automatic capture of local variables from enclosing scope. This enables functional programming patterns, callback-based APIs, and higher-order functions while maintaining type safety and memory safety.
+
+**Implementation Status:** ✅ Fully Implemented (December 2025)
+
+**What Was Implemented:**
+
+- ✅ Lambda syntax: `|x: int, y: int| -> int { return x + y; }` and expression style `|x, y| x + y`
+- ✅ Capture by Value: Variables from enclosing scope are captured by value (copy)
+- ✅ Closure Struct Generation: Compiler automatically generates structs to hold captured state
+- ✅ `Func<Ret>(Args...)` Type: Unified function pointer and closure type
+- ✅ VS Code Support: Syntax highlighting and type information on hover
+- ✅ Integration with Standard Library: Used in `List.map`, `List.filter` etc.
+
+**Examples:**
+
+- `examples/lambda_capture_test/` - Verification of capture semantics
+- `examples/lambda_simple/` - Basic usage
+- `examples/functional_patterns/` - Map/Filter/Reduce examples
+
+**Documentation:**
+
+- `docs/53-lambdas.md` - Comprehensive guide on syntax and capture rules
 
 ---
 
