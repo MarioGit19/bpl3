@@ -82,6 +82,7 @@
   - ✅ Capture by value semantics verified
   - ✅ `Func<Ret>(Args...)` type support
   - ✅ VS Code Extension support (Syntax Highlighting & Hover)
+  - ✅ Integration with Enum Pattern Matching (Capturing pattern bindings)
 
 ## Pending Features (expanded)
 

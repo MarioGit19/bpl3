@@ -1220,7 +1220,18 @@ export class TypeChecker extends TypeCheckerBase {
           bindingType = this.substituteType(bindingType, typeMap);
         }
 
-        this.defineSymbol(bindingName, "Variable", bindingType, pattern as any);
+        // Create a synthetic VariableDecl for the binding so it can be captured correctly
+        const bindingDecl: AST.VariableDecl = {
+          kind: "VariableDecl",
+          name: bindingName,
+          typeAnnotation: bindingType,
+          resolvedType: bindingType,
+          location: pattern.location,
+          isGlobal: false,
+          isConst: false,
+        };
+
+        this.defineSymbol(bindingName, "Variable", bindingType, bindingDecl);
       }
     }
 
@@ -1252,7 +1263,19 @@ export class TypeChecker extends TypeCheckerBase {
         if (bindingName === "_") continue;
 
         const bindingType = expectedFields.get(field.fieldName)!;
-        this.defineSymbol(bindingName, "Variable", bindingType, pattern as any);
+
+        // Create a synthetic VariableDecl for the binding so it can be captured correctly
+        const bindingDecl: AST.VariableDecl = {
+          kind: "VariableDecl",
+          name: bindingName,
+          typeAnnotation: bindingType,
+          resolvedType: bindingType,
+          location: pattern.location,
+          isGlobal: false,
+          isConst: false,
+        };
+
+        this.defineSymbol(bindingName, "Variable", bindingType, bindingDecl);
       }
     }
   }

@@ -182,12 +182,14 @@ The following features are recommended for implementation next:
 - ✅ `Func<Ret>(Args...)` Type: Unified function pointer and closure type
 - ✅ VS Code Support: Syntax highlighting and type information on hover
 - ✅ Integration with Standard Library: Used in `List.map`, `List.filter` etc.
+- ✅ Integration with Enum Pattern Matching: Capturing variables bound in match patterns
 
 **Examples:**
 
 - `examples/lambda_capture_test/` - Verification of capture semantics
 - `examples/lambda_simple/` - Basic usage
 - `examples/functional_patterns/` - Map/Filter/Reduce examples
+- `examples/lambda_enum_match/` - Integration with Enum Pattern Matching
 
 **Documentation:**
 

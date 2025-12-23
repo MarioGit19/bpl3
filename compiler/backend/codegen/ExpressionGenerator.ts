@@ -1,4 +1,5 @@
 import * as AST from "../../common/AST";
+import { CompilerError } from "../../common/CompilerError";
 import { TokenType } from "../../frontend/TokenType";
 import { PRIMITIVE_STRUCT_MAP } from "../../middleend/BuiltinTypes";
 import { TypeGenerator } from "./TypeGenerator";
@@ -61,7 +62,11 @@ export abstract class ExpressionGenerator extends TypeGenerator {
   protected generateLambda(expr: AST.LambdaExpr): string {
     if (!expr.resolvedType) {
       console.error("Lambda expression has no resolved type!");
-      throw new Error("Lambda expression has no resolved type");
+      throw new CompilerError(
+        "Lambda expression has no resolved type",
+        "",
+        expr.location,
+      );
     }
     const lambdaName = `lambda_L${expr.location.startLine}_C${expr.location.startColumn}`;
     this.pendingLambdas.push({ name: lambdaName, expr });
@@ -93,8 +98,10 @@ export abstract class ExpressionGenerator extends TypeGenerator {
         } else {
           console.log(`Failed to resolve type for ${decl.name}`);
           console.log(`Keys: ${Object.keys(decl)}`);
-          throw new Error(
+          throw new CompilerError(
             `Cannot resolve type for captured variable ${decl.name}`,
+            "",
+            decl.location,
           );
         }
       });
@@ -220,7 +227,11 @@ export abstract class ExpressionGenerator extends TypeGenerator {
   protected generateIdentifier(expr: AST.IdentifierExpr): string {
     const name = expr.name;
     if (!expr.resolvedType) {
-      throw new Error(`Identifier '${name}' has no resolved type`);
+      throw new CompilerError(
+        `Identifier '${name}' has no resolved type`,
+        "",
+        expr.location,
+      );
     }
 
     // Special case: function identifiers (not local variables) evaluate to their address directly
@@ -349,7 +360,11 @@ export abstract class ExpressionGenerator extends TypeGenerator {
       // We need the type of the object to know which struct layout to use
       // The object's resolvedType should be a BasicType with the struct name
       if (!objType || objType.kind !== "BasicType") {
-        throw new Error("Member access on non-struct type");
+        throw new CompilerError(
+          "Member access on non-struct type",
+          "Member access (.) is allowed only on struct types",
+          expr.location,
+        );
       }
 
       // Use resolved name for monomorphization lookup
@@ -368,13 +383,19 @@ export abstract class ExpressionGenerator extends TypeGenerator {
         layout = this.structLayouts.get(shortName);
       }
       if (!layout) {
-        throw new Error(`Unknown struct type: ${structName}`);
+        throw new CompilerError(
+          `Unknown struct type: ${structName}`,
+          "",
+          expr.location,
+        );
       }
 
       const fieldIndex = layout.get(memberExpr.property);
       if (fieldIndex === undefined) {
-        throw new Error(
+        throw new CompilerError(
           `Unknown field '${memberExpr.property}' in struct '${structName}'`,
+          "Available fields: " + Array.from(layout.keys()).join(", "),
+          expr.location,
         );
       }
 
@@ -672,7 +693,7 @@ export abstract class ExpressionGenerator extends TypeGenerator {
 
       const objType = indexExpr.object.resolvedType;
       if (!objType || objType.kind !== "BasicType") {
-        throw new Error("Indexing non-basic type");
+        throw new CompilerError("Indexing non-basic type", "", expr.location);
       }
 
       let addr: string;
@@ -3827,25 +3848,18 @@ export abstract class ExpressionGenerator extends TypeGenerator {
 
     // Default case (should not be reached if exhaustive, but needed for LLVM)
     this.emit(`${defaultLabel}:`);
-    // Generate unreachable or a default value based on result type
-    if (resultType.includes("*") || resultType.includes("i8*")) {
-      // For pointer types, use null
-      this.matchStack[this.matchStack.length - 1]!.results.push({
-        value: "null",
-        label: defaultLabel,
-        type: resultType,
-      });
-      this.emit(`  br label %${mergeLabel}`);
-    } else if (resultType === "void") {
-      this.emit(`  br label %${mergeLabel}`);
+
+    const wildcardArmIndex = expr.arms.findIndex(
+      (a) => a.pattern.kind === "PatternWildcard",
+    );
+
+    if (wildcardArmIndex !== -1) {
+      this.emit(`  br label %${armLabels[wildcardArmIndex]}`);
     } else {
-      // For other types, use 0
-      this.matchStack[this.matchStack.length - 1]!.results.push({
-        value: "0",
-        label: defaultLabel,
-        type: resultType,
-      });
-      this.emit(`  br label %${mergeLabel}`);
+      // Assume exhaustive match (checked by TypeChecker)
+      // If we reach here, it's a runtime error or undefined behavior
+      // For safety, we emit unreachable
+      this.emit(`  unreachable`);
     }
 
     // Pop match context and generate phi

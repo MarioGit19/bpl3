@@ -9,6 +9,7 @@ import {
 } from "../middleend/BuiltinTypes";
 import { TokenType } from "../frontend/TokenType";
 import { StatementGenerator } from "./codegen/StatementGenerator";
+import { CompilerError } from "../common/CompilerError";
 
 export class CodeGenerator extends StatementGenerator {
   constructor(
@@ -575,7 +576,11 @@ export class CodeGenerator extends StatementGenerator {
 
   private generateGlobalVariable(decl: AST.VariableDecl) {
     if (typeof decl.name !== "string") {
-      throw new Error("Destructuring not supported for global variables");
+      throw new CompilerError(
+        "Destructuring not supported for global variables",
+        "Global variables can't be of type Tuple",
+        decl.location,
+      );
     }
     this.globals.add(decl.name);
 
@@ -585,7 +590,11 @@ export class CodeGenerator extends StatementGenerator {
       if (decl.initializer.kind === "Literal") {
         init = this.generateLiteral(decl.initializer as AST.LiteralExpr);
       } else {
-        throw new Error("Global variables must be initialized with literals");
+        throw new CompilerError(
+          "Global variables must be initialized with literals",
+          "Global variables must be initialized with literals",
+          decl.location,
+        );
       }
     } else {
       if (
