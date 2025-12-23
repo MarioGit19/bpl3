@@ -131,8 +131,16 @@ export class ModuleResolver {
       if (resolved) {
         return resolved;
       }
-      throw new Error(
+      throw new CompilerError(
         `Module not found: ${importSource} (absolute path does not exist)`,
+        "Check if the file exists.",
+        {
+          file: fromFile,
+          startLine: 0,
+          startColumn: 0,
+          endLine: 0,
+          endColumn: 0,
+        },
       );
     }
 
@@ -146,8 +154,16 @@ export class ModuleResolver {
         return result;
       }
 
-      throw new Error(
+      throw new CompilerError(
         `Module not found: ${importSource} (resolved to ${resolved})`,
+        "Check if the file exists.",
+        {
+          file: fromFile,
+          startLine: 0,
+          startColumn: 0,
+          endLine: 0,
+          endColumn: 0,
+        },
       );
     }
 
@@ -212,7 +228,17 @@ export class ModuleResolver {
       }
     }
 
-    throw new Error(`Module not found: ${importSource}`);
+    throw new CompilerError(
+      `Module not found: ${importSource}`,
+      "Check if the module is installed or the path is correct.",
+      {
+        file: fromFile,
+        startLine: 0,
+        startColumn: 0,
+        endLine: 0,
+        endColumn: 0,
+      },
+    );
   }
 
   /**
@@ -229,7 +255,17 @@ export class ModuleResolver {
 
     // Detect circular dependencies
     if (visited.has(modulePath)) {
-      throw new Error(`Circular dependency detected: ${modulePath}`);
+      throw new CompilerError(
+        `Circular dependency detected: ${modulePath}`,
+        "Refactor code to avoid circular imports.",
+        {
+          file: modulePath,
+          startLine: 0,
+          startColumn: 0,
+          endLine: 0,
+          endColumn: 0,
+        },
+      );
     }
     visited.add(modulePath);
 
@@ -289,8 +325,16 @@ export class ModuleResolver {
       if (visited.has(modulePath)) return;
 
       if (visiting.has(modulePath)) {
-        throw new Error(
+        throw new CompilerError(
           `Circular dependency detected involving: ${modulePath}`,
+          "Refactor code to avoid circular imports.",
+          {
+            file: modulePath,
+            startLine: 0,
+            startColumn: 0,
+            endLine: 0,
+            endColumn: 0,
+          },
         );
       }
 
@@ -298,7 +342,17 @@ export class ModuleResolver {
 
       const module = this.modules.get(modulePath);
       if (!module) {
-        throw new Error(`Module not found in cache: ${modulePath}`);
+        throw new CompilerError(
+          `Module not found in cache: ${modulePath}`,
+          "Internal compiler error: module missing from cache during sort.",
+          {
+            file: modulePath,
+            startLine: 0,
+            startColumn: 0,
+            endLine: 0,
+            endColumn: 0,
+          },
+        );
       }
 
       // Visit dependencies first
@@ -343,14 +397,34 @@ export class ModuleResolver {
     const visit = (modulePath: string) => {
       if (visited.has(modulePath)) return;
       if (visiting.has(modulePath)) {
-        throw new Error(`Circular dependency detected: ${modulePath}`);
+        throw new CompilerError(
+          `Circular dependency detected: ${modulePath}`,
+          "Refactor code to avoid circular imports.",
+          {
+            file: modulePath,
+            startLine: 0,
+            startColumn: 0,
+            endLine: 0,
+            endColumn: 0,
+          },
+        );
       }
 
       visiting.add(modulePath);
 
       const module = this.modules.get(modulePath);
       if (!module) {
-        throw new Error(`Module not found in cache: ${modulePath}`);
+        throw new CompilerError(
+          `Module not found in cache: ${modulePath}`,
+          "Internal compiler error: module missing from cache.",
+          {
+            file: modulePath,
+            startLine: 0,
+            startColumn: 0,
+            endLine: 0,
+            endColumn: 0,
+          },
+        );
       }
 
       // Visit dependencies first

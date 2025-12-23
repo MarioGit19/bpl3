@@ -10,6 +10,8 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
+import { CompilerError, type SourceLocation } from "../common/CompilerError";
+
 export interface PackageManifest {
   name: string;
   version: string;
@@ -65,9 +67,20 @@ export class PackageManager {
    */
   loadManifest(packageDir: string): PackageManifest {
     const manifestPath = path.join(packageDir, "bpl.json");
+    const location: SourceLocation = {
+      file: manifestPath,
+      startLine: 1,
+      startColumn: 1,
+      endLine: 1,
+      endColumn: 1,
+    };
 
     if (!fs.existsSync(manifestPath)) {
-      throw new Error(`No bpl.json found in ${packageDir}`);
+      throw new CompilerError(
+        `No bpl.json found in ${packageDir}`,
+        "Run 'bpl init' to create a new package.",
+        location,
+      );
     }
 
     try {
@@ -76,32 +89,48 @@ export class PackageManager {
 
       // Validate required fields
       if (!manifest.name) {
-        throw new Error("Package manifest missing 'name' field");
+        throw new CompilerError(
+          "Package manifest missing 'name' field",
+          "Add a 'name' field to bpl.json.",
+          location,
+        );
       }
       if (!manifest.version) {
-        throw new Error("Package manifest missing 'version' field");
+        throw new CompilerError(
+          "Package manifest missing 'version' field",
+          "Add a 'version' field to bpl.json (e.g., '0.1.0').",
+          location,
+        );
       }
 
       // Validate version format
       if (!/^\d+\.\d+\.\d+$/.test(manifest.version)) {
-        throw new Error(
+        throw new CompilerError(
           `Invalid version format: ${manifest.version} (expected: X.Y.Z)`,
+          "Version must be in semantic versioning format (Major.Minor.Patch).",
+          location,
         );
       }
 
       // Validate name format
       if (!/^[a-z0-9-]+$/.test(manifest.name)) {
-        throw new Error(
+        throw new CompilerError(
           `Invalid package name: ${manifest.name} (use lowercase and hyphens only)`,
+          "Package names can only contain lowercase letters, numbers, and hyphens.",
+          location,
         );
       }
 
       return manifest;
     } catch (e) {
-      if (e instanceof Error) {
-        throw new Error(`Failed to load package manifest: ${e.message}`);
-      }
-      throw e;
+      if (e instanceof CompilerError) throw e;
+      throw new CompilerError(
+        `Failed to load package manifest: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+        "Check that bpl.json is valid JSON.",
+        location,
+      );
     }
   }
 
@@ -192,7 +221,17 @@ export class PackageManager {
     const manifestPath = path.join(packageDir, "bpl.json");
 
     if (files.length === 0) {
-      throw new Error("No .bpl files found in package");
+      throw new CompilerError(
+        "No .bpl files found in package",
+        "Add some .bpl files to the package directory.",
+        {
+          file: manifestPath,
+          startLine: 1,
+          startColumn: 1,
+          endLine: 1,
+          endColumn: 1,
+        },
+      );
     }
 
     console.log(`  Including ${files.length} source files`);
@@ -233,7 +272,17 @@ export class PackageManager {
 
       if (result.status !== 0) {
         const error = result.stderr?.toString() || "Unknown error";
-        throw new Error(`Failed to create tarball: ${error}`);
+        throw new CompilerError(
+          `Failed to create tarball: ${error}`,
+          "Check if 'tar' command is available and you have write permissions.",
+          {
+            file: manifestPath,
+            startLine: 1,
+            startColumn: 1,
+            endLine: 1,
+            endColumn: 1,
+          },
+        );
       }
 
       console.log(`✓ Package created: ${tarballName}`);
@@ -274,7 +323,17 @@ export class PackageManager {
       );
 
       if (matching.length === 0) {
-        throw new Error(`Package not found: ${packageSource}`);
+        throw new CompilerError(
+          `Package not found: ${packageSource}`,
+          "Check the package name or path.",
+          {
+            file: packageSource,
+            startLine: 1,
+            startColumn: 1,
+            endLine: 1,
+            endColumn: 1,
+          },
+        );
       }
 
       // Use latest version (simple string sort for now)
@@ -305,7 +364,17 @@ export class PackageManager {
 
       if (extractResult.status !== 0) {
         const error = extractResult.stderr?.toString() || "Unknown error";
-        throw new Error(`Failed to extract package: ${error}`);
+        throw new CompilerError(
+          `Failed to extract package: ${error}`,
+          "Check if 'tar' command is available.",
+          {
+            file: tarballPath,
+            startLine: 1,
+            startColumn: 1,
+            endLine: 1,
+            endColumn: 1,
+          },
+        );
       }
 
       const packageDir = path.join(tempDir, "package");
@@ -346,15 +415,35 @@ export class PackageManager {
     const packagePath = path.join(targetDir, packageName);
 
     if (!fs.existsSync(packagePath)) {
-      throw new Error(
-        `Package '${packageName}' is not installed ${options.global ? "globally" : "locally"}`,
+      throw new CompilerError(
+        `Package '${packageName}' is not installed ${
+          options.global ? "globally" : "locally"
+        }`,
+        "Check the package name.",
+        {
+          file: packagePath,
+          startLine: 1,
+          startColumn: 1,
+          endLine: 1,
+          endColumn: 1,
+        },
       );
     }
 
     // Verify it's actually a package directory
     const manifestPath = path.join(packagePath, "bpl.json");
     if (!fs.existsSync(manifestPath)) {
-      throw new Error(`Invalid package directory: ${packagePath}`);
+      throw new CompilerError(
+        `Invalid package directory: ${packagePath}`,
+        "Directory exists but is not a valid package (missing bpl.json).",
+        {
+          file: packagePath,
+          startLine: 1,
+          startColumn: 1,
+          endLine: 1,
+          endColumn: 1,
+        },
+      );
     }
 
     const manifest = this.loadManifest(packagePath);
@@ -460,7 +549,17 @@ export class PackageManager {
   init(dir: string, name?: string): void {
     const manifestPath = path.join(dir, "bpl.json");
     if (fs.existsSync(manifestPath)) {
-      throw new Error(`bpl.json already exists in ${dir}`);
+      throw new CompilerError(
+        `bpl.json already exists in ${dir}`,
+        "Delete the existing bpl.json if you want to re-initialize.",
+        {
+          file: manifestPath,
+          startLine: 1,
+          startColumn: 1,
+          endLine: 1,
+          endColumn: 1,
+        },
+      );
     }
 
     const manifest: PackageManifest = {

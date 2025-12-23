@@ -79,8 +79,16 @@ export class LinkerSymbolTable {
       }
 
       if (!existing.isExtern && !info.isExtern) {
-        throw new Error(
+        throw new CompilerError(
           `Duplicate symbol definition: ${info.name} in module ${info.module}`,
+          "Rename the symbol or check for duplicate declarations.",
+          {
+            file: info.module,
+            startLine: 0,
+            startColumn: 0,
+            endLine: 0,
+            endColumn: 0,
+          },
         );
       }
     }

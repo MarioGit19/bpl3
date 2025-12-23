@@ -16,12 +16,19 @@ function loadParser(): peggy.Parser {
 
   if (!existsSync(grammarPath)) {
     const bplHome = getBplHome();
-    throw new Error(
-      `Could not find bpl.peggy grammar file.\n` +
+    throw new CompilerError(
+      `Could not find bpl.peggy grammar file.`,
+      `Please ensure BPL_HOME is set correctly or the grammar directory exists.\n` +
         `BPL_HOME: ${bplHome}\n` +
         `Looking for: ${grammarPath}\n` +
-        `Please ensure BPL_HOME is set correctly or the grammar directory exists.\n` +
         `You can set it with: export BPL_HOME=/path/to/bpl`,
+      {
+        file: grammarPath,
+        startLine: 0,
+        startColumn: 0,
+        endLine: 0,
+        endColumn: 0,
+      },
     );
   }
 

@@ -11,6 +11,7 @@
 import { spawnSync } from "child_process";
 import * as fs from "fs";
 
+import { CompilerError } from "../common/CompilerError";
 import { LinkerSymbolTable } from "./LinkerSymbolTable";
 import { ObjectFileParser } from "./ObjectFileParser";
 
@@ -118,7 +119,17 @@ export class Linker {
    */
   private mergeIRFiles(irFiles: string[], verbose?: boolean): string {
     if (irFiles.length === 0) {
-      throw new Error("No IR files provided for linking");
+      throw new CompilerError(
+        "No IR files provided for linking",
+        "Internal compiler error: Linker called without input files.",
+        {
+          file: "linker",
+          startLine: 0,
+          startColumn: 0,
+          endLine: 0,
+          endColumn: 0,
+        },
+      );
     }
 
     if (irFiles.length === 1 && fs.existsSync(irFiles[0]!)) {
@@ -140,7 +151,17 @@ export class Linker {
     }
 
     if (modules.length === 0) {
-      throw new Error("No valid IR files found");
+      throw new CompilerError(
+        "No valid IR files found",
+        "Check that the input files exist and are readable.",
+        {
+          file: "linker",
+          startLine: 0,
+          startColumn: 0,
+          endLine: 0,
+          endColumn: 0,
+        },
+      );
     }
 
     if (verbose) {

@@ -756,7 +756,11 @@ export abstract class ExpressionGenerator extends TypeGenerator {
           `  ${addr} = getelementptr inbounds ${elemType}, ${ptrType} ${ptrReg}, i64 ${indexVal}`,
         );
       } else {
-        throw new Error("Indexing non-array/non-pointer");
+        throw new CompilerError(
+          "Indexing non-array/non-pointer",
+          "Only arrays and pointers can be indexed.",
+          expr.location,
+        );
       }
 
       // Runtime null-object guard for struct locals being indexed (if any)
@@ -845,7 +849,11 @@ export abstract class ExpressionGenerator extends TypeGenerator {
           return this.generateExpression(expr);
         }
       }
-      throw new Error("Expression is not an lvalue: Call");
+      throw new CompilerError(
+        "Expression is not an lvalue: Call",
+        "Function calls return rvalues and cannot be assigned to or have their address taken.",
+        expr.location,
+      );
     } else if (expr.kind === "Unary") {
       const unaryExpr = expr as AST.UnaryExpr;
       if (unaryExpr.operator.type === TokenType.Star) {
@@ -853,10 +861,18 @@ export abstract class ExpressionGenerator extends TypeGenerator {
         // The address is the value of x
         return this.generateExpression(unaryExpr.operand);
       }
-      throw new Error("Address of non-lvalue unary expression");
+      throw new CompilerError(
+        "Address of non-lvalue unary expression",
+        "This unary expression does not yield an lvalue.",
+        expr.location,
+      );
     }
 
-    throw new Error(`Expression is not an lvalue: ${expr.kind}`);
+    throw new CompilerError(
+      `Expression is not an lvalue: ${expr.kind}`,
+      "This expression cannot be assigned to or have its address taken.",
+      expr.location,
+    );
   }
 
   protected expressionToString(expr: AST.Expression): string {
@@ -1955,7 +1971,12 @@ export abstract class ExpressionGenerator extends TypeGenerator {
       const memberExpr = callee as AST.MemberExpr;
       const objType = memberExpr.object.resolvedType;
 
-      if (!objType) throw new Error("Member access on unresolved type");
+      if (!objType)
+        throw new CompilerError(
+          "Member access on unresolved type",
+          "The type of the object could not be resolved.",
+          memberExpr.location,
+        );
 
       if ((objType as any).kind === "ModuleType") {
         funcName = memberExpr.property;
@@ -2080,10 +2101,18 @@ export abstract class ExpressionGenerator extends TypeGenerator {
             }
             // Static call: no extra argument
           } else {
-            throw new Error("Static member access on non-struct type");
+            throw new CompilerError(
+              "Static member access on non-struct type",
+              "Static members can only be accessed on struct types.",
+              memberExpr.location,
+            );
           }
         } else {
-          throw new Error("Member access on non-struct type");
+          throw new CompilerError(
+            "Member access on non-struct type",
+            "Members can only be accessed on struct types.",
+            memberExpr.location,
+          );
         }
 
         // Check for inherited method
@@ -2444,7 +2473,11 @@ export abstract class ExpressionGenerator extends TypeGenerator {
         console.log(`[DEBUG] member: ${m.property}`);
         console.log(`[DEBUG] object resolvedType:`, m.object.resolvedType);
       }
-      throw new Error(`Function call '${funcName}' has no resolved type`);
+      throw new CompilerError(
+        `Function call '${funcName}' has no resolved type`,
+        "Internal compiler error: function type not resolved.",
+        expr.location,
+      );
     }
 
     if (
@@ -3231,8 +3264,10 @@ export abstract class ExpressionGenerator extends TypeGenerator {
     }
 
     if (!op) {
-      throw new Error(
+      throw new CompilerError(
         `Unsupported compound assignment operator: ${expr.operator.lexeme}`,
+        "This operator is not supported for compound assignment.",
+        expr.location,
       );
     }
 
@@ -3260,7 +3295,11 @@ export abstract class ExpressionGenerator extends TypeGenerator {
         | AST.BasicTypeNode
         | undefined;
       if (!callType || callType.kind !== "BasicType") {
-        throw new Error("Member access on non-struct type");
+        throw new CompilerError(
+          "Member access on non-struct type",
+          "Members can only be accessed on struct types.",
+          expr.location,
+        );
       }
 
       // When a call returns a value (non-pointer), materialize a temporary so reads work.
@@ -3294,13 +3333,19 @@ export abstract class ExpressionGenerator extends TypeGenerator {
         layout = this.structLayouts.get(shortName);
       }
       if (!layout) {
-        throw new Error(`Unknown struct type: ${structName}`);
+        throw new CompilerError(
+          `Unknown struct type: ${structName}`,
+          "Internal compiler error: struct layout missing.",
+          expr.location,
+        );
       }
 
       const fieldIndex = layout.get(expr.property);
       if (fieldIndex === undefined) {
-        throw new Error(
+        throw new CompilerError(
           `Unknown field '${expr.property}' in struct '${structName}'`,
+          "Check the struct definition.",
+          expr.location,
         );
       }
 
@@ -3655,7 +3700,11 @@ export abstract class ExpressionGenerator extends TypeGenerator {
       return destWithTag;
     }
 
-    throw new Error(`Unsupported cast from ${srcType} to ${destType}`);
+    throw new CompilerError(
+      `Unsupported cast from ${srcType} to ${destType}`,
+      "CastError",
+      srcTypeNode.location,
+    );
   }
 
   protected generateMatchExpr(expr: AST.MatchExpr): string {
@@ -4285,7 +4334,11 @@ export abstract class ExpressionGenerator extends TypeGenerator {
     if (!layout) {
       // Maybe we haven't generated the layout yet?
       // generateStructLiteral should happen inside a function, so types should be resolved.
-      throw new Error(`Layout for struct ${structName} not found`);
+      throw new CompilerError(
+        `Layout for struct ${structName} not found`,
+        "Internal compiler error: struct layout missing.",
+        expr.location,
+      );
     }
 
     const fieldValues = new Map<string, AST.Expression>();
@@ -4370,8 +4423,10 @@ export abstract class ExpressionGenerator extends TypeGenerator {
     // Get the enum variant info from type checker
     const enumVariantInfo = (expr as any).enumVariantInfo;
     if (!enumVariantInfo) {
-      throw new Error(
+      throw new CompilerError(
         "Missing enum variant info for struct variant construction",
+        "Internal compiler error: variant info missing.",
+        expr.location,
       );
     }
 
@@ -4418,8 +4473,10 @@ export abstract class ExpressionGenerator extends TypeGenerator {
           (f) => f.name === field.name,
         );
         if (fieldIndex === -1) {
-          throw new Error(
+          throw new CompilerError(
             `Field ${field.name} not found in variant ${variant.name}`,
+            "Check the enum variant definition.",
+            expr.location,
           );
         }
 

@@ -1,4 +1,5 @@
 import type { AST } from "../..";
+import { CompilerError } from "../../common/CompilerError";
 import { BaseCodeGenerator } from "./BaseCodeGenerator";
 
 export abstract class TypeGenerator extends BaseCodeGenerator {
@@ -753,7 +754,11 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
     if (this.resolveTypeDepth > 200) {
       console.log(`resolveType recursion limit reached! Type: ${type.kind}`);
       if (type.kind === "BasicType") console.log(`Name: ${(type as any).name}`);
-      throw new Error("resolveType recursion limit");
+      throw new CompilerError(
+        "resolveType recursion limit",
+        "Check for circular type definitions or excessive nesting.",
+        type.location,
+      );
     }
     this.resolveTypeDepth++;
     try {
@@ -761,7 +766,17 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
         // Should not happen if TypeChecker did its job
         console.error("resolveType called with undefined!");
         console.error(new Error().stack);
-        throw new Error("Cannot resolve undefined type");
+        throw new CompilerError(
+          "Cannot resolve undefined type",
+          "Internal compiler error: resolveType called with undefined.",
+          {
+            file: this.currentFilePath,
+            startLine: 0,
+            startColumn: 0,
+            endLine: 0,
+            endColumn: 0,
+          },
+        );
       }
       if (type.kind === "BasicType") {
         const basicType = type as AST.BasicTypeNode;
@@ -1164,7 +1179,21 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
     // Get the generic enum declaration
     const decl = this.enumDeclMap.get(enumName);
     if (!decl) {
-      throw new Error(`Generic enum ${enumName} not found`);
+      const loc =
+        genericArgs.length > 0
+          ? genericArgs[0]!.location
+          : {
+              file: "unknown",
+              startLine: 0,
+              startColumn: 0,
+              endLine: 0,
+              endColumn: 0,
+            };
+      throw new CompilerError(
+        `Generic enum ${enumName} not found`,
+        "Ensure the enum is defined.",
+        loc,
+      );
     }
 
     // Build type substitution map
@@ -1419,7 +1448,11 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
 
     if (!thisPtrAddr) {
       // Should not happen if generateFunction set it up
-      throw new Error("Could not find 'this' pointer for parent destroy call");
+      throw new CompilerError(
+        "Could not find 'this' pointer for parent destroy call",
+        "Internal compiler error.",
+        currentMethod.location,
+      );
     }
 
     const thisType = this.resolveType(

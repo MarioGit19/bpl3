@@ -254,7 +254,17 @@ export class Compiler {
       const entryModule = modules[modules.length - 1]; // Last in topo order is entry point
 
       if (!entryModule) {
-        throw new Error("No entry module found");
+        throw new CompilerError(
+          "No entry module found",
+          "Ensure the project has a valid entry point.",
+          {
+            file: this.options.filePath,
+            startLine: 0,
+            startColumn: 0,
+            endLine: 0,
+            endColumn: 0,
+          },
+        );
       }
 
       // Create a combined AST with all declarations from all modules

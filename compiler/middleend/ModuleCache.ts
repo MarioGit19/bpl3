@@ -11,6 +11,7 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 
+import { CompilerError } from "../common/CompilerError";
 import type * as AST from "../common/AST";
 
 export interface CachedModule {
@@ -164,7 +165,17 @@ export class ModuleCache {
 
     if (result.status !== 0) {
       const error = result.stderr?.toString() || "Unknown compilation error";
-      throw new Error(`Failed to compile ${modulePath}: ${error}`);
+      throw new CompilerError(
+        `Failed to compile ${modulePath}: ${error}`,
+        "Check clang output for details.",
+        {
+          file: modulePath,
+          startLine: 0,
+          startColumn: 0,
+          endLine: 0,
+          endColumn: 0,
+        },
+      );
     }
 
     // Clean up temporary LLVM IR file
@@ -204,7 +215,17 @@ export class ModuleCache {
 
     if (result.status !== 0) {
       const error = result.stderr?.toString() || "Unknown linking error";
-      throw new Error(`Failed to link modules: ${error}`);
+      throw new CompilerError(
+        `Failed to link modules: ${error}`,
+        "Check linker output for details.",
+        {
+          file: outputPath,
+          startLine: 0,
+          startColumn: 0,
+          endLine: 0,
+          endColumn: 0,
+        },
+      );
     }
   }
 

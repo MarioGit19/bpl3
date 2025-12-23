@@ -12,6 +12,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { CompilerError } from "../common/CompilerError";
 import { LinkerSymbolTable, type ObjectFileSymbol } from "./LinkerSymbolTable";
 
 export class ObjectFileParser {
@@ -20,7 +21,17 @@ export class ObjectFileParser {
    */
   static parseLLVMIR(filePath: string): ObjectFileSymbol[] {
     if (!fs.existsSync(filePath)) {
-      throw new Error(`Object file not found: ${filePath}`);
+      throw new CompilerError(
+        `Object file not found: ${filePath}`,
+        "Check that the file exists and the path is correct.",
+        {
+          file: filePath,
+          startLine: 1,
+          startColumn: 1,
+          endLine: 1,
+          endColumn: 1,
+        },
+      );
     }
 
     const content = fs.readFileSync(filePath, "utf-8");
@@ -68,7 +79,17 @@ export class ObjectFileParser {
    */
   static parseELFObject(filePath: string): ObjectFileSymbol[] {
     if (!fs.existsSync(filePath)) {
-      throw new Error(`Object file not found: ${filePath}`);
+      throw new CompilerError(
+        `Object file not found: ${filePath}`,
+        "Check that the file exists and the path is correct.",
+        {
+          file: filePath,
+          startLine: 1,
+          startColumn: 1,
+          endLine: 1,
+          endColumn: 1,
+        },
+      );
     }
 
     // For now, we'll use the `nm` tool if available
@@ -137,7 +158,17 @@ export class ObjectFileParser {
    */
   static parseObjectFile(filePath: string): ObjectFileSymbol[] {
     if (!fs.existsSync(filePath)) {
-      throw new Error(`Object file not found: ${filePath}`);
+      throw new CompilerError(
+        `Object file not found: ${filePath}`,
+        "Check if the file exists.",
+        {
+          file: filePath,
+          startLine: 0,
+          startColumn: 0,
+          endLine: 0,
+          endColumn: 0,
+        },
+      );
     }
 
     const ext = path.extname(filePath).toLowerCase();
@@ -147,8 +178,16 @@ export class ObjectFileParser {
     } else if (ext === ".o" || ext === ".obj" || ext === ".a") {
       return this.parseELFObject(filePath);
     } else {
-      throw new Error(
+      throw new CompilerError(
         `Unsupported object file format: ${ext} (supported: .ll, .o, .obj, .a)`,
+        "Use a supported file format.",
+        {
+          file: filePath,
+          startLine: 0,
+          startColumn: 0,
+          endLine: 0,
+          endColumn: 0,
+        },
       );
     }
   }
