@@ -106,6 +106,12 @@
   - Implementation notes: Abstract target-specific codegen paths and provide a target triple input. Maintain a small set of runtime abstractions for syscalls/ABI.
   - Acceptance criteria: Codegen can emit different target outputs and small example programs run on at least two targets.
 
+- [4] Debugger Support (DWARF)
+
+  - Description: Generate DWARF debug information to enable source-level debugging with tools like GDB and LLDB.
+  - Implementation notes: Map BPL source locations to LLVM IR debug metadata, generate DWARF type descriptors, emit debug info for functions/variables.
+  - Acceptance criteria: Can step through BPL code in GDB/LLDB, variables show correct values, breakpoints work.
+
 - [4] Closures and Lambda Expressions
 
   - Description: Implement anonymous functions with capture of local variables from enclosing scope.
@@ -148,6 +154,24 @@
   - Implementation notes: Generate static/dynamic completion scripts; bundle them with releases; document installation for bash and zsh; consider commander completion helpers; optionally complete file paths and target triples.
   - Acceptance criteria: Users can enable completions in bash and zsh; commands and flags complete correctly; installation steps are documented.
 
+- [5] Language Server Protocol (LSP) Enhancements
+
+  - Description: Expand capabilities to support "Rename Symbol", "Find All References", "Go to Implementation", and "Code Actions".
+  - Implementation notes: Implement rename/references/implementation requests, add code actions, improve sync.
+  - Acceptance criteria: Renaming updates references, find references works, go to implementation works.
+
+- [6] String Interpolation
+
+  - Description: Support embedding expressions directly into string literals using `${expression}` syntax.
+  - Implementation notes: Update lexer/parser, desugar to concatenation or builder, support arbitrary expressions.
+  - Acceptance criteria: `$"Hello ${name}"` compiles, expressions evaluated correctly.
+
+- [6] Default and Named Arguments
+
+  - Description: Allow functions to define default values for parameters and allow callers to specify arguments by name.
+  - Implementation notes: Update declaration/call syntax, resolve defaults at call site, handle named args.
+  - Acceptance criteria: Can declare/call with defaults, can use named arguments.
+
 - [6] Allow Structs to Inherit Primitives
 
   - Description: Permit `struct MyInt : int { ... }` so a struct can behave as a primitive type with additional methods/fields.
@@ -165,6 +189,156 @@
   - Description: Add public/private visibility modifiers and module encapsulation.
   - Implementation notes: Add pub/private keywords, enforce visibility during semantic analysis, support module-level exports.
   - Acceptance criteria: Private items cannot be accessed from outside module, pub items are accessible, exports control public API.
+
+- [7] Package Registry and Dependency Management
+
+  - Description: Create a centralized package registry and enhance package manager for publishing/versioning.
+  - Implementation notes: Design metadata format, implement semantic versioning, create registry API, add publish/install commands.
+  - Acceptance criteria: Can publish/install packages, version constraints respected.
+
+- [7] WebAssembly (WASM) Target
+
+  - Description: Add compilation target for WebAssembly (WASM) to run BPL in browsers.
+  - Implementation notes: Add wasm32 target support, handle ABI differences, map primitives, generate .wasm via LLVM.
+  - Acceptance criteria: Can compile to .wasm, runs in browser/Node.js.
+
+- [8] Null Safety Operators
+
+  - Description: Introduce null-safe navigation (`?.`) and null-coalescing (`??`) operators.
+  - Implementation notes: Implement `?.` and `??` operators, desugar to conditional checks.
+  - Acceptance criteria: `ptr?.field` returns null if ptr is null, `val ?? default` works.
+
+- [5] Parallel Compilation
+
+  - Description: Utilize multi-core processors to compile independent modules in parallel.
+  - Implementation notes: Analyze dependency graph, use worker threads/processes, manage shared resources.
+  - Acceptance criteria: `bpl build` uses multiple cores, build time decreases.
+
+- [5] Watch Mode
+
+  - Description: Add `--watch` mode to CLI to recompile on file changes.
+  - Implementation notes: Use file watcher, integrate with incremental compilation, debounce events.
+  - Acceptance criteria: `bpl build --watch` rebuilds on change.
+
+- [6] Parser Error Recovery
+
+  - Description: Improve parser to recover from syntax errors and continue parsing.
+  - Implementation notes: Implement synchronization points, skip tokens, mark error nodes.
+  - Acceptance criteria: Reports multiple errors per file, doesn't crash on malformed input.
+
+- [6] Nested Pattern Matching
+
+  - Description: Extend pattern matching to support nested patterns (e.g., `Option.Some(Result.Ok(x))`).
+  - Implementation notes: Update parser/typechecker/codegen for recursive pattern matching.
+  - Acceptance criteria: Can match deeply nested structures, exhaustiveness checking works.
+
+- [6] Explicit Memory Initialization
+
+  - Description: Mechanism to initialize raw memory as valid object (set `__null_bit__`).
+  - Implementation notes: `std.mem.init<T>(ptr)` intrinsic, sets internal flags.
+  - Acceptance criteria: Can use malloc'd memory without constructor call.
+
+- [7] Fuzz Testing Integration
+
+  - Description: Integrate fuzz testing (e.g., LLVM libFuzzer) to find compiler crashes.
+  - Implementation notes: Create fuzz target for frontend, link with libFuzzer, run in CI.
+  - Acceptance criteria: Fuzzer runs and finds crashes.
+
+- [7] Compiler Performance Benchmarking
+
+  - Description: Track compiler performance (time/memory) to prevent regressions.
+  - Implementation notes: Create benchmark suite, scripts to measure metrics, CI integration.
+  - Acceptance criteria: Benchmarks run automatically, regressions flagged.
+
+- [7] Automatic C Binding Generation (bindgen)
+
+  - Description: Tool to generate BPL `extern` declarations from C headers.
+  - Implementation notes: Use libclang to parse headers, map types, generate BPL files.
+  - Acceptance criteria: Can generate bindings for standard C libs, generated code compiles.
+
+- [7] Standard Library: Networking & HTTP
+
+  - Description: Add TCP/UDP sockets and HTTP client to stdlib.
+  - Implementation notes: Wrap platform socket APIs, implement HTTP client.
+  - Acceptance criteria: Can create servers/clients, make HTTP requests.
+
+- [7] Standard Library: System Calls & OS Interaction
+
+  - Description: Add support for signal handling, environment variables, and process control.
+  - Implementation notes: Wrap `signal`, `getenv`, `setenv`, `fork`, `exec`, `wait`.
+  - Acceptance criteria: Can handle SIGINT, read/write env vars, spawn child processes.
+
+- [7] Standard Library: Date & Time
+
+  - Description: Add Date, Time, Duration types and formatting utilities.
+  - Implementation notes: Wrap `time.h` functions, implement high-level Date/Time structs.
+  - Acceptance criteria: Can get current time, format dates, measure duration.
+
+- [7] Standard Library: JSON & Serialization
+
+  - Description: Add support for parsing and generating JSON data.
+  - Implementation notes: Implement `std.json.parse` and `std.json.stringify`.
+  - Acceptance criteria: Can parse JSON strings and serialize objects to JSON.
+
+- [7] Standard Library: Cryptography & Hashing
+
+  - Description: Provide basic cryptographic primitives and secure random number generation.
+  - Implementation notes: Implement `std.crypto.hash` (SHA256) and `std.crypto.random`.
+  - Acceptance criteria: Can compute hashes and generate secure random numbers.
+
+- [7] Standard Library: Regular Expressions
+
+  - Description: Add support for regular expressions.
+  - Implementation notes: Wrap a C regex library or implement basic engine.
+  - Acceptance criteria: Can match strings against regex patterns and extract groups.
+
+- [7] Standard Library: Advanced Collections
+
+  - Description: Expand collection types (Set, LinkedList, Queue, Stack, PriorityQueue).
+  - Implementation notes: Implement generic data structures in stdlib.
+  - Acceptance criteria: Can use Set, Queue, Stack, etc. in programs.
+
+- [7] Standard Library: BigInt & Arbitrary Precision
+
+  - Description: Add support for arbitrary precision integers.
+  - Implementation notes: Wrap GMP or implement native BigInt.
+  - Acceptance criteria: Can perform math on numbers > 64 bits.
+
+- [7] Standard Library: Compression & Archiving
+
+  - Description: Add support for zlib/gzip compression.
+  - Implementation notes: Wrap zlib C library.
+  - Acceptance criteria: Can compress and decompress data.
+
+- [7] Standard Library: Encoding & Decoding
+
+  - Description: Add Base64, Hex, and CSV support.
+  - Implementation notes: Implement encoding utilities.
+  - Acceptance criteria: Can encode/decode Base64, parse CSV.
+
+- [8] Middle-end Optimizations
+
+  - Description: Implement BPL-specific optimization passes before LLVM IR generation.
+  - Implementation notes: Dead code elimination, constant folding, inlining on AST/IR.
+  - Acceptance criteria: Generated code is cleaner/faster, compile-time evaluation improved.
+
+- [8] Compile-Time Function Execution (CTFE)
+
+  - Description: Execute functions at compile time to generate constants.
+  - Implementation notes: Interpreter for BPL IR/AST, execute during semantic analysis.
+  - Acceptance criteria: `const x = factorial(5)` works at compile time.
+
+- [8] Code Coverage Integration
+
+  - Description: Generate coverage reports for tests.
+  - Implementation notes: Instrument LLVM IR with coverage mapping, support llvm-cov.
+  - Acceptance criteria: Can generate and view coverage reports.
+
+- [8] Region-Based Memory Management (Arenas)
+
+  - Description: Add Arena allocators to stdlib for efficient memory management.
+  - Implementation notes: Implement Arena struct, bulk allocation/deallocation.
+  - Acceptance criteria: Can allocate from arena, reset frees all memory.
 
 - [8] Const Correctness
 

@@ -261,7 +261,33 @@ The following features are recommended for implementation next:
 - Extract type signatures, parameters, return types, examples
 - Provide templates for different output formats (HTML, Markdown, etc.)
 - Add command-line options for customizing output
-- Su6] Allow Structs to Inherit Primitives
+- Documentation covers the stdlib and sample modules
+- Output includes function signatures, parameters, return types
+- Documentation includes code examples
+- Generated docs are properly styled and navigable
+
+---
+
+## [6] Explicit Memory Initialization
+
+**Description:** Provide a mechanism to initialize raw memory (e.g., from `malloc`) as a valid object by setting internal flags (like `__null_bit__`). This allows using manually allocated memory without calling a constructor, which is useful for arrays of structs or custom allocators.
+
+**Implementation Notes:**
+
+- Add `std.mem.init<T>(ptr: *T)` intrinsic or built-in function
+- Compiler generates code to set `__null_bit__` to 1 for the pointed-to object
+- Optionally zero-initialize the rest of the memory
+- Ensure it works for arrays of structs (initializing multiple elements)
+
+**Acceptance Criteria:**
+
+- `local ptr: *User = malloc(...)` followed by `std.mem.init(ptr)` makes `ptr` valid
+- Accessing members of initialized pointer does not throw `NullAccessError`
+- Works for single objects and arrays
+
+---
+
+## [6] Allow Structs to Inherit Primitives
 
 **Description:** Permit `struct MyInt : int { ... }` so a struct can behave as a primitive type with additional methods/fields. This enables creating specialized primitive types with domain-specific methods while maintaining compatibility with code expecting the base primitive type.
 
@@ -283,20 +309,6 @@ The following features are recommended for implementation next:
 - Memory layout is compatible with base primitive type
 - Overrides of primitive methods are callable
 - Performance remains acceptable (no unnecessary boxing/unboxing)
-- Documentation covers the stdlib and sample modules
-- Output includes function signatures, parameters, return types
-- Documentation includes code examples
-- Generated docs are properly styled and navigable
-
----
-
-## [7] Allow Structs to Inherit Primitives
-
-**Description:** Permit `struct MyInt : int { ... }` so a struct can behave as a primitive type with additional methods/fields.
-
-**Implementation Notes:** Carefully design memory layout and type compatibility: instances of `MyInt` must be usable where `int` is expected. Implement implicit conversion rules and method overriding semantics. Consider specialization in codegen for performance.
-
-**Acceptance Criteria:** `MyInt` instances can be passed to APIs expecting `int`; overrides of primitive methods are callable.
 
 ---
 
@@ -432,76 +444,24 @@ The following features are recommended for implementation next:
 
 ---
 
-## [2] Generic-Aware Operator Resolution
+## [4] Debugger Support (DWARF)
 
-**Description:** Enable operator overloading to work with generic types by making operator resolution happen after generic type substitution. Currently, operators don't work with generic structs like `Array<T>` because the compiler looks up operators before substituting the generic type parameter. This limitation prevents ergonomic APIs for generic containers (e.g., `arr << value` for push).
-
-**Implementation Status:** ❌ Not Started (Documented limitation)
-
-**The Problem:**
-
-When you write `arr << 10` where `arr` is `Array<i32>`, the compiler:
-
-1. Sees operator `<<` with left operand type `Array<i32>`
-2. Looks up `__lshift__` method on the struct named `Array<i32>`
-3. Fails because the struct is actually named `Array` with generic parameter `T`
-4. Never finds the `__lshift__(this: *Array<T>, value: T)` method
-
-The operator resolution happens before generic type substitution, so it never sees the concrete instantiated type.
+**Description:** Generate DWARF debug information to enable source-level debugging with tools like GDB and LLDB. This allows developers to step through BPL code, inspect variables, and set breakpoints using standard debugging tools.
 
 **Implementation Notes:**
 
-**Phase 1: Analysis and Design**
-
-- Review current operator resolution algorithm in TypeChecker
-- Identify where generic type substitution happens relative to operator lookup
-- Design new "generic-aware" operator resolution that delays lookup
-- Consider performance implications of deferred operator resolution
-
-**Phase 2: Core Changes**
-
-- Modify operator resolution to detect when operand type is a generic instantiation
-- Add tracking for generic type parameters during operator lookup
-- Implement deferred operator resolution that happens after type substitution
-- May need to add a separate compilation pass for generic operator instantiation
-
-**Phase 3: Type System Integration**
-
-- Ensure operator methods on generic types are properly indexed
-- Handle method lookup with substituted type parameters
-- Support operator overload resolution with type inference
-- Maintain backward compatibility with non-generic operator overloads
-
-**Phase 4: Error Handling**
-
-- Generate clear error messages when operator method is missing on concrete type
-- Distinguish between "no operator method defined" vs "wrong type parameters"
-- Provide helpful suggestions for fixing operator overload issues
-
-**Technical Challenges:**
-
-- Operator resolution currently happens early in TypeChecker for performance
-- Generic type substitution happens later during monomorphization
-- Need to either: (a) delay all operator resolution, or (b) re-resolve operators after substitution
-- Must maintain type safety and prevent ambiguous overload situations
-
-**References:**
-
-- See `docs/operator-overloading-generics-limitation.md` for detailed technical analysis
-- Current workaround: Use concrete types (e.g., `IntArray`) instead of generics
-- Alternative workaround: Use explicit method calls (`arr.push(value)`) instead of operators
+- Map BPL source locations (file, line, column) to LLVM IR debug metadata
+- Generate DWARF type descriptors for BPL structs, enums, and primitives
+- Emit debug info for functions, variables, and scopes
+- Ensure proper handling of optimized code (debug info preservation)
+- Verify integration with GDB/LLDB
 
 **Acceptance Criteria:**
 
-- Generic structs can define operator methods that work with type parameters
-- `Array<T>` can implement `__lshift__(this: *Array<T>, value: T)` successfully
-- Code like `arr << 10` where `arr: Array<i32>` compiles and calls the correct method
-- Operator resolution correctly finds methods on instantiated generic types
-- Error messages clearly indicate when operator overloading fails on generic types
-- Type inference works correctly with generic operator overloads
-- Performance remains acceptable (no significant compilation slowdown)
-- All existing operator overloading tests continue to pass
-- New integration tests demonstrate generic operators working with Array<T>, Vec<T>, etc.
+- Can step through BPL code line-by-line in GDB/LLDB
+- Variables show correct values and types in debugger
+- Breakpoints work on BPL source lines
+- Stack traces show BPL function names and line numbers
 
 ---
 
@@ -528,6 +488,67 @@ The operator resolution happens before generic type substitution, so it never se
 - Type checking works for closure parameters and returns
 - Closures work with higher-order functions (map, filter, etc.)
 - Examples demonstrate functional programming patterns
+
+---
+
+## [5] Language Server Protocol (LSP) Enhancements
+
+**Description:** Expand the capabilities of the BPL Language Server to support advanced features like "Rename Symbol", "Find All References", "Go to Implementation", and "Code Actions". This significantly improves the developer experience in editors like VS Code.
+
+**Implementation Notes:**
+
+- Implement `textDocument/rename` for safe refactoring
+- Implement `textDocument/references` to find usage across workspace
+- Implement `textDocument/implementation` for interfaces/traits
+- Add code actions for common fixes (e.g., "Import missing module", "Fix typo")
+- Improve incremental synchronization for better performance
+
+**Acceptance Criteria:**
+
+- Renaming a symbol updates all references correctly across files
+- "Find References" lists all usages of a symbol
+- "Go to Implementation" works for interface methods
+- Code actions appear for common errors
+
+---
+
+## [6] String Interpolation
+
+**Description:** Support embedding expressions directly into string literals using `${expression}` syntax. This simplifies string construction and improves readability compared to concatenation or `printf` formatting.
+
+**Implementation Notes:**
+
+- Update lexer/parser to handle interpolated strings (e.g., `$"Value: ${x}"`)
+- Desugar interpolation into string concatenation or `StringBuilder` calls
+- Support arbitrary expressions inside `${...}`
+- Handle escaping of `$` characters
+
+**Acceptance Criteria:**
+
+- `local s: string = $"Hello ${name}!";` compiles and works
+- Expressions inside `${}` are evaluated correctly
+- Works with complex expressions (e.g., `${a + b}`)
+
+---
+
+## [6] Default and Named Arguments
+
+**Description:** Allow functions to define default values for parameters and allow callers to specify arguments by name. This reduces the need for function overloading and makes API calls more readable.
+
+**Implementation Notes:**
+
+- Update function declaration syntax to support default values (`x: int = 0`)
+- Update call syntax to support named arguments (`foo(y=20, x=10)`)
+- Resolve default values at call site (or generate wrapper functions)
+- Handle mix of positional and named arguments
+- Ensure correct evaluation order
+
+**Acceptance Criteria:**
+
+- Can declare functions with default parameters
+- Can call functions omitting default parameters
+- Can call functions using named arguments
+- Named arguments can be in any order
 
 ---
 
@@ -580,6 +601,454 @@ The operator resolution happens before generic type substitution, so it never se
 - Module exports properly control public API
 - Clear error messages on visibility violations
 - Examples demonstrate proper encapsulation patterns
+
+---
+
+## [7] Package Registry and Dependency Management
+
+**Description:** Create a centralized package registry and enhance the package manager to support publishing, versioning, and dependency resolution. This makes it easier to share and consume BPL libraries.
+
+**Implementation Notes:**
+
+- Design package metadata format (enhanced `bpl-package.json`)
+- Implement semantic versioning resolution
+- Create a backend registry API (simple static file server or API)
+- Add CLI commands: `bpl publish`, `bpl install <package>`
+- Handle transitive dependencies and version conflicts
+
+**Acceptance Criteria:**
+
+- Can publish a package to the registry
+- Can install a package and its dependencies
+- Version constraints are respected
+- `bpl_modules` structure handles dependencies correctly
+
+---
+
+## [7] WebAssembly (WASM) Target
+
+**Description:** Add a compilation target for WebAssembly (WASM) to enable running BPL code in web browsers and other WASM runtimes.
+
+**Implementation Notes:**
+
+- Add `wasm32-unknown-unknown` or `wasm32-wasi` target triple support
+- Handle WASM-specific ABI differences
+- Map BPL primitives to WASM types
+- Provide WASM-compatible standard library (or subset)
+- Generate `.wasm` files via LLVM backend
+
+**Acceptance Criteria:**
+
+- Can compile BPL code to `.wasm`
+- Generated WASM runs in a browser or Node.js
+- Basic I/O works (via WASI or imports)
+
+---
+
+## [8] Null Safety Operators
+
+**Description:** Introduce null-safe navigation (`?.`) and null-coalescing (`??`) operators to simplify handling of nullable types (pointers or Option types).
+
+**Implementation Notes:**
+
+- Implement `?.` for safe member access on pointers/options
+- Implement `??` for providing default values
+- Desugar `a?.b` to `(a != null ? a.b : null)` (or equivalent for Option)
+- Desugar `a ?? b` to `(a != null ? a : b)`
+
+**Acceptance Criteria:**
+
+- `ptr?.field` returns null/None if ptr is null/None
+- `val ?? default` returns default if val is null/None
+- Works with both pointers and `Option<T>`
+
+---
+
+## [5] Parallel Compilation
+
+**Description:** Utilize multi-core processors to compile independent modules in parallel, significantly reducing build times for large projects.
+
+**Implementation Notes:**
+
+- Analyze module dependency graph to identify independent subgraphs
+- Use worker threads or child processes to compile modules concurrently
+- Manage shared resources (cache, file locks) safely
+- Implement a task scheduler for compilation jobs
+
+**Acceptance Criteria:**
+
+- `bpl build` utilizes multiple cores
+- Build time decreases for projects with many modules
+- No race conditions or corrupted artifacts
+
+---
+
+## [5] Watch Mode
+
+**Description:** Add a `--watch` mode to the CLI that monitors source files for changes and automatically recompiles affected modules. This improves the developer feedback loop.
+
+**Implementation Notes:**
+
+- Use file system watcher (e.g., `chokidar` or native APIs)
+- Integrate with incremental compilation system
+- Debounce change events to avoid redundant builds
+- Clear terminal and show status updates
+
+**Acceptance Criteria:**
+
+- `bpl build --watch` stays running and waits for changes
+- Modifying a file triggers a rebuild
+- Only affected modules are recompiled
+
+---
+
+## [6] Parser Error Recovery
+
+**Description:** Improve the parser to recover from syntax errors and continue parsing the rest of the file. This allows reporting multiple errors in a single pass, rather than stopping at the first one.
+
+**Implementation Notes:**
+
+- Implement synchronization points (e.g., semicolons, braces)
+- When an error occurs, skip tokens until a synchronization point is found
+- Insert missing tokens or delete unexpected ones to restore valid state
+- Mark AST nodes as "error" nodes to prevent cascading errors in later phases
+
+**Acceptance Criteria:**
+
+- Compiler reports multiple syntax errors in a single file
+- Parser doesn't crash on malformed input
+- IDE experience is improved (syntax highlighting doesn't break completely)
+
+---
+
+## [6] Nested Pattern Matching
+
+**Description:** Extend pattern matching to support nested patterns, allowing deep destructuring of complex data structures in a single match arm. This improves readability and expressiveness when working with nested enums and structs.
+
+**Implementation Notes:**
+
+- Update parser to accept nested patterns (e.g., `Option.Some(Result.Ok(x))`)
+- Update TypeChecker to validate nested patterns and bind variables correctly
+- Update CodeGenerator to emit nested checks and extractions
+- Ensure exhaustiveness checking handles nested cases
+
+**Acceptance Criteria:**
+
+- Can match `Outer.A(Inner.B(x))`
+- Can bind variables at different levels of nesting
+- Exhaustiveness checking works for nested patterns
+
+---
+
+## [7] Fuzz Testing Integration
+
+**Description:** Integrate fuzz testing (e.g., LLVM libFuzzer) to automatically generate random inputs and find compiler crashes or assertion failures. This improves the robustness of the compiler.
+
+**Implementation Notes:**
+
+- Create a fuzz target that invokes the compiler frontend (lexer/parser/typechecker)
+- Link with libFuzzer
+- Run fuzzer continuously in CI or on dedicated machines
+- Triage and fix discovered crashes
+
+**Acceptance Criteria:**
+
+- Fuzz target exists and can be run
+- Fuzzer finds known crashes (if any)
+- Compiler robustness improves over time
+
+---
+
+## [7] Compiler Performance Benchmarking
+
+**Description:** Establish a benchmarking infrastructure to track compiler performance (build time, memory usage) over time and prevent regressions.
+
+**Implementation Notes:**
+
+- Create a set of benchmark projects (small, medium, large)
+- Write scripts to measure compilation time and peak memory usage
+- Integrate with CI to run benchmarks on every commit or nightly
+- Visualize results to identify trends
+
+**Acceptance Criteria:**
+
+- Benchmarks run automatically
+- Performance regressions are flagged
+- Historical performance data is available
+
+---
+
+## [7] Automatic C Binding Generation (bindgen)
+
+**Description:** Create a tool to automatically generate BPL `extern` declarations from C header files (`.h`). This significantly reduces the effort required to use existing C libraries.
+
+**Implementation Notes:**
+
+- Use `libclang` or a C parser to read header files
+- Map C types to BPL types (int -> i32, char* -> *char, structs -> structs)
+- Generate BPL source file with `extern` definitions and struct layouts
+- Handle macros and typedefs where possible
+
+**Acceptance Criteria:**
+
+- Tool accepts a `.h` file and outputs a `.bpl` file
+- Generated bindings compile and link correctly
+- Can call functions from a standard C library (e.g., `curl`, `sqlite`) using generated bindings
+
+---
+
+## [7] Standard Library: Networking & HTTP
+
+**Description:** Add networking capabilities to the standard library, including TCP/UDP sockets and a basic HTTP client. This enables building network-connected applications.
+
+**Implementation Notes:**
+
+- Implement `std.net.Socket` wrapping platform-specific socket APIs (BSD sockets/Winsock)
+- Implement `std.net.http` client using sockets or `libcurl` bindings
+- Support blocking and non-blocking modes (integrate with Async/Await later)
+- Provide DNS resolution helpers
+
+**Acceptance Criteria:**
+
+- Can create a TCP server and client
+- Can make an HTTP GET request
+- Basic error handling for network failures
+
+---
+
+## [7] Standard Library: System Calls & OS Interaction
+
+**Description:** Expand the standard library to include essential system calls and OS interaction capabilities, such as signal handling, environment variable access, and process control.
+
+**Implementation Notes:**
+
+- Implement `std.os.signal` to handle signals like SIGINT, SIGTERM.
+- Implement `std.os.env` for `getenv`, `setenv`.
+- Implement `std.os.process` for `fork`, `exec`, `wait`, `pid`.
+- Ensure cross-platform compatibility where possible (or clear errors on unsupported platforms).
+
+**Acceptance Criteria:**
+
+- Can register a signal handler and catch a signal.
+- Can read and write environment variables.
+- Can spawn a child process and wait for it to complete.
+
+---
+
+## [7] Standard Library: Date & Time
+
+**Description:** Add a comprehensive Date and Time module to the standard library, supporting time retrieval, duration calculations, and formatting.
+
+**Implementation Notes:**
+
+- Implement `std.time.now()` to get current timestamp.
+- Create `Date` and `Time` structs.
+- Implement `Duration` for time intervals.
+- Add formatting and parsing utilities (strftime style).
+- Wrap platform-specific time functions (`clock_gettime`, `GetSystemTime`).
+
+**Acceptance Criteria:**
+
+- Can get the current system time with high precision.
+- Can format a date string.
+- Can measure the duration of an operation.
+
+---
+
+## [7] Standard Library: JSON & Serialization
+
+**Description:** Add support for parsing and generating JSON data, a critical requirement for configuration and web APIs.
+
+**Implementation Notes:**
+
+- Implement `std.json.parse` returning a dynamic `JsonValue` enum variant.
+- Implement `std.json.stringify` for converting values to JSON strings.
+- (Future) Support reflection-based serialization for structs.
+
+**Acceptance Criteria:**
+
+- Can parse a JSON string into a traversable object.
+- Can serialize a `Map` or `List` to a JSON string.
+- Handles nested objects and arrays correctly.
+
+---
+
+## [7] Standard Library: Cryptography & Hashing
+
+**Description:** Provide basic cryptographic primitives and secure random number generation.
+
+**Implementation Notes:**
+
+- Implement `std.crypto.hash` (SHA256, MD5) wrapping C libraries or native implementation.
+- Implement `std.crypto.random` for CSPRNG.
+- Ensure secure memory handling for keys (if possible).
+
+**Acceptance Criteria:**
+
+- Can compute the SHA256 hash of a string/byte array.
+- Can generate cryptographically secure random bytes.
+
+---
+
+## [7] Standard Library: Regular Expressions
+
+**Description:** Add support for regular expressions to enable powerful string matching and manipulation.
+
+**Implementation Notes:**
+
+- Wrap a C regex library (like `pcre` or POSIX `regex.h`) or implement a basic engine.
+- Provide `std.regex.match`, `std.regex.replace`, `std.regex.split`.
+
+**Acceptance Criteria:**
+
+- Can compile a regex pattern.
+- Can check if a string matches a pattern.
+- Can extract capture groups from a match.
+
+---
+
+## [7] Standard Library: Advanced Collections
+
+**Description:** Expand the collection types available in the standard library beyond `List` and `Map`.
+
+**Implementation Notes:**
+
+- Implement `std.collections.Set<T>` (HashSet).
+- Implement `std.collections.LinkedList<T>` (Doubly linked).
+- Implement `std.collections.Queue<T>` and `std.collections.Stack<T>`.
+- Implement `std.collections.PriorityQueue<T>` (Binary Heap).
+
+**Acceptance Criteria:**
+
+- Can use a Set to filter unique items.
+- Can use Queue/Stack for standard algorithms.
+- Can use PriorityQueue for scheduling tasks.
+
+---
+
+## [7] Standard Library: BigInt & Arbitrary Precision
+
+**Description:** Add support for arbitrary precision integers and floating point numbers for applications requiring high precision (crypto, scientific computing).
+
+**Implementation Notes:**
+
+- Implement `std.math.BigInt` wrapping `gmp` or a native implementation.
+- Overload arithmetic operators for `BigInt`.
+- Support string conversion to/from `BigInt`.
+
+**Acceptance Criteria:**
+
+- Can perform arithmetic on integers larger than 64 bits.
+- Can print and parse large integers.
+
+---
+
+## [7] Standard Library: Compression & Archiving
+
+**Description:** Add support for data compression and decompression.
+
+**Implementation Notes:**
+
+- Implement `std.compress.zlib` and `std.compress.gzip`.
+- Wrap `zlib` or similar C library.
+- Provide stream-based and buffer-based APIs.
+
+**Acceptance Criteria:**
+
+- Can compress a string/buffer and decompress it back to original.
+- Can read/write gzip files.
+
+---
+
+## [7] Standard Library: Encoding & Decoding
+
+**Description:** Add utilities for common data encodings.
+
+**Implementation Notes:**
+
+- Implement `std.encoding.base64`.
+- Implement `std.encoding.hex`.
+- Implement `std.encoding.csv` for CSV parsing/generation.
+
+**Acceptance Criteria:**
+
+- Can encode binary data to Base64 string and decode back.
+- Can parse a CSV file into a list of records.
+
+---
+
+## [8] Middle-end Optimizations
+
+**Description:** Implement BPL-specific optimization passes in the middle-end (before LLVM IR generation) to improve code quality and enable high-level optimizations that LLVM might miss.
+
+**Implementation Notes:**
+
+- Implement Dead Code Elimination (DCE) on the AST or BPL IR
+- Implement Constant Folding and Propagation
+- Implement Inlining of small BPL functions
+- Implement specialized optimizations for BPL constructs (e.g., enum matching)
+
+**Acceptance Criteria:**
+
+- Generated LLVM IR is cleaner and more efficient
+- Compile-time evaluation handles more cases
+- Runtime performance improves for specific patterns
+
+---
+
+## [8] Compile-Time Function Execution (CTFE)
+
+**Description:** Allow a subset of BPL functions to be executed during compilation to generate constants. This enables complex compile-time calculations and data initialization without runtime cost.
+
+**Implementation Notes:**
+
+- Identify functions marked for compile-time execution (e.g., `const frame`)
+- Implement an interpreter for the BPL IR or AST
+- Execute code during semantic analysis phase
+- Store results as constants in the compiled binary
+- Restrict operations (no I/O, no heap allocation unless optimized out)
+
+**Acceptance Criteria:**
+
+- `const global X: int = factorial(5);` compiles with `120` hardcoded
+- Can use CTFE results for array sizes `local arr: int[compute_size()];`
+
+---
+
+## [8] Code Coverage Integration
+
+**Description:** Add support for generating code coverage reports to help developers identify untested parts of their code.
+
+**Implementation Notes:**
+
+- Add `--coverage` flag to compiler
+- Instrument LLVM IR with coverage mapping (compatible with `llvm-cov`)
+- Generate `.profraw` files at runtime
+- Document how to view reports using standard tools
+
+**Acceptance Criteria:**
+
+- Compiling with `--coverage` and running tests generates profile data
+- Can view line-by-line coverage report using `llvm-cov`
+
+---
+
+## [8] Region-Based Memory Management (Arenas)
+
+**Description:** Add `Arena` allocators to the standard library to simplify manual memory management. Arenas allow allocating many objects and freeing them all at once, reducing the risk of memory leaks and fragmentation.
+
+**Implementation Notes:**
+
+- Implement `std.mem.Arena` struct
+- Support `arena.alloc<T>(...)`
+- Support `arena.reset()` and `arena.destroy()`
+- Optimize for bulk allocation performance
+
+**Acceptance Criteria:**
+
+- Can create an Arena and allocate objects from it
+- Destroying the Arena frees all memory
+- Performance is better than individual `malloc`/`free` calls for many small objects
 
 ---
 

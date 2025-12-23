@@ -1,0 +1,6 @@
+{
+  "expectedOutput": "arr[0] = 10\narr[1] = 20\narr[2] = 30\n",
+  "args": [],
+  "env": {},
+  "input": ""
+}
