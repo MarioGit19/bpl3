@@ -519,7 +519,7 @@ export class Formatter {
 
   private formatAsm(stmt: AST.AsmBlockStmt): string {
     const indent = this.getIndent();
-    return `${indent}asm { ${stmt.content} }`;
+    return `${indent}asm {${stmt.content}}`;
   }
 
   private formatIf(stmt: AST.IfStmt): string {

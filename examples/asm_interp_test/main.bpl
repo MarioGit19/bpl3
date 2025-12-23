@@ -7,11 +7,11 @@ frame main() ret int {
     printf("Before: a=%d, res=%d\n", a, res);
 
     # Inline LLVM IR with interpolation
-    asm { 
+    asm {
         %val = load i32, i32* (a)
         %temp = add i32 %val, 1
         store i32 %temp, i32* (res)
-     }
+}
 
     printf("After: a=%d, res=%d\n", a, res);
     return 0;

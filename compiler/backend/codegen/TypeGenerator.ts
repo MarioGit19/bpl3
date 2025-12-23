@@ -1,0 +1,1450 @@
+import type { AST } from "../..";
+import { BaseCodeGenerator } from "./BaseCodeGenerator";
+
+export abstract class TypeGenerator extends BaseCodeGenerator {
+  protected abstract generateFunction(
+    decl: AST.FunctionDecl,
+    parentStruct?: AST.StructDecl | AST.EnumDecl,
+  ): void;
+
+  protected getMangledName(
+    name: string,
+    type: AST.FunctionTypeNode,
+    isExtern: boolean = false,
+    genericArgs: AST.TypeNode[] = [],
+  ): string {
+    if (name === "main" || isExtern) return name;
+    let mangled = `${name}_${type.paramTypes.map((t) => this.mangleType(t)).join("_")}`;
+    if (genericArgs.length > 0) {
+      mangled += "_" + genericArgs.map((t) => this.mangleType(t)).join("_");
+    }
+    return mangled;
+  }
+
+  protected getTypeIdFromNode(type: AST.TypeNode): number {
+    const typeName = this.resolveType(type); // Get LLVM type name as key
+
+    // Primitives
+    if (typeName === "i32") return 1;
+    if (typeName === "i1") return 2;
+    if (typeName === "double") return 3;
+    if (typeName === "i8*") return 4;
+
+    if (!this.typeIdMap.has(typeName)) {
+      this.typeIdMap.set(typeName, this.nextTypeId++);
+    }
+    return this.typeIdMap.get(typeName)!;
+  }
+
+  protected getAllStructFields(decl: AST.StructDecl): AST.StructField[] {
+    let fields: AST.StructField[] = [];
+    if (decl.inheritanceList) {
+      for (const typeNode of decl.inheritanceList) {
+        if (typeNode.kind === "BasicType") {
+          // Check for generic instantiation
+          if (typeNode.genericArgs && typeNode.genericArgs.length > 0) {
+            const baseDecl =
+              (typeNode.resolvedDeclaration as AST.StructDecl) ||
+              this.structMap.get(typeNode.name);
+            if (baseDecl && baseDecl.kind === "StructDecl") {
+              // Resolve the monomorphized struct to ensure it exists and we get the concrete name
+              const llvmType = this.resolveMonomorphizedType(
+                baseDecl,
+                typeNode.genericArgs,
+              );
+              // llvmType is like %struct.Name_Args
+              let structName = llvmType;
+              if (structName.startsWith("%struct.")) {
+                structName = structName.substring(8);
+              }
+              // Strip pointer if present (shouldn't be for struct type)
+              while (structName.endsWith("*")) {
+                structName = structName.slice(0, -1);
+              }
+
+              const parent = this.structMap.get(structName);
+              if (parent) {
+                fields = this.getAllStructFields(parent);
+                break; // Only one parent struct
+              }
+            }
+          }
+
+          // Try to use resolved declaration first (supports cross-module inheritance)
+          if (
+            typeNode.resolvedDeclaration &&
+            (typeNode.resolvedDeclaration as any).kind === "StructDecl"
+          ) {
+            const parent = typeNode.resolvedDeclaration as AST.StructDecl;
+            fields = this.getAllStructFields(parent);
+            break; // Only one parent struct
+          }
+
+          // Fallback to name lookup (local structs)
+          const parent = this.structMap.get(typeNode.name);
+          if (parent) {
+            fields = this.getAllStructFields(parent);
+            break; // Only one parent struct
+          }
+        }
+      }
+    }
+
+    const hasVTable = (this.vtableLayouts.get(decl.name)?.length || 0) > 0;
+    const parentHasVTable = fields.some((f) => f.name === "__vtable__");
+
+    const currentFields = decl.members.filter(
+      (m) => m.kind === "StructField",
+    ) as AST.StructField[];
+
+    let resultFields = [...fields];
+    if (hasVTable && !parentHasVTable) {
+      const vtableField: AST.StructField = {
+        kind: "StructField",
+        name: "__vtable__",
+        type: {
+          kind: "BasicType",
+          name: "i8",
+          genericArgs: [],
+          pointerDepth: 1,
+          arrayDimensions: [],
+          location: decl.location,
+        },
+        location: decl.location,
+      };
+      resultFields.push(vtableField);
+    }
+
+    return resultFields.concat(currentFields);
+  }
+
+  protected collectStructLayouts(program: AST.Program) {
+    for (const stmt of program.statements) {
+      if (stmt.kind === "StructDecl") {
+        // Only collect non-generic structs initially
+        // Generic structs are collected on demand
+        // But we need to index layout for non-generic ones
+        const decl = stmt as AST.StructDecl;
+        if (decl.genericParams.length === 0) {
+          const layout = new Map<string, number>();
+          const fields = this.getAllStructFields(decl);
+          fields.forEach((f, i) => layout.set(f.name, i));
+          this.structLayouts.set(decl.name, layout);
+        }
+      }
+    }
+  }
+
+  protected computeVTableLayouts(program: AST.Program) {
+    // First, ensure all structs are in structMap
+    for (const stmt of program.statements) {
+      if (stmt.kind === "StructDecl") {
+        const decl = stmt as AST.StructDecl;
+        this.structMap.set(decl.name, decl);
+      }
+    }
+
+    // Helper to get methods of a struct
+    const getMethods = (decl: AST.StructDecl): string[] => {
+      return decl.members
+        .filter((m) => m.kind === "FunctionDecl")
+        .filter((m) => (m as AST.FunctionDecl).genericParams.length === 0)
+        .map((m) => (m as AST.FunctionDecl).name);
+    };
+
+    // Helper to compute layout recursively
+    const compute = (name: string): string[] => {
+      if (this.vtableLayouts.has(name)) return this.vtableLayouts.get(name)!;
+
+      const decl = this.structMap.get(name);
+      if (!decl) return [];
+
+      let layout: string[] = [];
+
+      // Check parent
+      let parentName: string | null = null;
+      if (decl.inheritanceList) {
+        for (const typeNode of decl.inheritanceList) {
+          if (typeNode.kind === "BasicType") {
+            // Resolve parent name
+            let pName = typeNode.name;
+            if (
+              typeNode.resolvedDeclaration &&
+              (typeNode.resolvedDeclaration as any).kind === "StructDecl"
+            ) {
+              pName = (typeNode.resolvedDeclaration as any).name;
+            }
+            // Ignore generics for now or handle them?
+            // If generic, we might need to instantiate?
+            // For now, assume non-generic inheritance for vtables or simple names.
+            parentName = pName;
+            break;
+          }
+        }
+      }
+
+      if (parentName) {
+        layout = [...compute(parentName)];
+      }
+
+      // Add/Override methods
+      const methods = getMethods(decl);
+      for (const method of methods) {
+        const index = layout.indexOf(method);
+        if (index === -1) {
+          layout.push(method);
+        }
+        // If index !== -1, it's an override, position stays same.
+      }
+
+      this.vtableLayouts.set(name, layout);
+      return layout;
+    };
+
+    // Compute for all structs
+    for (const [name, decl] of this.structMap) {
+      if (decl.genericParams.length === 0) {
+        compute(name);
+      }
+    }
+  }
+
+  protected generateVTable(structName: string, decl: AST.StructDecl) {
+    const methods = this.vtableLayouts.get(structName);
+    if (!methods || methods.length === 0) return;
+
+    const vtableName = `${structName}_vtable`;
+    const globalName = `@${vtableName}`;
+    this.vtableGlobalNames.set(structName, globalName);
+
+    // Build array of function pointers
+    const ptrs: string[] = [];
+    for (const methodName of methods) {
+      const owner = this.findMethodOwner(structName, methodName);
+      if (!owner) {
+        ptrs.push("null");
+        continue;
+      }
+
+      const methodDecl = owner.members.find(
+        (m) =>
+          m.kind === "FunctionDecl" &&
+          m.name === methodName &&
+          (m as AST.FunctionDecl).genericParams.length === 0,
+      ) as AST.FunctionDecl;
+
+      const funcName = `${owner.name}_${methodName}`;
+      let mangled = funcName;
+      if (
+        methodDecl.resolvedType &&
+        methodDecl.resolvedType.kind === "FunctionType"
+      ) {
+        mangled = this.getMangledName(
+          funcName,
+          methodDecl.resolvedType as AST.FunctionTypeNode,
+        );
+      }
+
+      const funcTypeStr = this.resolveType(methodDecl.resolvedType!);
+      ptrs.push(`i8* bitcast (${funcTypeStr} @${mangled} to i8*)`);
+    }
+
+    const arrayType = `[${methods.length} x i8*]`;
+    const arrayContent = `[${ptrs.join(", ")}]`;
+
+    this.emitDeclaration(
+      `${globalName} = constant ${arrayType} ${arrayContent}`,
+    );
+    this.emitDeclaration("");
+  }
+
+  protected generateStruct(decl: AST.StructDecl, mangledName?: string) {
+    const structName = mangledName || decl.name;
+
+    // Avoid re-emitting
+    if (this.generatedStructs.has(structName)) return;
+    this.generatedStructs.add(structName);
+
+    // %struct.Name = type { ... }
+    const fields = this.getAllStructFields(decl);
+
+    // We need to resolve field types.
+    // If this is a monomorphized struct (generic instance), the fields might use generic types.
+    // The 'decl' passed here should effectively be the instantiated version with types substituted.
+    // However, for simplicity, 'resolveType' handles substitution if 'decl' is a virtual AST node?
+    // No, standard resolveType relies on resolving AST nodes.
+    // When we call generateStruct for Box<int>, we should have already substituted T with int in the fields.
+
+    const fieldTypes = fields
+      .map((f) => this.resolveType(f.resolvedType || f.type))
+      .join(", ");
+
+    // Add hidden null-bit field at the end (i1 = 1 bit boolean)
+    const allFieldTypes = fieldTypes ? `${fieldTypes}, i1` : `i1`;
+    this.emitDeclaration(`%struct.${structName} = type { ${allFieldTypes} }`);
+    this.emitDeclaration("");
+
+    // Register layout - null_bit is always the last field
+    const layout = new Map<string, number>();
+    fields.forEach((f, i) => layout.set(f.name, i));
+    layout.set("__null_bit__", fields.length); // Hidden null bit field
+    this.structLayouts.set(structName, layout);
+
+    // Generate VTable if needed
+    if (this.vtableLayouts.has(structName)) {
+      this.generateVTable(structName, decl);
+    }
+
+    // Generate methods
+    // Only generate methods for non-generic structs (standard structs).
+    // For monomorphized structs (when mangledName is provided), methods are queued
+    // separately in resolveMonomorphizedType() with proper type substitution.
+    if (decl.genericParams.length === 0 && !mangledName) {
+      const methods = decl.members.filter(
+        (m) => m.kind === "FunctionDecl",
+      ) as AST.FunctionDecl[];
+
+      for (const method of methods) {
+        const originalName = method.name;
+        const mangledName = `${structName}_${method.name}`;
+
+        if (this.currentFunctionName) {
+          this.pendingGenerations.push(() => {
+            const oldName = method.name;
+            method.name = mangledName;
+            this.generateFunction(method, decl);
+            method.name = oldName;
+          });
+        } else {
+          method.name = mangledName;
+          this.generateFunction(method, decl);
+          method.name = originalName;
+        }
+      }
+    }
+  }
+
+  protected generateEnum(decl: AST.EnumDecl, mangledName?: string) {
+    const enumName = mangledName || decl.name;
+
+    // Avoid re-emitting
+    if (this.generatedStructs.has(enumName)) return;
+    this.generatedStructs.add(enumName);
+
+    // Calculate maximum variant data size with proper alignment
+    let maxSize = 0;
+    for (const variant of decl.variants) {
+      let variantSize = 0;
+
+      if (variant.dataType) {
+        if (variant.dataType.kind === "EnumVariantTuple") {
+          // Tuple variant: calculate size with alignment
+          let offset = 0;
+          for (const fieldType of variant.dataType.types) {
+            const llvmType = this.resolveType(fieldType);
+            const fieldSize = this.getTypeSize(llvmType);
+
+            // Align offset based on field size
+            const alignment =
+              fieldSize >= 8 ? 8 : fieldSize >= 4 ? 4 : fieldSize >= 2 ? 2 : 1;
+            if (offset % alignment !== 0) {
+              offset = Math.ceil(offset / alignment) * alignment;
+            }
+
+            offset += fieldSize;
+          }
+          variantSize = offset;
+        } else if (variant.dataType.kind === "EnumVariantStruct") {
+          // Struct variant: calculate size with alignment
+          let offset = 0;
+          for (const field of variant.dataType.fields) {
+            const llvmType = this.resolveType(field.type);
+            const fieldSize = this.getTypeSize(llvmType);
+
+            // Align offset based on field size
+            const alignment =
+              fieldSize >= 8 ? 8 : fieldSize >= 4 ? 4 : fieldSize >= 2 ? 2 : 1;
+            if (offset % alignment !== 0) {
+              offset = Math.ceil(offset / alignment) * alignment;
+            }
+
+            offset += fieldSize;
+          }
+          variantSize = offset;
+        }
+      }
+      // Unit variants have size 0
+
+      if (variantSize > maxSize) {
+        maxSize = variantSize;
+      }
+    }
+
+    // Generate enum as: { i32 tag, [maxSize x i8] data }
+    // If maxSize is 0 (all unit variants), just use { i32 }
+    const enumType =
+      maxSize > 0
+        ? `%enum.${enumName} = type { i32, [${maxSize} x i8] }`
+        : `%enum.${enumName} = type { i32 }`;
+
+    this.emitDeclaration(enumType);
+    this.emitDeclaration("");
+
+    // Register layout for later use
+    const layout = new Map<string, number>();
+    layout.set("__tag__", 0); // Discriminant is always at index 0
+    if (maxSize > 0) {
+      layout.set("__data__", 1); // Data union is at index 1
+    }
+    this.structLayouts.set(enumName, layout);
+
+    // Store the data array size for equality comparisons
+    if (maxSize > 0) {
+      this.enumDataSizes.set(enumName, maxSize);
+    }
+
+    // Store variant information for later use in pattern matching
+    const variantInfo = new Map<
+      string,
+      { index: number; dataType?: AST.EnumVariantData }
+    >();
+    decl.variants.forEach((v, i) => {
+      variantInfo.set(v.name, { index: i, dataType: v.dataType });
+    });
+    this.enumVariants.set(enumName, variantInfo);
+
+    // Generate methods
+    // Only generate methods for non-generic enums.
+    // For monomorphized enums (when mangledName is provided), methods are queued
+    // separately in instantiateGenericEnum() with proper type substitution.
+    if (decl.genericParams.length === 0 && !mangledName && decl.methods) {
+      for (const method of decl.methods) {
+        const originalName = method.name;
+        const mangledName = `${enumName}_${method.name}`;
+
+        if (this.currentFunctionName) {
+          this.pendingGenerations.push(() => {
+            const oldName = method.name;
+            method.name = mangledName;
+            this.generateFunction(method, decl);
+            method.name = oldName;
+          });
+        } else {
+          method.name = mangledName;
+          this.generateFunction(method, decl);
+          method.name = originalName;
+        }
+      }
+    }
+  }
+
+  protected getTypeSize(llvmType: string): number {
+    // Estimate size in bytes for common LLVM types
+    // This is a simplification - actual sizes may vary
+    if (llvmType === "i1") return 1;
+    if (llvmType === "i8") return 1;
+    if (llvmType === "i16") return 2;
+    if (llvmType === "i32") return 4;
+    if (llvmType === "i64") return 8;
+    if (llvmType === "double") return 8;
+    if (llvmType === "float") return 4;
+    if (llvmType.endsWith("*")) return 8; // Pointers are 8 bytes
+    if (llvmType.startsWith("%struct.")) return 8; // Approximate struct size
+    if (llvmType.startsWith("%enum.")) return 8; // Approximate enum size
+    return 8; // Default fallback
+  }
+
+  protected getDataArraySize(enumTypeName: string): number {
+    // Extract the data array size from enum type string like "%enum.Color = type { i32, [16 x i8] }"
+    // or from just the type name "%enum.Color"
+    const match = enumTypeName.match(/\[(\d+) x i8\]/);
+    if (match && match[1]) {
+      return parseInt(match[1], 10);
+    }
+    // If no match, the enum might not have a data field (unit-only enum)
+    return 0;
+  }
+
+  protected generateEnumVariantConstruction(
+    enumDecl: AST.EnumDecl,
+    variant: AST.EnumVariant,
+    variantIndex: number,
+    genericArgs?: AST.TypeNode[],
+  ): string {
+    let enumName = enumDecl.name;
+
+    // If generic args are provided, instantiate the generic enum
+    if (genericArgs && genericArgs.length > 0) {
+      enumName = this.instantiateGenericEnum(enumDecl.name, genericArgs);
+    }
+
+    const enumType = `%enum.${enumName}`;
+
+    // For now, only handle unit variants (no associated data)
+    // TODO: Handle tuple and struct variants with data
+    if (variant.dataType) {
+      throw this.createError(
+        `Enum variants with associated data are not yet supported in code generation`,
+        variant,
+        `Variant '${variant.name}' has associated data. Only unit variants are currently supported.`,
+      );
+    }
+
+    // Allocate space for the enum value
+    const enumPtr = this.newRegister();
+    this.emit(`  ${enumPtr} = alloca ${enumType}`);
+
+    // Get pointer to tag field (index 0)
+    const tagPtr = this.newRegister();
+    this.emit(
+      `  ${tagPtr} = getelementptr inbounds ${enumType}, ${enumType}* ${enumPtr}, i32 0, i32 0`,
+    );
+
+    // Store the variant index as the discriminant
+    this.emit(`  store i32 ${variantIndex}, i32* ${tagPtr}`);
+
+    // Load and return the enum value
+    const result = this.newRegister();
+    this.emit(`  ${result} = load ${enumType}, ${enumType}* ${enumPtr}`);
+
+    return result;
+  }
+
+  protected mangleType(type: AST.TypeNode): string {
+    if (type.kind === "BasicType") {
+      let name = type.name;
+
+      // Normalize aliases to match TypeChecker and ensure consistent mangling
+      switch (name) {
+        case "int":
+          name = "i32";
+          break;
+        case "uint":
+          name = "u32";
+          break;
+        case "float":
+          name = "double";
+          break;
+        case "bool":
+          name = "i1";
+          break;
+        case "char":
+          name = "i8";
+          break;
+        case "uchar":
+          name = "u8";
+          break;
+        case "short":
+          name = "i16";
+          break;
+        case "ushort":
+          name = "u16";
+          break;
+        case "long":
+          name = "i64";
+          break;
+        case "ulong":
+          name = "u64";
+          break;
+      }
+
+      // Handle generic args in mangling
+      if (type.genericArgs.length > 0) {
+        const args = type.genericArgs.map((t) => this.mangleType(t)).join("_");
+        name = `${name}_${args}`;
+      }
+
+      // Cleanup name similarly to before but on AST level names
+      if (name.includes(".")) name = name.replace(/\./g, "_");
+
+      // Basic type pointers/arrays
+      let suffix = "";
+      for (let i = 0; i < type.pointerDepth; i++) suffix += "_ptr";
+      for (let d of type.arrayDimensions) suffix += `_arr_${d}_`;
+
+      return `${name}${suffix}`;
+    } else if (type.kind === "FunctionType") {
+      return "fn"; // simplified mangling for fn types
+    }
+    return "unknown";
+  }
+
+  protected checkInheritance(childName: string, parentName: string): boolean {
+    if (childName === parentName) return true;
+
+    const structDecl = this.structMap.get(childName);
+    if (!structDecl) return false;
+
+    if (structDecl.inheritanceList) {
+      for (const parent of structDecl.inheritanceList) {
+        if (parent.kind === "BasicType") {
+          const parentBasic = parent as AST.BasicTypeNode;
+          // Check direct parent
+          if (parentBasic.name === parentName) return true;
+          // Check recursive
+          if (this.checkInheritance(parentBasic.name, parentName)) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  protected isGenericTypeParameter(name: string): boolean {
+    // Check if this is a generic type parameter (usually single uppercase letter or short name)
+    // This is a heuristic - better would be to track in symbol table
+    return name.length <= 2 && name === name.toUpperCase();
+  }
+
+  protected isPrimitiveType(name: string): boolean {
+    const primitives = [
+      "int",
+      "i8",
+      "i16",
+      "i32",
+      "i64",
+      "u8",
+      "u16",
+      "u32",
+      "u64",
+      "float",
+      "double",
+      "bool",
+      "char",
+      "void",
+      "string",
+    ];
+    return primitives.includes(name);
+  }
+
+  protected getASTTypeSize(type: AST.TypeNode): number {
+    const typeStr = this.resolveType(type);
+
+    // Map LLVM types to sizes
+    if (typeStr === "i1") return 1;
+    if (typeStr === "i8") return 1;
+    if (typeStr === "i16") return 2;
+    if (typeStr === "i32") return 4;
+    if (typeStr === "i64") return 8;
+    if (typeStr === "float") return 4;
+    if (typeStr === "double") return 8;
+    if (typeStr.includes("*")) return 8; // Pointers are 8 bytes
+
+    // For structs and other types, return a default
+    return 0;
+  }
+
+  protected findMethodOwner(
+    structName: string,
+    methodName: string,
+  ): AST.StructDecl | null {
+    const decl = this.structMap.get(structName);
+    if (!decl) return null;
+
+    // Check members
+    if (
+      decl.members.some(
+        (m) => m.kind === "FunctionDecl" && m.name === methodName,
+      )
+    ) {
+      return decl;
+    }
+
+    // Check parents
+    for (const parent of decl.inheritanceList) {
+      if (parent.kind === "BasicType") {
+        // Handle generic inheritance
+        if (parent.genericArgs && parent.genericArgs.length > 0) {
+          const baseDecl =
+            (parent.resolvedDeclaration as AST.StructDecl) ||
+            this.structMap.get(parent.name);
+          if (baseDecl && baseDecl.kind === "StructDecl") {
+            // Resolve the monomorphized struct
+            const llvmType = this.resolveMonomorphizedType(
+              baseDecl,
+              parent.genericArgs,
+            );
+            let pName = llvmType;
+            if (pName.startsWith("%struct.")) {
+              pName = pName.substring(8);
+            }
+            // Strip pointer if present
+            while (pName.endsWith("*")) {
+              pName = pName.slice(0, -1);
+            }
+            const owner = this.findMethodOwner(pName, methodName);
+            if (owner) return owner;
+          }
+          continue;
+        }
+
+        let parentName = parent.name;
+        // Use resolved declaration if available (handles imports)
+        if (
+          parent.resolvedDeclaration &&
+          (parent.resolvedDeclaration as any).kind === "StructDecl"
+        ) {
+          parentName = (parent.resolvedDeclaration as any).name;
+        }
+
+        const owner = this.findMethodOwner(parentName, methodName);
+        if (owner) return owner;
+      }
+    }
+    return null;
+  }
+
+  protected findInstantiatedParentType(
+    childDecl: AST.StructDecl,
+    childType: AST.BasicTypeNode,
+    parentName: string,
+  ): AST.BasicTypeNode | undefined {
+    if (childDecl.name === parentName) return childType;
+
+    if (!childDecl.inheritanceList || childDecl.inheritanceList.length === 0)
+      return undefined;
+
+    const parentType = childDecl.inheritanceList[0] as AST.BasicTypeNode;
+
+    // Substitute if child is generic
+    let instantiatedParent = parentType;
+    if (
+      childDecl.genericParams.length > 0 &&
+      childType.genericArgs.length > 0
+    ) {
+      const map = new Map<string, AST.TypeNode>();
+      for (let i = 0; i < childDecl.genericParams.length; i++) {
+        if (i < childType.genericArgs.length) {
+          map.set(childDecl.genericParams[i]!.name, childType.genericArgs[i]!);
+        }
+      }
+      instantiatedParent = this.substituteType(
+        parentType,
+        map,
+      ) as AST.BasicTypeNode;
+    }
+
+    if (instantiatedParent.name === parentName) return instantiatedParent;
+
+    const parentDecl = this.structMap.get(instantiatedParent.name);
+    if (!parentDecl) return undefined;
+
+    return this.findInstantiatedParentType(
+      parentDecl,
+      instantiatedParent,
+      parentName,
+    );
+  }
+
+  protected resolveTypeDepth = 0;
+
+  protected resolveType(type: AST.TypeNode): string {
+    if (this.resolveTypeDepth > 200) {
+      console.log(`resolveType recursion limit reached! Type: ${type.kind}`);
+      if (type.kind === "BasicType") console.log(`Name: ${(type as any).name}`);
+      throw new Error("resolveType recursion limit");
+    }
+    this.resolveTypeDepth++;
+    try {
+      if (!type) {
+        // Should not happen if TypeChecker did its job
+        throw new Error("Cannot resolve undefined type");
+      }
+      if (type.kind === "BasicType") {
+        const basicType = type as AST.BasicTypeNode;
+        let llvmType = "";
+
+        // Check currentTypeMap for generic substitutions
+        if (this.currentTypeMap.has(basicType.name)) {
+          const mapped = this.currentTypeMap.get(basicType.name)!;
+
+          // Prevent infinite recursion if mapped type is same as current type (T -> T)
+          if (
+            mapped.kind === "BasicType" &&
+            (mapped as any).name === basicType.name
+          ) {
+            // Fallback to struct name if T maps to T (generic template context)
+            return `%struct.${basicType.name}`;
+          }
+
+          let llvmType = this.resolveType(mapped);
+
+          for (let i = 0; i < basicType.pointerDepth; i++) {
+            llvmType += "*";
+          }
+
+          for (let i = basicType.arrayDimensions.length - 1; i >= 0; i--) {
+            llvmType = `[${basicType.arrayDimensions[i]} x ${llvmType}]`;
+          }
+          return llvmType;
+        }
+
+        // Check for type aliases
+        if (this.typeAliasMap.has(basicType.name)) {
+          const aliasDecl = this.typeAliasMap.get(basicType.name)!;
+          // If it's a generic alias, we need to substitute args
+          if (aliasDecl.genericParams && aliasDecl.genericParams.length > 0) {
+            // For now, just resolve the base type if no args provided (should be handled by TypeChecker)
+            // If args provided, we need substitution logic similar to structs
+            if (basicType.genericArgs.length > 0) {
+              const typeMap = new Map<string, AST.TypeNode>();
+              for (let i = 0; i < aliasDecl.genericParams.length; i++) {
+                typeMap.set(
+                  aliasDecl.genericParams[i]!.name,
+                  basicType.genericArgs[i]!,
+                );
+              }
+              const substituted = this.substituteType(aliasDecl.type, typeMap);
+              let llvmType = this.resolveType(substituted);
+
+              for (let i = 0; i < basicType.pointerDepth; i++) {
+                llvmType += "*";
+              }
+              for (let i = basicType.arrayDimensions.length - 1; i >= 0; i--) {
+                llvmType = `[${basicType.arrayDimensions[i]} x ${llvmType}]`;
+              }
+              return llvmType;
+            }
+          }
+
+          // Non-generic alias or generic alias used without args (if allowed/resolved)
+          let llvmType = this.resolveType(aliasDecl.type);
+          for (let i = 0; i < basicType.pointerDepth; i++) {
+            llvmType += "*";
+          }
+          for (let i = basicType.arrayDimensions.length - 1; i >= 0; i--) {
+            llvmType = `[${basicType.arrayDimensions[i]} x ${llvmType}]`;
+          }
+          return llvmType;
+        }
+
+        // Check for generics usage
+        if (basicType.genericArgs && basicType.genericArgs.length > 0) {
+          // Substitute generic args first
+          const instantiatedArgs = basicType.genericArgs.map((arg) =>
+            this.substituteType(arg, this.currentTypeMap),
+          );
+          const structDecl = this.structMap.get(basicType.name);
+          const enumDecl = this.enumDeclMap.get(basicType.name);
+
+          if (structDecl) {
+            // Instantiate generic struct
+            llvmType = this.resolveMonomorphizedType(
+              structDecl,
+              instantiatedArgs,
+            );
+          } else if (enumDecl) {
+            // Instantiate generic enum
+            const mangledName = this.instantiateGenericEnum(
+              basicType.name,
+              instantiatedArgs,
+            );
+            llvmType = `%enum.${mangledName}`;
+          } else {
+            // Maybe a primitive like int<T>? Should not happen.
+            llvmType = `%struct.${basicType.name}`; // Fallback
+          }
+        } else {
+          switch (basicType.name) {
+            case "int":
+            case "i32":
+            case "u32":
+            case "uint":
+              llvmType = "i32";
+              break;
+            case "i8":
+            case "u8":
+            case "char":
+            case "uchar":
+              llvmType = "i8";
+              break;
+            case "i16":
+            case "u16":
+            case "short":
+            case "ushort":
+              llvmType = "i16";
+              break;
+            case "i64":
+            case "u64":
+            case "long":
+            case "ulong":
+              llvmType = "i64";
+              break;
+            case "float":
+            case "double":
+              llvmType = "double";
+              break;
+            case "bool":
+            case "i1":
+              llvmType = "i1";
+              break;
+            case "void":
+              llvmType = basicType.pointerDepth > 0 ? "i8" : "void";
+              break;
+            case "string":
+              llvmType = "i8*";
+              break;
+            case "null":
+            case "nullptr":
+              llvmType = "i8*"; // Generic pointer type
+              break;
+            default:
+              // Check if it's an enum type
+              if (this.enumVariants.has(basicType.name)) {
+                llvmType = `%enum.${basicType.name}`;
+              } else {
+                llvmType = `%struct.${basicType.name}`;
+              }
+              break;
+          }
+        }
+
+        for (let i = 0; i < basicType.pointerDepth; i++) {
+          llvmType += "*";
+        }
+
+        for (let i = basicType.arrayDimensions.length - 1; i >= 0; i--) {
+          llvmType = `[${basicType.arrayDimensions[i]} x ${llvmType}]`;
+        }
+
+        return llvmType;
+      } else if (type.kind === "TupleType") {
+        const tupleType = type as AST.TupleTypeNode;
+        // Represent tuples as LLVM structs: { type0, type1, ... }
+        const elementTypes = tupleType.types.map((t) => this.resolveType(t));
+        return `{ ${elementTypes.join(", ")} }`;
+      } else if (type.kind === "FunctionType") {
+        const funcType = type as AST.FunctionTypeNode;
+        const ret = this.resolveType(funcType.returnType);
+        const params = funcType.paramTypes
+          .map((p) => this.resolveType(p))
+          .join(", ");
+        return `${ret} (${params})*`;
+      }
+      return "void";
+    } finally {
+      this.resolveTypeDepth--;
+    }
+  }
+
+  protected isSigned(type: AST.TypeNode): boolean {
+    if (type.kind === "BasicType") {
+      return [
+        "int",
+        "i8",
+        "i16",
+        "i32",
+        "i64",
+        "char",
+        "short",
+        "long",
+      ].includes((type as AST.BasicTypeNode).name);
+    }
+    return false;
+  }
+
+  protected isIntegerType(type: string): boolean {
+    return ["i1", "i8", "i16", "i32", "i64"].includes(type);
+  }
+
+  protected getTypeId(type: string): number {
+    if (this.typeIdMap.has(type)) {
+      return this.typeIdMap.get(type)!;
+    }
+    const id = this.nextTypeId++;
+    this.typeIdMap.set(type, id);
+    return id;
+  }
+
+  protected resolveMonomorphizedType(
+    baseStruct: AST.StructDecl,
+    genericArgs: AST.TypeNode[],
+  ): string {
+    // 1. Mangle Name
+    const argNames = genericArgs
+      .map((arg) => {
+        // Use lightweight mangling to avoid recursive resolveType for generic args
+        return this.mangleType(arg);
+      })
+      .join("_");
+
+    const mangledName = `${baseStruct.name}_${argNames}`;
+
+    // 2. Check if exists
+    if (this.generatedStructs.has(mangledName)) {
+      return `%struct.${mangledName}`;
+    }
+    // Also check structMap in case it was created but not yet generated (e.g. recursive reference)
+    if (this.structMap.has(mangledName)) {
+      return `%struct.${mangledName}`;
+    }
+
+    // 3. Check if we're already resolving this type (prevent re-entry during method generation)
+    if (this.resolvingMonomorphizedTypes.has(mangledName)) {
+      // We're already resolving this type - just return the struct name
+      // The struct definition and methods will be completed by the outer call
+      return `%struct.${mangledName}`;
+    }
+
+    // 4. Mark that we're resolving this type to prevent re-entry
+    this.resolvingMonomorphizedTypes.add(mangledName);
+
+    try {
+      // 5. Instantiate
+      // Create a map of generic param names to concrete argument types
+      const typeMap = new Map<string, AST.TypeNode>();
+      if (baseStruct.genericParams.length !== genericArgs.length) {
+        throw this.createError(
+          `Generic argument mismatch for struct '${baseStruct.name}'`,
+          undefined,
+          `Expected ${baseStruct.genericParams.length} generic arguments, but got ${genericArgs.length}`,
+        );
+      }
+      for (let i = 0; i < baseStruct.genericParams.length; i++) {
+        typeMap.set(baseStruct.genericParams[i]!.name.trim(), genericArgs[i]!);
+      }
+
+      // Clone and substitute fields
+      const instantiatedMembers = baseStruct.members.map((m) => {
+        if (m.kind === "StructField") {
+          const field = m as AST.StructField;
+          return {
+            ...field,
+            type: this.substituteType(field.type, typeMap),
+            resolvedType: undefined, // Force re-resolution
+            typeMap,
+          } as AST.StructField;
+        } else if (m.kind === "FunctionDecl") {
+          const func = m as AST.FunctionDecl;
+          // Substitute function type for vtable generation
+          let newResolvedType = func.resolvedType;
+          if (newResolvedType && newResolvedType.kind === "FunctionType") {
+            newResolvedType = this.substituteType(
+              newResolvedType,
+              typeMap,
+            ) as AST.FunctionTypeNode;
+          }
+          return {
+            ...func,
+            resolvedType: newResolvedType,
+            returnType: this.substituteType(func.returnType, typeMap),
+            params: func.params.map((p) => {
+              const newParam = {
+                ...p,
+                type: this.substituteType(p.type, typeMap),
+              };
+              return newParam;
+            }),
+          } as AST.FunctionDecl;
+        }
+        return m;
+      });
+
+      // Handle generic inheritance
+      let instantiatedInheritanceList: AST.TypeNode[] = [];
+      if (baseStruct.inheritanceList) {
+        instantiatedInheritanceList = baseStruct.inheritanceList.map((t) => {
+          let instantiatedType = this.substituteType(t, typeMap);
+
+          // Force resolution of parent to ensure it exists and we get the concrete name
+          // Only for BasicType (structs/specs)
+          if (instantiatedType.kind === "BasicType") {
+            const parentLlvmType = this.resolveType(instantiatedType);
+            let parentName = parentLlvmType;
+            if (parentName.startsWith("%struct.")) {
+              parentName = parentName.substring(8);
+              while (parentName.endsWith("*"))
+                parentName = parentName.slice(0, -1);
+            }
+            instantiatedType = {
+              ...instantiatedType,
+              name: parentName,
+              genericArgs: [], // Cleared because name is now concrete
+              resolvedDeclaration: undefined, // Clear resolved declaration to force name lookup
+            };
+          }
+          return instantiatedType;
+        });
+      }
+
+      const instantiatedStruct: AST.StructDecl = {
+        ...baseStruct,
+        name: mangledName, // Update name
+        genericParams: [], // Concrete now
+        inheritanceList: instantiatedInheritanceList,
+        members: instantiatedMembers, // Include all members so findMethodOwner can find them
+      };
+
+      // Register in structMap so it can be looked up by name (for inheritance etc)
+      this.structMap.set(mangledName, instantiatedStruct);
+
+      this.generateStruct(instantiatedStruct, mangledName);
+
+      // Queue generation of methods
+      const methods = baseStruct.members.filter(
+        (m) => m.kind === "FunctionDecl",
+      ) as AST.FunctionDecl[];
+      for (const method of methods) {
+        // If method is not generic, generate it now (monomorphized)
+        if (method.genericParams.length === 0) {
+          // Pre-calculate mangled name and mark as defined to prevent redundant declarations
+          const funcType = method.resolvedType as AST.FunctionTypeNode;
+          const substitutedFuncType = this.substituteType(
+            funcType,
+            typeMap,
+          ) as AST.FunctionTypeNode;
+          const methodName = `${mangledName}_${method.name}`;
+          const fullMangledName = this.getMangledName(
+            methodName,
+            substitutedFuncType,
+            false,
+            [],
+          );
+          this.definedFunctions.add(fullMangledName);
+
+          this.pendingGenerations.push(() => {
+            const oldName = method.name;
+            method.name = `${mangledName}_${method.name}`;
+            const prevMap = this.currentTypeMap;
+            this.currentTypeMap = typeMap;
+
+            // We pass instantiatedStruct as parent to generateFunction
+            // This correctly sets up "this" type and destructor chaining
+            this.generateFunction(method, instantiatedStruct);
+
+            this.currentTypeMap = prevMap;
+            method.name = oldName;
+          });
+        }
+        // If method IS generic, we don't generate it here.
+        // It will be generated when called, via resolveMonomorphizedFunction.
+      }
+
+      // Mark as generated (even though methods are pending) to prevent re-entry
+      // The struct definition itself is complete, methods will be generated from pendingGenerations
+      this.generatedStructs.add(mangledName);
+
+      return `%struct.${mangledName}`;
+    } finally {
+      // Always remove from tracking set when done
+      this.resolvingMonomorphizedTypes.delete(mangledName);
+    }
+  }
+
+  protected instantiateGenericEnum(
+    enumName: string,
+    genericArgs: AST.TypeNode[],
+  ): string {
+    // Create mangled name for the instantiated enum
+    const mangledName = this.mangleGenericTypeName(enumName, genericArgs);
+
+    // Check if already generated
+    if (this.generatedEnums.has(mangledName)) {
+      return mangledName;
+    }
+    this.generatedEnums.add(mangledName);
+
+    // Get the generic enum declaration
+    const decl = this.enumDeclMap.get(enumName);
+    if (!decl) {
+      throw new Error(`Generic enum ${enumName} not found`);
+    }
+
+    // Build type substitution map
+    const typeMap = new Map<string, AST.TypeNode>();
+    if (decl.genericParams) {
+      for (
+        let i = 0;
+        i < decl.genericParams.length && i < genericArgs.length;
+        i++
+      ) {
+        typeMap.set(decl.genericParams[i]!.name, genericArgs[i]!);
+      }
+    }
+
+    // Create a copy of the enum with substituted types
+    const instantiatedDecl: AST.EnumDecl = {
+      ...decl,
+      name: mangledName,
+      genericParams: [], // Instantiated enums have no generic params
+      variants: decl.variants.map((v) => ({
+        ...v,
+        dataType: v.dataType
+          ? v.dataType.kind === "EnumVariantTuple"
+            ? {
+                ...v.dataType,
+                types: v.dataType.types.map((t) =>
+                  this.substituteType(t, typeMap),
+                ),
+              }
+            : v.dataType.kind === "EnumVariantStruct"
+              ? {
+                  ...v.dataType,
+                  fields: v.dataType.fields.map((f) => ({
+                    name: f.name,
+                    type: this.substituteType(f.type, typeMap),
+                  })),
+                }
+              : v.dataType
+          : undefined,
+      })),
+    };
+
+    // Generate the instantiated enum
+    this.generateEnum(instantiatedDecl, mangledName);
+
+    return mangledName;
+  }
+
+  protected mangleGenericTypeName(
+    baseName: string,
+    genericArgs: AST.TypeNode[],
+  ): string {
+    if (genericArgs.length === 0) return baseName;
+
+    const argNames = genericArgs.map((arg) => {
+      if (arg.kind === "BasicType") {
+        const basicArg = arg as AST.BasicTypeNode;
+        let name = basicArg.name;
+
+        // Normalize primitive type names to their LLVM canonical form
+        const primitiveMap: Record<string, string> = {
+          int: "i32",
+          uint: "i32",
+          u32: "i32",
+          char: "i8",
+          uchar: "i8",
+          u8: "i8",
+          short: "i16",
+          ushort: "i16",
+          u16: "i16",
+          long: "i64",
+          ulong: "i64",
+          u64: "i64",
+          bool: "i1",
+        };
+
+        const normalizedName = primitiveMap[name];
+        if (normalizedName) {
+          name = normalizedName;
+        }
+
+        if (basicArg.genericArgs && basicArg.genericArgs.length > 0) {
+          name = this.mangleGenericTypeName(name, basicArg.genericArgs);
+        }
+        if (basicArg.pointerDepth > 0) {
+          name += "_ptr".repeat(basicArg.pointerDepth);
+        }
+        return name;
+      }
+      return "unknown";
+    });
+
+    return `${baseName}_${argNames.join("_")}`;
+  }
+
+  protected resolveMonomorphizedFunction(
+    decl: AST.FunctionDecl,
+    genericArgs: AST.TypeNode[],
+    contextMap?: Map<string, AST.TypeNode>,
+    namePrefix?: string,
+  ): string {
+    // 1. Substitute generic args in case they are also generic
+    const concreteArgs = genericArgs.map((arg) =>
+      this.substituteType(arg, this.currentTypeMap),
+    );
+
+    // 2. Create Instance Map
+    const instanceMap = new Map<string, AST.TypeNode>(this.currentTypeMap);
+    if (contextMap) {
+      for (const [k, v] of contextMap) {
+        instanceMap.set(k, v);
+      }
+    }
+    if (decl.genericParams.length !== concreteArgs.length) {
+      throw this.createError(
+        `Generic argument mismatch for function '${decl.name}'`,
+        decl,
+        `Expected ${decl.genericParams.length} generic arguments, but got ${concreteArgs.length}`,
+      );
+    }
+    for (let i = 0; i < decl.genericParams.length; i++) {
+      instanceMap.set(decl.genericParams[i]!.name, concreteArgs[i]!);
+    }
+
+    // 3. Substitute Function Type to get correct mangled name
+    const substitutedType = this.substituteType(
+      decl.resolvedType as AST.FunctionTypeNode,
+      instanceMap,
+    ) as AST.FunctionTypeNode;
+
+    // 4. Calculate Mangled Name
+    let mangledName = this.getMangledName(
+      decl.name,
+      substitutedType,
+      false,
+      concreteArgs,
+    );
+    if (namePrefix) {
+      mangledName = `${namePrefix}_${this.getMangledName(
+        decl.name,
+        substitutedType,
+        false,
+        concreteArgs,
+      )}`;
+    }
+
+    // 5. Check Cache
+    if (this.declaredFunctions.has(mangledName)) {
+      return mangledName;
+    }
+    this.declaredFunctions.add(mangledName);
+
+    // 6. Queue Generation
+    this.pendingGenerations.push(() => {
+      // Create a specialized declaration
+      const newDecl: AST.FunctionDecl = {
+        ...decl,
+        name: decl.name,
+        resolvedType: substitutedType,
+      };
+
+      if (namePrefix) {
+        newDecl.name = `${namePrefix}_${decl.name}`;
+      }
+
+      const prevMap = this.currentTypeMap;
+      this.currentTypeMap = instanceMap;
+
+      this.generateFunction(newDecl);
+
+      this.currentTypeMap = prevMap;
+    });
+
+    return mangledName;
+  }
+
+  protected substituteType(
+    type: AST.TypeNode,
+    map: Map<string, AST.TypeNode>,
+  ): AST.TypeNode {
+    if (type.kind === "BasicType") {
+      // Check map by iterating keys to ensure string matching works
+      for (const [key, value] of map.entries()) {
+        if (key === type.name.trim()) {
+          const mapped = value;
+          // Merge pointer depth and array dims
+          if (mapped.kind === "BasicType") {
+            return {
+              ...mapped,
+              pointerDepth: mapped.pointerDepth + type.pointerDepth,
+              arrayDimensions: [
+                ...mapped.arrayDimensions,
+                ...type.arrayDimensions,
+              ],
+            };
+          }
+          return mapped;
+        }
+      }
+
+      // Recursively substitute generic args
+      return {
+        ...type,
+        genericArgs: type.genericArgs.map((arg) =>
+          this.substituteType(arg, map),
+        ),
+      };
+    } else if (type.kind === "FunctionType") {
+      return {
+        ...type,
+        returnType: this.substituteType(type.returnType, map),
+        paramTypes: type.paramTypes.map((p) => this.substituteType(p, map)),
+      };
+    }
+    return type;
+  }
+
+  protected emitParentDestroy(
+    parentStruct: AST.StructDecl,
+    currentMethod: AST.FunctionDecl,
+  ) {
+    // Find parent type
+    let parentType: AST.TypeNode | undefined;
+    if (parentStruct.inheritanceList) {
+      for (const t of parentStruct.inheritanceList) {
+        if (t.kind === "BasicType") {
+          parentType = t;
+          break;
+        }
+      }
+    }
+
+    if (!parentType) return;
+
+    // Resolve parent type name
+    const parentTypeName = this.resolveType(parentType);
+
+    // Extract struct name
+    let structName = parentTypeName;
+    if (structName.startsWith("%struct.")) {
+      structName = structName.substring(8);
+    }
+    while (structName.endsWith("*")) {
+      structName = structName.slice(0, -1);
+    }
+
+    const destroyMethodName = `${structName}_destroy`;
+
+    // Get 'this' parameter (first parameter)
+    const thisParamName = currentMethod.params[0]!.name;
+    const thisPtrAddr = this.localPointers.get(thisParamName);
+
+    if (!thisPtrAddr) {
+      // Should not happen if generateFunction set it up
+      throw new Error("Could not find 'this' pointer for parent destroy call");
+    }
+
+    const thisType = this.resolveType(
+      (currentMethod.resolvedType as AST.FunctionTypeNode).paramTypes[0]!,
+    );
+    const thisPtr = this.newRegister();
+    this.emit(`  ${thisPtr} = load ${thisType}, ${thisType}* ${thisPtrAddr}`);
+
+    // Bitcast to parent pointer type
+    const parentPtrType = parentTypeName + "*";
+    const casted = this.newRegister();
+    this.emit(
+      `  ${casted} = bitcast ${thisType} ${thisPtr} to ${parentPtrType}`,
+    );
+
+    // Call parent destroy
+    let callName = destroyMethodName;
+
+    // Try to find the parent struct and its destroy method to get the correct mangled name
+    const parentDecl = this.structMap.get(structName);
+    if (parentDecl) {
+      const destroyMethod = parentDecl.members.find(
+        (m) => m.kind === "FunctionDecl" && m.name === "destroy",
+      ) as AST.FunctionDecl | undefined;
+
+      if (
+        destroyMethod &&
+        destroyMethod.resolvedType &&
+        destroyMethod.resolvedType.kind === "FunctionType"
+      ) {
+        callName = this.getMangledName(
+          destroyMethodName,
+          destroyMethod.resolvedType,
+        );
+      } else {
+        console.log(`[DEBUG] Could not find destroy method for ${structName}`);
+      }
+    } else {
+      console.log(
+        `[DEBUG] Could not find parent struct ${structName} in structMap`,
+      );
+    }
+
+    this.emit(`  call void @${callName}(${parentPtrType} ${casted})`);
+  }
+}

@@ -20,10 +20,10 @@ frame main() ret int {
     # But currently BPL only supports raw injection.
     # So we have to write the LLVM IR wrapper ourselves inside the asm block.
 
-    asm { 
+    asm {
         %res_val = call i64 asm sideeffect "movq $$42, %rax; movq %rax, $0", "=r,~{rax},~{dirflag},~{fpsr},~{flags}"()
         store i64 %res_val, i64* (res)
-     }
+    }
 
     printf("Result: %d\n", res);
     return 0;

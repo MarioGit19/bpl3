@@ -13,6 +13,12 @@ struct Type {
     frame toString(this: *Type) ret string {
         return this.getTypeName();
     }
+
+    # Virtual destructor
+    # The compiler generates calls to this when objects go out of scope
+    frame destroy(this: *Type) {
+        # Default destructor does nothing
+    }
 }
 
 export [Type];
