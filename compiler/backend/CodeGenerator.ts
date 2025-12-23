@@ -13,7 +13,11 @@ import { CompilerError } from "../common/CompilerError";
 
 export class CodeGenerator extends StatementGenerator {
   constructor(
-    options: { stdLibPath?: string; useLinkOnceOdrForStdLib?: boolean } = {},
+    options: {
+      stdLibPath?: string;
+      useLinkOnceOdrForStdLib?: boolean;
+      target?: string;
+    } = {},
   ) {
     super(options);
   }
@@ -477,6 +481,10 @@ export class CodeGenerator extends StatementGenerator {
     }
 
     let header = "";
+    if (this.target) {
+      header += `target triple = "${this.target}"\n`;
+    }
+
     for (const [content, varName] of this.stringLiterals) {
       const len = content.length + 1;
       const escaped = this.escapeString(content);
@@ -493,7 +501,7 @@ export class CodeGenerator extends StatementGenerator {
     try {
       const fs = require("fs");
       fs.writeFileSync("ir.ll", result);
-    } catch (e) {}
+    } catch (e) { }
 
     return result;
   }

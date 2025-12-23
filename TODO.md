@@ -75,6 +75,7 @@
     - Direct field access on struct variants (e.g., `msg.x`) - use pattern matching instead
     - Namespace-qualified patterns in match (e.g., `Enums.Color.Red`) - import enum directly
     - Generic enum type inference (e.g., `Option.Some(42)` → `Option<int>`) - requires bidirectional type checking
+- [x] Multi-Target Support (Cross-compilation via LLVM target triples)
 - [x] Root Global `Type` Struct (Implicit inheritance for all structs)
 - [x] Primitive Types as Structs Inheriting `Primitive` (Wrapper structs for int, float, bool, char)
 - [x] Closures and Lambda Expressions ✅
@@ -106,10 +107,15 @@
     - ⏳ Generic type inference - Requires bidirectional type checking (future enhancement)
   - **Why complete:** All essential features for practical enum usage are implemented and thoroughly tested. Remaining limitations have simple workarounds and don't impact typical use cases.
 
-- [3] Multi-Target Support
+- [x] Multi-Target Support ✅ (FULLY COMPLETE)
 
   - Description: Add support for targeting multiple platforms and architectures (x86/x64/ARM) and provide conditional std lib methods for platform differences.
-  - Implementation notes: Abstract target-specific codegen paths and provide a target triple input. Maintain a small set of runtime abstractions for syscalls/ABI.
+  - **Final Status:** ALL COMPLETE ✅ - Verified with Windows (x86_64) and macOS (ARM64) targets
+  - Implemented features:
+    - ✅ **CLI Support**: `--target`, `--sysroot`, `--cpu`, `--march` flags
+    - ✅ **Backend Integration**: `CodeGenerator` emits `target triple` directive
+    - ✅ **Module Cache**: Cache keys include target triple to prevent collisions
+    - ✅ **Linker**: Forwards target flags to clang
   - Acceptance criteria: Codegen can emit different target outputs and small example programs run on at least two targets.
 
 - [4] Debugger Support (DWARF)

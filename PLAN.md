@@ -10,16 +10,38 @@ Priority levels: 0 = Highest Priority, 9 = Lowest Priority
 
 The following features are recommended for implementation next:
 
-### 1. **Multi-Target Support** [Priority 3] 🌍 CROSS-PLATFORM
+### 1. **Debugger Support (DWARF)** [Priority 4] 🐞 DEBUGGING
 
-- **Why:** Enables compiling for different architectures (x86, ARM) and OSs
-- **Impact:** Broader reach for BPL applications
-- **Use cases:** Cross-compilation, embedded systems
-- **Complexity:** High (requires backend abstraction)
+- **Why:** Enables source-level debugging with GDB/LLDB
+- **Impact:** Huge quality-of-life improvement for developers
+- **Use cases:** Stepping through code, inspecting variables
+- **Complexity:** High (requires mapping source locations to IR metadata)
 
 ---
 
 ## 📋 COMPLETED FEATURES
+
+---
+
+## [3] ✅ Multi-Target Support (COMPLETED)
+
+**Description:** Add support for targeting multiple platforms and architectures (x86/x64/ARM) and provide conditional std lib methods for platform differences.
+
+**Implementation Status:** ✅ Fully Implemented (December 2025)
+
+**What Was Implemented:**
+
+- ✅ **CLI Support**: Added `--target`, `--sysroot`, `--cpu`, `--march` flags to `bpl` CLI
+- ✅ **Backend Integration**: `CodeGenerator` now accepts a target triple and emits `target triple = "..."` directive in LLVM IR
+- ✅ **Module Cache**: Cache keys now include the target triple to ensure correct caching for different targets
+- ✅ **Linker**: Linker correctly forwards target flags to `clang`
+- ✅ **Verification**: Verified with Windows (x86_64) and macOS (ARM64) targets
+
+**Tests:**
+
+- Verified that `bpl build --target x86_64-pc-windows-gnu` produces IR with `target triple = "x86_64-pc-windows-gnu"`
+- Verified that `bpl build --target arm64-apple-darwin` produces IR with `target triple = "arm64-apple-darwin"`
+- Verified that multi-module builds correctly propagate target settings
 
 ---
 

@@ -133,17 +133,28 @@ export class ModuleCache {
     content: string,
     llvmIR: string,
     verbose: boolean = false,
+    target?: string,
   ): string {
-    const hash = this.calculateHash(content);
+    // Include target in hash to ensure different targets get different cache entries
+    const contentToHash = target ? `${content}|${target}` : content;
+    const hash = this.calculateHash(contentToHash);
     const objectFileName = `${hash}.o`;
     const objectFilePath = path.join(this.cacheDir, objectFileName);
 
     // Check if already cached
-    if (this.isCached(modulePath, content)) {
+    // We use the modified hash, so isCached needs to know about it or we check manually
+    // Since isCached calls calculateHash(content), we can't use it directly if we change hashing logic
+    // Let's check manually here using our new hash
+    const cached = this.manifest.modules.get(modulePath);
+    if (
+      cached &&
+      cached.hash === hash &&
+      fs.existsSync(cached.objectFile)
+    ) {
       if (verbose) {
         console.log(`  Using cached: ${path.basename(modulePath)}`);
       }
-      return this.getCachedObjectFile(modulePath)!;
+      return cached.objectFile;
     }
 
     if (verbose) {
@@ -155,13 +166,15 @@ export class ModuleCache {
     fs.writeFileSync(llFilePath, llvmIR);
 
     // Compile to object file using clang
-    const result = spawnSync(
-      "clang",
-      ["-c", "-Wno-override-module", llFilePath, "-o", objectFilePath],
-      {
-        stdio: verbose ? "inherit" : "pipe",
-      },
-    );
+    const clangArgs = ["-c", "-Wno-override-module"];
+    if (target) {
+      clangArgs.push("-target", target);
+    }
+    clangArgs.push(llFilePath, "-o", objectFilePath);
+
+    const result = spawnSync("clang", clangArgs, {
+      stdio: verbose ? "inherit" : "pipe",
+    });
 
     if (result.status !== 0) {
       const error = result.stderr?.toString() || "Unknown compilation error";
@@ -204,12 +217,18 @@ export class ModuleCache {
     objectFiles: string[],
     outputPath: string,
     verbose: boolean = false,
+    target?: string,
   ): void {
     if (verbose) {
       console.log(`Linking ${objectFiles.length} modules...`);
     }
 
-    const result = spawnSync("clang", [...objectFiles, "-o", outputPath], {
+    const clangArgs = [...objectFiles, "-o", outputPath];
+    if (target) {
+      clangArgs.unshift("-target", target);
+    }
+
+    const result = spawnSync("clang", clangArgs, {
       stdio: verbose ? "inherit" : "pipe",
     });
 

@@ -3,12 +3,18 @@ import { CompilerError, type AST } from "../..";
 export class BaseCodeGenerator {
   protected stdLibPath?: string;
   protected useLinkOnceOdrForStdLib: boolean = false;
+  protected target?: string;
 
   constructor(
-    options: { stdLibPath?: string; useLinkOnceOdrForStdLib?: boolean } = {},
+    options: {
+      stdLibPath?: string;
+      useLinkOnceOdrForStdLib?: boolean;
+      target?: string;
+    } = {},
   ) {
     this.stdLibPath = options.stdLibPath;
     this.useLinkOnceOdrForStdLib = options.useLinkOnceOdrForStdLib || false;
+    this.target = options.target;
   }
 
   protected output: string[] = [];

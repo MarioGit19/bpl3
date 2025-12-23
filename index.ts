@@ -567,7 +567,9 @@ function processCodeInternal(
   }
 
   // 4. Code Generation
-  const generator = new CodeGenerator();
+  const generator = new CodeGenerator({
+    target: options.target,
+  });
   const ir = generator.generate(ast, filePath);
 
   // Determine output path for LLVM IR

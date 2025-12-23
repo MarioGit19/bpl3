@@ -124,7 +124,9 @@ export class Compiler {
       if (this.options.verbose) {
         console.log("[Backend] Code Generation...");
       }
-      const codeGenerator = new CodeGenerator();
+      const codeGenerator = new CodeGenerator({
+        target: this.options.target,
+      });
       const llvmIR = codeGenerator.generate(ast, this.options.filePath);
 
       // 5. Linking (if object files provided)
@@ -322,6 +324,7 @@ export class Compiler {
       const codeGenerator = new CodeGenerator({
         stdLibPath,
         useLinkOnceOdrForStdLib: isLinkingBpl,
+        target: this.options.target,
       });
 
       const llvmIR = codeGenerator.generate(combinedAST, this.options.filePath);
@@ -422,7 +425,9 @@ export class Compiler {
         console.log("[Module Cache] Compiling modules...");
       }
 
-      const codeGenerator = new CodeGenerator();
+      const codeGenerator = new CodeGenerator({
+        target: this.options.target,
+      });
       const llvmIR = codeGenerator.generate(combinedAST, entryModule.path);
 
       const objectFile = cache.compileModule(
@@ -430,6 +435,7 @@ export class Compiler {
         allContent,
         llvmIR,
         this.options.verbose,
+        this.options.target,
       );
 
       const objectFiles = [objectFile];
@@ -443,7 +449,12 @@ export class Compiler {
         console.log("[Module Cache] Linking modules...");
       }
 
-      cache.linkModules(objectFiles, outputPath, this.options.verbose);
+      cache.linkModules(
+        objectFiles,
+        outputPath,
+        this.options.verbose,
+        this.options.target,
+      );
 
       if (this.options.verbose) {
         const stats = cache.getStats();
