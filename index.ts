@@ -15,6 +15,7 @@ import { lexWithGrammar } from "./compiler/frontend/GrammarLexer";
 import { Parser } from "./compiler/frontend/Parser";
 import { PackageManager } from "./compiler/middleend/PackageManager";
 import { TypeChecker } from "./compiler/middleend/TypeChecker";
+import { Linter } from "./compiler/linter/Linter";
 
 const program = new Command();
 
@@ -69,10 +70,10 @@ _bpl_completion() {
     prev="\${COMP_WORDS[COMP_CWORD-1]}"
 
     # Main commands
-    local commands="format init pack install list uninstall completion help"
+    local commands="format init pack install list uninstall completion help lint"
     
     # Global options (work with file arguments and commands)
-    local global_opts="-e --eval --stdin -o --output --emit --target --sysroot --cpu --march --clang-flag -l --lib -L --lib-path --object --run -v --verbose --cache --write -h --help -V --version"
+    local global_opts="-e --eval --stdin -o --output --emit --target --sysroot --cpu --march --clang-flag -l --lib -L --lib-path --object --run -v --verbose --cache --write -h --help -V --version --dwarf"
     
     # Emit types
     local emit_types="llvm ast tokens formatted"
@@ -133,7 +134,14 @@ _bpl_completion() {
                 fi
                 return 0
                 ;;
-            init|pack|list)
+                lint)
+                if [[ "$cur" == -* ]]; then
+                    COMPREPLY=( $(compgen -W "-v --verbose" -- "\${cur}") )
+                else
+                    COMPREPLY=( $(compgen -f -X '!*.bpl' -- "\${cur}") )
+                fi
+                return 0
+                ;;            init|pack|list)
                 COMPREPLY=( $(compgen -W "-v --verbose" -- "\${cur}") )
                 return 0
                 ;;
@@ -198,6 +206,7 @@ _bpl() {
     local -a commands
     commands=(
         'format:Format BPL source files'
+        'lint:Lint BPL source files'
         'init:Initialize a new BPL package'
         'pack:Package a BPL project'
         'install:Install a BPL package'
@@ -215,6 +224,7 @@ _bpl() {
         '-o[Output file]:file:_files'
         '--output[Output file]:file:_files'
         '--emit[Emit type]:type:(llvm ast tokens formatted)'
+        '--dwarf[Generate DWARF debug information]'
         '--target[Target triple]:triple:(x86_64-pc-linux-gnu aarch64-unknown-linux-gnu arm64-apple-darwin x86_64-apple-darwin x86_64-pc-windows-gnu)'
         '--sysroot[Sysroot path]:path:_directories'
         '--cpu[Target CPU]:cpu'
@@ -253,6 +263,12 @@ _bpl() {
                     _arguments \\
                         '-w[Write to file]' \\
                         '--write[Write to file]' \\
+                        '-v[Verbose]' \\
+                        '--verbose[Verbose]' \\
+                        '*:file:_files -g "*.bpl"'
+                    ;;
+                lint)
+                    _arguments \\
                         '-v[Verbose]' \\
                         '--verbose[Verbose]' \\
                         '*:file:_files -g "*.bpl"'
@@ -304,6 +320,7 @@ program
   .option("--stdin", "read BPL code from stdin")
   .option("-o, --output <file>", "output file path")
   .option("--emit <type>", "emit type: llvm, ast, tokens, formatted", "llvm")
+  .option("-g, --dwarf", "generate DWARF debug information")
   .option(
     "--target <triple>",
     "target triple for clang (e.g. x86_64-pc-windows-gnu)",
@@ -453,6 +470,7 @@ function processCodeInternal(
       target: options.target,
       sysroot: options.sysroot,
       clangFlags: options.clangFlag,
+      dwarf: options.dwarf,
     });
 
     const result = compiler.compile(content);
@@ -567,8 +585,10 @@ function processCodeInternal(
   }
 
   // 4. Code Generation
+  const hostDefaults = getHostDefaults();
   const generator = new CodeGenerator({
-    target: options.target,
+    target: options.target || hostDefaults.target,
+    dwarf: options.dwarf,
   });
   const ir = generator.generate(ast, filePath);
 
@@ -614,6 +634,10 @@ function compileBinaryAndRun(
   }
 
   const clangArgs = ["-Wno-override-module"];
+
+  if (options.dwarf) {
+    clangArgs.push("-g");
+  }
 
   const target = options.target ?? hostDefaults.target;
   if (target) {
@@ -709,6 +733,53 @@ function compileBinaryAndRun(
     }
   }
 }
+
+// Lint command
+program
+  .command("lint [files...]")
+  .description("Lint BPL source files")
+  .option("-v, --verbose", "enable verbose output")
+  .action((files, options) => {
+    if (!files || files.length === 0) {
+      console.error("Error: No files specified.");
+      process.exit(1);
+    }
+
+    const linter = new Linter();
+    let hasErrors = false;
+
+    for (const file of files) {
+      try {
+        if (!fs.existsSync(file)) {
+          console.error(`Error: File not found: ${file}`);
+          hasErrors = true;
+          continue;
+        }
+
+        const content = fs.readFileSync(file, "utf-8");
+        const tokens = lexWithGrammar(content, file);
+        const parser = new Parser(content, file, tokens);
+        const ast = parser.parse();
+
+        const errors = linter.lint(ast);
+        if (errors.length > 0) {
+          hasErrors = true;
+          console.error(diagnosticFormatter.formatErrors(errors));
+        }
+      } catch (e) {
+        hasErrors = true;
+        if (e instanceof CompilerError) {
+          console.error(diagnosticFormatter.formatError(e));
+        } else {
+          console.error(`Error processing ${file}: ${e}`);
+        }
+      }
+    }
+
+    if (hasErrors) {
+      process.exit(1);
+    }
+  });
 
 // Package management commands
 program

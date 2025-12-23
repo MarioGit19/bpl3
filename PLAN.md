@@ -10,16 +10,32 @@ Priority levels: 0 = Highest Priority, 9 = Lowest Priority
 
 The following features are recommended for implementation next:
 
-### 1. **Debugger Support (DWARF)** [Priority 4] 🐞 DEBUGGING
+### 1. **Type Narrowing / Pattern Matching** [Priority 3] 🔍 TYPES
 
-- **Why:** Enables source-level debugging with GDB/LLDB
-- **Impact:** Huge quality-of-life improvement for developers
-- **Use cases:** Stepping through code, inspecting variables
-- **Complexity:** High (requires mapping source locations to IR metadata)
+- **Why:** Allows safer code by narrowing types in conditional blocks
+- **Impact:** Reduces need for explicit casts
+- **Use cases:** `if (x is int) { ... }`
+- **Complexity:** Medium (requires flow-sensitive analysis)
 
 ---
 
 ## 📋 COMPLETED FEATURES
+
+---
+
+## [4] ✅ Debugger Support (DWARF) (COMPLETED)
+
+**Description:** Enables source-level debugging with GDB/LLDB by generating DWARF debug information in the LLVM IR.
+
+**Implementation Status:** ✅ Fully Implemented (December 2025)
+
+**What Was Implemented:**
+
+- ✅ **DWARF Metadata**: Added generation of `!DICompileUnit`, `!DISubprogram`, `!DILocalVariable`, `!DIGlobalVariable`, `!DIBasicType`, `!DICompositeType` metadata.
+- ✅ **Source Mapping**: Attached `!dbg` locations to LLVM instructions to map IR back to source lines.
+- ✅ **Variable Inspection**: Enabled inspection of local variables, global variables, and function arguments in GDB.
+- ✅ **Struct Support**: Implemented debug info for struct types and member access.
+- ✅ **Verification**: Verified with GDB on test cases involving locals, globals, and structs.
 
 ---
 
@@ -61,14 +77,6 @@ The following features are recommended for implementation next:
 - ✅ Recursive enums (via pointers)
 - ✅ LLVM IR generation for tagged unions
 - ✅ Explicit returns in match arms (blocks returning values)
-
----
-
-## [2] ✅ Operator Overloading for User Types (COMPLETED)
-
-**Description:** Let user-defined types implement special methods (dunder-style like `__add__`, `__eq__`) that override built-in operator behavior for instances. This makes custom types (like Vector, Complex, BigInt) feel like first-class citizens by allowing them to be used with familiar operators. Operators become syntactic sugar for method calls, making code more intuitive and readable.
-
-**Implementation Status:** ✅ Fully Implemented
 
 ---
 
@@ -219,31 +227,6 @@ The following features are recommended for implementation next:
 
 ---
 
-## [3] Multi-Target Support
-
-**Description:** Add support for targeting multiple platforms and architectures (x86/x64/ARM, Linux/Windows/macOS) and provide conditional stdlib methods for platform differences. This enables developers to write code once and compile it for multiple targets, with transparent handling of platform-specific differences.
-
-**Implementation Notes:**
-
-- Define a target abstraction layer that decouples frontend from backend
-- Implement target triples (architecture-os-abi format) for different platforms
-- Create platform-specific codegen paths for different architectures
-- Abstract syscall/ABI differences through a runtime layer
-- Implement conditional compilation based on target platform
-- Provide platform detection macros/constants in stdlib
-- Support different calling conventions per architecture
-- Handle register allocation and instruction selection per target
-
-**Acceptance Criteria:**
-
-- Compiler can emit different target outputs (x86, ARM, etc.)
-- Same source code compiles successfully for multiple platforms
-- Small example programs run correctly on at least two different target architectures
-- Platform-specific stdlib functions work correctly
-- Build system allows specifying target platforms
-
----
-
 ## [5] Type Narrowing / Pattern Matching
 
 **Description:** Implement syntax and semantics for narrowing variable types based on runtime checks (useful inside `catch` blocks or generic contexts). This allows developers to work with more specific types after validation, enabling type-safe handling of polymorphic values and optional types.
@@ -269,9 +252,15 @@ The following features are recommended for implementation next:
 
 ---
 
-## [5] Linting Tool
+## [5] Linting Tool ✅ (COMPLETED)
 
 **Description:** Provide static analysis tooling to detect style issues, potential bugs, and code quality problems (unused variables, suspicious casts, missing returns, unreachable code). This helps developers maintain code quality and catch bugs early without running the program.
+
+**Status:** COMPLETE ✅
+
+- Implemented `bpl lint` command
+- Created extensible `Linter` class
+- Added basic rules (naming conventions)
 
 **Implementation Notes:**
 
@@ -485,53 +474,6 @@ The following features are recommended for implementation next:
 - Unused variables and functions are flagged
 - Clear messages guide developers to issues
 - Warnings can be individually configured or suppressed
-
----
-
-## [4] Debugger Support (DWARF)
-
-**Description:** Generate DWARF debug information to enable source-level debugging with tools like GDB and LLDB. This allows developers to step through BPL code, inspect variables, and set breakpoints using standard debugging tools.
-
-**Implementation Notes:**
-
-- Map BPL source locations (file, line, column) to LLVM IR debug metadata
-- Generate DWARF type descriptors for BPL structs, enums, and primitives
-- Emit debug info for functions, variables, and scopes
-- Ensure proper handling of optimized code (debug info preservation)
-- Verify integration with GDB/LLDB
-
-**Acceptance Criteria:**
-
-- Can step through BPL code line-by-line in GDB/LLDB
-- Variables show correct values and types in debugger
-- Breakpoints work on BPL source lines
-- Stack traces show BPL function names and line numbers
-
----
-
-## [4] Closures and Lambda Expressions
-
-**Description:** Implement anonymous functions with automatic capture of variables from enclosing scope. This enables functional programming patterns, callback-based APIs, and higher-order functions while maintaining type safety and memory safety.
-
-**Implementation Notes:**
-
-- Add lambda syntax (e.g., `|x, y| x + y` or `func(x, y) => x + y`)
-- Analyze captured variables in semantic analysis phase
-- Generate hidden closure struct containing captured variables
-- Transform lambda call into method call on closure struct
-- Handle move semantics vs borrow semantics for captures
-- Support closure type inference
-- Implement closure type checking
-- Handle nested closures correctly
-
-**Acceptance Criteria:**
-
-- Lambdas capture local variables correctly
-- Captured variables have appropriate lifetimes
-- Closures can be passed as function arguments
-- Type checking works for closure parameters and returns
-- Closures work with higher-order functions (map, filter, etc.)
-- Examples demonstrate functional programming patterns
 
 ---
 

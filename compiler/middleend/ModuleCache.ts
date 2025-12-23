@@ -146,11 +146,7 @@ export class ModuleCache {
     // Since isCached calls calculateHash(content), we can't use it directly if we change hashing logic
     // Let's check manually here using our new hash
     const cached = this.manifest.modules.get(modulePath);
-    if (
-      cached &&
-      cached.hash === hash &&
-      fs.existsSync(cached.objectFile)
-    ) {
+    if (cached && cached.hash === hash && fs.existsSync(cached.objectFile)) {
       if (verbose) {
         console.log(`  Using cached: ${path.basename(modulePath)}`);
       }

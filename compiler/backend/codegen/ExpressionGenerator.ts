@@ -2466,13 +2466,6 @@ export abstract class ExpressionGenerator extends TypeGenerator {
 
     const funcType = expr.callee.resolvedType as AST.FunctionTypeNode;
     if (!funcType) {
-      console.log(`[DEBUG] generateCall failed for ${funcName}`);
-      console.log(`[DEBUG] callee kind: ${expr.callee.kind}`);
-      if (expr.callee.kind === "Member") {
-        const m = expr.callee as AST.MemberExpr;
-        console.log(`[DEBUG] member: ${m.property}`);
-        console.log(`[DEBUG] object resolvedType:`, m.object.resolvedType);
-      }
       throw new CompilerError(
         `Function call '${funcName}' has no resolved type`,
         "Internal compiler error: function type not resolved.",

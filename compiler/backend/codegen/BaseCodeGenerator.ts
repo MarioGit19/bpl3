@@ -1,20 +1,26 @@
 import { CompilerError, type AST } from "../..";
+import { DebugInfoGenerator } from "./DebugInfoGenerator";
 
 export class BaseCodeGenerator {
   protected stdLibPath?: string;
   protected useLinkOnceOdrForStdLib: boolean = false;
   protected target?: string;
+  protected generateDwarf: boolean = false;
+  protected debugInfoGenerator: DebugInfoGenerator;
 
   constructor(
     options: {
       stdLibPath?: string;
       useLinkOnceOdrForStdLib?: boolean;
       target?: string;
+      dwarf?: boolean;
     } = {},
   ) {
     this.stdLibPath = options.stdLibPath;
     this.useLinkOnceOdrForStdLib = options.useLinkOnceOdrForStdLib || false;
     this.target = options.target;
+    this.generateDwarf = options.dwarf || false;
+    this.debugInfoGenerator = new DebugInfoGenerator("unknown.bpl", ".");
   }
 
   protected output: string[] = [];
@@ -85,9 +91,51 @@ export class BaseCodeGenerator {
     return new CompilerError(message, hint || "", location);
   }
 
-  protected emit(line: string) {
-    this.output.push(line);
+  protected currentSubprogramId: number = -1;
+
+  protected emit(line: string, node?: AST.ASTNode) {
+    if (this.generateDwarf && this.currentSubprogramId !== -1) {
+      // If node is provided, use its location.
+      // If not, check if we have a "current statement" location set by generateStatement
+      let locId = -1;
+
+      if (node && node.location) {
+        locId = this.debugInfoGenerator.createLocation(
+          node.location.startLine,
+          node.location.startColumn || 0,
+          this.currentSubprogramId,
+        );
+      } else if (this.currentStatementLocation) {
+        locId = this.debugInfoGenerator.createLocation(
+          this.currentStatementLocation.startLine,
+          this.currentStatementLocation.startColumn || 0,
+          this.currentSubprogramId,
+        );
+      }
+
+      if (locId !== -1) {
+        // Only attach debug info to instructions, not labels or braces
+        const trimmed = line.trim();
+        if (
+          trimmed.endsWith(":") ||
+          trimmed.startsWith("}") ||
+          trimmed.startsWith("{") ||
+          trimmed.startsWith("define") ||
+          trimmed === ""
+        ) {
+          this.output.push(line);
+        } else {
+          this.output.push(`${line}, !dbg !${locId}`);
+        }
+      } else {
+        this.output.push(line);
+      }
+    } else {
+      this.output.push(line);
+    }
   }
+
+  protected currentStatementLocation: AST.SourceLocation | null = null;
 
   protected emitDeclaration(line: string) {
     this.declarationsOutput.push(line);

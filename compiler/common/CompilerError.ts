@@ -40,14 +40,17 @@ export class CompilerError extends Error {
     message: string;
     location: SourceLocation;
   }> = [];
+  public code?: string;
 
   constructor(
     public message: string,
     public hint: string,
     public location: SourceLocation,
+    code?: string,
   ) {
     super(message);
     this.name = "CompilerError";
+    this.code = code;
     this.loadSourceLines();
   }
 

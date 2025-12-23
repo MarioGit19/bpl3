@@ -283,7 +283,7 @@ export class DiagnosticFormatter {
 
     const parts: string[] = [];
 
-    // Header: severity[file:line:col]: message
+    // Header: severity[code][file:line:col]: message
     const severityLabel = getSeverityLabel(
       effectiveSeverity,
       this.config.colorize,
@@ -292,7 +292,15 @@ export class DiagnosticFormatter {
       error.location,
       this.config.colorize,
     );
-    const header = `${severityLabel}[${locationRef}]: ${error.message}`;
+
+    let codeStr = "";
+    if (error.code) {
+      codeStr = this.config.colorize
+        ? `${COLORS.bold}${COLORS.red}[${error.code}]${COLORS.reset}`
+        : `[${error.code}]`;
+    }
+
+    const header = `${severityLabel}${codeStr}[${locationRef}]: ${error.message}`;
     parts.push(header);
 
     // Code snippet

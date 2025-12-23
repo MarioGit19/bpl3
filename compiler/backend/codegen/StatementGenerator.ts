@@ -17,6 +17,13 @@ export abstract class StatementGenerator extends ExpressionGenerator {
   }
 
   protected generateStatement(stmt: AST.Statement) {
+    // Attach debug info for the statement start
+    if (this.generateDwarf && this.currentSubprogramId !== -1) {
+      this.currentStatementLocation = stmt.location;
+    } else {
+      this.currentStatementLocation = null;
+    }
+
     switch (stmt.kind) {
       case "VariableDecl":
         this.generateVariableDecl(stmt as AST.VariableDecl);
@@ -538,6 +545,35 @@ export abstract class StatementGenerator extends ExpressionGenerator {
             this.emit(
               `  store ${targetType} ${elemPtr}, ${targetType}* ${addr}`,
             );
+
+            // DWARF: Variable declaration
+            if (this.generateDwarf && this.currentSubprogramId !== -1) {
+              const typeId = this.getDwarfTypeId(
+                target.type || { kind: "BasicType", name: "unknown" },
+              ); // Need proper type node
+              const fileId = this.debugInfoGenerator.getFileNodeId(
+                decl.location.file,
+              );
+              const varId = this.debugInfoGenerator.createAutoVariable(
+                target.name,
+                fileId,
+                decl.location.startLine,
+                typeId,
+                this.currentSubprogramId,
+              );
+
+              // Emit llvm.dbg.declare
+              // call void @llvm.dbg.declare(metadata i32* %a.addr, metadata !12, metadata !DIExpression()), !dbg !14
+              const locId = this.debugInfoGenerator.createLocation(
+                decl.location.startLine,
+                decl.location.startColumn,
+                this.currentSubprogramId,
+              );
+
+              this.emit(
+                `  call void @llvm.dbg.declare(metadata ${targetType}* ${addr}, metadata !${varId}, metadata !DIExpression())`,
+              );
+            }
           }
         }
       };
@@ -560,6 +596,37 @@ export abstract class StatementGenerator extends ExpressionGenerator {
         ? this.resolveType(decl.typeAnnotation)
         : this.resolveType(decl.initializer!.resolvedType!);
     const addr = this.allocateStack(decl.name as string, type);
+
+    // DWARF: Variable declaration
+    if (this.generateDwarf && this.currentSubprogramId !== -1) {
+      const typeNode =
+        decl.typeAnnotation ||
+        decl.initializer?.resolvedType ||
+        decl.resolvedType;
+      if (typeNode) {
+        const typeId = this.getDwarfTypeId(typeNode);
+        const fileId = this.debugInfoGenerator.getFileNodeId(
+          decl.location.file,
+        );
+        const varId = this.debugInfoGenerator.createAutoVariable(
+          decl.name as string,
+          fileId,
+          decl.location.startLine,
+          typeId,
+          this.currentSubprogramId,
+        );
+
+        const locId = this.debugInfoGenerator.createLocation(
+          decl.location.startLine,
+          decl.location.startColumn,
+          this.currentSubprogramId,
+        );
+
+        this.emit(
+          `  call void @llvm.dbg.declare(metadata ${type}* ${addr}, metadata !${varId}, metadata !DIExpression())`,
+        );
+      }
+    }
 
     // Initialize uninitialized struct variables with default values (recursively setting null bits)
     if (
@@ -807,10 +874,12 @@ export abstract class StatementGenerator extends ExpressionGenerator {
 
     const condType = this.resolveType(stmt.expression.resolvedType!);
 
-    this.emit(`  switch ${condType} ${cond}, label %${defaultLabel} [`);
+    // Use raw output push to avoid attaching !dbg to the middle of the instruction
+    this.output.push(`  switch ${condType} ${cond}, label %${defaultLabel} [`);
     for (const c of caseLabels) {
-      this.emit(`    ${condType} ${c.value}, label %${c.label}`);
+      this.output.push(`    ${condType} ${c.value}, label %${c.label}`);
     }
+    // Attach debug info to the end of the switch instruction
     this.emit(`  ]`);
 
     for (const c of caseLabels) {
@@ -875,10 +944,20 @@ export abstract class StatementGenerator extends ExpressionGenerator {
       if (!isInstantiating) return;
     }
 
+    // Also skip methods of generic structs/enums unless instantiated
+    if (parentStruct && parentStruct.genericParams.length > 0) {
+      const isInstantiating = parentStruct.genericParams.every((p) =>
+        this.currentTypeMap.has(p.name),
+      );
+      if (!isInstantiating) {
+        return;
+      }
+    }
+
     if (this.currentFunctionName) {
-      console.log(`[DEBUG] RECURSIVE generateFunction detected!`);
-      console.log(`[DEBUG] Outer: ${this.currentFunctionName}`);
-      console.log(`[DEBUG] Inner: ${decl.name}`);
+      // console.log(`[DEBUG] RECURSIVE generateFunction detected!`);
+      // console.log(`[DEBUG] Outer: ${this.currentFunctionName}`);
+      // console.log(`[DEBUG] Inner: ${decl.name}`);
     }
 
     // Save state for re-entrancy (e.g. when resolving types triggers monomorphization)
@@ -894,6 +973,7 @@ export abstract class StatementGenerator extends ExpressionGenerator {
     const prevOnReturn = this.onReturn;
     const prevIsMainWithVoidReturn = this.isMainWithVoidReturn;
     const prevGeneratingFunctionBody = this.generatingFunctionBody;
+    const prevSubprogramId = this.currentSubprogramId;
 
     this.registerCount = 0;
     this.labelCount = 0;
@@ -905,6 +985,52 @@ export abstract class StatementGenerator extends ExpressionGenerator {
     this.localNullFlags.clear();
     this.pointerToLocal.clear();
     this.generatingFunctionBody = true;
+
+    let name = decl.name;
+    const funcType = decl.resolvedType as AST.FunctionTypeNode;
+    let effectiveFuncType = funcType;
+
+    if (decl.resolvedType && decl.resolvedType.kind === "FunctionType") {
+      let genericArgs: AST.TypeNode[] = [];
+      if (decl.genericParams.length > 0) {
+        genericArgs = decl.genericParams.map(
+          (p) => this.currentTypeMap.get(p.name)!,
+        );
+      }
+      // Substitute generic types in function signature before mangling
+      const substitutedFuncType = this.substituteType(
+        funcType,
+        this.currentTypeMap,
+      ) as AST.FunctionTypeNode;
+      effectiveFuncType = substitutedFuncType;
+
+      name = this.getMangledName(
+        decl.name,
+        substitutedFuncType,
+        false,
+        genericArgs,
+      );
+    }
+
+    // DWARF: Create subprogram
+    if (this.generateDwarf) {
+      const file = decl.location.file || this.currentFilePath;
+      const returnTypeId = this.getDwarfTypeId(effectiveFuncType.returnType);
+      const paramTypeIds = effectiveFuncType.paramTypes.map((t) =>
+        this.getDwarfTypeId(t),
+      );
+      const subroutineTypeId = this.debugInfoGenerator.createSubroutineType(
+        returnTypeId,
+        paramTypeIds,
+      );
+
+      this.currentSubprogramId = this.debugInfoGenerator.createSubprogram(
+        decl.name,
+        decl.location.startLine,
+        file,
+        subroutineTypeId,
+      );
+    }
 
     try {
       // Setup destructor chaining
@@ -935,35 +1061,13 @@ export abstract class StatementGenerator extends ExpressionGenerator {
         this.onReturn = undefined;
       }
 
-      let name = decl.name;
-      const funcType = decl.resolvedType as AST.FunctionTypeNode;
-      if (decl.resolvedType && decl.resolvedType.kind === "FunctionType") {
-        let genericArgs: AST.TypeNode[] = [];
-        if (decl.genericParams.length > 0) {
-          genericArgs = decl.genericParams.map(
-            (p) => this.currentTypeMap.get(p.name)!,
-          );
-        }
-        // Substitute generic types in function signature before mangling
-        const substitutedFuncType = this.substituteType(
-          funcType,
-          this.currentTypeMap,
-        ) as AST.FunctionTypeNode;
-        name = this.getMangledName(
-          decl.name,
-          substitutedFuncType,
-          false,
-          genericArgs,
-        );
-      }
-
       // Prevent duplicate generation
       if (this.emittedFunctions.has(name)) {
         return;
       }
       this.emittedFunctions.add(name);
 
-      let retType = this.resolveType(funcType.returnType);
+      let retType = this.resolveType(effectiveFuncType.returnType);
 
       // Special case: if this is main with void return, change to i32 for exit code
       this.isMainWithVoidReturn = decl.name === "main" && retType === "void";
@@ -1000,7 +1104,13 @@ export abstract class StatementGenerator extends ExpressionGenerator {
       ) {
         linkage = "linkonce_odr ";
       }
-      this.emit(`define ${linkage}${retType} @${name}(${params}) {`);
+      let dbgSuffix = "";
+      if (this.generateDwarf && this.currentSubprogramId !== -1) {
+        dbgSuffix = ` !dbg !${this.currentSubprogramId}`;
+      }
+      this.emit(
+        `define ${linkage}${retType} @${name}(${params})${dbgSuffix} {`,
+      );
       this.emit("entry:");
 
       // Unpack closure context if present
@@ -1063,10 +1173,39 @@ export abstract class StatementGenerator extends ExpressionGenerator {
       for (let i = 0; i < decl.params.length; i++) {
         const param = decl.params[i]!;
         this.locals.add(param.name);
-        const type = this.resolveType(funcType.paramTypes[i]!);
+        const type = this.resolveType(effectiveFuncType.paramTypes[i]!);
         const paramReg = `%${param.name}`;
         const stackAddr = this.allocateStack(param.name, type);
         this.emit(`  store ${type} ${paramReg}, ${type}* ${stackAddr}`);
+
+        // DWARF: Parameter debug info
+        if (this.generateDwarf && this.currentSubprogramId) {
+          const paramType = effectiveFuncType.paramTypes[i]!;
+          const dwarfTypeId = this.getDwarfTypeId(paramType);
+          const fileId = this.debugInfoGenerator.getFileNodeId(
+            this.currentFilePath,
+          );
+          const paramVarId = this.debugInfoGenerator.createParameterVariable(
+            param.name,
+            i + 1, // arg index (1-based)
+            fileId,
+            decl.location.startLine,
+            dwarfTypeId,
+            this.currentSubprogramId,
+          );
+
+          // Emit llvm.dbg.declare
+          // call void @llvm.dbg.declare(metadata i32* %a.addr, metadata !13, metadata !DIExpression()), !dbg !14
+          const locationId = this.debugInfoGenerator.createLocation(
+            decl.location.startLine,
+            decl.location.startColumn || 0,
+            this.currentSubprogramId,
+          );
+
+          this.emit(
+            `  call void @llvm.dbg.declare(metadata ${type}* ${stackAddr}, metadata !${paramVarId}, metadata !DIExpression()), !dbg !${locationId}`,
+          );
+        }
 
         // For struct-value parameters, extract the __null_bit__ field to detect if null was passed
         const flagPtr = this.localNullFlags.get(param.name);
@@ -1078,8 +1217,9 @@ export abstract class StatementGenerator extends ExpressionGenerator {
           this.emit(`  ${loaded} = load ${type}, ${type}* ${stackAddr}`);
 
           // Get the struct layout to find __null_bit__ index
-          const structName = (funcType.paramTypes[i] as AST.BasicTypeNode)
-            ?.name;
+          const structName = (
+            effectiveFuncType.paramTypes[i] as AST.BasicTypeNode
+          )?.name;
           const layout = this.structLayouts.get(structName);
           const nullBitIndex = layout ? layout.get("__null_bit__") : -1;
 
@@ -1110,7 +1250,7 @@ export abstract class StatementGenerator extends ExpressionGenerator {
       const isTerminator =
         lastLine.startsWith("ret") ||
         lastLine.startsWith("br") ||
-        lastLine === "unreachable";
+        lastLine.startsWith("unreachable");
 
       if (!isTerminator) {
         // Decrement stack depth
@@ -1148,6 +1288,7 @@ export abstract class StatementGenerator extends ExpressionGenerator {
       this.currentFunctionReturnType = prevCurrentFunctionReturnType;
       this.currentFunctionName = prevCurrentFunctionName;
       this.locals = prevLocals;
+      this.currentSubprogramId = prevSubprogramId;
       this.localPointers = prevLocalPointers;
       this.localNullFlags = prevLocalNullFlags;
       this.pointerToLocal = prevPointerToLocal;

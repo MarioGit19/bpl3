@@ -38,6 +38,7 @@ export interface CompilerOptions {
   target?: string; // Target triple
   sysroot?: string; // Sysroot for cross-compilation
   clangFlags?: string[]; // Additional clang flags
+  dwarf?: boolean; // Generate DWARF debug information
   collectAllErrors?: boolean; // Continue scanning and report all errors
 }
 
@@ -126,6 +127,7 @@ export class Compiler {
       }
       const codeGenerator = new CodeGenerator({
         target: this.options.target,
+        dwarf: this.options.dwarf,
       });
       const llvmIR = codeGenerator.generate(ast, this.options.filePath);
 
@@ -325,6 +327,7 @@ export class Compiler {
         stdLibPath,
         useLinkOnceOdrForStdLib: isLinkingBpl,
         target: this.options.target,
+        dwarf: this.options.dwarf,
       });
 
       const llvmIR = codeGenerator.generate(combinedAST, this.options.filePath);
@@ -427,6 +430,7 @@ export class Compiler {
 
       const codeGenerator = new CodeGenerator({
         target: this.options.target,
+        dwarf: this.options.dwarf,
       });
       const llvmIR = codeGenerator.generate(combinedAST, entryModule.path);
 

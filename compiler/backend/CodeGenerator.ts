@@ -10,6 +10,7 @@ import {
 import { TokenType } from "../frontend/TokenType";
 import { StatementGenerator } from "./codegen/StatementGenerator";
 import { CompilerError } from "../common/CompilerError";
+import { DebugInfoGenerator } from "./codegen/DebugInfoGenerator";
 
 export class CodeGenerator extends StatementGenerator {
   constructor(
@@ -17,6 +18,7 @@ export class CodeGenerator extends StatementGenerator {
       stdLibPath?: string;
       useLinkOnceOdrForStdLib?: boolean;
       target?: string;
+      dwarf?: boolean;
     } = {},
   ) {
     super(options);
@@ -26,6 +28,15 @@ export class CodeGenerator extends StatementGenerator {
     if (filePath) {
       this.currentFilePath = filePath;
     }
+
+    if (this.generateDwarf) {
+      this.debugInfoGenerator = new DebugInfoGenerator(
+        filePath || "unknown.bpl",
+        ".",
+      );
+      this.debugInfoGenerator.createCompileUnit();
+    }
+
     this.output = [];
     this.declarationsOutput = [];
     this.stringLiterals.clear();
@@ -480,9 +491,20 @@ export class CodeGenerator extends StatementGenerator {
       task();
     }
 
+    if (this.generateDwarf) {
+      const metadata = this.debugInfoGenerator.generateMetadataOutput();
+      this.output.push(...metadata);
+    }
+
     let header = "";
     if (this.target) {
+      // TODO: Check if it can be dynamic
+      header += `target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"\n`;
       header += `target triple = "${this.target}"\n`;
+    }
+    if (this.currentFilePath) {
+      const filename = this.currentFilePath.split("/").pop() || "unknown";
+      header += `source_filename = "${filename}"\n`;
     }
 
     for (const [content, varName] of this.stringLiterals) {
@@ -501,7 +523,7 @@ export class CodeGenerator extends StatementGenerator {
     try {
       const fs = require("fs");
       fs.writeFileSync("ir.ll", result);
-    } catch (e) { }
+    } catch (e) {}
 
     return result;
   }
@@ -617,7 +639,27 @@ export class CodeGenerator extends StatementGenerator {
       else if (type.endsWith("*")) init = "null";
     }
     const keyword = decl.isConst ? "constant" : "global";
-    this.emitDeclaration(`@${decl.name} = ${keyword} ${type} ${init}`);
+
+    let dbgSuffix = "";
+    if (this.generateDwarf) {
+      const typeNode = decl.typeAnnotation!;
+      const typeId = this.getDwarfTypeId(typeNode);
+      const fileId = this.debugInfoGenerator.getFileNodeId(decl.location.file);
+      const globalVarId = this.debugInfoGenerator.createGlobalVariable(
+        decl.name,
+        decl.name,
+        fileId,
+        decl.location.startLine,
+        typeId,
+        false,
+        true,
+      );
+      dbgSuffix = `, !dbg !${globalVarId}`;
+    }
+
+    this.emitDeclaration(
+      `@${decl.name} = ${keyword} ${type} ${init}${dbgSuffix}`,
+    );
     this.emitDeclaration("");
   }
 

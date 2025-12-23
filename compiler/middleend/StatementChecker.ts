@@ -526,6 +526,7 @@ export function checkVariableDecl(
             )} to ${this.typeToString(resolvedDecl)}`,
             "Ensure the initializer type matches the declared type.",
             decl.location,
+            "E001",
           );
         }
       } else {

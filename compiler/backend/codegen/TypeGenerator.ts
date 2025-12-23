@@ -23,6 +23,401 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
     return mangled;
   }
 
+  protected getDwarfTypeId(type: AST.TypeNode): number {
+    if (!this.generateDwarf) return 0;
+
+    const resolvedName = this.resolveType(type);
+
+    // Pointers
+    if (resolvedName.endsWith("*")) {
+      // We need to find the pointee type.
+      // This is tricky because resolveType returns a string.
+      // We need to inspect the AST node.
+      if (type.kind === "BasicType") {
+        if (type.pointerDepth > 0) {
+          // Create a copy of the type with one less pointer depth
+          const pointeeType: AST.BasicTypeNode = {
+            ...type,
+            pointerDepth: type.pointerDepth - 1,
+          };
+          const pointeeId = this.getDwarfTypeId(pointeeType);
+          return this.debugInfoGenerator.createPointerType(pointeeId);
+        }
+      }
+      // Fallback for other pointer types (e.g. function pointers, or if we can't deduce)
+      // Just use void*
+      const voidId = 0;
+      return this.debugInfoGenerator.createPointerType(voidId);
+    }
+
+    // Basic Types
+    let primitiveName = "";
+    if (type.kind === "BasicType") {
+      // Check for type aliases
+      if (this.typeAliasMap.has(type.name)) {
+        const aliasDecl = this.typeAliasMap.get(type.name)!;
+
+        // If it's a generic alias, we need to substitute args
+        if (aliasDecl.genericParams && aliasDecl.genericParams.length > 0) {
+          if (type.genericArgs && type.genericArgs.length > 0) {
+            const typeMap = new Map<string, AST.TypeNode>();
+            for (let i = 0; i < aliasDecl.genericParams.length; i++) {
+              if (i < type.genericArgs.length) {
+                typeMap.set(
+                  aliasDecl.genericParams[i]!.name,
+                  type.genericArgs[i]!,
+                );
+              }
+            }
+            const substituted = this.substituteType(aliasDecl.type, typeMap);
+            return this.getDwarfTypeId(substituted);
+          }
+        }
+
+        // Non-generic alias or generic alias used without args
+        return this.getDwarfTypeId(aliasDecl.type);
+      }
+
+      primitiveName = type.name;
+    }
+
+    if (primitiveName === "i32" || primitiveName === "int") {
+      return this.debugInfoGenerator.createBasicType("int", 32, 5);
+    }
+    if (primitiveName === "u32" || primitiveName === "uint") {
+      return this.debugInfoGenerator.createBasicType("unsigned int", 32, 7);
+    }
+    if (primitiveName === "i64" || primitiveName === "long") {
+      return this.debugInfoGenerator.createBasicType("long", 64, 5);
+    }
+    if (primitiveName === "u64" || primitiveName === "ulong") {
+      return this.debugInfoGenerator.createBasicType("unsigned long", 64, 7);
+    }
+    if (primitiveName === "i16" || primitiveName === "short") {
+      return this.debugInfoGenerator.createBasicType("short", 16, 5);
+    }
+    if (primitiveName === "u16" || primitiveName === "ushort") {
+      return this.debugInfoGenerator.createBasicType("unsigned short", 16, 7);
+    }
+    if (primitiveName === "i8") {
+      return this.debugInfoGenerator.createBasicType("signed char", 8, 6);
+    }
+    if (primitiveName === "char") {
+      return this.debugInfoGenerator.createBasicType("char", 8, 8);
+    }
+    if (primitiveName === "u8" || primitiveName === "uchar") {
+      return this.debugInfoGenerator.createBasicType("unsigned char", 8, 8);
+    }
+    if (primitiveName === "i1" || primitiveName === "bool") {
+      return this.debugInfoGenerator.createBasicType("bool", 8, 2);
+    }
+    if (primitiveName === "double") {
+      return this.debugInfoGenerator.createBasicType("double", 64, 4);
+    }
+    if (primitiveName === "float") {
+      return this.debugInfoGenerator.createBasicType("float", 32, 4);
+    }
+    if (primitiveName === "void") {
+      return 0;
+    }
+
+    // Fallback using resolvedName (for non-BasicTypes or unresolved aliases)
+    if (resolvedName === "i32" || resolvedName === "int") {
+      return this.debugInfoGenerator.createBasicType("int", 32, 5);
+    }
+    if (resolvedName === "u32" || resolvedName === "uint") {
+      return this.debugInfoGenerator.createBasicType("unsigned int", 32, 7);
+    }
+    if (resolvedName === "i64" || resolvedName === "long") {
+      return this.debugInfoGenerator.createBasicType("long", 64, 5);
+    }
+    if (resolvedName === "u64" || resolvedName === "ulong") {
+      return this.debugInfoGenerator.createBasicType("unsigned long", 64, 7);
+    }
+    if (resolvedName === "i16" || resolvedName === "short") {
+      return this.debugInfoGenerator.createBasicType("short", 16, 5);
+    }
+    if (resolvedName === "u16" || resolvedName === "ushort") {
+      return this.debugInfoGenerator.createBasicType("unsigned short", 16, 7);
+    }
+    if (resolvedName === "i8") {
+      return this.debugInfoGenerator.createBasicType("char", 8, 6);
+    }
+    if (resolvedName === "char") {
+      return this.debugInfoGenerator.createBasicType("char", 8, 8);
+    }
+    if (resolvedName === "u8" || resolvedName === "uchar") {
+      return this.debugInfoGenerator.createBasicType("unsigned char", 8, 8);
+    }
+    if (resolvedName === "i1" || resolvedName === "bool") {
+      return this.debugInfoGenerator.createBasicType("bool", 8, 2);
+    }
+    if (resolvedName === "double") {
+      return this.debugInfoGenerator.createBasicType("double", 64, 4);
+    }
+    if (resolvedName === "float") {
+      return this.debugInfoGenerator.createBasicType("float", 32, 4);
+    }
+    if (resolvedName === "void") {
+      return 0;
+    }
+
+    // Function Types (Closures)
+    if (type.kind === "FunctionType") {
+      const voidPtrId = this.debugInfoGenerator.createPointerType(0);
+      const fileId = this.debugInfoGenerator.getFileNodeId(
+        this.currentFilePath,
+      );
+
+      // Create members for { i8*, i8* }
+      const funcMember = this.debugInfoGenerator.createMemberType(
+        "func_ptr",
+        fileId,
+        0,
+        64,
+        0,
+        voidPtrId,
+      );
+      const envMember = this.debugInfoGenerator.createMemberType(
+        "env_ptr",
+        fileId,
+        0,
+        64,
+        64,
+        voidPtrId,
+      );
+
+      const funcType = type as AST.FunctionTypeNode;
+      const retName = this.resolveType(funcType.returnType);
+      const paramNames = funcType.paramTypes
+        .map((p) => this.resolveType(p))
+        .join("_");
+      const closureName = `Closure_${retName}_${paramNames}`.replace(
+        /[^a-zA-Z0-9_]/g,
+        "_",
+      );
+
+      return this.debugInfoGenerator.createStructType(
+        closureName,
+        128,
+        fileId,
+        0,
+        [funcMember, envMember],
+      );
+    }
+
+    // Arrays
+    if (
+      type.kind === "BasicType" &&
+      type.arrayDimensions &&
+      type.arrayDimensions.length > 0
+    ) {
+      const size = type.arrayDimensions[0];
+      if (size === null) {
+        // Dynamic array / Slice
+        // TODO: Handle slice properly
+        return 0;
+      }
+
+      // Element type
+      let elementTypeNode: AST.BasicTypeNode;
+      if (type.arrayDimensions.length > 1) {
+        elementTypeNode = {
+          ...type,
+          arrayDimensions: type.arrayDimensions.slice(1),
+        };
+      } else {
+        elementTypeNode = {
+          ...type,
+          arrayDimensions: [],
+        };
+      }
+
+      const elementTypeId = this.getDwarfTypeId(elementTypeNode);
+      const elementSizeInBits = this.getTypeSizeInBits(elementTypeNode);
+      const sizeInBits = size * elementSizeInBits;
+      const alignInBits = elementSizeInBits >= 64 ? 64 : elementSizeInBits;
+
+      return this.debugInfoGenerator.createArrayType(
+        size,
+        elementTypeId,
+        sizeInBits,
+        alignInBits,
+      );
+    }
+
+    // Structs
+    if (type.kind === "BasicType") {
+      const structDecl = this.structMap.get(type.name);
+      if (structDecl) {
+        // Check if we already created this struct type to avoid recursion
+        // DebugInfoGenerator caches by name, but we need to compute elements.
+        // We can use a placeholder or forward declaration if needed, but for now let's just compute.
+
+        // We need to compute fields.
+        let fields = this.getAllStructFields(structDecl);
+        let structName = structDecl.name;
+
+        // Handle generics
+        if (
+          type.genericArgs &&
+          type.genericArgs.length > 0 &&
+          structDecl.genericParams
+        ) {
+          const typeMap = new Map<string, AST.TypeNode>();
+          for (let i = 0; i < structDecl.genericParams.length; i++) {
+            if (i < type.genericArgs.length) {
+              typeMap.set(
+                structDecl.genericParams[i].name,
+                type.genericArgs[i],
+              );
+            }
+          }
+
+          fields = fields.map((field) => ({
+            ...field,
+            type: this.substituteType(field.type, typeMap),
+          }));
+
+          // Update struct name for DWARF to avoid collision with generic template
+          const argNames = type.genericArgs
+            .map((arg) => {
+              if (arg.kind === "BasicType")
+                return (arg as AST.BasicTypeNode).name;
+              return "T";
+            })
+            .join("_");
+          structName = `${structDecl.name}_${argNames}`;
+        }
+
+        const elements: number[] = [];
+        let offset = 0;
+
+        const fileId = this.debugInfoGenerator.getFileNodeId(
+          structDecl.location.file,
+        );
+
+        for (const field of fields) {
+          const fieldTypeId = this.getDwarfTypeId(field.type);
+          // Compute size and alignment (simplified)
+          let size = 64; // Default to 64 bits for pointers/i64/double
+          const fieldTypeName = this.resolveType(field.type);
+          if (fieldTypeName === "i32") size = 32;
+          if (fieldTypeName === "i16") size = 16;
+          if (fieldTypeName === "i8" || fieldTypeName === "i1") size = 8;
+
+          // Alignment padding (simplified)
+          // Assume packed or natural alignment. LLVM handles layout, but DWARF needs offsets.
+          // For now, let's assume 64-bit alignment for everything to keep it simple,
+          // or just increment offset by size.
+
+          const memberId = this.debugInfoGenerator.createMemberType(
+            field.name,
+            fileId,
+            field.location?.startLine || 0,
+            size,
+            offset,
+            fieldTypeId,
+          );
+          elements.push(memberId);
+          offset += size;
+        }
+
+        return this.debugInfoGenerator.createStructType(
+          structName,
+          offset, // Total size
+          fileId,
+          structDecl.location?.startLine || 0,
+          elements,
+        );
+      }
+    }
+
+    // Tuples
+    if (type.kind === "TupleType") {
+      const tupleType = type as AST.TupleTypeNode;
+      const elements: number[] = [];
+      let offset = 0;
+      const fileId = this.debugInfoGenerator.getFileNodeId(
+        this.currentFilePath,
+      );
+
+      for (let i = 0; i < tupleType.types.length; i++) {
+        const fieldType = tupleType.types[i];
+        const fieldTypeId = this.getDwarfTypeId(fieldType);
+        const fieldSize = this.getTypeSizeInBits(fieldType);
+
+        const memberId = this.debugInfoGenerator.createMemberType(
+          `_${i}`,
+          fileId,
+          0,
+          fieldSize,
+          offset,
+          fieldTypeId,
+        );
+        elements.push(memberId);
+        offset += fieldSize;
+      }
+
+      return this.debugInfoGenerator.createStructType(
+        `tuple_${elements.length}`, // Simplified name
+        offset,
+        fileId,
+        0,
+        elements,
+      );
+    }
+
+    // Enums
+    if (type.kind === "BasicType") {
+      const enumDecl = this.enumDeclMap.get(type.name);
+      if (enumDecl) {
+        const fileId = this.debugInfoGenerator.getFileNodeId(
+          enumDecl.location.file,
+        );
+
+        // Calculate maxSize if not already known
+        let maxSize = this.enumDataSizes.get(type.name);
+        if (maxSize === undefined) {
+          maxSize = this.calculateEnumMaxSize(enumDecl);
+          this.enumDataSizes.set(type.name, maxSize);
+        }
+
+        // Create DWARF struct
+        // { i32 tag, [maxSize x i8] data }
+        const elements: number[] = [];
+
+        // Tag (i32)
+        const intTypeId = this.debugInfoGenerator.createBasicType("int", 32, 5);
+        const tagMember = this.debugInfoGenerator.createMemberType(
+          "tag",
+          fileId,
+          enumDecl.location.startLine,
+          32,
+          0,
+          intTypeId,
+        );
+        elements.push(tagMember);
+
+        // Data (array of i8) - only if maxSize > 0
+        // We omit the data field for now as we don't have array type support in DebugInfoGenerator yet.
+        // But we set the correct size.
+
+        const totalSize = 32 + maxSize * 8;
+
+        return this.debugInfoGenerator.createStructType(
+          enumDecl.name,
+          totalSize,
+          fileId,
+          enumDecl.location.startLine,
+          elements,
+        );
+      }
+    }
+
+    return 0; // Unknown
+  }
+
   protected getTypeIdFromNode(type: AST.TypeNode): number {
     const typeName = this.resolveType(type); // Get LLVM type name as key
 
@@ -337,14 +732,7 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
     }
   }
 
-  protected generateEnum(decl: AST.EnumDecl, mangledName?: string) {
-    const enumName = mangledName || decl.name;
-
-    // Avoid re-emitting
-    if (this.generatedStructs.has(enumName)) return;
-    this.generatedStructs.add(enumName);
-
-    // Calculate maximum variant data size with proper alignment
+  protected calculateEnumMaxSize(decl: AST.EnumDecl): number {
     let maxSize = 0;
     for (const variant of decl.variants) {
       let variantSize = 0;
@@ -392,6 +780,87 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
         maxSize = variantSize;
       }
     }
+    return maxSize;
+  }
+
+  protected calculateStructSize(decl: AST.StructDecl): number {
+    let size = 0;
+    const fields = this.getAllStructFields(decl);
+    for (const field of fields) {
+      size += this.getTypeSizeInBits(field.type);
+    }
+    return size;
+  }
+
+  protected getTypeSizeInBits(type: AST.TypeNode): number {
+    if (type.kind === "BasicType") {
+      if (type.pointerDepth > 0) return 64;
+
+      if (type.arrayDimensions && type.arrayDimensions.length > 0) {
+        let totalElements = 1;
+        for (const dim of type.arrayDimensions) {
+          if (dim === null) return 128; // Slice {ptr, len} (simplified)
+          totalElements *= dim;
+        }
+
+        const elementType: AST.BasicTypeNode = {
+          ...type,
+          arrayDimensions: [],
+        };
+        return totalElements * this.getTypeSizeInBits(elementType);
+      }
+
+      switch (type.name) {
+        case "i64":
+        case "u64":
+        case "int":
+        case "uint":
+        case "double":
+        case "float":
+          return 64;
+        case "i32":
+        case "u32":
+          return 32;
+        case "i16":
+        case "u16":
+          return 16;
+        case "i8":
+        case "u8":
+        case "char":
+        case "bool":
+          return 8;
+        case "void":
+          return 0;
+      }
+
+      const structDecl = this.structMap.get(type.name);
+      if (structDecl) return this.calculateStructSize(structDecl);
+
+      const enumDecl = this.enumDeclMap.get(type.name);
+      if (enumDecl) return this.calculateEnumMaxSize(enumDecl) * 8;
+
+      return 64; // Default
+    }
+
+    if (type.kind === "FunctionType") return 128; // Closure { func_ptr, env_ptr }
+    if (type.kind === "TupleType") {
+      let size = 0;
+      for (const t of type.types) size += this.getTypeSizeInBits(t);
+      return size;
+    }
+
+    return 64;
+  }
+
+  protected generateEnum(decl: AST.EnumDecl, mangledName?: string) {
+    const enumName = mangledName || decl.name;
+
+    // Avoid re-emitting
+    if (this.generatedStructs.has(enumName)) return;
+    this.generatedStructs.add(enumName);
+
+    // Calculate maximum variant data size with proper alignment
+    const maxSize = this.calculateEnumMaxSize(decl);
 
     // Generate enum as: { i32 tag, [maxSize x i8] data }
     // If maxSize is 0 (all unit variants), just use { i32 }
@@ -752,8 +1221,6 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
 
   protected resolveType(type: AST.TypeNode): string {
     if (this.resolveTypeDepth > 200) {
-      console.log(`resolveType recursion limit reached! Type: ${type.kind}`);
-      if (type.kind === "BasicType") console.log(`Name: ${(type as any).name}`);
       throw new CompilerError(
         "resolveType recursion limit",
         "Check for circular type definitions or excessive nesting.",
@@ -780,6 +1247,7 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
       }
       if (type.kind === "BasicType") {
         const basicType = type as AST.BasicTypeNode;
+
         let llvmType = "";
 
         // Check currentTypeMap for generic substitutions
@@ -792,7 +1260,14 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
             (mapped as any).name === basicType.name
           ) {
             // Fallback to struct name if T maps to T (generic template context)
-            return `%struct.${basicType.name}`;
+            let llvmType = `%struct.${basicType.name}`;
+            for (let i = 0; i < basicType.pointerDepth; i++) {
+              llvmType += "*";
+            }
+            for (let i = basicType.arrayDimensions.length - 1; i >= 0; i--) {
+              llvmType = `[${basicType.arrayDimensions[i]} x ${llvmType}]`;
+            }
+            return llvmType;
           }
 
           let llvmType = this.resolveType(mapped);
@@ -1032,6 +1507,7 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
           `Expected ${baseStruct.genericParams.length} generic arguments, but got ${genericArgs.length}`,
         );
       }
+
       for (let i = 0; i < baseStruct.genericParams.length; i++) {
         typeMap.set(baseStruct.genericParams[i]!.name.trim(), genericArgs[i]!);
       }
@@ -1487,13 +1963,7 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
           destroyMethodName,
           destroyMethod.resolvedType,
         );
-      } else {
-        console.log(`[DEBUG] Could not find destroy method for ${structName}`);
       }
-    } else {
-      console.log(
-        `[DEBUG] Could not find parent struct ${structName} in structMap`,
-      );
     }
 
     this.emit(`  call void @${callName}(${parentPtrType} ${casted})`);

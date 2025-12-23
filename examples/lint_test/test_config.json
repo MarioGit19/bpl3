@@ -1,0 +1,4 @@
+{
+  "skip_compilation": true,
+  "description": "This example is tested via CLI.test.ts as it requires the 'lint' command"
+}

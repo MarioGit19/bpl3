@@ -12,32 +12,35 @@ _bpl_completion() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     # Main commands
-    local commands="format init pack install list uninstall completion help"
-    
+    local commands="format init pack install list uninstall completion help lint"
+
     # Global options (work with file arguments and commands)
-    local global_opts="-e --eval --stdin -o --output --emit --target --sysroot --cpu --march --clang-flag -l --lib -L --lib-path --object --run -v --verbose --cache --write -h --help -V --version"
-    
+    local global_opts="-e --eval --stdin -o --output --emit --target --sysroot --cpu --march --clang-flag -l --lib -L --lib-path --object --run -v --verbose --cache --write -h --help -V --version --dwarf"
+
     # Format command options
     local format_opts="-w --write -v --verbose"
-    
+
+    # Lint command options
+    local lint_opts="-v --verbose"
+
     # Init command options
     local init_opts="-v --verbose"
-    
+
     # Pack command options
     local pack_opts="-v --verbose"
-    
-    # Install command options  
+
+    # Install command options
     local install_opts="-v --verbose"
-    
+
     # List command options
     local list_opts="-v --verbose"
-    
+
     # Uninstall command options
     local uninstall_opts="-v --verbose"
-    
+
     # Completion command options
     local completion_opts="bash zsh"
-    
+
     # Emit types
     local emit_types="llvm ast tokens formatted"
 
@@ -47,35 +50,35 @@ _bpl_completion() {
             # Complete with file paths
             COMPREPLY=( $(compgen -f -- "${cur}") )
             return 0
-            ;;
+        ;;
         --emit)
             COMPREPLY=( $(compgen -W "${emit_types}" -- "${cur}") )
             return 0
-            ;;
+        ;;
         --target)
             # Common target triples
             local targets="x86_64-pc-linux-gnu aarch64-unknown-linux-gnu arm64-apple-darwin x86_64-apple-darwin x86_64-pc-windows-gnu"
             COMPREPLY=( $(compgen -W "${targets}" -- "${cur}") )
             return 0
-            ;;
+        ;;
         --sysroot|--lib-path|-L)
             # Complete with directories
             COMPREPLY=( $(compgen -d -- "${cur}") )
             return 0
-            ;;
+        ;;
         --object)
             # Complete with object files
             COMPREPLY=( $(compgen -f -X '!*.@(o|ll|bc)' -- "${cur}") )
             return 0
-            ;;
+        ;;
         -l|--lib)
             # Don't complete, let user type library name
             return 0
-            ;;
+        ;;
         --cpu|--march|--clang-flag|-e|--eval)
             # Don't complete, let user type
             return 0
-            ;;
+        ;;
     esac
 
     # Determine which command we're in (if any)
@@ -100,15 +103,24 @@ _bpl_completion() {
                     COMPREPLY=( $(compgen -f -X '!*.bpl' -- "${cur}") )
                 fi
                 return 0
-                ;;
+            ;;
+            lint)
+                if [[ "$cur" == -* ]]; then
+                    COMPREPLY=( $(compgen -W "${lint_opts}" -- "${cur}") )
+                else
+                    # Complete with .bpl files
+                    COMPREPLY=( $(compgen -f -X '!*.bpl' -- "${cur}") )
+                fi
+                return 0
+            ;;
             init)
                 COMPREPLY=( $(compgen -W "${init_opts}" -- "${cur}") )
                 return 0
-                ;;
+            ;;
             pack)
                 COMPREPLY=( $(compgen -W "${pack_opts}" -- "${cur}") )
                 return 0
-                ;;
+            ;;
             install)
                 if [[ "$cur" == -* ]]; then
                     COMPREPLY=( $(compgen -W "${install_opts}" -- "${cur}") )
@@ -117,27 +129,27 @@ _bpl_completion() {
                     COMPREPLY=( $(compgen -f -- "${cur}") )
                 fi
                 return 0
-                ;;
+            ;;
             list)
                 COMPREPLY=( $(compgen -W "${list_opts}" -- "${cur}") )
                 return 0
-                ;;
+            ;;
             uninstall)
                 if [[ "$cur" == -* ]]; then
                     COMPREPLY=( $(compgen -W "${uninstall_opts}" -- "${cur}") )
                 fi
                 # Could list installed packages here if we had a way to query them
                 return 0
-                ;;
+            ;;
             completion)
                 COMPREPLY=( $(compgen -W "${completion_opts}" -- "${cur}") )
                 return 0
-                ;;
+            ;;
             help)
                 # Complete with commands for help
                 COMPREPLY=( $(compgen -W "${commands}" -- "${cur}") )
                 return 0
-                ;;
+            ;;
         esac
     fi
 
