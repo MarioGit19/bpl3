@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { SourceManager } from "./SourceManager";
 
 export interface SourceLocation {
   file: string;
@@ -59,8 +60,14 @@ export class CompilerError extends Error {
    */
   private loadSourceLines(): void {
     try {
-      // Skip reading for special file names (stdin, eval)
-      // Check the full path, not just basename, as these are fake file identifiers
+      // Check SourceManager first (for virtual files like stdin/eval)
+      const cachedSource = SourceManager.getSource(this.location.file);
+      if (cachedSource) {
+        this.sourceLines = cachedSource.split("\n");
+        return;
+      }
+
+      // Skip reading for special file names if not in cache
       if (
         this.location.file.includes("stdin-") ||
         this.location.file.includes("eval-")

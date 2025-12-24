@@ -1014,17 +1014,25 @@ export abstract class ExpressionGenerator extends TypeGenerator {
 
       // Handle generic struct method calls
       let mangledName: string;
+      let resolvedMethodType: AST.FunctionTypeNode;
+
       if (targetType.genericArgs && targetType.genericArgs.length > 0) {
         // Generic struct - need monomorphized method name
         const structDecl = this.structMap.get(targetType.name);
-        if (structDecl && structDecl.genericParams.length > 0) {
+        const enumDecl = this.enumDeclMap.get(targetType.name);
+
+        if (
+          (structDecl && structDecl.genericParams.length > 0) ||
+          (enumDecl && enumDecl.genericParams.length > 0)
+        ) {
+          const genericParams = structDecl
+            ? structDecl.genericParams
+            : enumDecl!.genericParams;
+
           // Build context map for generic substitution
           const contextMap = new Map<string, AST.TypeNode>();
-          for (let i = 0; i < structDecl.genericParams.length; i++) {
-            contextMap.set(
-              structDecl.genericParams[i]!.name,
-              targetType.genericArgs[i]!,
-            );
+          for (let i = 0; i < genericParams.length; i++) {
+            contextMap.set(genericParams[i]!.name, targetType.genericArgs[i]!);
           }
 
           // Build monomorphized struct name using mangleType (avoids recursion)
@@ -1047,12 +1055,14 @@ export abstract class ExpressionGenerator extends TypeGenerator {
             fullMethodName,
             substitutedMethodType,
           );
+          resolvedMethodType = substitutedMethodType;
         } else {
           // Fallback: non-generic or already concrete
           const structName = targetType.name;
           const methodType = method.resolvedType as AST.FunctionTypeNode;
           const fullMethodName = `${structName}_${method.name}`;
           mangledName = this.getMangledName(fullMethodName, methodType);
+          resolvedMethodType = methodType;
         }
       } else {
         // Non-generic struct
@@ -1060,6 +1070,7 @@ export abstract class ExpressionGenerator extends TypeGenerator {
         const methodType = method.resolvedType as AST.FunctionTypeNode;
         const fullMethodName = `${structName}_${method.name}`;
         mangledName = this.getMangledName(fullMethodName, methodType);
+        resolvedMethodType = methodType;
       }
 
       // Prepare arguments: this (left) + right
@@ -1071,6 +1082,7 @@ export abstract class ExpressionGenerator extends TypeGenerator {
       let otherVal = rightRaw;
       let otherType = rightType;
       let thisExpr = expr.left;
+      let otherExpr = expr.right;
 
       if (overload.swapOperands) {
         thisVal = rightRaw;
@@ -1078,6 +1090,7 @@ export abstract class ExpressionGenerator extends TypeGenerator {
         otherVal = leftRaw;
         otherType = leftType;
         thisExpr = expr.right;
+        otherExpr = expr.left;
       }
 
       // For operator overloads on pointers (like &arr << value), pass the pointer value directly
@@ -1103,6 +1116,33 @@ export abstract class ExpressionGenerator extends TypeGenerator {
           thisPtr = spillAddr;
         }
         thisArg = `${thisType}* ${thisPtr}`;
+      }
+
+      // Check if the second argument needs to be passed by pointer
+      // This happens if the operator method expects a pointer (e.g. __eq__(this: *T, other: *T))
+      // but the operand is a value
+      if (resolvedMethodType.paramTypes.length >= 2) {
+        const expectedTypeNode = resolvedMethodType.paramTypes[1]!;
+        const expectedType = this.resolveType(expectedTypeNode);
+
+        if (expectedType.endsWith("*") && !otherType.endsWith("*")) {
+          // Expected pointer, got value. Pass address.
+          let otherPtr: string;
+          try {
+            otherPtr = this.generateAddress(otherExpr);
+          } catch {
+            const spillAddr = this.allocateStack(
+              `op_arg_spill_${this.labelCount++}`,
+              otherType,
+            );
+            this.emit(
+              `  store ${otherType} ${otherVal}, ${otherType}* ${spillAddr}`,
+            );
+            otherPtr = spillAddr;
+          }
+          otherVal = otherPtr;
+          otherType = `${otherType}*`;
+        }
       }
 
       // Call the operator method
@@ -4103,8 +4143,8 @@ export abstract class ExpressionGenerator extends TypeGenerator {
           for (let i = 0; i < alias.genericParams.length; i++) {
             if (i < substituted.genericArgs.length) {
               typeMap.set(
-                alias.genericParams[i].name,
-                substituted.genericArgs[i],
+                alias.genericParams[i]!.name,
+                substituted.genericArgs[i]!,
               );
             }
           }

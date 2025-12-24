@@ -300,7 +300,7 @@ export class OverloadResolver {
       memberName: string,
     ) =>
       | {
-          decl: AST.StructDecl | AST.SpecDecl;
+          decl: AST.StructDecl | AST.EnumDecl | AST.SpecDecl;
           members: (AST.StructField | AST.FunctionDecl | AST.SpecMethod)[];
           genericMap: Map<string, AST.TypeNode>;
         }
@@ -314,23 +314,31 @@ export class OverloadResolver {
 
     const basicType = targetType as AST.BasicTypeNode;
 
-    // Find the struct declaration
-    let decl: AST.StructDecl | undefined;
+    // Find the struct or enum declaration
+    let decl: AST.StructDecl | AST.EnumDecl | undefined;
     if (basicType.resolvedDeclaration) {
-      // Only assign if it's a StructDecl, not an EnumDecl
-      if (basicType.resolvedDeclaration.kind === "StructDecl") {
-        decl = basicType.resolvedDeclaration as AST.StructDecl;
+      if (
+        basicType.resolvedDeclaration.kind === "StructDecl" ||
+        basicType.resolvedDeclaration.kind === "EnumDecl"
+      ) {
+        decl = basicType.resolvedDeclaration as AST.StructDecl | AST.EnumDecl;
       }
     } else {
       // Look up by base name (works for both "Array" and "Array<T>")
       const baseName = basicType.name;
       const symbol = this.ctx.getCurrentScope().resolve(baseName);
-      if (
-        symbol &&
-        symbol.kind === "Struct" &&
-        (symbol.declaration as any).kind === "StructDecl"
-      ) {
-        decl = symbol.declaration as AST.StructDecl;
+      if (symbol) {
+        if (
+          symbol.kind === "Struct" &&
+          (symbol.declaration as any).kind === "StructDecl"
+        ) {
+          decl = symbol.declaration as AST.StructDecl;
+        } else if (
+          symbol.kind === "Enum" &&
+          (symbol.declaration as any).kind === "EnumDecl"
+        ) {
+          decl = symbol.declaration as AST.EnumDecl;
+        }
       }
     }
 

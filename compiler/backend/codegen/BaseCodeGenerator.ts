@@ -1,4 +1,5 @@
 import { CompilerError, type AST } from "../..";
+import type { SourceLocation } from "../../common/CompilerError";
 import { DebugInfoGenerator } from "./DebugInfoGenerator";
 
 export class BaseCodeGenerator {
@@ -135,7 +136,7 @@ export class BaseCodeGenerator {
     }
   }
 
-  protected currentStatementLocation: AST.SourceLocation | null = null;
+  protected currentStatementLocation: SourceLocation | null = null;
 
   protected emitDeclaration(line: string) {
     this.declarationsOutput.push(line);

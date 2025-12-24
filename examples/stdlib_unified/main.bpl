@@ -70,12 +70,12 @@ frame main() ret int {
     local opt2: Option<int> = Option<int>.Some(42);
     local opt3: Option<int> = Option<int>.None;
 
-    if (opt1.__eq__(opt2)) {
+    if (opt1 == opt2) {
         # equality comparison
         IO.printString("Some(42) == Some(42): true");
     }
     # inequality comparison
-    if (opt1.__ne__(opt3)) {
+    if (opt1 != opt3) {
         IO.printString("Some(42) != None: true");
     }
     IO.print("");

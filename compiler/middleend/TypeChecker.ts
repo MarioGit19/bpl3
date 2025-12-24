@@ -1342,6 +1342,18 @@ export class TypeChecker extends TypeCheckerBase {
           return context.inferredTypes[0];
         }
 
+        // Check if the block diverges (ends with Throw, Break, or Continue)
+        if (body.statements.length > 0) {
+          const lastStmt = body.statements[body.statements.length - 1]!;
+          if (
+            lastStmt.kind === "Throw" ||
+            lastStmt.kind === "Break" ||
+            lastStmt.kind === "Continue"
+          ) {
+            return undefined; // Diverges, compatible with any type
+          }
+        }
+
         return this.makeVoidType();
       } finally {
         this.matchContext.pop();

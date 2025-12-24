@@ -175,7 +175,10 @@ export class ImportHandler {
       }
     } else {
       // Handle std/ prefix
-      if (stmt.source.startsWith("std/")) {
+      if (stmt.source === "std") {
+        const stdLibPath = getStdLibPath();
+        importPath = path.join(stdLibPath, "std.bpl");
+      } else if (stmt.source.startsWith("std/")) {
         const stdLibPath = getStdLibPath();
         const relativePath = stmt.source.substring(4);
         importPath = path.join(stdLibPath, relativePath);

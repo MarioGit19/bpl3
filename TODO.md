@@ -98,12 +98,22 @@
   - ✅ Formatter support for `as`/`is` expressions (parentheses enforcement)
   - ✅ Integration with `match` expressions
   - ✅ Comprehensive test suite covering inheritance, specs, and enums
+- [x] Result<T, E> Type Implementation ✅
+  - ✅ `Result<T, E>` enum in standard library
+  - ✅ Helper methods: `isOk`, `isErr`, `unwrap`, `unwrapOr`, `map`, `mapErr`
+  - ✅ Operator overloading for Generic Enums (Backend support)
+  - ✅ Equality operators (`==`, `!=`) for `Result` and `Option`
+  - ✅ Integration tests verifying `Result` functionality
+- [x] CLI Eval Error Display Fix ✅
+  - ✅ `DiagnosticFormatter` uses `SourceManager` for virtual files
+  - ✅ Correct error snippets shown for `--eval` code
 
 ## Pending Features (expanded)
 
 ### RECOMMENDED NEXT PRIORITIES
 
 - [ ] **Advanced Type System Features**
+
   - [ ] Intersection Types (`TypeA & TypeB`)
   - [ ] Union Types (`TypeA | TypeB`) (beyond Enums)
   - [ ] Type Guards (User-defined `is` functions)

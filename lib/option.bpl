@@ -32,20 +32,20 @@ enum Option<T> {
         };
     }
 
-    frame __eq__(this: Option<T>, other: Option<T>) ret bool {
-        return match (this) {
-            Option.Some(v1) => match (other) {
+    frame __eq__(this: *Option<T>, other: *Option<T>) ret bool {
+        return match (*this) {
+            Option.Some(v1) => match (*other) {
                 Option.Some(v2) => v1 == v2,
                 Option.None => false,
             },
-            Option.None => match (other) {
+            Option.None => match (*other) {
                 Option.Some(_) => false,
                 Option.None => true,
             },
         };
     }
 
-    frame __ne__(this: Option<T>, other: Option<T>) ret bool {
+    frame __ne__(this: *Option<T>, other: *Option<T>) ret bool {
         return !(this.__eq__(other));
     }
 }

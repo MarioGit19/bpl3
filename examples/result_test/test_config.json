@@ -1,0 +1,6 @@
+{
+  "expectedOutput": "ok is Ok: 42\nerr is Err: Something went wrong\nunwrapOr works for Ok\nunwrapOr works for Err\nEquality works\nInequality works\n",
+  "args": [],
+  "env": {},
+  "input": ""
+}

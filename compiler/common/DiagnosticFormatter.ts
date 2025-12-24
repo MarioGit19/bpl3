@@ -18,6 +18,7 @@ import {
   DiagnosticSeverity,
   type SourceLocation,
 } from "./CompilerError";
+import { SourceManager } from "./SourceManager";
 
 /**
  * Configuration for diagnostic formatting
@@ -87,6 +88,12 @@ function getSeverityLabel(
  */
 function getSourceLines(filePath: string): string[] | null {
   try {
+    // Check SourceManager first
+    const cachedSource = SourceManager.getSource(filePath);
+    if (cachedSource) {
+      return cachedSource.split("\n");
+    }
+
     if (fs.existsSync(filePath)) {
       const content = fs.readFileSync(filePath, "utf-8");
       return content.split("\n");

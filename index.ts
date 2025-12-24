@@ -10,6 +10,7 @@ import { CodeGenerator } from "./compiler/backend/CodeGenerator";
 import { CompilerError } from "./compiler/common/CompilerError";
 import { DiagnosticFormatter } from "./compiler/common/DiagnosticFormatter";
 import { resolveBplPath } from "./compiler/common/PathResolver";
+import { SourceManager } from "./compiler/common/SourceManager";
 import { Formatter } from "./compiler/formatter/Formatter";
 import { lexWithGrammar } from "./compiler/frontend/GrammarLexer";
 import { Parser } from "./compiler/frontend/Parser";
@@ -432,6 +433,8 @@ function processCode(
   programArgs?: string[],
 ) {
   try {
+    // Register source for error reporting
+    SourceManager.setSource(sourceLabel, code);
     processCodeInternal(code, sourceLabel, options, programArgs);
   } catch (e) {
     if (e instanceof CompilerError) {

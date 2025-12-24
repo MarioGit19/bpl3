@@ -2,74 +2,60 @@
 
 export [Result];
 
-struct Result<T, E> {
-    ok: bool,
-    value: T,
-    error: E,
-    frame Ok(value: T) ret Result<T, E> {
-        local r: Result<T, E>;
-        r.ok = true;
-        r.value = value;
-        return r;
+# Result<T, E> standard library
+
+export [Result];
+
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+
+    frame isOk(this: Result<T, E>) ret bool {
+        return match<Result.Ok>(this);
     }
 
-    frame Err(error: E) ret Result<T, E> {
-        local r: Result<T, E>;
-        r.ok = false;
-        r.error = error;
-        return r;
+    frame isErr(this: Result<T, E>) ret bool {
+        return match<Result.Err>(this);
     }
 
-    frame isOk(this: *Result<T, E>) ret bool {
-        if (this.ok) {
-            return true;
-        }
-        return false;
+    frame unwrap(this: Result<T, E>) ret T {
+        return match (this) {
+            Result.Ok(val) => val,
+            Result.Err(err) => { throw err; },
+        };
     }
 
-    frame isErr(this: *Result<T, E>) ret bool {
-        if (this.ok) {
-            return false;
-        }
-        return true;
+    frame unwrapOr(this: Result<T, E>, defaultValue: T) ret T {
+        return match (this) {
+            Result.Ok(val) => val,
+            Result.Err(_) => defaultValue,
+        };
     }
 
-    frame unwrap(this: *Result<T, E>) ret T {
-        if (this.ok) {
-            return this.value;
-        }
-        # Throw the error object/value for handling by caller
-        throw this.error;
+    frame unwrapErr(this: Result<T, E>) ret E {
+        return match (this) {
+            Result.Ok(_) => { throw 101; }, # Panic code for unwrapErr on Ok
+            Result.Err(err) => err,
+        };
     }
 
-    frame unwrapOr(this: *Result<T, E>, defaultValue: T) ret T {
-        if (this.ok) {
-            return this.value;
-        }
-        return defaultValue;
-    }
-
-    frame unwrapErr(this: *Result<T, E>) ret E {
-        return this.error;
-    }
-
-    # Operator overloading: Equality comparison
-    # Two Results are equal if both Ok with equal values or both Err with equal errors
     frame __eq__(this: *Result<T, E>, other: Result<T, E>) ret bool {
-        if (this.ok && other.ok) {
-            # Both Ok - compare values
-            return this.value == other.value;
+        if (this.isOk()) {
+            if (other.isOk()) {
+                return this.unwrap() == other.unwrap();
+            } else {
+                return false;
+            }
+        } else {
+            if (other.isErr()) {
+                return this.unwrapErr() == other.unwrapErr();
+            } else {
+                return false;
+            }
         }
-        if (!this.ok && !other.ok) {
-            # Both Err - compare errors
-            return this.error == other.error;
-        }
-        # One Ok, one Err
-        return false;
     }
 
-    # Operator overloading: Inequality comparison
     frame __ne__(this: *Result<T, E>, other: Result<T, E>) ret bool {
-        return !this.__eq__(other);
+        return !(this.__eq__(other));
     }
 }

@@ -235,11 +235,11 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
 
       const elementTypeId = this.getDwarfTypeId(elementTypeNode);
       const elementSizeInBits = this.getTypeSizeInBits(elementTypeNode);
-      const sizeInBits = size * elementSizeInBits;
+      const sizeInBits = size! * elementSizeInBits;
       const alignInBits = elementSizeInBits >= 64 ? 64 : elementSizeInBits;
 
       return this.debugInfoGenerator.createArrayType(
-        size,
+        size!,
         elementTypeId,
         sizeInBits,
         alignInBits,
@@ -268,8 +268,8 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
           for (let i = 0; i < structDecl.genericParams.length; i++) {
             if (i < type.genericArgs.length) {
               typeMap.set(
-                structDecl.genericParams[i].name,
-                type.genericArgs[i],
+                structDecl.genericParams[i]!.name,
+                type.genericArgs[i]!,
               );
             }
           }
@@ -343,7 +343,7 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
       );
 
       for (let i = 0; i < tupleType.types.length; i++) {
-        const fieldType = tupleType.types[i];
+        const fieldType = tupleType.types[i]!;
         const fieldTypeId = this.getDwarfTypeId(fieldType);
         const fieldSize = this.getTypeSizeInBits(fieldType);
 
