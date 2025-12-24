@@ -1412,9 +1412,11 @@ export abstract class ExpressionGenerator extends TypeGenerator {
       }
 
       // Call the operator method
-      // Use the expression's resolved type instead of the method's return type
-      // because the expression type has generic parameters already substituted by TypeChecker
-      const returnType = this.resolveType(expr.resolvedType!);
+      // Use the substituted method return type
+      const returnType = this.resolveType(resolvedMethodType.returnType);
+      // Update AST to ensure consumers see the concrete type
+      expr.resolvedType = resolvedMethodType.returnType;
+
       const resultReg = this.newRegister();
       this.emit(
         `  ${resultReg} = call ${returnType} @${mangledName}(i8* null, ${thisArg}, ${otherType} ${otherVal})`,
@@ -3505,8 +3507,36 @@ export abstract class ExpressionGenerator extends TypeGenerator {
             const valueRaw = this.generateExpression(expr.value);
 
             // Get the struct name and build full method name
-            const structName = objectType.name;
-            const methodType = setMethod.resolvedType as AST.FunctionTypeNode;
+            let structName = objectType.name;
+            let methodType = setMethod.resolvedType as AST.FunctionTypeNode;
+
+            // Handle generic struct method calls
+            if (objectType.genericArgs && objectType.genericArgs.length > 0) {
+              const structDecl = this.structMap.get(objectType.name);
+              if (structDecl && structDecl.genericParams.length > 0) {
+                // Build context map for generic substitution
+                const contextMap = new Map<string, AST.TypeNode>();
+                for (let i = 0; i < structDecl.genericParams.length; i++) {
+                  contextMap.set(
+                    structDecl.genericParams[i]!.name,
+                    objectType.genericArgs[i]!,
+                  );
+                }
+
+                // Build monomorphized struct name using mangleType
+                const argNames = objectType.genericArgs
+                  .map((arg) => this.mangleType(arg))
+                  .join("_");
+                structName = `${objectType.name}_${argNames}`;
+
+                // Substitute types in method signature
+                methodType = this.substituteType(
+                  methodType,
+                  contextMap,
+                ) as AST.FunctionTypeNode;
+              }
+            }
+
             const fullMethodName = `${structName}_${setMethod.name}`;
             const mangledName = this.getMangledName(fullMethodName, methodType);
 
@@ -3843,10 +3873,41 @@ export abstract class ExpressionGenerator extends TypeGenerator {
 
       // Get the struct name from the target type
       const targetType = overload.targetType as AST.BasicTypeNode;
-      const structName = targetType.name;
+      let structName = targetType.name;
+      let methodType = method.resolvedType as AST.FunctionTypeNode;
+
+      // Handle generic struct method calls
+      if (targetType.genericArgs && targetType.genericArgs.length > 0) {
+        const structDecl = this.structMap.get(targetType.name);
+        if (structDecl && structDecl.genericParams.length > 0) {
+          // Build context map for generic substitution
+          const contextMap = new Map<string, AST.TypeNode>();
+          for (let i = 0; i < structDecl.genericParams.length; i++) {
+            contextMap.set(
+              structDecl.genericParams[i]!.name,
+              targetType.genericArgs[i]!,
+            );
+          }
+
+          // Build monomorphized struct name using mangleType
+          const argNames = targetType.genericArgs
+            .map((arg) => this.mangleType(arg))
+            .join("_");
+          structName = `${targetType.name}_${argNames}`;
+
+          // Substitute types in method signature
+          methodType = this.substituteType(
+            methodType,
+            contextMap,
+          ) as AST.FunctionTypeNode;
+
+          // Update the expression's resolved type to the substituted type
+          // This ensures that subsequent consumers (like generateCall) see the concrete type
+          expr.resolvedType = methodType.returnType;
+        }
+      }
 
       // Build the method name with struct prefix
-      const methodType = method.resolvedType as AST.FunctionTypeNode;
       const fullMethodName = `${structName}_${method.name}`;
       const mangledName = this.getMangledName(fullMethodName, methodType);
 
@@ -3871,7 +3932,7 @@ export abstract class ExpressionGenerator extends TypeGenerator {
       }
 
       // Call the __get__ method
-      const returnType = this.resolveType(method.returnType);
+      const returnType = this.resolveType(methodType.returnType);
       const resultReg = this.newRegister();
       this.emit(
         `  ${resultReg} = call ${returnType} @${mangledName}(i8* null, ${objectType}* ${thisPtr}, ${indexType} ${indexRaw})`,

@@ -1,5 +1,5 @@
 {
-  "expectedOutput": "Result: 42\n",
+  "expectedOutput": ["Result: 42"],
   "args": [],
   "env": {},
   "input": ""

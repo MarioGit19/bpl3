@@ -1,5 +1,5 @@
 {
-  "expectedOutput": "p == null: true 1 1\nq == null after init: false 1 0\n",
+  "expectedOutput": ["p == null: true 1 1", "q == null after init: false 1 0"],
   "args": [],
   "env": {},
   "input": ""

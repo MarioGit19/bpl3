@@ -1,5 +1,8 @@
 {
-  "expectedOutput": "Testing null object access trap...\nAttempting to access p.x on null object:\n",
+  "expectedOutput": [
+    "Testing null object access trap...",
+    "Attempting to access p.x on null object:"
+  ],
   "args": [],
   "env": {},
   "input": "",

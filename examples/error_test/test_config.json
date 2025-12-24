@@ -1,7 +1,9 @@
 {
-  "expectedOutput": "error[E001]",
+  "expectedOutput": ["error[E001]"],
   "exitCode": 1,
   "args": [],
-  "env": { "NO_COLOR": "1" },
+  "env": {
+    "NO_COLOR": "1"
+  },
   "input": ""
 }

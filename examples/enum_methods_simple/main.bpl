@@ -14,9 +14,12 @@ enum Color {
 
 frame testColor() ret int {
     local color: Color = Color.Red;
-    return color.to_code();
+    return color.toCode();
 }
 
 frame main() ret int {
-    return testColor();
+    if (testColor() == 1) {
+        return 0;
+    }
+    return 1;
 }

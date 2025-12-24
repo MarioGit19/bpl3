@@ -707,7 +707,7 @@ With test configuration:
 
 ```json
 {
-  "expectedOutput": "Hello from my example!\n",
+  "expectedOutput": ["Hello from my example!"],
   "args": [],
   "env": {},
   "input": "",
@@ -723,11 +723,11 @@ With test configuration:
 
 - **Driver**: `tests/Integration.test.ts` runs `examples/<name>/main.bpl` via `cmp.sh`.
 - **Configuration**: `test_config.json` specifies:
-  - `expectedOutput` - expected stdout
-  - `args` - command-line arguments
-  - `env` - environment variables
-  - `input` - stdin input
-  - `skip_compilation` - skip compilation step if true
+  - `expectedOutput`: string[] - expected stdout
+  - `args`: string[] - command-line arguments
+  - `env`: Record<string, string> - environment variables
+  - `input`: string - stdin input
+  - `skip_compilation`: boolean - skip compilation step if true
 
 ### Two Paths for Testing
 
@@ -784,7 +784,7 @@ bun index.ts examples/path/to/file.bpl --emit llvm
 
 ```json
 {
-  "expectedOutput": "Result: 42\n",
+  "expectedOutput": ["Result: 42"],
   "args": [],
   "env": {},
   "input": ""
@@ -795,7 +795,7 @@ bun index.ts examples/path/to/file.bpl --emit llvm
 
 ```json
 {
-  "expectedOutput": "Sum: 15\n",
+  "expectedOutput": ["Sum: 15"],
   "args": ["10", "5"],
   "env": {},
   "input": ""
@@ -806,7 +806,7 @@ bun index.ts examples/path/to/file.bpl --emit llvm
 
 ```json
 {
-  "expectedOutput": "You entered: hello\n",
+  "expectedOutput": ["You entered: hello"],
   "args": [],
   "env": {},
   "input": "hello\n"
@@ -817,7 +817,7 @@ bun index.ts examples/path/to/file.bpl --emit llvm
 
 ```json
 {
-  "expectedOutput": "Debug mode: on\n",
+  "expectedOutput": ["Debug mode: on"],
   "args": [],
   "env": { "DEBUG": "1" }
 }

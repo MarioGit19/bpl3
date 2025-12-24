@@ -936,7 +936,27 @@ export function checkIndex(
         targetType: objectType,
         methodDeclaration: method,
       };
-      return this.resolveType(method.returnType);
+
+      // Build type substitution map for return type resolution (for generics)
+      const typeSubstitutionMap = new Map<string, AST.TypeNode>();
+      if (
+        objectType.kind === "BasicType" &&
+        objectType.genericArgs.length > 0
+      ) {
+        const decl = objectType.resolvedDeclaration;
+        if (decl && decl.genericParams && decl.genericParams.length > 0) {
+          for (let i = 0; i < decl.genericParams.length; i++) {
+            typeSubstitutionMap.set(
+              decl.genericParams[i]!.name,
+              objectType.genericArgs[i]!,
+            );
+          }
+        }
+      }
+
+      return typeSubstitutionMap.size > 0
+        ? this.substituteType(method.returnType, typeSubstitutionMap)
+        : this.resolveType(method.returnType);
     }
   }
 

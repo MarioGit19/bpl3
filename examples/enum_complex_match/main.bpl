@@ -30,7 +30,7 @@ frame compare(cmp: Comparison, result: int, expected: int) ret int {
     };
 
     if (check == 0) {
-        return 1;
+        return 99;
     } else {
         return 0;
     }

@@ -1,5 +1,5 @@
 {
-  "expectedOutput": "Sum: 350, Scaled: 525.0\n",
+  "expectedOutput": ["Sum: 350, Scaled: 525.0"],
   "args": [],
   "env": {},
   "input": ""

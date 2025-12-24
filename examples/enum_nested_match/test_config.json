@@ -1,5 +1,12 @@
 {
-  "expectedOutput": "Test 1 - Wrapped(Value(42)): 42\nTest 2 - Wrapped(Empty): 0\nTest 3 - None: -1\nTest 4 - Warning(5): 105\nv1: 42, v2: 0, status: 105\nCombined result: 147\n",
+  "expectedOutput": [
+    "Test 1 - Wrapped(Value(42)): 42",
+    "Test 2 - Wrapped(Empty): 0",
+    "Test 3 - None: -1",
+    "Test 4 - Warning(5): 105",
+    "v1: 42, v2: 0, status: 105",
+    "Combined result: 147"
+  ],
   "exitCode": 147,
   "args": [],
   "env": {},

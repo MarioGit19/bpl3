@@ -1,5 +1,15 @@
 {
-  "expectedOutput": "Doubled: 2 4 6 8 10 \nEvens: 2 4 \nSum: 15\nFound > 3: 4\nAll positive: true\nAny > 10: false\nIndex of 3: 2\nContains 5: true\nFound index > 3: 3\n",
+  "expectedOutput": [
+    "Doubled: 2 4 6 8 10 ",
+    "Evens: 2 4 ",
+    "Sum: 15",
+    "Found > 3: 4",
+    "All positive: true",
+    "Any > 10: false",
+    "Index of 3: 2",
+    "Contains 5: true",
+    "Found index > 3: 3"
+  ],
   "args": [],
   "env": {},
   "input": ""

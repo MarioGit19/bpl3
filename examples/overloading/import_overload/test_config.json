@@ -1,3 +1,8 @@
 {
-  "expectedOutput": "Int: 30\nDouble: 4.000000\nCalc Int: 150\nCalc Double: 150.500000\n"
+  "expectedOutput": [
+    "Int: 30",
+    "Double: 4.000000",
+    "Calc Int: 150",
+    "Calc Double: 150.500000"
+  ]
 }

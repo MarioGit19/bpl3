@@ -1,5 +1,23 @@
 {
-  "expectedOutput": "=== Null/Pointer Compatibility Tests ===\n== Test 1: nullptr for all pointers ==\nnullptr for all pointers: OK\n== Test 2: void* to typed pointers ==\nvoid* to typed pointers: OK\n== Test 3: typed pointers to void* ==\ntyped pointers to void*: OK\n== Test 4: void* parameters ==\nvoid* param accepted: OK\n== Test 6: void* return values ==\nvoid* return: OK\n== Test 6: malloc pattern ==\nmalloc user: id=100\n== Test 7: null checks ==\nnullptr check: OK\nstruct pointer null check: OK\n=== All tests passed ===\n",
+  "expectedOutput": [
+    "=== Null/Pointer Compatibility Tests ===",
+    "== Test 1: nullptr for all pointers ==",
+    "nullptr for all pointers: OK",
+    "== Test 2: void* to typed pointers ==",
+    "void* to typed pointers: OK",
+    "== Test 3: typed pointers to void* ==",
+    "typed pointers to void*: OK",
+    "== Test 4: void* parameters ==",
+    "void* param accepted: OK",
+    "== Test 6: void* return values ==",
+    "void* return: OK",
+    "== Test 6: malloc pattern ==",
+    "malloc user: id=100",
+    "== Test 7: null checks ==",
+    "nullptr check: OK",
+    "struct pointer null check: OK",
+    "=== All tests passed ==="
+  ],
   "args": [],
   "env": {},
   "input": ""

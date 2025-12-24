@@ -1,5 +1,10 @@
 {
-  "expectedOutput": "Test: Passing null as parameter\nIn testParam\nCaught: Attempted to access member of null object in testParam (expr: d.value)\nTest completed\n",
+  "expectedOutput": [
+    "Test: Passing null as parameter",
+    "In testParam",
+    "Caught: Attempted to access member of null object in testParam (expr: d.value)",
+    "Test completed"
+  ],
   "args": [],
   "env": {},
   "input": ""

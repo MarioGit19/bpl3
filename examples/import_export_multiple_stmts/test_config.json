@@ -1,3 +1,3 @@
 {
-  "expectedOutput": "Import test passed"
+  "expectedOutput": ["Import test passed"]
 }

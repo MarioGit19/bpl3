@@ -1,5 +1,5 @@
 {
-  "expectedOutput": "Before asm\nInside asm\nAfter asm\n",
+  "expectedOutput": ["Before asm", "Inside asm", "After asm"],
   "args": [],
   "env": {},
   "input": ""

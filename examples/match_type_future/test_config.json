@@ -1,4 +1,4 @@
 {
-  "expectedOutput": "Found Some variant\nFound None variant\n",
+  "expectedOutput": ["Found Some variant", "Found None variant"],
   "exitCode": 0
 }

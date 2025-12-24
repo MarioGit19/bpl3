@@ -1,5 +1,13 @@
 {
-  "expectedOutput": "=== Test Zero-Valued Struct ===\n\nCreating Point { x: 5, y: 10 }\nAccessing p.x (should be 5): 5\nAccessing p.y (should be 10): 10\n\nSetting p to null\n",
+  "expectedOutput": [
+    "=== Test Zero-Valued Struct ===",
+    "",
+    "Creating Point { x: 5, y: 10 }",
+    "Accessing p.x (should be 5): 5",
+    "Accessing p.y (should be 10): 10",
+    "",
+    "Setting p to null"
+  ],
   "args": [],
   "env": {},
   "input": "",

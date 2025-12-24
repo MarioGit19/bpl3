@@ -1,4 +1,4 @@
 {
   "description": "Test that generics work with explicit arguments (inference disabled)",
-  "expectedOutput": "Identity: 42\nAdd: 30\n"
+  "expectedOutput": ["Identity: 42", "Add: 30"]
 }

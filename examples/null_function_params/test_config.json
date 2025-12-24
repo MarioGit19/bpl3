@@ -1,5 +1,9 @@
 {
-  "expectedOutput": "=== Null Function Parameters Test ===\n\nTest 1: Passing null as parameter\n",
+  "expectedOutput": [
+    "=== Null Function Parameters Test ===",
+    "",
+    "Test 1: Passing null as parameter"
+  ],
   "args": [],
   "env": {},
   "input": "",

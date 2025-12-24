@@ -1,5 +1,17 @@
 {
-  "expectedOutput": "Testing push with << operator:\nArray length after pushes: 3\nElements: 10, 20, 30\n\nTesting pop with >> operator:\nPopped value: 30\nArray length after pop: 2\nPopped value: 20\nArray length after pop: 1\n\n=== Array operator test passed! ===\n",
+  "expectedOutput": [
+    "Testing push with << operator:",
+    "Array length after pushes: 3",
+    "Elements: 10, 20, 30",
+    "",
+    "Testing pop with >> operator:",
+    "Popped value: 30",
+    "Array length after pop: 2",
+    "Popped value: 20",
+    "Array length after pop: 1",
+    "",
+    "=== Array operator test passed! ==="
+  ],
   "args": [],
   "env": {},
   "input": ""

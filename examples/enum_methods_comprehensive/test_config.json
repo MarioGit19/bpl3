@@ -1,5 +1,5 @@
 {
-  "exitCode": 1,
+  "exitCode": 0,
   "expectedOutput": [
     "Color is primary: 1, code: 1",
     "Ok value: 42, Err value: 99"

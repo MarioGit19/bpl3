@@ -1,5 +1,6 @@
 {
   "name": "enum_imports",
   "description": "Test importing and exporting enum types across modules",
-  "exitCode": 1
+  "exitCode": 1,
+  "expectedOutput": [" Non-exhaustive match: missing variants: Write"]
 }

@@ -1,5 +1,12 @@
 {
-  "expectedOutput": "10 + 5 = 15\n15 * 2 = 30\nClear = 0\nfunc1(10) = 110\nfunc2(100) = 50\nAdd > 10: 20\n",
+  "expectedOutput": [
+    "10 + 5 = 15",
+    "15 * 2 = 30",
+    "Clear = 0",
+    "func1(10) = 110",
+    "func2(100) = 50",
+    "Add > 10: 20"
+  ],
   "args": [],
   "env": {},
   "input": ""

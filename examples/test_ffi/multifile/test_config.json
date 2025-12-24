@@ -1,4 +1,4 @@
 {
-  "expectedOutput": "Hello from lib\nMulti-file extern OK\n",
+  "expectedOutput": ["Hello from lib", "Multi-file extern OK"],
   "exitCode": 0
 }

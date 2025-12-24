@@ -1,5 +1,5 @@
 {
-  "expectedOutput": "Created struct p\np == null: false\n",
+  "expectedOutput": ["Created struct p", "p == null: false"],
   "args": [],
   "env": {},
   "input": ""

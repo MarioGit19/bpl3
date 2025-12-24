@@ -1,6 +1,6 @@
 {
-  "expectedOutput": "",
-  "exitCode": 1,
+  "expectedOutput": [],
+  "exitCode": 0,
   "args": [],
   "env": {},
   "input": "",

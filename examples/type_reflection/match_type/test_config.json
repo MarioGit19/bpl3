@@ -1,4 +1,9 @@
 {
-  "expectedOutput": "Value is an int\nValue is a float\nValue is something else\nValue is a Point\n",
+  "expectedOutput": [
+    "Value is an int",
+    "Value is a float",
+    "Value is something else",
+    "Value is a Point"
+  ],
   "exitCode": 0
 }

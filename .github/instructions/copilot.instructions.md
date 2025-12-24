@@ -181,14 +181,14 @@ frame printNumber(n: int) {
 struct Point {
     x: int,
     y: int,
-    
+
     frame new(x: int, y: int) ret Point {
         local p: Point;
         p.x = x;
         p.y = y;
         return p;
     }
-    
+
     frame distance(this: Point) ret float {
         return sqrt(cast<float>(this.x * this.x + this.y * this.y));
     }
@@ -209,17 +209,17 @@ frame main() ret int {
 ```bpl
 struct Box<T> {
     value: T,
-    
+
     frame new(val: T) ret Box<T> {
         local b: Box<T>;
         b.value = val;
         return b;
     }
-    
+
     frame get(this: Box<T>) ret T {
         return this.value;
     }
-    
+
     frame map<U>(this: Box<T>, transform: Func<U>(T)) ret Box<U> {
         local result: Box<U>;
         result.value = transform(this.value);
@@ -242,7 +242,7 @@ frame main() ret int {
 ```bpl
 struct Animal {
     name: string,
-    
+
     frame makeSound(this: Animal) {
         printf("%s makes a sound\n", this.name);
     }
@@ -250,7 +250,7 @@ struct Animal {
 
 struct Dog extends Animal {
     breed: string,
-    
+
     frame makeSound(this: Dog) {
         printf("%s barks!\n", this.name);
     }
@@ -588,14 +588,14 @@ frame main() ret int {
     # Allocate memory
     local size: int = sizeof(int) * 10;
     local ptr: *int = cast<*int>(malloc(size));
-    
+
     # Use memory
     *ptr = 42;
     *(ptr + 1) = 100;
-    
+
     # Free memory
     free(cast<*void>(ptr));
-    
+
     return 0;
 }
 ```
@@ -657,14 +657,14 @@ Construct complex objects step by step:
 struct ConfigBuilder {
     timeout: int,
     retries: int,
-    
+
     frame new() ret ConfigBuilder {
         local b: ConfigBuilder;
         b.timeout = 30;
         b.retries = 3;
         return b;
     }
-    
+
     frame withTimeout(this: ConfigBuilder, t: int) ret ConfigBuilder {
         this.timeout = t;
         return this;
@@ -707,7 +707,7 @@ With test configuration:
 
 ```json
 {
-  "expectedOutput": "Hello from my example!\n",
+  "expectedOutput": ["Hello from my example!"],
   "args": [],
   "env": {},
   "input": "",
@@ -723,20 +723,22 @@ With test configuration:
 
 - **Driver**: `tests/Integration.test.ts` runs `examples/<name>/main.bpl` via `cmp.sh`.
 - **Configuration**: `test_config.json` specifies:
-  - `expectedOutput` - expected stdout
-  - `args` - command-line arguments
-  - `env` - environment variables
-  - `input` - stdin input
-  - `skip_compilation` - skip compilation step if true
+  - `expectedOutput`: string[] - expected stdout
+  - `args`: string[] - command-line arguments
+  - `env`: Record<string, string> - environment variables
+  - `input`: string - stdin input
+  - `skip_compilation`: boolean - skip compilation step if true
 
 ### Two Paths for Testing
 
 **Path 1: Simple Test (Recommended)**
+
 - Single `main.bpl` + `test_config.json`
 - Used by Integration test runner
 - Fastest, simplest approach
 
 **Path 2: Complex Test**
+
 - Custom `test.sh` script in example directory
 - For multi-file orchestration or complex scenarios
 - Must exit with code 0 on success, non-zero on failure
@@ -764,11 +766,13 @@ bun index.ts examples/path/to/file.bpl --emit llvm
 ### Test Workflow
 
 **For simple examples:**
+
 1. Write `main.bpl` in `examples/<name>/`.
 2. Create `test_config.json` with expected output.
 3. Run `bun test tests/Integration.test.ts` to verify.
 
 **For complex examples:**
+
 1. Write `main.bpl` and supporting `.bpl` files.
 2. Create `test.sh` script to orchestrate testing.
 3. Add `test_config.json` with `"skip_compilation": true` if needed.
@@ -777,9 +781,10 @@ bun index.ts examples/path/to/file.bpl --emit llvm
 ### Test Configuration Examples
 
 **Basic output test:**
+
 ```json
 {
-  "expectedOutput": "Result: 42\n",
+  "expectedOutput": ["Result: 42"],
   "args": [],
   "env": {},
   "input": ""
@@ -787,9 +792,10 @@ bun index.ts examples/path/to/file.bpl --emit llvm
 ```
 
 **With command-line arguments:**
+
 ```json
 {
-  "expectedOutput": "Sum: 15\n",
+  "expectedOutput": ["Sum: 15"],
   "args": ["10", "5"],
   "env": {},
   "input": ""
@@ -797,9 +803,10 @@ bun index.ts examples/path/to/file.bpl --emit llvm
 ```
 
 **With stdin input:**
+
 ```json
 {
-  "expectedOutput": "You entered: hello\n",
+  "expectedOutput": ["You entered: hello"],
   "args": [],
   "env": {},
   "input": "hello\n"
@@ -807,11 +814,12 @@ bun index.ts examples/path/to/file.bpl --emit llvm
 ```
 
 **With environment variables:**
+
 ```json
 {
-  "expectedOutput": "Debug mode: on\n",
+  "expectedOutput": ["Debug mode: on"],
   "args": [],
-  "env": {"DEBUG": "1"}
+  "env": { "DEBUG": "1" }
 }
 ```
 

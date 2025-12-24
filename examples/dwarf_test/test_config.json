@@ -1,5 +1,5 @@
 {
-  "expectedOutput": "Hello, DWARF!\n",
+  "expectedOutput": ["Hello, DWARF!"],
   "args": ["--dwarf"],
   "env": {},
   "input": ""

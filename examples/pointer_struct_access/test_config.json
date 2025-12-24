@@ -1,5 +1,10 @@
 {
-  "expectedOutput": "users[1].age = 30\nusers[1].addr.zip = 20002\nUser(id=1, age=20, zip=10001)\nusers[2].age after setAge = 41\n",
+  "expectedOutput": [
+    "users[1].age = 30",
+    "users[1].addr.zip = 20002",
+    "User(id=1, age=20, zip=10001)",
+    "users[2].age after setAge = 41"
+  ],
   "args": [],
   "env": {},
   "input": ""

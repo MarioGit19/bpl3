@@ -1,4 +1,4 @@
 {
   "description": "Test wildcard generic constraints with inheritance",
-  "expectedOutput": "Base ID: 99\n"
+  "expectedOutput": ["Base ID: 99"]
 }

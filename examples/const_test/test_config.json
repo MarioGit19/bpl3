@@ -1,5 +1,12 @@
 {
-  "expectedOutput": "a: 10\np.x: 1\nmut_p.x: 30\nptr.x: 40\nc_ptr.x: 50\nx: 1, y: 2\n",
+  "expectedOutput": [
+    "a: 10",
+    "p.x: 1",
+    "mut_p.x: 30",
+    "ptr.x: 40",
+    "c_ptr.x: 50",
+    "x: 1, y: 2"
+  ],
   "args": [],
   "env": {},
   "input": ""

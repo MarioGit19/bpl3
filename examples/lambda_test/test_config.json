@@ -1,5 +1,11 @@
 {
-  "expectedOutput": "f(10) = 20\ng() = 42\nh(10, 20) = 30\napply(func, 5) = 25\ncapturer(10) = 110\n",
+  "expectedOutput": [
+    "f(10) = 20",
+    "g() = 42",
+    "h(10, 20) = 30",
+    "apply(func, 5) = 25",
+    "capturer(10) = 110"
+  ],
   "args": [],
   "env": {},
   "input": ""

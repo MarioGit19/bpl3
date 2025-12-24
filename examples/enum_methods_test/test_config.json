@@ -1,5 +1,5 @@
 {
-  "expectedOutput": "Status is active\nStatus code: 1\n",
+  "expectedOutput": ["Status is active", "Status code: 1"],
   "args": [],
   "env": {},
   "input": "",

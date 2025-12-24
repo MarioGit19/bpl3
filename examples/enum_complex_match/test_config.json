@@ -1,5 +1,5 @@
 {
   "name": "enum_complex_match",
   "description": "Complex match patterns with multiple enum types and nested conditionals",
-  "exitCode": 1
+  "exitCode": 99
 }

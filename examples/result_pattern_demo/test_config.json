@@ -1,5 +1,5 @@
 {
-  "expectedOutput": "Success: 5\nGot expected error\n",
+  "expectedOutput": ["Success: 5", "Got expected error"],
   "args": [],
   "env": {},
   "input": "",

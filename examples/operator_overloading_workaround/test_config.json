@@ -1,5 +1,9 @@
 {
-  "expectedOutput": "b.val = 10\nb2.val = 15\nSuccess: Generic methods work!\n",
+  "expectedOutput": [
+    "b.val = 10",
+    "b2.val = 15",
+    "Success: Generic methods work!"
+  ],
   "args": [],
   "env": {},
   "input": "",

@@ -1,5 +1,24 @@
 {
-  "expectedOutput": "=== Null Complex Expressions Test ===\n\nTest 1: Null in arithmetic\nCaught Test 1: Attempted to access member of null object in testArithmetic (expr: p.x)\nTest 2: Null in comparison\nCaught Test 2: Attempted to access member of null object in testComparison (expr: p1.x)\nTest 3: Null with compound assignment\nCaught Test 3: Attempted to access member of null object in testCompoundAssignment (expr: c.count)\nTest 4: Null in ternary\nCaught Test 4: Attempted to access member of null object in testTernary (expr: p.x)\nTest 5: Null with increment\nCaught Test 5: Attempted to access member of null object in testIncrement (expr: c.count)\nTest 6: Multiple accesses in expression\nCaught Test 6: Attempted to access member of null object in testMultipleAccess (expr: p.x)\nTest 7: Null in nested calls\nCaught Test 7: Attempted to access member of null object in testNestedCalls (expr: p.x)\n\nAll tests passed!\n",
+  "expectedOutput": [
+    "=== Null Complex Expressions Test ===",
+    "",
+    "Test 1: Null in arithmetic",
+    "Caught Test 1: Attempted to access member of null object in testArithmetic (expr: p.x)",
+    "Test 2: Null in comparison",
+    "Caught Test 2: Attempted to access member of null object in testComparison (expr: p1.x)",
+    "Test 3: Null with compound assignment",
+    "Caught Test 3: Attempted to access member of null object in testCompoundAssignment (expr: c.count)",
+    "Test 4: Null in ternary",
+    "Caught Test 4: Attempted to access member of null object in testTernary (expr: p.x)",
+    "Test 5: Null with increment",
+    "Caught Test 5: Attempted to access member of null object in testIncrement (expr: c.count)",
+    "Test 6: Multiple accesses in expression",
+    "Caught Test 6: Attempted to access member of null object in testMultipleAccess (expr: p.x)",
+    "Test 7: Null in nested calls",
+    "Caught Test 7: Attempted to access member of null object in testNestedCalls (expr: p.x)",
+    "",
+    "All tests passed!"
+  ],
   "args": [],
   "env": {},
   "input": ""

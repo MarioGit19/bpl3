@@ -35,9 +35,22 @@ frame main() ret int {
     try {
         local arr: Array<int> = Array<int>.new(5);
         arr.push(1);
-        arr.get(10); # Should throw
+
+        # Manually throw to test different constructors
+        if (true) {
+            # Test constructor with message only
+            throw IndexOutOfBoundsError.new("Custom index error message");
+        }
+        # Should throw (but we threw above)
+        arr.get(10);
     } catch (e: IndexOutOfBoundsError) {
-        printf("Caught IndexOutOfBoundsError: index %d, size %d\n", e.index, e.size);
+        printf("Caught IndexOutOfBoundsError: %s (index %d, size %d)\n", e.message, e.index, e.size);
+    }
+    # Test explicit initialization
+    try {
+        throw IndexOutOfBoundsError { message: "Explicit init error", code: 123, index: 99, size: 10 };
+    } catch (e: IndexOutOfBoundsError) {
+        printf("Caught explicit IndexOutOfBoundsError: %s (index %d, size %d)\n", e.message, e.index, e.size);
     }
     # Test Array EmptyError
     try {

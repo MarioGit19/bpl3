@@ -1,4 +1,4 @@
 {
-  "expectedOutput": "Value: 10\n",
+  "expectedOutput": ["Value: 10"],
   "exitCode": 0
 }

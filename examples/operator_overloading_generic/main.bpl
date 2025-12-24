@@ -1,6 +1,8 @@
 # Test generic operator overloading
 # This tests the new generic-aware operator resolution feature
 
+import [IndexOutOfBoundsError] from "std/errors.bpl";
+
 extern printf(fmt: string, ...);
 extern malloc(size: ulong) ret *void;
 extern free(ptr: *void);
@@ -34,9 +36,8 @@ struct Array<T> {
     # Index operator: arr[i]
     frame __get__(this: *Array<T>, index: int) ret T {
         if ((index < 0) || (index >= this.length)) {
-            printf("Index out of bounds!\n");
-            # Return first element as fallback (not ideal, but for demo)
-            return this.data[0];
+            # Use the new static constructor method
+            throw IndexOutOfBoundsError.new(index, this.length);
         }
         return this.data[index];
     }

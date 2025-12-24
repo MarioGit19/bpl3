@@ -1,5 +1,5 @@
 {
-  "expectedOutput": "Quitting\nMoving\nTo 10, 20\nOther message\n",
+  "expectedOutput": ["Quitting", "Moving", "To 10, 20", "Other message"],
   "args": [],
   "env": {},
   "input": "",

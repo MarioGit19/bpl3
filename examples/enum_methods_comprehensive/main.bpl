@@ -51,5 +51,8 @@ frame main() ret int {
 
     printf("Ok value: %d, Err value: %d\n", ok_val, err_val);
 
+    if (code == 1) {
+        return 0;
+    }
     return code;
 }

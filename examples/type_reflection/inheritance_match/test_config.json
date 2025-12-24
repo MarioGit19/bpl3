@@ -1,4 +1,4 @@
 {
-  "expectedOutput": "Dog is an Animal\nDog is a Dog\n",
+  "expectedOutput": ["Dog is an Animal", "Dog is a Dog"],
   "exitCode": 0
 }
