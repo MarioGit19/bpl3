@@ -1,5 +1,17 @@
 {
-  "expectedOutput": ["Point(10, 20)"],
+  "expectedOutput": [
+    "--- Struct Test ---",
+    "Created p1: Point(x=10, y=20)",
+    "Moved p1 (5, -5): Point(x=15, y=15)",
+    "Created p2: Point(x=15, y=15)",
+    "p1 is equal to p2",
+    "Created Rect from (0,0) to (100,50)",
+    "Rect Area: 5000",
+    "Created p3: Point(x=50, y=25)",
+    "Rect contains p3",
+    "Created p4: Point(x=150, y=150)",
+    "Rect does NOT contain p4"
+  ],
   "args": [],
   "env": {},
   "input": ""

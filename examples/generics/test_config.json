@@ -1,10 +1,14 @@
 {
   "expectedOutput": [
-    "Int box value: 100",
-    "Float box value: 2.718",
-    "Another int box: 42",
-    "Generic int box: 123",
-    "Generic float box: 3.14"
+    "--- Generics Test ---",
+    "Box<int>: 10",
+    "Box<int> updated: 20",
+    "Box<float>: 3.14",
+    "Pair<int, int>: (1, 2)",
+    "Identity<int>: 42",
+    "Identity<string>: hello",
+    "Swap<int>(100, 200): (200, 100)",
+    "Nested Box<Box<int>>: 999"
   ],
   "args": [],
   "env": {},

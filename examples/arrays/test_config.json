@@ -1,5 +1,13 @@
 {
-  "expectedOutput": ["10", "20", "30", "40", "50"],
+  "expectedOutput": [
+    "--- Arrays Test ---",
+    "Original Array: [ 10 20 30 40 50 ]",
+    "Doubled Array: [ 20 40 60 80 100 ]",
+    "Sum of elements: 300",
+    "2x2 Matrix (flat):",
+    "1 2",
+    "3 4"
+  ],
   "args": [],
   "env": {},
   "input": ""

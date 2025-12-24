@@ -1,5 +1,15 @@
 {
-  "name": "enum_tests",
-  "description": "Test basic enum parsing with Color, Message, Shape and Option",
-  "exitCode": 0
+  "expectedOutput": [
+    "--- Enum Test ---",
+    "Color is Red",
+    "Color is Green",
+    "Message: Quit",
+    "Message: Move to (10, 20)",
+    "Message: Write 'Hello BPL'",
+    "Option: Some(42)",
+    "Option: None"
+  ],
+  "args": [],
+  "env": {},
+  "input": ""
 }
