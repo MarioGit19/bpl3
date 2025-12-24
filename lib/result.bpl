@@ -21,7 +21,9 @@ enum Result<T, E> {
     frame unwrap(this: Result<T, E>) ret T {
         return match (this) {
             Result.Ok(val) => val,
-            Result.Err(err) => { throw err; },
+            Result.Err(err) => {
+                throw err;
+            },
         };
     }
 
@@ -34,7 +36,9 @@ enum Result<T, E> {
 
     frame unwrapErr(this: Result<T, E>) ret E {
         return match (this) {
-            Result.Ok(_) => { throw 101; }, # Panic code for unwrapErr on Ok
+            Result.Ok(_) => {
+                throw 101; # Panic code for unwrapErr on Ok
+            },
             Result.Err(err) => err,
         };
     }
@@ -56,6 +60,6 @@ enum Result<T, E> {
     }
 
     frame __ne__(this: *Result<T, E>, other: Result<T, E>) ret bool {
-        return !(this.__eq__(other));
+        return !this.__eq__(other);
     }
 }

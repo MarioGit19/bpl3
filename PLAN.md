@@ -17,6 +17,21 @@ The following features are recommended for implementation next:
 - **Use cases:** Intersection types, Union types, Type guards
 - **Complexity:** High
 
+### 2. **Internal Error Structs** [Priority 6] ⚠️ STD LIB
+
+- **Why:** Currently, the runtime throws raw integers (e.g., `101`) for errors, which is opaque and hard to handle.
+- **Impact:** Improves error handling and debugging experience.
+- **Description:** Replace integer error codes with standard library structs.
+- **Proposed Structs:**
+  - `ResultUnwrapError`: Thrown when unwrapping an `Err` result.
+  - `OptionUnwrapError`: Thrown when unwrapping a `None` option.
+  - `IndexOutOfBoundsError`: Thrown when accessing invalid array indices.
+  - `NullPointerError`: Thrown when dereferencing null.
+  - `DivisionByZeroError`: Thrown on division by zero.
+  - `IOError`: For file system and network errors.
+  - `CastError`: For failed dynamic casts.
+- **Complexity:** Medium (Requires updating stdlib and compiler codegen)
+
 ---
 
 ## 📋 COMPLETED FEATURES
@@ -93,6 +108,19 @@ The following features are recommended for implementation next:
 - `examples/const_test/`: Additional regression tests.
 
 ---
+
+## [4] ✅ VS Code Extension Improvements (COMPLETED)
+
+**Description:** Enhanced the VS Code extension with better standard library resolution, new language features support, and productivity tools.
+
+**Implementation Status:** ✅ Fully Implemented (December 2025)
+
+**What Was Implemented:**
+
+- ✅ **BPL_HOME Support**: Fixed standard library resolution to respect `BPL_HOME` environment variable and added `bplLanguageServer.bplHome` setting.
+- ✅ **New Language Features**: Added support for `enum`, `u8`-`u64`, `Option`, `Result` in autocomplete and hover.
+- ✅ **Snippets**: Added a comprehensive set of code snippets for common patterns (main, frame, struct, enum, loops, etc.).
+- ✅ **Syntax Highlighting**: Updated TextMate grammar to support new types (`u8`-`u64`).
 
 ## [4] ✅ Debugger Support (DWARF) (COMPLETED)
 
@@ -523,24 +551,19 @@ The following features are recommended for implementation next:
 
 ---
 
-## [5] Language Server Protocol (LSP) Enhancements
+## [5] ✅ Language Server Protocol (LSP) Enhancements (COMPLETED)
 
 **Description:** Expand the capabilities of the BPL Language Server to support advanced features like "Rename Symbol", "Find All References", "Go to Implementation", and "Code Actions". This significantly improves the developer experience in editors like VS Code.
 
-**Implementation Notes:**
+**Implementation Status:** ✅ Fully Implemented (December 2025)
 
-- Implement `textDocument/rename` for safe refactoring
-- Implement `textDocument/references` to find usage across workspace
-- Implement `textDocument/implementation` for interfaces/traits
-- Add code actions for common fixes (e.g., "Import missing module", "Fix typo")
-- Improve incremental synchronization for better performance
+**What Was Implemented:**
 
-**Acceptance Criteria:**
-
-- Renaming a symbol updates all references correctly across files
-- "Find References" lists all usages of a symbol
-- "Go to Implementation" works for interface methods
-- Code actions appear for common errors
+- ✅ **Rename Symbol**: Implemented `textDocument/rename` to rename symbols across open files.
+- ✅ **Find References**: Implemented `textDocument/references` to find symbol usages.
+- ✅ **Go to Implementation**: Implemented `textDocument/implementation` to find structs implementing a spec.
+- ✅ **Code Actions**: Added "Quick Fix" to auto-import common standard library types (`Result`, `Option`, `List`, etc.) when they are unknown.
+- ✅ **Snippets**: Expanded snippet library with `match`, `spec`, `lambda`, `const`, and more.
 
 ---
 

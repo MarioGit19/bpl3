@@ -1,5 +1,5 @@
 import * as path from "path";
-import { window, workspace } from "vscode";
+import { window, workspace, commands, type Terminal } from "vscode";
 import { LanguageClient, TransportKind } from "vscode-languageclient/node";
 
 import type { ExtensionContext } from "vscode";
@@ -10,6 +10,7 @@ import type {
 } from "vscode-languageclient/node";
 
 let client: LanguageClient;
+let terminal: Terminal | undefined;
 
 export async function activate(context: ExtensionContext) {
   // The server is implemented in node
@@ -47,6 +48,27 @@ export async function activate(context: ExtensionContext) {
 
   // Start the client. This will also launch the server
   client.start();
+
+  // Register Run Command
+  context.subscriptions.push(
+    commands.registerCommand("bpl.runFile", (uri: string) => {
+      if (!terminal) {
+        terminal = window.createTerminal("BPL Run");
+      }
+      terminal.show();
+      // If uri is passed as string (from CodeLens), use it. Otherwise use active editor.
+      let filePath = uri;
+      if (!filePath && window.activeTextEditor) {
+        filePath = window.activeTextEditor.document.uri.fsPath;
+      }
+      if (filePath) {
+        // Quote path to handle spaces
+        terminal.sendText(`bpl --run "${filePath}"`);
+      } else {
+        window.showErrorMessage("No file to run.");
+      }
+    }),
+  );
 
   // Enable format-on-save by default, honoring user setting
   const config = workspace.getConfiguration();

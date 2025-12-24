@@ -98,6 +98,16 @@
   - ✅ Formatter support for `as`/`is` expressions (parentheses enforcement)
   - ✅ Integration with `match` expressions
   - ✅ Comprehensive test suite covering inheritance, specs, and enums
+- [ ] Internal Error Structs for Standard Library (Replace integer error codes with proper structs)
+  - `ResultUnwrapError`, `OptionUnwrapError`
+  - `IndexOutOfBoundsError`, `NullPointerError`
+  - `DivisionByZeroError`, `IOError`, `CastError`
+- [x] LSP Enhancements ✅
+  - ✅ Rename Symbol
+  - ✅ Find References
+  - ✅ Go to Implementation
+  - ✅ Code Actions (Auto-import)
+  - ✅ Expanded Snippets
 - [x] Result<T, E> Type Implementation ✅
   - ✅ `Result<T, E>` enum in standard library
   - ✅ Helper methods: `isOk`, `isErr`, `unwrap`, `unwrapOr`, `map`, `mapErr`

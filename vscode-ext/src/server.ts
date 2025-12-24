@@ -16,6 +16,11 @@ import {
   Range,
   TextDocuments,
   TextDocumentSyncKind,
+  TextEdit,
+  CodeAction,
+  CodeActionKind,
+  CodeLens,
+  InsertTextFormat,
 } from "vscode-languageserver/node";
 
 // Compiler integration
@@ -41,6 +46,34 @@ const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 interface AnalysisResult {
   program: AST.Program;
   checker: TypeChecker;
+}
+
+function typeNodeToString(type: AST.TypeNode | undefined): string {
+  if (!type) return "void";
+  switch (type.kind) {
+    case "BasicType":
+      let name = type.name;
+      if (type.genericArgs && type.genericArgs.length > 0) {
+        name += `<${type.genericArgs.map(typeNodeToString).join(", ")}>`;
+      }
+      if (type.arrayDimensions) {
+        for (const dim of type.arrayDimensions) {
+          name += `[${dim !== null ? dim : ""}]`;
+        }
+      }
+      if (type.pointerDepth) {
+        name = "*".repeat(type.pointerDepth) + name;
+      }
+      return name;
+    case "FunctionType":
+      const params = type.paramTypes.map(typeNodeToString).join(", ");
+      const ret = typeNodeToString(type.returnType);
+      return `Func<${ret}>(${params})`;
+    case "TupleType":
+      return `(${type.types.map(typeNodeToString).join(", ")})`;
+    default:
+      return "unknown";
+  }
 }
 const documentAnalysis = new Map<string, AnalysisResult>();
 
@@ -75,6 +108,13 @@ connection.onInitialize((params: InitializeParams) => {
       definitionProvider: true,
       hoverProvider: true,
       documentFormattingProvider: true,
+      renameProvider: true,
+      referencesProvider: true,
+      implementationProvider: true,
+      codeActionProvider: true,
+      codeLensProvider: {
+        resolveProvider: false,
+      },
     },
   };
   if (hasWorkspaceFolderCapability) {
@@ -105,6 +145,7 @@ connection.onInitialized(() => {
 // The example settings
 interface ExampleSettings {
   maxNumberOfProblems: number;
+  bplHome?: string;
 }
 
 // The global settings, used when the `workspace/configuration` request is not supported by the client.
@@ -172,6 +213,18 @@ function getTextForUri(
 
 // Resolve workspace lib directory (for std/* imports)
 function findWorkspaceLibDir(startDir: string): string | null {
+  // Check BPL_HOME environment variable first
+  if (process.env.BPL_HOME) {
+    const bplHomeLib = path.join(process.env.BPL_HOME, "lib");
+    if (fs.existsSync(bplHomeLib)) {
+      return bplHomeLib;
+    }
+    // Also check if BPL_HOME itself is the lib dir (some users might set it that way)
+    if (fs.existsSync(path.join(process.env.BPL_HOME, "string.bpl"))) {
+      return process.env.BPL_HOME;
+    }
+  }
+
   let dir = startDir;
   const maxUp = 10;
   for (let i = 0; i < maxUp; i++) {
@@ -340,6 +393,16 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
   const filePath = fileURLToPath(textDocument.uri);
   const currentDir = path.dirname(filePath);
 
+  if (settings?.bplHome) {
+    process.env.BPL_HOME = settings.bplHome;
+  } else {
+    // Auto-detect BPL_HOME if not set
+    const libDir = findWorkspaceLibDir(currentDir);
+    if (libDir) {
+      process.env.BPL_HOME = path.dirname(libDir);
+    }
+  }
+
   const diagnostics: Diagnostic[] = [];
   try {
     // Parse to AST
@@ -446,7 +509,171 @@ connection.onDidChangeWatchedFiles((_change) => {
 
 // This handler provides the initial list of the completion items.
 connection.onCompletion(
-  (_textDocumentPosition: TextDocumentPositionParams): CompletionItem[] => {
+  (textDocumentPosition: TextDocumentPositionParams): CompletionItem[] => {
+    const document = documents.get(textDocumentPosition.textDocument.uri);
+    if (!document) return [];
+
+    const text = document.getText();
+    const offset = document.offsetAt(textDocumentPosition.position);
+    const lineText = text.split("\n")[textDocumentPosition.position.line] || "";
+    const charBefore = lineText[textDocumentPosition.position.character - 1];
+
+    // 1. Member Access Completion (User.)
+    if (charBefore === ".") {
+      // Find the expression before the dot
+      // Handle generics and arrays: Array<int>. or arr[0].
+      let i = textDocumentPosition.position.character - 2;
+      let depth = 0;
+
+      while (i >= 0) {
+        const char = lineText[i];
+        if (char === ">") depth++;
+        else if (char === "<") depth--;
+        else if (char === "]") depth++;
+        else if (char === "[") depth--;
+        else if (char === ")") depth++;
+        else if (char === "(") depth--;
+
+        if (depth === 0 && !/[a-zA-Z0-9_]/.test(char || "")) break;
+        i--;
+      }
+
+      const varName = lineText
+        .substring(i + 1, textDocumentPosition.position.character - 1)
+        .trim();
+
+      if (varName) {
+        let typeName = varName;
+        let isStaticAccess = true; // Default to static access (Type.member)
+
+        const analysis = documentAnalysis.get(
+          textDocumentPosition.textDocument.uri,
+        );
+        if (analysis) {
+          // Check if varName is a variable in scope
+          const line = textDocumentPosition.position.line + 1;
+          const col = textDocumentPosition.position.character - 1;
+          const node = findNodeAtPosition(analysis.program, line, col);
+
+          if (node) {
+            if (node.kind === "Identifier") {
+              const ident = node as AST.IdentifierExpr;
+              if (ident.resolvedType) {
+                typeName = analysis.checker.typeToString(ident.resolvedType);
+                isStaticAccess = false; // Variable access (instance.member)
+              }
+            } else if (node.kind === "Index") {
+              const access = node as AST.IndexExpr;
+              if (access.resolvedType) {
+                typeName = analysis.checker.typeToString(access.resolvedType);
+                isStaticAccess = false;
+              }
+            } else if (node.kind === "Call") {
+              const call = node as AST.CallExpr;
+              if (call.resolvedType) {
+                typeName = analysis.checker.typeToString(call.resolvedType);
+                isStaticAccess = false;
+              }
+            } else if (node.kind === "Member") {
+              const access = node as AST.MemberExpr;
+              // If we are at the dot, we want the type of the object
+              if (access.object && access.object.resolvedType) {
+                typeName = analysis.checker.typeToString(
+                  access.object.resolvedType,
+                );
+                isStaticAccess = false;
+              }
+            }
+          }
+        }
+
+        // Fallback: If AST analysis failed (e.g. due to syntax errors), try to find type via regex
+        if (typeName === varName && isStaticAccess) {
+          // Check for 'this'
+          if (varName === "this") {
+            const structName = findEnclosingStruct(
+              text,
+              textDocumentPosition.position.line,
+            );
+            if (structName) {
+              typeName = structName;
+              isStaticAccess = false;
+            }
+          } else {
+            // Check for local/arg variable
+            const inferredType = findVariableType(
+              text,
+              varName,
+              textDocumentPosition.position.line,
+            );
+            if (inferredType) {
+              typeName = inferredType;
+              isStaticAccess = false;
+            }
+          }
+        }
+
+        // Normalize type name for lookup (handle generics and arrays)
+        let baseTypeName = typeName;
+        if (typeName.endsWith("[]")) {
+          baseTypeName = "Array";
+        } else if (typeName.includes("<")) {
+          baseTypeName = typeName.split("<")[0] || typeName;
+        }
+
+        // Find definition of baseTypeName
+        const typeDef = findSymbolDefinition(document, baseTypeName);
+        if (typeDef) {
+          // If the definition is in the current file, use the cached program if available
+          // to avoid parsing errors due to incomplete code
+          if (typeDef.uri === document.uri) {
+            const cachedAnalysis = documentAnalysis.get(document.uri);
+            if (cachedAnalysis && cachedAnalysis.program) {
+              const decl = cachedAnalysis.program.statements.find(
+                (s) =>
+                  (s.kind === "StructDecl" || s.kind === "EnumDecl") &&
+                  (s as any).name === baseTypeName,
+              );
+              if (decl) {
+                return getCompletionItemsFromDecl(
+                  decl,
+                  baseTypeName,
+                  isStaticAccess,
+                );
+              }
+            }
+          }
+
+          const fullText = getTextForUri(typeDef.uri, documents);
+          if (fullText) {
+            try {
+              // Parse the file to get AST
+              const parser = new Parser(fullText, fileURLToPath(typeDef.uri));
+              const program = parser.parse();
+
+              // Find the struct/enum declaration
+              const decl = program.statements.find(
+                (s) =>
+                  (s.kind === "StructDecl" || s.kind === "EnumDecl") &&
+                  (s as any).name === baseTypeName,
+              );
+
+              if (decl) {
+                return getCompletionItemsFromDecl(
+                  decl,
+                  baseTypeName,
+                  isStaticAccess,
+                );
+              }
+            } catch (e) {
+              connection.console.error(`Failed to parse definition file: ${e}`);
+            }
+          }
+        }
+      }
+      return [];
+    }
+
     const keywords = [
       "global",
       "local",
@@ -455,6 +682,7 @@ connection.onCompletion(
       "frame",
       "ret",
       "struct",
+      "enum",
       "import",
       "from",
       "export",
@@ -489,6 +717,10 @@ connection.onCompletion(
     const types = [
       "int",
       "uint",
+      "u8",
+      "u16",
+      "u32",
+      "u64",
       "float",
       "bool",
       "char",
@@ -497,6 +729,8 @@ connection.onCompletion(
       "Func",
       "string",
       "Self",
+      "Option",
+      "Result",
     ];
 
     const items: CompletionItem[] = [];
@@ -517,9 +751,227 @@ connection.onCompletion(
       });
     });
 
+    // Add local variables from AST analysis
+    const analysis = documentAnalysis.get(
+      textDocumentPosition.textDocument.uri,
+    );
+    if (analysis) {
+      // Traverse AST to find locals in scope at current position
+      // This is a simplified traversal.
+      // We can look at the checker's scope if we had position info in scopes.
+      // Instead, let's just collect all locals in the current function.
+      const line = textDocumentPosition.position.line + 1;
+      const currentFunc = findFunctionAtLine(analysis.program, line);
+      if (currentFunc) {
+        // Add params
+        currentFunc.params.forEach((p) => {
+          items.push({
+            label: p.name,
+            kind: CompletionItemKind.Variable,
+            detail: analysis.checker.typeToString(p.type),
+          });
+        });
+        // Add locals from body
+        // We need to traverse the body statements
+        traverseLocals(currentFunc.body.statements, (name, type) => {
+          items.push({
+            label: name,
+            kind: CompletionItemKind.Variable,
+            detail: type ? analysis.checker.typeToString(type) : "unknown",
+          });
+        });
+      }
+    }
+
     return items;
   },
 );
+
+function findFunctionAtLine(
+  program: AST.Program,
+  line: number,
+): AST.FunctionDecl | null {
+  for (const decl of program.statements) {
+    if (decl.kind === "FunctionDecl") {
+      const func = decl as AST.FunctionDecl;
+      if (
+        func.location &&
+        line >= func.location.startLine &&
+        line <= func.location.endLine
+      ) {
+        return func;
+      }
+    } else if (decl.kind === "StructDecl") {
+      const struct = decl as AST.StructDecl;
+      for (const member of struct.members) {
+        if (member.kind === "FunctionDecl") {
+          const method = member as AST.FunctionDecl;
+          if (
+            method.location &&
+            line >= method.location.startLine &&
+            line <= method.location.endLine
+          ) {
+            return method;
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function traverseLocals(
+  stmts: AST.Statement[],
+  cb: (name: string, type?: AST.TypeNode) => void,
+) {
+  for (const stmt of stmts) {
+    if (stmt.kind === "VariableDecl") {
+      const varDecl = stmt as AST.VariableDecl;
+      if (typeof varDecl.name === "string") {
+        cb(varDecl.name, varDecl.typeAnnotation);
+      } else {
+        // Destructuring
+        for (const item of varDecl.name) {
+          cb(item.name, item.type);
+        }
+      }
+    } else if (stmt.kind === "Block") {
+      traverseLocals((stmt as AST.BlockStmt).statements, cb);
+    } else if (stmt.kind === "If") {
+      const ifStmt = stmt as AST.IfStmt;
+      traverseLocals(ifStmt.thenBranch.statements, cb);
+      if (ifStmt.elseBranch) {
+        if (ifStmt.elseBranch.kind === "Block") {
+          traverseLocals((ifStmt.elseBranch as AST.BlockStmt).statements, cb);
+        } else if (ifStmt.elseBranch.kind === "If") {
+          // else if - recursive check on the single statement
+          traverseLocals([ifStmt.elseBranch], cb);
+        }
+      }
+    } else if (stmt.kind === "Loop") {
+      traverseLocals((stmt as AST.LoopStmt).body.statements, cb);
+    }
+  }
+}
+
+function getCompletionItemsFromDecl(
+  decl: AST.Statement,
+  typeName: string,
+  isStaticAccess: boolean,
+): CompletionItem[] {
+  const items: CompletionItem[] = [];
+
+  if (decl.kind === "StructDecl") {
+    const structDecl = decl as AST.StructDecl;
+
+    // Fields (only for instance access)
+    if (!isStaticAccess) {
+      for (const member of structDecl.members) {
+        if (member.kind === "StructField") {
+          const field = member as AST.StructField;
+          const typeStr = typeNodeToString(field.type);
+          items.push({
+            label: field.name,
+            kind: CompletionItemKind.Field,
+            detail: `${field.name}: ${typeStr}`,
+            documentation: `Field of ${typeName}`,
+          });
+        }
+      }
+    }
+
+    // Methods
+    for (const member of structDecl.members) {
+      if (member.kind === "FunctionDecl") {
+        const method = member as AST.FunctionDecl;
+
+        // Filter static vs instance methods
+        // Static methods (like new) usually don't have 'this' as first param
+        // Instance methods have 'this'
+        const isInstanceMethod =
+          method.params.length > 0 && method.params[0]?.name === "this";
+
+        if (
+          (isStaticAccess && !isInstanceMethod) ||
+          (!isStaticAccess && isInstanceMethod)
+        ) {
+          const paramsStr = method.params
+            .map((p) => `${p.name}: ${typeNodeToString(p.type)}`)
+            .join(", ");
+          const retTypeStr = typeNodeToString(method.returnType);
+          const signature = `frame ${method.name}(${paramsStr}) ret ${retTypeStr}`;
+
+          items.push({
+            label: method.name,
+            kind: CompletionItemKind.Method,
+            detail: signature,
+            documentation: `Method of ${typeName}`,
+            insertText: method.name + "($0)",
+            insertTextFormat: InsertTextFormat.Snippet,
+          });
+        }
+      }
+    }
+  } else if (decl.kind === "EnumDecl") {
+    const enumDecl = decl as AST.EnumDecl;
+
+    // Variants (Static access only)
+    if (isStaticAccess) {
+      for (const variant of enumDecl.variants) {
+        let detail = variant.name;
+        if (variant.dataType) {
+          // Add data type info if available
+          if (variant.dataType.kind === "EnumVariantTuple") {
+            const types = variant.dataType.types
+              .map((t) => typeNodeToString(t))
+              .join(", ");
+            detail += `(${types})`;
+          } else if (variant.dataType.kind === "EnumVariantStruct") {
+            const fields = variant.dataType.fields
+              .map((f) => `${f.name}: ${typeNodeToString(f.type)}`)
+              .join(", ");
+            detail += `{ ${fields} }`;
+          }
+        }
+
+        items.push({
+          label: variant.name,
+          kind: CompletionItemKind.EnumMember,
+          detail: detail,
+          documentation: `Variant of ${typeName}`,
+        });
+      }
+    }
+
+    // Methods
+    for (const method of enumDecl.methods) {
+      const isInstanceMethod =
+        method.params.length > 0 && method.params[0]?.name === "this";
+
+      if (
+        (isStaticAccess && !isInstanceMethod) ||
+        (!isStaticAccess && isInstanceMethod)
+      ) {
+        const paramsStr = method.params
+          .map((p) => `${p.name}: ${typeNodeToString(p.type)}`)
+          .join(", ");
+        const retTypeStr = typeNodeToString(method.returnType);
+        const signature = `frame ${method.name}(${paramsStr}) ret ${retTypeStr}`;
+
+        items.push({
+          label: method.name,
+          kind: CompletionItemKind.Method,
+          detail: signature,
+          documentation: `Method of ${typeName}`,
+          insertText: method.name + "($0)",
+          insertTextFormat: InsertTextFormat.Snippet,
+        });
+      }
+    }
+  }
+
+  return items;
+}
 
 // This handler resolves additional information for the item selected in
 // the completion list.
@@ -1040,6 +1492,10 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
   const types = [
     "int",
     "uint",
+    "u8",
+    "u16",
+    "u32",
+    "u64",
     "float",
     "bool",
     "char",
@@ -1047,6 +1503,9 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
     "any",
     "Func",
     "string",
+    "Self",
+    "Option",
+    "Result",
   ];
 
   if (keywords.includes(word)) {
@@ -1327,6 +1786,263 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
   return null;
 });
 
+function getWordAtPosition(
+  document: TextDocument,
+  position: any,
+): string | null {
+  const text = document.getText();
+  const offset = document.offsetAt(position);
+  const wordRegex = /[a-zA-Z_][a-zA-Z0-9_]*/g;
+  let match;
+  while ((match = wordRegex.exec(text)) !== null) {
+    if (offset >= match.index && offset <= match.index + match[0].length) {
+      return match[0];
+    }
+  }
+  return null;
+}
+
+function findAllReferences(
+  word: string,
+  documents: TextDocuments<TextDocument>,
+): Location[] {
+  const locations: Location[] = [];
+  documents.all().forEach((doc) => {
+    const text = doc.getText();
+    const regex = new RegExp(`\\b${word}\\b`, "g");
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      locations.push(
+        Location.create(
+          doc.uri,
+          Range.create(
+            doc.positionAt(match.index),
+            doc.positionAt(match.index + match[0].length),
+          ),
+        ),
+      );
+    }
+  });
+  return locations;
+}
+
+connection.onRenameRequest((params) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) return null;
+
+  const word = getWordAtPosition(document, params.position);
+  if (!word) return null;
+
+  const locations = findAllReferences(word, documents);
+  const changes: { [uri: string]: TextEdit[] } = {};
+
+  locations.forEach((loc) => {
+    if (!changes[loc.uri]) changes[loc.uri] = [];
+    changes[loc.uri]!.push(TextEdit.replace(loc.range, params.newName));
+  });
+
+  return { changes };
+});
+
+connection.onReferences((params) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) return null;
+
+  const word = getWordAtPosition(document, params.position);
+  if (!word) return null;
+
+  return findAllReferences(word, documents);
+});
+
+connection.onImplementation((params) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) return null;
+
+  const word = getWordAtPosition(document, params.position);
+  if (!word) return null;
+
+  // Find structs that implement this spec/interface
+  const locations: Location[] = [];
+  documents.all().forEach((doc) => {
+    const text = doc.getText();
+    // Regex for inheritance: struct Name : Parent or struct Name implements Parent
+    const regex = new RegExp(
+      `\\bstruct\\s+([a-zA-Z0-9_]+)\\s*(?::|implements)\\s*${word}\\b`,
+      "g",
+    );
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      locations.push(
+        Location.create(
+          doc.uri,
+          Range.create(
+            doc.positionAt(match.index),
+            doc.positionAt(match.index + match[0].length),
+          ),
+        ),
+      );
+    }
+  });
+  return locations;
+});
+
+connection.onCodeAction((params) => {
+  const actions: CodeAction[] = [];
+  const document = documents.get(params.textDocument.uri);
+  if (!document) return [];
+
+  const currentDir = path.dirname(fileURLToPath(document.uri));
+
+  for (const diagnostic of params.context.diagnostics) {
+    // Example: "Unknown type 'Result'" -> Import Result from std
+    const unknownTypeMatch = /Unknown type '(\w+)'/.exec(diagnostic.message);
+    if (unknownTypeMatch) {
+      const typeName = unknownTypeMatch[1];
+
+      // 1. Check Standard Library
+      if (
+        typeName &&
+        [
+          "Result",
+          "Option",
+          "List",
+          "Map",
+          "Set",
+          "Vec2",
+          "Vec3",
+          "Stack",
+          "Queue",
+        ].includes(typeName)
+      ) {
+        actions.push({
+          title: `Import ${typeName} from std`,
+          kind: CodeActionKind.QuickFix,
+          diagnostics: [diagnostic],
+          edit: {
+            changes: {
+              [params.textDocument.uri]: [
+                TextEdit.insert(
+                  { line: 0, character: 0 },
+                  `import [${typeName}] from "std";\n`,
+                ),
+              ],
+            },
+          },
+        });
+      }
+
+      // 2. Scan nearby files for exports
+      try {
+        const files = fs.readdirSync(currentDir);
+        for (const file of files) {
+          if (
+            file.endsWith(".bpl") &&
+            file !== path.basename(fileURLToPath(document.uri))
+          ) {
+            const content = fs.readFileSync(
+              path.join(currentDir, file),
+              "utf-8",
+            );
+            // Check for export [TypeName]
+            if (
+              new RegExp(`export\\s+\\[\\s*${typeName}\\s*\\]`).test(content)
+            ) {
+              actions.push({
+                title: `Import ${typeName} from ./${file}`,
+                kind: CodeActionKind.QuickFix,
+                diagnostics: [diagnostic],
+                edit: {
+                  changes: {
+                    [params.textDocument.uri]: [
+                      TextEdit.insert(
+                        { line: 0, character: 0 },
+                        `import [${typeName}] from "./${file}";\n`,
+                      ),
+                    ],
+                  },
+                },
+              });
+            }
+          }
+        }
+      } catch (e) {
+        // Ignore fs errors
+      }
+    }
+
+    // Check for unknown function/variable
+    const unknownSymbolMatch = /Unknown symbol '(\w+)'/.exec(
+      diagnostic.message,
+    );
+    if (unknownSymbolMatch) {
+      const symbolName = unknownSymbolMatch[1];
+      // Scan nearby files for export symbolName
+      try {
+        const files = fs.readdirSync(currentDir);
+        for (const file of files) {
+          if (
+            file.endsWith(".bpl") &&
+            file !== path.basename(fileURLToPath(document.uri))
+          ) {
+            const content = fs.readFileSync(
+              path.join(currentDir, file),
+              "utf-8",
+            );
+            // Check for export symbolName
+            if (new RegExp(`export\\s+${symbolName}\\b`).test(content)) {
+              actions.push({
+                title: `Import ${symbolName} from ./${file}`,
+                kind: CodeActionKind.QuickFix,
+                diagnostics: [diagnostic],
+                edit: {
+                  changes: {
+                    [params.textDocument.uri]: [
+                      TextEdit.insert(
+                        { line: 0, character: 0 },
+                        `import ${symbolName} from "./${file}";\n`,
+                      ),
+                    ],
+                  },
+                },
+              });
+            }
+          }
+        }
+      } catch (e) {
+        // Ignore fs errors
+      }
+    }
+  }
+  return actions;
+});
+
+connection.onCodeLens((params) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) return [];
+
+  const text = document.getText();
+  const lenses: CodeLens[] = [];
+
+  // Find main function: frame main()
+  const mainRegex = /frame\s+main\s*\(/g;
+  let match;
+  while ((match = mainRegex.exec(text)) !== null) {
+    const startPos = document.positionAt(match.index);
+    const endPos = document.positionAt(match.index + match[0].length);
+
+    lenses.push({
+      range: Range.create(startPos, endPos),
+      command: {
+        title: "Run File",
+        command: "bpl.runFile",
+        arguments: [fileURLToPath(document.uri)],
+      },
+    });
+  }
+
+  return lenses;
+});
+
 // Make the text document manager listen on the connection
 // for open, change and close text document events
 documents.listen(connection);
@@ -1374,4 +2090,56 @@ function findNodeAtPosition(
 
   // If no child contains the position, then 'node' is the most specific one
   return node;
+}
+
+function findEnclosingStruct(text: string, line: number): string | null {
+  const lines = text.split(/\r?\n/);
+  for (let i = line; i >= 0; i--) {
+    const l = lines[i] || "";
+    const match = /struct\s+([a-zA-Z0-9_]+)/.exec(l);
+    if (match) return match[1] || null;
+  }
+  return null;
+}
+
+function findVariableType(
+  text: string,
+  varName: string,
+  line: number,
+): string | null {
+  const lines = text.split(/\r?\n/);
+  // 1. Search backwards for local declaration or function arg
+  for (let i = line; i >= 0; i--) {
+    const l = lines[i] || "";
+
+    // Check for function definition (end of scope search)
+    if (l.trim().startsWith("frame ")) {
+      // Check if it's an argument in this frame
+      const argMatch = new RegExp(`\\b${varName}\\s*:\\s*([a-zA-Z0-9_]+)`).exec(
+        l,
+      );
+      if (argMatch) return argMatch[1] || null;
+      return null; // Stop searching if we hit the function boundary
+    }
+
+    // Check for local declaration: local varName : Type
+    // or local (varName : Type)
+    // We just look for "varName : Type" which is common to both
+    // But we must ensure it's not a struct field or something else.
+    // Inside a function, "varName : Type" is likely a declaration.
+    const declMatch = new RegExp(`\\b${varName}\\s*:\\s*([a-zA-Z0-9_]+)`).exec(
+      l,
+    );
+    if (declMatch) {
+      return declMatch[1] || null;
+    }
+  }
+
+  // 2. Search for global declaration
+  const globalMatch = new RegExp(
+    `\\bglobal\\s+${varName}\\s*:\\s*([a-zA-Z0-9_]+)`,
+  ).exec(text);
+  if (globalMatch) return globalMatch[1] || null;
+
+  return null;
 }

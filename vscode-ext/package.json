@@ -55,6 +55,12 @@
         "path": "./syntaxes/bpl.tmLanguage.json"
       }
     ],
+    "snippets": [
+      {
+        "language": "bpl",
+        "path": "./snippets/bpl.json"
+      }
+    ],
     "configuration": {
       "type": "object",
       "title": "BPL3 configuration",
@@ -70,6 +76,11 @@
           "type": "boolean",
           "default": true,
           "description": "Enable BPL format-on-save for .bpl files."
+        },
+        "bplLanguageServer.bplHome": {
+          "scope": "resource",
+          "type": "string",
+          "description": "Path to BPL installation directory (BPL_HOME)."
         }
       }
     }

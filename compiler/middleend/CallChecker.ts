@@ -193,15 +193,72 @@ export function checkCall(
       }
     }
 
-    if (calleeType.declaration) {
-      expr.resolvedDeclaration = calleeType.declaration as AST.FunctionDecl;
+    let effectiveFuncType = calleeType as AST.FunctionTypeNode;
+    const decl = effectiveFuncType.declaration as AST.FunctionDecl;
+
+    // Handle generic method inference
+    if (decl && decl.genericParams && decl.genericParams.length > 0) {
+      // Check if we have explicit generics in the call
+      if (expr.genericArgs && expr.genericArgs.length > 0) {
+        // Explicit generics provided - substitute them
+        const typeMap = new Map<string, AST.TypeNode>();
+        for (
+          let i = 0;
+          i < decl.genericParams.length && i < expr.genericArgs.length;
+          i++
+        ) {
+          typeMap.set(decl.genericParams[i]!.name, expr.genericArgs[i]!);
+        }
+        effectiveFuncType = this.substituteType(
+          effectiveFuncType,
+          typeMap,
+        ) as AST.FunctionTypeNode;
+      } else {
+        // Infer generics from arguments
+        const typeMap = new Map<string, AST.TypeNode>();
+        for (
+          let i = 0;
+          i < effectiveFuncType.paramTypes.length && i < argTypes.length;
+          i++
+        ) {
+          const paramType = effectiveFuncType.paramTypes[i]!;
+          const argType = argTypes[i];
+          if (argType) {
+            inferGenericArgs(paramType, argType, decl.genericParams, typeMap);
+          }
+        }
+
+        if (typeMap.size > 0) {
+          effectiveFuncType = this.substituteType(
+            effectiveFuncType,
+            typeMap,
+          ) as AST.FunctionTypeNode;
+          // Store inferred generics for code generation
+          expr.genericArgs = decl.genericParams.map(
+            (p) =>
+              typeMap.get(p.name) ||
+              ({
+                kind: "BasicType",
+                name: "void", // Default to void if not inferred?
+                genericArgs: [],
+                pointerDepth: 0,
+                arrayDimensions: [],
+                location: expr.location,
+              } as AST.TypeNode),
+          );
+        }
+      }
     }
-    return validateFunctionCall.call(
-      this,
-      expr,
-      calleeType as AST.FunctionTypeNode,
-      argTypes,
-    );
+
+    if (effectiveFuncType.declaration) {
+      expr.resolvedDeclaration =
+        effectiveFuncType.declaration as AST.FunctionDecl;
+    }
+
+    // Update resolvedType on callee to point to specialized type
+    expr.callee.resolvedType = effectiveFuncType;
+
+    return validateFunctionCall.call(this, expr, effectiveFuncType, argTypes);
   }
 
   return undefined;
@@ -584,11 +641,7 @@ export function checkMember(
 
             // Substitute generics if we have a map
             if (genericMap && genericMap.size > 0) {
-              console.log(
-                `Substituting return type ${this.typeToString(returnType)} with map keys: ${Array.from(genericMap.keys()).join(", ")}`,
-              );
               returnType = this.substituteType(returnType, genericMap);
-              console.log(`Result: ${this.typeToString(returnType)}`);
               paramTypes = paramTypes.map((t) =>
                 this.substituteType(t, genericMap),
               );
@@ -934,6 +987,30 @@ function inferGenericArgs(
       inferGenericArgs(
         paramType.types[i]!,
         argType.types[i]!,
+        genericParams,
+        typeMap,
+      );
+    }
+  } else if (
+    paramType.kind === "FunctionType" &&
+    argType.kind === "FunctionType"
+  ) {
+    // Return type
+    inferGenericArgs(
+      paramType.returnType,
+      argType.returnType,
+      genericParams,
+      typeMap,
+    );
+    // Param types
+    for (
+      let i = 0;
+      i < paramType.paramTypes.length && i < argType.paramTypes.length;
+      i++
+    ) {
+      inferGenericArgs(
+        paramType.paramTypes[i]!,
+        argType.paramTypes[i]!,
         genericParams,
         typeMap,
       );

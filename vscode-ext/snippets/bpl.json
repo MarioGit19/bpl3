@@ -1,0 +1,220 @@
+{
+  "Main Function": {
+    "prefix": "main",
+    "body": ["frame main() ret int {", "\t$0", "\treturn 0;", "}"],
+    "description": "Main function entry point"
+  },
+  "Function Definition": {
+    "prefix": "frame",
+    "body": ["frame ${1:name}(${2:args}) ret ${3:void} {", "\t$0", "}"],
+    "description": "Define a new function"
+  },
+  "Struct Definition": {
+    "prefix": "struct",
+    "body": [
+      "struct ${1:Name} {",
+      "\t${2:field}: ${3:type},",
+      "\t",
+      "\tframe new(${4:args}) ret ${1:Name} {",
+      "\t\tlocal self: ${1:Name};",
+      "\t\t$0",
+      "\t\treturn self;",
+      "\t}",
+      "}"
+    ],
+    "description": "Define a new struct"
+  },
+  "Enum Definition": {
+    "prefix": "enum",
+    "body": ["enum ${1:Name} {", "\t${2:Variant},", "\t$0", "}"],
+    "description": "Define a new enum"
+  },
+  "Spec Definition": {
+    "prefix": "spec",
+    "body": [
+      "spec ${1:Name} {",
+      "\tframe ${2:method}(${3:args}) ret ${4:void};",
+      "\t$0",
+      "}"
+    ],
+    "description": "Define a new interface/spec"
+  },
+  "Loop": {
+    "prefix": "loop",
+    "body": ["loop (${1:condition}) {", "\t$0", "}"],
+    "description": "While loop"
+  },
+  "Infinite Loop": {
+    "prefix": "loop-inf",
+    "body": ["loop {", "\t$0", "\tif (${1:condition}) { break; }", "}"],
+    "description": "Infinite loop"
+  },
+  "If Statement": {
+    "prefix": "if",
+    "body": ["if (${1:condition}) {", "\t$0", "}"],
+    "description": "If statement"
+  },
+  "If Else": {
+    "prefix": "ifelse",
+    "body": ["if (${1:condition}) {", "\t$2", "} else {", "\t$0", "}"],
+    "description": "If-else statement"
+  },
+  "Switch Statement": {
+    "prefix": "switch",
+    "body": [
+      "switch (${1:expression}) {",
+      "\tcase ${2:value}: {",
+      "\t\t$3",
+      "\t}",
+      "\tdefault: {",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ],
+    "description": "Switch statement"
+  },
+  "Match Expression": {
+    "prefix": "match",
+    "body": [
+      "match (${1:expression}) {",
+      "\t${2:Type}.${3:Variant} => {",
+      "\t\t$4",
+      "\t},",
+      "\t${2:Type}.${5:Other} => {",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ],
+    "description": "Match expression"
+  },
+  "Try Catch": {
+    "prefix": "try",
+    "body": ["try {", "\t$0", "} catch (e: ${1:int}) {", "\t", "}"],
+    "description": "Try-catch block"
+  },
+  "Print": {
+    "prefix": "print",
+    "body": ["printf(\"${1:%d}\\n\", ${2:value});"],
+    "description": "Print using printf"
+  },
+  "Import": {
+    "prefix": "import",
+    "body": ["import ${1:symbol} from \"${2:module}\";"],
+    "description": "Import statement"
+  },
+  "Import Type": {
+    "prefix": "import-type",
+    "body": ["import [${1:Type}] from \"${2:module}\";"],
+    "description": "Import type statement"
+  },
+  "Lambda": {
+    "prefix": "lambda",
+    "body": ["|${1:args}| ${2:expression}"],
+    "description": "Lambda expression"
+  },
+  "Lambda Block": {
+    "prefix": "lambda-block",
+    "body": ["|${1:args}| -> ${2:ReturnType} {", "\t$0", "}"],
+    "description": "Lambda with block body"
+  },
+  "Const Variable": {
+    "prefix": "const",
+    "body": ["local const ${1:name}: ${2:type} = ${3:value};"],
+    "description": "Constant local variable"
+  },
+  "New Object": {
+    "prefix": "new",
+    "body": ["${1:Type}.new(${2:args})"],
+    "description": "Instantiate a struct"
+  },
+  "Cast": {
+    "prefix": "cast",
+    "body": ["cast<${1:Type}>(${2:expr})"],
+    "description": "Type cast"
+  },
+  "As Cast": {
+    "prefix": "as",
+    "body": ["${1:expr} as ${2:Type}"],
+    "description": "Safe type cast using 'as'"
+  },
+  "Is Check": {
+    "prefix": "is",
+    "body": ["if (${1:expr} is ${2:Type}) {", "\t$0", "}"],
+    "description": "Type check using 'is'"
+  },
+  "Global Variable": {
+    "prefix": "global",
+    "body": ["global ${1:NAME}: ${2:type} = ${3:value};"],
+    "description": "Global variable declaration"
+  },
+  "Local Variable": {
+    "prefix": "local",
+    "body": ["local ${1:name}: ${2:type} = ${3:value};"],
+    "description": "Local variable declaration"
+  },
+  "Export": {
+    "prefix": "export",
+    "body": ["export ${1:symbol};"],
+    "description": "Export a symbol"
+  },
+  "Extern Function": {
+    "prefix": "extern",
+    "body": ["extern ${1:name}(${2:args}) ret ${3:type};"],
+    "description": "External function declaration"
+  },
+  "Inline Assembly": {
+    "prefix": "asm",
+    "body": ["asm {", "\t\"${1:instruction}\"", "}"],
+    "description": "Inline assembly block"
+  },
+  "Break": {
+    "prefix": "break",
+    "body": ["break;"],
+    "description": "Break statement"
+  },
+  "Continue": {
+    "prefix": "continue",
+    "body": ["continue;"],
+    "description": "Continue statement"
+  },
+  "Return": {
+    "prefix": "return",
+    "body": ["return ${1:value};"],
+    "description": "Return statement"
+  },
+  "Throw": {
+    "prefix": "throw",
+    "body": ["throw ${1:error};"],
+    "description": "Throw exception"
+  },
+  "Sizeof": {
+    "prefix": "sizeof",
+    "body": ["sizeof(${1:type})"],
+    "description": "Sizeof operator"
+  },
+  "Null": {
+    "prefix": "null",
+    "body": ["null"],
+    "description": "Null value"
+  },
+  "Null Pointer": {
+    "prefix": "nullptr",
+    "body": ["nullptr"],
+    "description": "Null pointer"
+  },
+  "True": {
+    "prefix": "true",
+    "body": ["true"],
+    "description": "Boolean true"
+  },
+  "False": {
+    "prefix": "false",
+    "body": ["false"],
+    "description": "Boolean false"
+  },
+  "Function Type": {
+    "prefix": "Func",
+    "body": ["Func<${1:ReturnType}>(${2:ArgTypes})"],
+    "description": "Function type definition"
+  }
+}
