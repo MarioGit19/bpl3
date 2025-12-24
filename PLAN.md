@@ -23,6 +23,33 @@ The following features are recommended for implementation next:
 
 ---
 
+## [5] ✅ Const Correctness (COMPLETED)
+
+**Description:** Enforce `const` (or equivalent) declarations and immutability rules across the language: constant variables, read-only fields, `const` parameters, and compile-time constants.
+
+**Implementation Status:** ✅ Fully Implemented (December 2025)
+
+**What Was Implemented:**
+
+- ✅ **Const Keyword**: Added `const` keyword for local variables (`local const x: int = 10;`) and function parameters (`frame foo(x: const int)`).
+- ✅ **Type System**: Updated `TypeChecker` to track `isConst` property on symbols and types.
+- ✅ **Immutability Enforcement**:
+  - Prevent assignment to `const` variables and parameters.
+  - Prevent assignment to fields of `const` structs.
+  - Prevent assignment to elements of `const` arrays.
+  - Recursive const checking for nested access (e.g., `constStruct.field.subfield = 1` is illegal).
+- ✅ **Lambda Support**: `const` correctness for captured variables and lambda parameters.
+- ✅ **Formatter**: Updated formatter to handle `const` syntax correctly.
+- ✅ **Tests**: Added comprehensive unit and integration tests covering all scenarios.
+
+**Tests:**
+
+- `tests/ConstCorrectness.test.ts`: Unit tests for parser and type checker.
+- `examples/const_correctness/`: Integration tests for runtime behavior and compilation errors.
+- `examples/const_test/`: Additional regression tests.
+
+---
+
 ## [4] ✅ Debugger Support (DWARF) (COMPLETED)
 
 **Description:** Enables source-level debugging with GDB/LLDB by generating DWARF debug information in the LLVM IR.
@@ -346,31 +373,6 @@ The following features are recommended for implementation next:
 
 ---
 
-## [8] Const Correctness
-
-**Description:** Enforce `const` (or equivalent) declarations and immutability rules across the language: constant variables, read-only fields, `const` parameters, and compile-time constants. This prevents accidental mutations and enables compiler optimizations while making developer intent explicit.
-
-**Implementation Notes:**
-
-- Add `isConst` flag to symbol/type entries throughout the compiler
-- Propagate const through assignments, parameter passing, and returns
-- Implement proper const type qualifiers
-- Treat `const` references to mutable objects as shallowly const initially
-- Decide and document const semantics (deep vs shallow)
-- Support compile-time constants and const folding
-- Generate errors on attempted mutation of const values
-- Support const promotion where safe
-- Handle mutable borrows of const values correctly
-
-**Acceptance Criteria:**
-
-- Examples declaring `const` variables produce errors on mutation attempts
-- `const` parameters cannot be assigned inside functions
-- `const` globals evaluate as compile-time constants where used
-- Proper error messages guide users on const correctness
-- Compiler can optimize based on const information
-
----
 
 ## [8] Async/Await
 

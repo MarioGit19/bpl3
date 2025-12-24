@@ -1077,11 +1077,13 @@ export function checkLambda(
 
     // Define parameter in scope (skip if _)
     if (param.name !== "_") {
+      const isConst = (resolvedType as any).isConst;
       this.currentScope.define({
         name: param.name,
         kind: "Parameter",
         type: resolvedType,
         declaration: param as any,
+        isConst: isConst,
       });
     }
   }

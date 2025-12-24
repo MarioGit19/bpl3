@@ -73,6 +73,7 @@ export interface ITypeCheckerContext {
     type: AST.TypeNode | undefined,
     node: AST.ASTNode,
     moduleScope?: SymbolTable,
+    isConst?: boolean,
   ): void;
   hoistDeclaration(stmt: AST.Statement): void;
 }
@@ -311,7 +312,7 @@ export abstract class TypeCheckerBase {
         );
 
         if (resolvedBase.kind === "BasicType") {
-          return {
+          const result: AST.BasicTypeNode = {
             ...resolvedBase,
             genericArgs: [
               ...resolvedBase.genericArgs,
@@ -325,7 +326,14 @@ export abstract class TypeCheckerBase {
               ...type.arrayDimensions,
             ],
             location: type.location,
+            isConst: resolvedBase.isConst || (type as any).isConst,
           };
+          return result;
+        }
+
+        // Propagate const for other types (FunctionType, TupleType)
+        if ((type as any).isConst) {
+          return { ...resolvedBase, isConst: true } as any;
         }
         return resolvedBase;
       }
@@ -445,6 +453,7 @@ export abstract class TypeCheckerBase {
     type: AST.TypeNode | undefined,
     node: AST.ASTNode,
     moduleScope?: SymbolTable,
+    isConst?: boolean,
   ): void {
     const existing = this.currentScope.getInCurrentScope(name);
 
@@ -480,6 +489,7 @@ export abstract class TypeCheckerBase {
       type,
       declaration: node,
       moduleScope,
+      isConst,
     });
   }
 

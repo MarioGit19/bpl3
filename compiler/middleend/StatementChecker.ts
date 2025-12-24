@@ -37,6 +37,7 @@ export interface StatementCheckerContext {
     type: AST.TypeNode | undefined,
     node: AST.ASTNode,
     moduleScope?: any,
+    isConst?: boolean,
   ): void;
   isBoolType(type: AST.TypeNode): boolean;
   makeVoidType(): AST.TypeNode;
@@ -418,6 +419,8 @@ export function checkVariableDecl(
               "Variable",
               this.resolveType(finalType),
               decl,
+              undefined,
+              decl.isConst,
             );
           }
         }
@@ -435,6 +438,8 @@ export function checkVariableDecl(
             "Variable",
             this.resolveType(finalType),
             decl,
+            undefined,
+            decl.isConst,
           );
         }
       }
@@ -558,8 +563,14 @@ export function checkVariableDecl(
       decl.location,
     );
   }
-
-  this.defineSymbol(decl.name as string, "Variable", declaredType, decl);
+  this.defineSymbol(
+    decl.name as string,
+    "Variable",
+    declaredType,
+    decl,
+    undefined,
+    decl.isConst,
+  );
   decl.resolvedType = declaredType;
 }
 

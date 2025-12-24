@@ -1,7 +1,7 @@
 {
   "exitCode": 1,
   "expectedOutput": [
-    "Cannot assign to constant variable 'LOCAL_CONST'",
-    "Cannot assign to constant variable 'GLOBAL_CONST'"
+    "Cannot assign to constant 'LOCAL_CONST'",
+    "Cannot assign to constant 'GLOBAL_CONST'"
   ]
 }

@@ -1,3 +1,6 @@
 {
-  "expectedOutput": "Const test passed"
+  "expectedOutput": "a: 10\np.x: 1\nmut_p.x: 30\nptr.x: 40\nc_ptr.x: 50\nx: 1, y: 2\n",
+  "args": [],
+  "env": {},
+  "input": ""
 }

@@ -206,7 +206,12 @@ export class Formatter {
 
     output += "(";
     output += decl.params
-      .map((p) => `${p.name}: ${this.formatType(p.type)}`)
+      .map((p) => {
+        const typeStr = this.formatType(p.type);
+        return p.isConst
+          ? `const ${p.name}: ${typeStr}`
+          : `${p.name}: ${typeStr}`;
+      })
       .join(", ");
     output += ")";
 
@@ -415,7 +420,12 @@ export class Formatter {
 
     output += "(";
     output += method.params
-      .map((p) => `${p.name}: ${this.formatType(p.type)}`)
+      .map((p) => {
+        const typeStr = this.formatType(p.type);
+        return p.isConst
+          ? `const ${p.name}: ${typeStr}`
+          : `${p.name}: ${typeStr}`;
+      })
       .join(", ");
     output += ")";
 
@@ -999,8 +1009,9 @@ export class Formatter {
 
   private formatType(type: AST.TypeNode): string {
     switch (type.kind) {
-      case "BasicType":
+      case "BasicType": {
         let output = "";
+        if (type.isConst) output += "const ";
         for (let i = 0; i < type.pointerDepth; i++) output += "*";
         output += type.name;
         if (type.genericArgs.length > 0) {
@@ -1010,13 +1021,21 @@ export class Formatter {
           output += `[${dim !== null ? dim : ""}]`;
         }
         return output;
-      case "FunctionType":
-        let func = `Func<${this.formatType(type.returnType)}>(`;
+      }
+      case "FunctionType": {
+        let func = "";
+        if (type.isConst) func += "const ";
+        func += `Func<${this.formatType(type.returnType)}>(`;
         func += type.paramTypes.map((t) => this.formatType(t)).join(", ");
         func += ")";
         return func;
-      case "TupleType":
-        return `(${type.types.map((t) => this.formatType(t)).join(", ")})`;
+      }
+      case "TupleType": {
+        let output = "";
+        if (type.isConst) output += "const ";
+        output += `(${type.types.map((t) => this.formatType(t)).join(", ")})`;
+        return output;
+      }
       default:
         return "unknown_type";
     }

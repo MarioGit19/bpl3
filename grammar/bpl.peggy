@@ -1088,7 +1088,14 @@ ParameterList
     }
 
 Parameter
-  = name:Identifier _ ":" _ type:Type { return { name: name.name, type, location: makeLoc(location()) }; }
+  = isConstPrefix:K_const? _ name:Identifier _ ":" _ isConstType:K_const? _ type:Type {
+      return {
+        name: name.name,
+        type,
+        isConst: !!isConstPrefix || !!isConstType,
+        location: makeLoc(location()),
+      };
+    }
 
 GenericParamList
   = "<" _ head:GenericParam tail:(_ "," _ GenericParam)* _ ">" {
@@ -1109,6 +1116,14 @@ ReturnType
   = K_ret _ type:Type { return type; }
 
 Type
+  = isConst:K_const? _ t:BaseType {
+      if (isConst) {
+        t.isConst = true;
+      }
+      return t;
+    }
+
+BaseType
   = FunctionType
   / TupleType
   / BasicType

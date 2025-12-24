@@ -1,0 +1,6 @@
+{
+  "expectedOutput": "x is 10\nLambda received 42\nCaptured const c: 100\n",
+  "args": [],
+  "env": {},
+  "input": ""
+}

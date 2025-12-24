@@ -29,11 +29,13 @@ export interface BasicTypeNode extends ASTNode {
   pointerDepth: number;
   arrayDimensions: (number | null)[];
   resolvedDeclaration?: StructDecl | EnumDecl | SpecDecl;
+  isConst?: boolean;
 }
 
 export interface TupleTypeNode extends ASTNode {
   kind: "TupleType";
   types: TypeNode[];
+  isConst?: boolean;
 }
 
 export interface FunctionTypeNode extends ASTNode {
@@ -42,6 +44,7 @@ export interface FunctionTypeNode extends ASTNode {
   paramTypes: TypeNode[];
   isVariadic?: boolean;
   declaration?: FunctionDecl;
+  isConst?: boolean;
 }
 
 // --- Expressions ---
@@ -308,7 +311,12 @@ export interface FunctionDecl extends ASTNode {
   isStatic: boolean;
   name: string;
   genericParams: GenericParam[];
-  params: { name: string; type: TypeNode; location: SourceLocation }[];
+  params: {
+    name: string;
+    type: TypeNode;
+    location: SourceLocation;
+    isConst?: boolean;
+  }[];
   returnType: TypeNode;
   body: BlockStmt;
 }
@@ -339,7 +347,12 @@ export interface SpecMethod extends ASTNode {
   kind: "SpecMethod";
   name: string;
   genericParams: GenericParam[];
-  params: { name: string; type: TypeNode; location: SourceLocation }[];
+  params: {
+    name: string;
+    type: TypeNode;
+    location: SourceLocation;
+    isConst?: boolean;
+  }[];
   returnType?: TypeNode;
 }
 

@@ -84,6 +84,12 @@
   - ✅ `Func<Ret>(Args...)` type support
   - ✅ VS Code Extension support (Syntax Highlighting & Hover)
   - ✅ Integration with Enum Pattern Matching (Capturing pattern bindings)
+- [x] Const Correctness ✅
+  - ✅ `const` keyword for local variables
+  - ✅ `const` keyword for function parameters
+  - ✅ Immutability enforcement in TypeChecker
+  - ✅ Recursive mutability checking for member access and indexing
+  - ✅ `this` treated as const pointer in methods
 
 ## Pending Features (expanded)
 
@@ -156,6 +162,7 @@
   - Acceptance criteria: Can step through BPL code in GDB/LLDB, variables show correct values, breakpoints work.
 
 - [5] Type Narrowing / Pattern Matching (Partially Implemented)
+
   - Description: Implement syntax and semantics for narrowing variable types based on runtime checks.
   - **Status:** PARTIAL (Syntax only)
   - Implemented:
@@ -191,7 +198,7 @@
   - Description: Support embedding expressions directly into string literals using `${expression}` syntax.
   - Implementation notes: Update lexer/parser, desugar to concatenation or builder, support arbitrary expressions.
   - Acceptance criteria: `$"Hello ${name}"` compiles, expressions evaluated correctly.
- (Partially Implemented)
+    (Partially Implemented)
 
   - Description: Permit `struct MyInt : int { ... }` so a struct can behave as a primitive type with additional methods/fields.
   - **Status:** PARTIAL (Syntax only)
@@ -265,6 +272,7 @@
   - Acceptance criteria: Can match deeply nested structures, exhaustiveness checking works.
 
 - [x] Explicit Memory Initialization ✅
+
   - Description: Mechanism to initialize raw memory as valid object (set `__null_bit__`).
   - **Final Status:** COMPLETE ✅
   - Implemented features:

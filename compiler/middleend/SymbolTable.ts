@@ -18,6 +18,7 @@ export interface Symbol {
   moduleScope?: SymbolTable;
   overloads?: Symbol[];
   used?: boolean;
+  isConst?: boolean;
 }
 
 export class SymbolTable {

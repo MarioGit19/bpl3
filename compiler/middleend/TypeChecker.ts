@@ -422,6 +422,8 @@ export class TypeChecker extends TypeCheckerBase {
           location: decl.location,
         },
         decl,
+        undefined,
+        true, // 'this' is const
       );
     }
 
@@ -463,6 +465,8 @@ export class TypeChecker extends TypeCheckerBase {
         "Variable",
         this.resolveType(param.type),
         param as any,
+        undefined,
+        param.isConst,
       );
     }
 
@@ -836,6 +840,39 @@ export class TypeChecker extends TypeCheckerBase {
   // ========== Complex Expression Checkers ==========
   // These need to remain in the main class due to complexity
 
+  private checkIsMutable(expr: AST.Expression): void {
+    if (expr.kind === "Identifier") {
+      const id = expr as AST.IdentifierExpr;
+      const symbol = this.currentScope.resolve(id.name);
+      if (symbol && symbol.isConst) {
+        throw new CompilerError(
+          `Cannot assign to constant '${id.name}'`,
+          "Constants cannot be modified.",
+          expr.location,
+        );
+      }
+    } else if (expr.kind === "Member") {
+      const member = expr as AST.MemberExpr;
+      const objType = this.checkExpression(member.object);
+      if (objType && (objType as AST.BasicTypeNode).pointerDepth > 0) {
+        return;
+      }
+      this.checkIsMutable(member.object);
+    } else if (expr.kind === "Index") {
+      const index = expr as AST.IndexExpr;
+      const objType = this.checkExpression(index.object);
+      if (objType && (objType as AST.BasicTypeNode).pointerDepth > 0) {
+        return;
+      }
+      this.checkIsMutable(index.object);
+    } else if (expr.kind === "TupleLiteral") {
+      const tuple = expr as AST.TupleLiteralExpr;
+      for (const elem of tuple.elements) {
+        this.checkIsMutable(elem);
+      }
+    }
+  }
+
   private checkAssignment(expr: AST.AssignmentExpr): AST.TypeNode | undefined {
     // Check if assignee is an l-value
     if (
@@ -875,22 +912,8 @@ export class TypeChecker extends TypeCheckerBase {
 
     const targetType = this.checkExpression(expr.assignee);
 
-    if (expr.assignee.kind === "Identifier") {
-      const id = expr.assignee as AST.IdentifierExpr;
-      if (
-        id.resolvedDeclaration &&
-        id.resolvedDeclaration.kind === "VariableDecl"
-      ) {
-        const decl = id.resolvedDeclaration as AST.VariableDecl;
-        if (decl.isConst) {
-          throw new CompilerError(
-            `Cannot assign to constant variable '${id.name}'`,
-            "Constants cannot be modified after initialization.",
-            expr.location,
-          );
-        }
-      }
-    }
+    // Check const correctness
+    this.checkIsMutable(expr.assignee);
 
     const valueType = this.checkExpression(expr.value);
 

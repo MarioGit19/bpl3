@@ -1,25 +1,38 @@
-global const GLOBAL_CONST: int = 100;
-global var_global: int = 200;
+extern printf(fmt: string, ...);
 
-extern printf(fmt: string, ...) ret int;
-extern exit(code: int);
+frame process(x: int, const y: int) {
+    # y = 10; # Should be error
+    printf("x: %d, y: %d\n", x, y);
+}
 
-frame main() {
-    local const LOCAL_CONST: int = 10;
-    local var_local: int = 20;
+struct Point {
+    x: int,
+    y: int,
+}
 
-    # Read constants
-    if (GLOBAL_CONST != 100) {
-        printf("GLOBAL_CONST mismatch\n");
-        exit(1);
-    }
-    if (LOCAL_CONST != 10) {
-        printf("LOCAL_CONST mismatch\n");
-        exit(1);
-    }
-    # Assignments (should fail compilation if uncommented)
-    # GLOBAL_CONST = 101;
-    # LOCAL_CONST = 11;
+frame main() ret int {
+    local const a: int = 10;
+    # a = 20; # Should be error
+    printf("a: %d\n", a);
 
-    printf("Const test passed\n");
+    local const p: Point = Point { x: 1, y: 2 };
+    # p.x = 3; # Should be error
+    printf("p.x: %d\n", p.x);
+
+    local mut_p: Point = Point { x: 10, y: 20 };
+    mut_p.x = 30; # OK
+    printf("mut_p.x: %d\n", mut_p.x);
+
+    local ptr: *Point = &mut_p;
+    ptr.x = 40; # OK
+    printf("ptr.x: %d\n", ptr.x);
+
+    local const c_ptr: *Point = &mut_p;
+    c_ptr.x = 50; # OK (pointer is const, but pointee is mutable)
+    # c_ptr = &p; # Should be error
+    printf("c_ptr.x: %d\n", c_ptr.x);
+
+    process(1, 2);
+
+    return 0;
 }
