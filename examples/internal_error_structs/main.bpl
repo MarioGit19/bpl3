@@ -1,0 +1,77 @@
+import [Option] from "std/option.bpl";
+import [Result] from "std/result.bpl";
+import [FS] from "std/fs.bpl";
+import [Array] from "std/array.bpl";
+import [OptionUnwrapError], [ResultUnwrapError], [IOError], [IndexOutOfBoundsError], [EmptyError], [NullAccessError], [DivisionByZeroError] from "std/errors.bpl";
+extern printf(fmt: string, ...);
+
+struct Point {
+    x: int,
+    y: int,
+}
+
+frame main() ret int {
+    # Test OptionUnwrapError
+    try {
+        local opt: Option<int> = Option<int>.None;
+        opt.unwrap();
+    } catch (e: OptionUnwrapError) {
+        printf("Caught OptionUnwrapError: %s\n", e.message);
+    }
+    # Test ResultUnwrapError
+    try {
+        local res: Result<int, int> = Result<int, int>.Ok(42);
+        res.unwrapErr();
+    } catch (e: ResultUnwrapError) {
+        printf("Caught ResultUnwrapError: %s\n", e.message);
+    }
+    # Test IOError
+    try {
+        FS.readFile("non_existent_file.txt");
+    } catch (e: IOError) {
+        printf("Caught IOError: %s (code: %d)\n", e.message, e.code);
+    }
+    # Test Array IndexOutOfBoundsError
+    try {
+        local arr: Array<int> = Array<int>.new(5);
+        arr.push(1);
+        arr.get(10); # Should throw
+    } catch (e: IndexOutOfBoundsError) {
+        printf("Caught IndexOutOfBoundsError: index %d, size %d\n", e.index, e.size);
+    }
+    # Test Array EmptyError
+    try {
+        local arr: Array<int> = Array<int>.new(5);
+        arr.pop(); # Should throw
+    } catch (e: EmptyError) {
+        printf("Caught EmptyError: %s\n", e.message);
+    }
+    # Test NullAccessError
+    try {
+        # Create a null struct (simulated by casting null to struct pointer then dereferencing? No, BPL supports null assignment to structs?)
+        # Actually, BPL structs are values. Assigning null to them sets the null bit if supported.
+        # But wait, does BPL support `local p: Point = null;`?
+        # Let's try using a pointer to struct and accessing member, which might trigger it if it's a "null object" check?
+        # The code checks `objType.pointerDepth === 0`. So it's for VALUE access.
+        # How to get a null value?
+        # `local p: Point = null;` might work if parser allows it.
+        # Or `local p: Point;` (uninitialized) might be null?
+        # Let's try:
+        local p: Point = null;
+        p.x = p.y;
+    } catch (e: NullAccessError) {
+        printf("Caught NullAccessError: %s\n", e.message);
+    } catchOther {
+        printf("Caught unknown error in NullAccessError test\n");
+    }
+
+    # Test DivisionByZeroError
+    try {
+        local a: int = 10;
+        local b: int = 0;
+        local c: int = a / b;
+    } catch (e: DivisionByZeroError) {
+        printf("Caught DivisionByZeroError\n");
+    }
+    return 0;
+}

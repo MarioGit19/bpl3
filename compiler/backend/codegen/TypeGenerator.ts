@@ -1413,9 +1413,9 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
           }
         } else {
           switch (basicType.name) {
-            case "int":
             case "i32":
             case "u32":
+            case "int":
             case "uint":
               llvmType = "i32";
               break;

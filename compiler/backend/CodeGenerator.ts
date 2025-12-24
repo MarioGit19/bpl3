@@ -72,6 +72,27 @@ export class CodeGenerator extends StatementGenerator {
     if (!this.structMap.has("Type")) {
       const typeDecl = createTypeStructDecl();
       this.structMap.set("Type", typeDecl);
+
+      // Compute vtables early to ensure StackOverflowError has correct layout if it has methods
+      // This is necessary because StackOverflowError is generated before Type, but might depend on vtable layout
+      this.computeVTableLayouts(program);
+
+      // Ensure built-in errors are generated first if present, as they are used in code generation
+      // This ensures structLayouts has the correct layout (including vtable) before generating Type methods or other code
+      const builtinErrors = [
+        "StackOverflowError",
+        "DivisionByZeroError",
+        "NullAccessError",
+        "IndexOutOfBoundsError",
+        "EmptyError",
+      ];
+
+      for (const errorName of builtinErrors) {
+        if (this.structMap.has(errorName)) {
+          this.generateStruct(this.structMap.get(errorName)!);
+        }
+      }
+
       this.generateStruct(typeDecl);
     }
 
@@ -119,169 +140,178 @@ export class CodeGenerator extends StatementGenerator {
       endLine: 0,
       endColumn: 0,
     };
-    const nullAccessErrorDecl: AST.StructDecl = {
-      kind: "StructDecl",
-      name: "NullAccessError",
-      genericParams: [],
-      inheritanceList: [],
-      members: [
-        {
-          kind: "StructField",
-          name: "message",
-          type: {
-            kind: "BasicType",
-            name: "i8",
-            genericArgs: [],
-            pointerDepth: 1,
-            arrayDimensions: [],
-            location: internalLoc,
-          },
-          location: internalLoc,
-        },
-        {
-          kind: "StructField",
-          name: "function",
-          type: {
-            kind: "BasicType",
-            name: "i8",
-            genericArgs: [],
-            pointerDepth: 1,
-            arrayDimensions: [],
-            location: internalLoc,
-          },
-          location: internalLoc,
-        },
-        {
-          kind: "StructField",
-          name: "expression",
-          type: {
-            kind: "BasicType",
-            name: "i8",
-            genericArgs: [],
-            pointerDepth: 1,
-            arrayDimensions: [],
-            location: internalLoc,
-          },
-          location: internalLoc,
-        },
-      ],
-      location: internalLoc,
-    };
-    this.structMap.set("NullAccessError", nullAccessErrorDecl);
 
-    //  Add NullAccessError to struct layouts
-    const nullAccessErrorLayout = new Map<string, number>();
-    nullAccessErrorLayout.set("message", 0);
-    nullAccessErrorLayout.set("function", 1);
-    nullAccessErrorLayout.set("expression", 2);
-    this.structLayouts.set("NullAccessError", nullAccessErrorLayout);
+    if (!this.structMap.has("NullAccessError")) {
+      const nullAccessErrorDecl: AST.StructDecl = {
+        kind: "StructDecl",
+        name: "NullAccessError",
+        genericParams: [],
+        inheritanceList: [],
+        members: [
+          {
+            kind: "StructField",
+            name: "message",
+            type: {
+              kind: "BasicType",
+              name: "i8",
+              genericArgs: [],
+              pointerDepth: 1,
+              arrayDimensions: [],
+              location: internalLoc,
+            },
+            location: internalLoc,
+          },
+          {
+            kind: "StructField",
+            name: "function",
+            type: {
+              kind: "BasicType",
+              name: "i8",
+              genericArgs: [],
+              pointerDepth: 1,
+              arrayDimensions: [],
+              location: internalLoc,
+            },
+            location: internalLoc,
+          },
+          {
+            kind: "StructField",
+            name: "expression",
+            type: {
+              kind: "BasicType",
+              name: "i8",
+              genericArgs: [],
+              pointerDepth: 1,
+              arrayDimensions: [],
+              location: internalLoc,
+            },
+            location: internalLoc,
+          },
+        ],
+        location: internalLoc,
+      };
+      this.structMap.set("NullAccessError", nullAccessErrorDecl);
+
+      //  Add NullAccessError to struct layouts
+      const nullAccessErrorLayout = new Map<string, number>();
+      nullAccessErrorLayout.set("message", 0);
+      nullAccessErrorLayout.set("function", 1);
+      nullAccessErrorLayout.set("expression", 2);
+      this.structLayouts.set("NullAccessError", nullAccessErrorLayout);
+    }
 
     // Register built-in IndexOutOfBoundsError struct
-    const indexOutOfBoundsErrorDecl: AST.StructDecl = {
-      kind: "StructDecl",
-      name: "IndexOutOfBoundsError",
-      genericParams: [],
-      inheritanceList: [],
-      members: [
-        {
-          kind: "StructField",
-          name: "index",
-          type: {
-            kind: "BasicType",
-            name: "i64",
-            genericArgs: [],
-            pointerDepth: 0,
-            arrayDimensions: [],
+    if (!this.structMap.has("IndexOutOfBoundsError")) {
+      const indexOutOfBoundsErrorDecl: AST.StructDecl = {
+        kind: "StructDecl",
+        name: "IndexOutOfBoundsError",
+        genericParams: [],
+        inheritanceList: [],
+        members: [
+          {
+            kind: "StructField",
+            name: "index",
+            type: {
+              kind: "BasicType",
+              name: "i32",
+              genericArgs: [],
+              pointerDepth: 0,
+              arrayDimensions: [],
+              location: internalLoc,
+            },
             location: internalLoc,
           },
-          location: internalLoc,
-        },
-        {
-          kind: "StructField",
-          name: "size",
-          type: {
-            kind: "BasicType",
-            name: "i64",
-            genericArgs: [],
-            pointerDepth: 0,
-            arrayDimensions: [],
+          {
+            kind: "StructField",
+            name: "size",
+            type: {
+              kind: "BasicType",
+              name: "i32",
+              genericArgs: [],
+              pointerDepth: 0,
+              arrayDimensions: [],
+              location: internalLoc,
+            },
             location: internalLoc,
           },
-          location: internalLoc,
-        },
-      ],
-      location: internalLoc,
-    };
-    this.structMap.set("IndexOutOfBoundsError", indexOutOfBoundsErrorDecl);
+        ],
+        location: internalLoc,
+      };
+      this.structMap.set("IndexOutOfBoundsError", indexOutOfBoundsErrorDecl);
 
-    // Add IndexOutOfBoundsError to struct layouts
-    const indexOutOfBoundsErrorLayout = new Map<string, number>();
-    indexOutOfBoundsErrorLayout.set("index", 0);
-    indexOutOfBoundsErrorLayout.set("size", 1);
-    this.structLayouts.set(
-      "IndexOutOfBoundsError",
-      indexOutOfBoundsErrorLayout,
-    );
+      // Add IndexOutOfBoundsError to struct layouts
+      const indexOutOfBoundsErrorLayout = new Map<string, number>();
+      indexOutOfBoundsErrorLayout.set("index", 0);
+      indexOutOfBoundsErrorLayout.set("size", 1);
+      this.structLayouts.set(
+        "IndexOutOfBoundsError",
+        indexOutOfBoundsErrorLayout,
+      );
+    }
 
     // Register built-in DivisionByZeroError struct
-    const divisionByZeroErrorDecl: AST.StructDecl = {
-      kind: "StructDecl",
-      name: "DivisionByZeroError",
-      genericParams: [],
-      inheritanceList: [],
-      members: [
-        {
-          kind: "StructField",
-          name: "dummy",
-          type: {
-            kind: "BasicType",
-            name: "i8",
-            genericArgs: [],
-            pointerDepth: 0,
-            arrayDimensions: [],
+    if (!this.structMap.has("DivisionByZeroError")) {
+      const divisionByZeroErrorDecl: AST.StructDecl = {
+        kind: "StructDecl",
+        name: "DivisionByZeroError",
+        genericParams: [],
+        inheritanceList: [],
+        members: [
+          {
+            kind: "StructField",
+            name: "dummy",
+            type: {
+              kind: "BasicType",
+              name: "i8",
+              genericArgs: [],
+              pointerDepth: 0,
+              arrayDimensions: [],
+              location: internalLoc,
+            },
             location: internalLoc,
           },
-          location: internalLoc,
-        },
-      ],
-      location: internalLoc,
-    };
-    this.structMap.set("DivisionByZeroError", divisionByZeroErrorDecl);
+        ],
+        location: internalLoc,
+      };
+      this.structMap.set("DivisionByZeroError", divisionByZeroErrorDecl);
 
-    // Add DivisionByZeroError to struct layouts
-    const divisionByZeroErrorLayout = new Map<string, number>();
-    divisionByZeroErrorLayout.set("dummy", 0);
-    this.structLayouts.set("DivisionByZeroError", divisionByZeroErrorLayout);
+      // Add DivisionByZeroError to struct layouts
+      const divisionByZeroErrorLayout = new Map<string, number>();
+      divisionByZeroErrorLayout.set("dummy", 0);
+      this.structLayouts.set("DivisionByZeroError", divisionByZeroErrorLayout);
+    }
 
     // Register built-in StackOverflowError struct
-    const stackOverflowErrorDecl: AST.StructDecl = {
-      kind: "StructDecl",
-      name: "StackOverflowError",
-      genericParams: [],
-      inheritanceList: [],
-      members: [
-        {
-          kind: "StructField",
-          name: "dummy",
-          type: {
-            kind: "BasicType",
-            name: "i8",
-            genericArgs: [],
-            pointerDepth: 0,
-            arrayDimensions: [],
+    if (!this.structMap.has("StackOverflowError")) {
+      const stackOverflowErrorDecl: AST.StructDecl = {
+        kind: "StructDecl",
+        name: "StackOverflowError",
+        genericParams: [],
+        inheritanceList: [],
+        members: [
+          {
+            kind: "StructField",
+            name: "dummy",
+            type: {
+              kind: "BasicType",
+              name: "i8",
+              genericArgs: [],
+              pointerDepth: 0,
+              arrayDimensions: [],
+              location: internalLoc,
+            },
             location: internalLoc,
           },
-          location: internalLoc,
-        },
-      ],
-      location: internalLoc,
-    };
-    this.structMap.set("StackOverflowError", stackOverflowErrorDecl);
+        ],
+        location: internalLoc,
+      };
+      this.structMap.set("StackOverflowError", stackOverflowErrorDecl);
 
-    // Add StackOverflowError to struct layouts
-    const stackOverflowErrorLayout = new Map<string, number>();
-    stackOverflowErrorLayout.set("dummy", 0);
-    this.structLayouts.set("StackOverflowError", stackOverflowErrorLayout);
+      // Add StackOverflowError to struct layouts
+      const stackOverflowErrorLayout = new Map<string, number>();
+      stackOverflowErrorLayout.set("dummy", 0);
+      this.structLayouts.set("StackOverflowError", stackOverflowErrorLayout);
+    }
 
     // Index Structs for inheritance lookup
     for (const stmt of program.statements) {
@@ -310,33 +340,53 @@ export class CodeGenerator extends StatementGenerator {
     this.declaredFunctions.add("memcmp");
 
     // NullAccessError struct for null object access exceptions
-    this.emitDeclaration("%struct.NullAccessError = type { i8*, i8*, i8* }");
-    this.structLayouts.set(
-      "NullAccessError",
-      new Map([
-        ["message", 0],
-        ["function", 1],
-        ["expression", 2],
-      ]),
-    );
+    if (
+      !this.structMap.has("NullAccessError") ||
+      this.structMap.get("NullAccessError")!.location.file === "internal"
+    ) {
+      this.emitDeclaration("%struct.NullAccessError = type { i8*, i8*, i8* }");
+      this.structLayouts.set(
+        "NullAccessError",
+        new Map([
+          ["message", 0],
+          ["function", 1],
+          ["expression", 2],
+        ]),
+      );
+    }
 
     // IndexOutOfBoundsError struct for array access exceptions
-    this.emitDeclaration("%struct.IndexOutOfBoundsError = type { i64, i64 }");
-    this.structLayouts.set(
-      "IndexOutOfBoundsError",
-      new Map([
-        ["index", 0],
-        ["size", 1],
-      ]),
-    );
+    if (
+      !this.structMap.has("IndexOutOfBoundsError") ||
+      this.structMap.get("IndexOutOfBoundsError")!.location.file === "internal"
+    ) {
+      this.emitDeclaration("%struct.IndexOutOfBoundsError = type { i32, i32 }");
+      this.structLayouts.set(
+        "IndexOutOfBoundsError",
+        new Map([
+          ["index", 0],
+          ["size", 1],
+        ]),
+      );
+    }
 
     // DivisionByZeroError struct
-    this.emitDeclaration("%struct.DivisionByZeroError = type { i8 }");
-    this.structLayouts.set("DivisionByZeroError", new Map([["dummy", 0]]));
+    if (
+      !this.structMap.has("DivisionByZeroError") ||
+      this.structMap.get("DivisionByZeroError")!.location.file === "internal"
+    ) {
+      this.emitDeclaration("%struct.DivisionByZeroError = type { i8 }");
+      this.structLayouts.set("DivisionByZeroError", new Map([["dummy", 0]]));
+    }
 
     // StackOverflowError struct
-    this.emitDeclaration("%struct.StackOverflowError = type { i8 }");
-    this.structLayouts.set("StackOverflowError", new Map([["dummy", 0]]));
+    if (
+      !this.structMap.has("StackOverflowError") ||
+      this.structMap.get("StackOverflowError")!.location.file === "internal"
+    ) {
+      this.emitDeclaration("%struct.StackOverflowError = type { i8 }");
+      this.structLayouts.set("StackOverflowError", new Map([["dummy", 0]]));
+    }
 
     // fprintf and stderr for null trap error messages (kept for backward compatibility)
     this.emitDeclaration("%struct._IO_FILE = type opaque");

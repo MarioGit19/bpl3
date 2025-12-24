@@ -2,6 +2,8 @@
 
 export [Option];
 
+import [OptionUnwrapError] from "std/errors.bpl";
+
 enum Option<T> {
     Some(T),
     None,
@@ -15,7 +17,7 @@ enum Option<T> {
     }
 
     frame panic() ret T {
-        throw 100;
+        throw OptionUnwrapError { message: "Called unwrap on None" };
     }
 
     frame unwrap(this: Option<T>) ret T {
@@ -46,6 +48,6 @@ enum Option<T> {
     }
 
     frame __ne__(this: *Option<T>, other: *Option<T>) ret bool {
-        return !(this.__eq__(other));
+        return !this.__eq__(other);
     }
 }

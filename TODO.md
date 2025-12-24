@@ -98,7 +98,7 @@
   - ✅ Formatter support for `as`/`is` expressions (parentheses enforcement)
   - ✅ Integration with `match` expressions
   - ✅ Comprehensive test suite covering inheritance, specs, and enums
-- [ ] Internal Error Structs for Standard Library (Replace integer error codes with proper structs)
+- [x] Internal Error Structs for Standard Library (Replace integer error codes with proper structs) ✅
   - `ResultUnwrapError`, `OptionUnwrapError`
   - `IndexOutOfBoundsError`, `NullPointerError`
   - `DivisionByZeroError`, `IOError`, `CastError`

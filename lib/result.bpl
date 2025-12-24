@@ -6,6 +6,8 @@ export [Result];
 
 export [Result];
 
+import [ResultUnwrapError] from "std/errors.bpl";
+
 enum Result<T, E> {
     Ok(T),
     Err(E),
@@ -37,7 +39,7 @@ enum Result<T, E> {
     frame unwrapErr(this: Result<T, E>) ret E {
         return match (this) {
             Result.Ok(_) => {
-                throw 101; # Panic code for unwrapErr on Ok
+                throw ResultUnwrapError { message: "Called unwrapErr on Ok" };
             },
             Result.Err(err) => err,
         };

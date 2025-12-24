@@ -273,7 +273,7 @@ export class ModuleResolver {
     const content = fs.readFileSync(modulePath, "utf-8");
     const tokens = lexWithGrammar(content, modulePath);
     const parser = new Parser(content, modulePath, tokens);
-    const ast = parser.parse();
+    const ast = parser.parse(true);
 
     // Create module info
     const moduleInfo: ModuleInfo = {

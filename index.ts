@@ -552,7 +552,7 @@ function processCodeInternal(
 
   // 2. Parsing
   const parser = new Parser(content, filePath, tokens);
-  const ast = parser.parse();
+  const ast = parser.parse(true);
 
   if (options.emit === "ast") {
     console.log(JSON.stringify(ast, null, 2));
@@ -762,7 +762,7 @@ program
         const content = fs.readFileSync(file, "utf-8");
         const tokens = lexWithGrammar(content, file);
         const parser = new Parser(content, file, tokens);
-        const ast = parser.parse();
+        const ast = parser.parse(true);
 
         const errors = linter.lint(ast);
         if (errors.length > 0) {
@@ -812,7 +812,7 @@ program
         const content = fs.readFileSync(filePath, "utf-8");
         const tokens = lexWithGrammar(content, filePath);
         const parser = new Parser(content, filePath, tokens);
-        const ast = parser.parse();
+        const ast = parser.parse(false);
         const formatter = new Formatter();
         const formatted = formatter.format(ast);
 

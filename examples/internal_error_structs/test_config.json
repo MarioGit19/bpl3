@@ -1,0 +1,6 @@
+{
+  "expectedOutput": "Caught OptionUnwrapError: Called unwrap on None\nCaught ResultUnwrapError: Called unwrapErr on Ok\nCaught IOError: Cannot open file (code: -1)\nCaught IndexOutOfBoundsError: index 10, size 1\nCaught EmptyError: Pop from empty array\nCaught NullAccessError: Attempted to access member of null object\nCaught DivisionByZeroError\n",
+  "args": [],
+  "env": {},
+  "input": ""
+}

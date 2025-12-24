@@ -17,24 +17,25 @@ The following features are recommended for implementation next:
 - **Use cases:** Intersection types, Union types, Type guards
 - **Complexity:** High
 
-### 2. **Internal Error Structs** [Priority 6] ⚠️ STD LIB
-
-- **Why:** Currently, the runtime throws raw integers (e.g., `101`) for errors, which is opaque and hard to handle.
-- **Impact:** Improves error handling and debugging experience.
-- **Description:** Replace integer error codes with standard library structs.
-- **Proposed Structs:**
-  - `ResultUnwrapError`: Thrown when unwrapping an `Err` result.
-  - `OptionUnwrapError`: Thrown when unwrapping a `None` option.
-  - `IndexOutOfBoundsError`: Thrown when accessing invalid array indices.
-  - `NullPointerError`: Thrown when dereferencing null.
-  - `DivisionByZeroError`: Thrown on division by zero.
-  - `IOError`: For file system and network errors.
-  - `CastError`: For failed dynamic casts.
-- **Complexity:** Medium (Requires updating stdlib and compiler codegen)
-
 ---
 
 ## 📋 COMPLETED FEATURES
+
+---
+
+## [6] ✅ Internal Error Structs (COMPLETED)
+
+**Description:** Replace integer error codes with standard library structs for better error handling and debugging.
+
+**Implementation Status:** ✅ Fully Implemented (December 2025)
+
+**What Was Implemented:**
+
+- ✅ **Standard Library**: Created `lib/errors.bpl` with `OptionUnwrapError`, `ResultUnwrapError`, `IOError`, `CastError`.
+- ✅ **Option/Result**: Updated `Option.unwrap` and `Result.unwrapErr` to throw structured errors.
+- ✅ **Filesystem**: Updated `FS.readFile` to throw `IOError`.
+- ✅ **Compiler Support**: `IndexOutOfBoundsError`, `NullAccessError`, `DivisionByZeroError` were already supported in codegen.
+- ✅ **Tests**: Added `examples/internal_error_structs` to verify structured error throwing and catching.
 
 ---
 

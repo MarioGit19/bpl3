@@ -457,6 +457,7 @@ export interface ImportStmt extends ASTNode {
   source: string;
   importAll?: boolean; // If true, import all exported symbols
   namespace?: string; // If set, import into this namespace
+  isImplicit?: boolean;
 }
 
 export interface ExportStmt extends ASTNode {

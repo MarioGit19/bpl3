@@ -3,6 +3,7 @@
 export [FS];
 
 import [String] from "std/string.bpl";
+import [IOError] from "std/errors.bpl";
 extern fopen(path: string, mode: string) ret *void;
 extern fclose(file: *void) ret int;
 extern fseek(file: *void, offset: long, whence: int) ret int;
@@ -39,7 +40,7 @@ struct FS {
         local f: *void = fopen(path, "rb");
         if (f == null) {
             # cannot open
-            throw -1;
+            throw IOError { code: -1, message: "Cannot open file" };
         }
         # SEEK_END = 2
         fseek(f, cast<long>(0), cast<int>(2));

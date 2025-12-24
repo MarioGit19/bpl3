@@ -219,7 +219,7 @@ export class ImportHandler {
       const content = fs.readFileSync(importPath, "utf-8");
       const tokens = lexWithGrammar(content, importPath);
       const parser = new Parser(content, importPath, tokens);
-      moduleAst = parser.parse();
+      moduleAst = parser.parse(true);
       this.ctx.preLoadedModules.set(importPath, moduleAst);
     }
 

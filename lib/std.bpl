@@ -17,6 +17,17 @@ export [UShort];
 export [UInt];
 export [ULong];
 
+import [OptionUnwrapError], [ResultUnwrapError], [IOError], [CastError], [IndexOutOfBoundsError], [EmptyError], [NullAccessError], [DivisionByZeroError], [StackOverflowError] from "std/errors.bpl";
+export [OptionUnwrapError];
+export [ResultUnwrapError];
+export [IOError];
+export [CastError];
+export [IndexOutOfBoundsError];
+export [EmptyError];
+export [NullAccessError];
+export [DivisionByZeroError];
+export [StackOverflowError];
+
 # Data Structures
 import [Array] from "std/array.bpl";
 export [Array];

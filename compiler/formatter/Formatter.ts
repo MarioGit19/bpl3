@@ -84,6 +84,10 @@ export class Formatter {
   private formatStatements(statements: AST.Statement[]): string {
     let output = "";
     for (const stmt of statements) {
+      if (stmt.kind === "Import" && (stmt as AST.ImportStmt).isImplicit) {
+        continue;
+      }
+
       output += this.printCommentsBefore(stmt.location.startLine);
 
       // Check for gap before statement (after comments)

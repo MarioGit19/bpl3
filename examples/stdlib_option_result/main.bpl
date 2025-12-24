@@ -1,6 +1,7 @@
 import [Option] from "std/option.bpl";
 import [Result] from "std/result.bpl";
 import [IO] from "std/io.bpl";
+import [OptionUnwrapError] from "std/errors.bpl";
 
 frame demoOption() {
     IO.log("=== Option Demo ===");
@@ -10,7 +11,7 @@ frame demoOption() {
     try {
         local v: int = o2.unwrap();
         IO.printInt(v);
-    } catch (e_int: int) {
+    } catch (e: OptionUnwrapError) {
         IO.log("Caught Option unwrap error");
     }
     IO.printInt(o2.unwrapOr(7));

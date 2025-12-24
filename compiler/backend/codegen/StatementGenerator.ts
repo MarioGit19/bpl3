@@ -1181,10 +1181,84 @@ export abstract class StatementGenerator extends ExpressionGenerator {
       this.emit(`  br i1 ${isOverflow}, label %${stackErr}, label %${stackOk}`);
 
       this.emit(`${stackErr}:`);
-      const errorStruct = this.newRegister();
-      this.emit(
-        `  ${errorStruct} = insertvalue %struct.StackOverflowError undef, i8 0, 0`,
-      );
+
+      // Initialize StackOverflowError struct
+      // We need to handle both the internal fallback (just i8) and the stdlib version (vtable + i8 + null_bit)
+      const msg = "Stack overflow";
+      if (!this.stringLiterals.has(msg)) {
+        this.stringLiterals.set(
+          msg,
+          `@.stack_overflow_msg.${this.stringLiterals.size}`,
+        );
+      }
+      const msgLen = msg.length + 1;
+      const msgPtr = `getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(msg)}, i64 0, i64 0)`;
+
+      const soLayout = this.structLayouts.get("StackOverflowError");
+      let currentStruct = "undef";
+
+      if (soLayout) {
+        // Initialize vtable if present
+        if (soLayout.has("__vtable__")) {
+          const vtableIndex = soLayout.get("__vtable__");
+          const vtablePtr = this.newRegister();
+          // Assuming standard vtable size of 3 (getTypeName, toString, destroy)
+          this.emit(
+            `  ${vtablePtr} = bitcast [3 x i8*]* @StackOverflowError_vtable to i8*`,
+          );
+          const nextStruct = this.newRegister();
+          this.emit(
+            `  ${nextStruct} = insertvalue %struct.StackOverflowError ${currentStruct}, i8* ${vtablePtr}, ${vtableIndex}`,
+          );
+          currentStruct = nextStruct;
+        }
+
+        if (soLayout.has("message")) {
+          const idx = soLayout.get("message");
+          const nextStruct = this.newRegister();
+          this.emit(
+            `  ${nextStruct} = insertvalue %struct.StackOverflowError ${currentStruct}, i8* ${msgPtr}, ${idx}`,
+          );
+          currentStruct = nextStruct;
+        }
+        if (soLayout.has("code")) {
+          const idx = soLayout.get("code");
+          const nextStruct = this.newRegister();
+          this.emit(
+            `  ${nextStruct} = insertvalue %struct.StackOverflowError ${currentStruct}, i32 9, ${idx}`,
+          );
+          currentStruct = nextStruct;
+        }
+
+        // Initialize dummy field
+        if (soLayout.has("dummy")) {
+          const dummyIndex = soLayout.get("dummy");
+          const nextStruct = this.newRegister();
+          this.emit(
+            `  ${nextStruct} = insertvalue %struct.StackOverflowError ${currentStruct}, i8 0, ${dummyIndex}`,
+          );
+          currentStruct = nextStruct;
+        }
+
+        // Initialize null bit
+        if (soLayout.has("__null_bit__")) {
+          const nullBitIndex = soLayout.get("__null_bit__");
+          const nextStruct = this.newRegister();
+          this.emit(
+            `  ${nextStruct} = insertvalue %struct.StackOverflowError ${currentStruct}, i1 1, ${nullBitIndex}`,
+          );
+          currentStruct = nextStruct;
+        }
+      } else {
+        // Fallback for internal definition
+        const nextStruct = this.newRegister();
+        this.emit(
+          `  ${nextStruct} = insertvalue %struct.StackOverflowError undef, i8 0, 0`,
+        );
+        currentStruct = nextStruct;
+      }
+
+      const errorStruct = currentStruct;
       this.emitThrow(errorStruct, "%struct.StackOverflowError");
       // this.emit("  unreachable");
 

@@ -472,29 +472,92 @@ export abstract class ExpressionGenerator extends TypeGenerator {
 
             this.emit(`${throwLabel}:`);
             // Create and throw NullAccessError
-            const errorStruct = this.newRegister();
-            const errorWithMsg = this.newRegister();
-            const errorWithFunc = this.newRegister();
-            const errorWithExpr = this.newRegister();
             const msgLen = msg.length + 1;
             const funcLen = funcName.length + 1;
             const exprLen = exprStr.length + 1;
-            this.emit(
-              `  ${errorStruct} = insertvalue %struct.NullAccessError undef, i8* getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(
-                msg,
-              )}, i64 0, i64 0), 0`,
-            );
-            this.emit(
-              `  ${errorWithMsg} = insertvalue %struct.NullAccessError ${errorStruct}, i8* getelementptr inbounds ([${funcLen} x i8], [${funcLen} x i8]* ${this.stringLiterals.get(
-                funcName,
-              )}, i64 0, i64 0), 1`,
-            );
-            this.emit(
-              `  ${errorWithExpr} = insertvalue %struct.NullAccessError ${errorWithMsg}, i8* getelementptr inbounds ([${exprLen} x i8], [${exprLen} x i8]* ${this.stringLiterals.get(
-                exprStr,
-              )}, i64 0, i64 0), 2`,
-            );
-            this.emitThrow(errorWithExpr, "%struct.NullAccessError");
+
+            const msgPtr = `getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(msg)}, i32 0, i32 0)`;
+            const funcPtr = `getelementptr inbounds ([${funcLen} x i8], [${funcLen} x i8]* ${this.stringLiterals.get(funcName)}, i32 0, i32 0)`;
+            const exprPtr = `getelementptr inbounds ([${exprLen} x i8], [${exprLen} x i8]* ${this.stringLiterals.get(exprStr)}, i32 0, i32 0)`;
+
+            const nullLayout = this.structLayouts.get("NullAccessError");
+            let currentStruct = "undef";
+
+            if (nullLayout) {
+              if (nullLayout.has("__vtable__")) {
+                const vtableIndex = nullLayout.get("__vtable__");
+                const vtablePtr = this.newRegister();
+                this.emit(
+                  `  ${vtablePtr} = bitcast [3 x i8*]* @NullAccessError_vtable to i8*`,
+                );
+                const nextStruct = this.newRegister();
+                this.emit(
+                  `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i8* ${vtablePtr}, ${vtableIndex}`,
+                );
+                currentStruct = nextStruct;
+              }
+
+              if (nullLayout.has("message")) {
+                const idx = nullLayout.get("message");
+                const nextStruct = this.newRegister();
+                this.emit(
+                  `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i8* ${msgPtr}, ${idx}`,
+                );
+                currentStruct = nextStruct;
+              }
+              if (nullLayout.has("code")) {
+                const idx = nullLayout.get("code");
+                const nextStruct = this.newRegister();
+                this.emit(
+                  `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i32 7, ${idx}`,
+                );
+                currentStruct = nextStruct;
+              }
+
+              if (nullLayout.has("function")) {
+                const idx = nullLayout.get("function");
+                const nextStruct = this.newRegister();
+                this.emit(
+                  `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i8* ${funcPtr}, ${idx}`,
+                );
+                currentStruct = nextStruct;
+              }
+
+              if (nullLayout.has("expression")) {
+                const idx = nullLayout.get("expression");
+                const nextStruct = this.newRegister();
+                this.emit(
+                  `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i8* ${exprPtr}, ${idx}`,
+                );
+                currentStruct = nextStruct;
+              }
+
+              if (nullLayout.has("__null_bit__")) {
+                const idx = nullLayout.get("__null_bit__");
+                const nextStruct = this.newRegister();
+                this.emit(
+                  `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i1 1, ${idx}`,
+                );
+                currentStruct = nextStruct;
+              }
+            } else {
+              // Fallback
+              let s = this.newRegister();
+              this.emit(
+                `  ${s} = insertvalue %struct.NullAccessError undef, i8* ${msgPtr}, 0`,
+              );
+              let s2 = this.newRegister();
+              this.emit(
+                `  ${s2} = insertvalue %struct.NullAccessError ${s}, i8* ${funcPtr}, 1`,
+              );
+              let s3 = this.newRegister();
+              this.emit(
+                `  ${s3} = insertvalue %struct.NullAccessError ${s2}, i8* ${exprPtr}, 2`,
+              );
+              currentStruct = s3;
+            }
+
+            this.emitThrow(currentStruct, "%struct.NullAccessError");
 
             this.emit(`${passLabel}:`);
           }
@@ -550,29 +613,92 @@ export abstract class ExpressionGenerator extends TypeGenerator {
 
           // Throw NullAccessError
           this.emit(`${throwLabel}:`);
-          const errorStruct = this.newRegister();
-          const errorWithMsg = this.newRegister();
-          const errorWithFunc = this.newRegister();
-          const errorWithExpr = this.newRegister();
           const msgLen = msg.length + 1;
           const funcLen = funcName.length + 1;
           const exprLen = exprStr.length + 1;
-          this.emit(
-            `  ${errorStruct} = insertvalue %struct.NullAccessError undef, i8* getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(
-              msg,
-            )}, i64 0, i64 0), 0`,
-          );
-          this.emit(
-            `  ${errorWithMsg} = insertvalue %struct.NullAccessError ${errorStruct}, i8* getelementptr inbounds ([${funcLen} x i8], [${funcLen} x i8]* ${this.stringLiterals.get(
-              funcName,
-            )}, i64 0, i64 0), 1`,
-          );
-          this.emit(
-            `  ${errorWithExpr} = insertvalue %struct.NullAccessError ${errorWithMsg}, i8* getelementptr inbounds ([${exprLen} x i8], [${exprLen} x i8]* ${this.stringLiterals.get(
-              exprStr,
-            )}, i64 0, i64 0), 2`,
-          );
-          this.emitThrow(errorWithExpr, "%struct.NullAccessError");
+
+          const msgPtr = `getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(msg)}, i32 0, i32 0)`;
+          const funcPtr = `getelementptr inbounds ([${funcLen} x i8], [${funcLen} x i8]* ${this.stringLiterals.get(funcName)}, i32 0, i32 0)`;
+          const exprPtr = `getelementptr inbounds ([${exprLen} x i8], [${exprLen} x i8]* ${this.stringLiterals.get(exprStr)}, i32 0, i32 0)`;
+
+          const nullLayout = this.structLayouts.get("NullAccessError");
+          let currentStruct = "undef";
+
+          if (nullLayout) {
+            if (nullLayout.has("__vtable__")) {
+              const vtableIndex = nullLayout.get("__vtable__");
+              const vtablePtr = this.newRegister();
+              this.emit(
+                `  ${vtablePtr} = bitcast [3 x i8*]* @NullAccessError_vtable to i8*`,
+              );
+              const nextStruct = this.newRegister();
+              this.emit(
+                `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i8* ${vtablePtr}, ${vtableIndex}`,
+              );
+              currentStruct = nextStruct;
+            }
+
+            if (nullLayout.has("message")) {
+              const idx = nullLayout.get("message");
+              const nextStruct = this.newRegister();
+              this.emit(
+                `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i8* ${msgPtr}, ${idx}`,
+              );
+              currentStruct = nextStruct;
+            }
+            if (nullLayout.has("code")) {
+              const idx = nullLayout.get("code");
+              const nextStruct = this.newRegister();
+              this.emit(
+                `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i32 7, ${idx}`,
+              );
+              currentStruct = nextStruct;
+            }
+
+            if (nullLayout.has("function")) {
+              const idx = nullLayout.get("function");
+              const nextStruct = this.newRegister();
+              this.emit(
+                `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i8* ${funcPtr}, ${idx}`,
+              );
+              currentStruct = nextStruct;
+            }
+
+            if (nullLayout.has("expression")) {
+              const idx = nullLayout.get("expression");
+              const nextStruct = this.newRegister();
+              this.emit(
+                `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i8* ${exprPtr}, ${idx}`,
+              );
+              currentStruct = nextStruct;
+            }
+
+            if (nullLayout.has("__null_bit__")) {
+              const idx = nullLayout.get("__null_bit__");
+              const nextStruct = this.newRegister();
+              this.emit(
+                `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i1 1, ${idx}`,
+              );
+              currentStruct = nextStruct;
+            }
+          } else {
+            // Fallback
+            let s = this.newRegister();
+            this.emit(
+              `  ${s} = insertvalue %struct.NullAccessError undef, i8* ${msgPtr}, 0`,
+            );
+            let s2 = this.newRegister();
+            this.emit(
+              `  ${s2} = insertvalue %struct.NullAccessError ${s}, i8* ${funcPtr}, 1`,
+            );
+            let s3 = this.newRegister();
+            this.emit(
+              `  ${s3} = insertvalue %struct.NullAccessError ${s2}, i8* ${exprPtr}, 2`,
+            );
+            currentStruct = s3;
+          }
+
+          this.emitThrow(currentStruct, "%struct.NullAccessError");
 
           // Continue normal path
           this.emit(`${passLabel}:`);
@@ -639,29 +765,92 @@ export abstract class ExpressionGenerator extends TypeGenerator {
 
         // Throw NullAccessError
         this.emit(`${throwLabel}:`);
-        const errorStruct = this.newRegister();
-        const errorWithMsg = this.newRegister();
-        const errorWithFunc = this.newRegister();
-        const errorWithExpr = this.newRegister();
         const msgLen = msg.length + 1;
         const funcLen = funcName.length + 1;
         const exprLen = exprStr.length + 1;
-        this.emit(
-          `  ${errorStruct} = insertvalue %struct.NullAccessError undef, i8* getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(
-            msg,
-          )}, i64 0, i64 0), 0`,
-        );
-        this.emit(
-          `  ${errorWithMsg} = insertvalue %struct.NullAccessError ${errorStruct}, i8* getelementptr inbounds ([${funcLen} x i8], [${funcLen} x i8]* ${this.stringLiterals.get(
-            funcName,
-          )}, i64 0, i64 0), 1`,
-        );
-        this.emit(
-          `  ${errorWithExpr} = insertvalue %struct.NullAccessError ${errorWithMsg}, i8* getelementptr inbounds ([${exprLen} x i8], [${exprLen} x i8]* ${this.stringLiterals.get(
-            exprStr,
-          )}, i64 0, i64 0), 2`,
-        );
-        this.emitThrow(errorWithExpr, "%struct.NullAccessError");
+
+        const msgPtr = `getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(msg)}, i32 0, i32 0)`;
+        const funcPtr = `getelementptr inbounds ([${funcLen} x i8], [${funcLen} x i8]* ${this.stringLiterals.get(funcName)}, i32 0, i32 0)`;
+        const exprPtr = `getelementptr inbounds ([${exprLen} x i8], [${exprLen} x i8]* ${this.stringLiterals.get(exprStr)}, i32 0, i32 0)`;
+
+        const nullLayout = this.structLayouts.get("NullAccessError");
+        let currentStruct = "undef";
+
+        if (nullLayout) {
+          if (nullLayout.has("__vtable__")) {
+            const vtableIndex = nullLayout.get("__vtable__");
+            const vtablePtr = this.newRegister();
+            this.emit(
+              `  ${vtablePtr} = bitcast [3 x i8*]* @NullAccessError_vtable to i8*`,
+            );
+            const nextStruct = this.newRegister();
+            this.emit(
+              `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i8* ${vtablePtr}, ${vtableIndex}`,
+            );
+            currentStruct = nextStruct;
+          }
+
+          if (nullLayout.has("message")) {
+            const idx = nullLayout.get("message");
+            const nextStruct = this.newRegister();
+            this.emit(
+              `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i8* ${msgPtr}, ${idx}`,
+            );
+            currentStruct = nextStruct;
+          }
+          if (nullLayout.has("code")) {
+            const idx = nullLayout.get("code");
+            const nextStruct = this.newRegister();
+            this.emit(
+              `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i32 7, ${idx}`,
+            );
+            currentStruct = nextStruct;
+          }
+
+          if (nullLayout.has("function")) {
+            const idx = nullLayout.get("function");
+            const nextStruct = this.newRegister();
+            this.emit(
+              `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i8* ${funcPtr}, ${idx}`,
+            );
+            currentStruct = nextStruct;
+          }
+
+          if (nullLayout.has("expression")) {
+            const idx = nullLayout.get("expression");
+            const nextStruct = this.newRegister();
+            this.emit(
+              `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i8* ${exprPtr}, ${idx}`,
+            );
+            currentStruct = nextStruct;
+          }
+
+          if (nullLayout.has("__null_bit__")) {
+            const idx = nullLayout.get("__null_bit__");
+            const nextStruct = this.newRegister();
+            this.emit(
+              `  ${nextStruct} = insertvalue %struct.NullAccessError ${currentStruct}, i1 1, ${idx}`,
+            );
+            currentStruct = nextStruct;
+          }
+        } else {
+          // Fallback
+          let s = this.newRegister();
+          this.emit(
+            `  ${s} = insertvalue %struct.NullAccessError undef, i8* ${msgPtr}, 0`,
+          );
+          let s2 = this.newRegister();
+          this.emit(
+            `  ${s2} = insertvalue %struct.NullAccessError ${s}, i8* ${funcPtr}, 1`,
+          );
+          let s3 = this.newRegister();
+          this.emit(
+            `  ${s3} = insertvalue %struct.NullAccessError ${s2}, i8* ${exprPtr}, 2`,
+          );
+          currentStruct = s3;
+        }
+
+        this.emitThrow(currentStruct, "%struct.NullAccessError");
 
         // Continue normal path
         this.emit(`${passLabel}:`);
@@ -722,17 +911,94 @@ export abstract class ExpressionGenerator extends TypeGenerator {
 
             this.emit(`${throwLabel}:`);
             // Construct IndexOutOfBoundsError
-            const errorStruct = this.newRegister();
-            const errorWithIndex = this.newRegister();
+            const msg = "Index out of bounds";
+            if (!this.stringLiterals.has(msg)) {
+              this.stringLiterals.set(
+                msg,
+                `@.index_oob_msg.${this.stringLiterals.size}`,
+              );
+            }
+            const msgLen = msg.length + 1;
+            const msgPtr = `getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(msg)}, i32 0, i32 0)`;
 
-            this.emit(
-              `  ${errorStruct} = insertvalue %struct.IndexOutOfBoundsError undef, i64 ${indexVal}, 0`,
-            );
-            this.emit(
-              `  ${errorWithIndex} = insertvalue %struct.IndexOutOfBoundsError ${errorStruct}, i64 ${size}, 1`,
-            );
+            const layout = this.structLayouts.get("IndexOutOfBoundsError");
+            let currentStruct = "undef";
 
-            this.emitThrow(errorWithIndex, "%struct.IndexOutOfBoundsError");
+            if (layout) {
+              if (layout.has("__vtable__")) {
+                const vtableIndex = layout.get("__vtable__");
+                const vtablePtr = this.newRegister();
+                this.emit(
+                  `  ${vtablePtr} = bitcast [3 x i8*]* @IndexOutOfBoundsError_vtable to i8*`,
+                );
+                const nextStruct = this.newRegister();
+                this.emit(
+                  `  ${nextStruct} = insertvalue %struct.IndexOutOfBoundsError ${currentStruct}, i8* ${vtablePtr}, ${vtableIndex}`,
+                );
+                currentStruct = nextStruct;
+              }
+
+              if (layout.has("message")) {
+                const idx = layout.get("message");
+                const nextStruct = this.newRegister();
+                this.emit(
+                  `  ${nextStruct} = insertvalue %struct.IndexOutOfBoundsError ${currentStruct}, i8* ${msgPtr}, ${idx}`,
+                );
+                currentStruct = nextStruct;
+              }
+              if (layout.has("code")) {
+                const idx = layout.get("code");
+                const nextStruct = this.newRegister();
+                this.emit(
+                  `  ${nextStruct} = insertvalue %struct.IndexOutOfBoundsError ${currentStruct}, i32 5, ${idx}`,
+                );
+                currentStruct = nextStruct;
+              }
+
+              if (layout.has("index")) {
+                const idx = layout.get("index");
+                const indexValI32 = this.newRegister();
+                this.emit(`  ${indexValI32} = trunc i64 ${indexVal} to i32`);
+                const nextStruct = this.newRegister();
+                this.emit(
+                  `  ${nextStruct} = insertvalue %struct.IndexOutOfBoundsError ${currentStruct}, i32 ${indexValI32}, ${idx}`,
+                );
+                currentStruct = nextStruct;
+              }
+
+              if (layout.has("size")) {
+                const idx = layout.get("size");
+                const nextStruct = this.newRegister();
+                this.emit(
+                  `  ${nextStruct} = insertvalue %struct.IndexOutOfBoundsError ${currentStruct}, i32 ${size}, ${idx}`,
+                );
+                currentStruct = nextStruct;
+              }
+
+              if (layout.has("__null_bit__")) {
+                const idx = layout.get("__null_bit__");
+                const nextStruct = this.newRegister();
+                this.emit(
+                  `  ${nextStruct} = insertvalue %struct.IndexOutOfBoundsError ${currentStruct}, i1 1, ${idx}`,
+                );
+                currentStruct = nextStruct;
+              }
+            } else {
+              // Fallback
+              const indexValI32 = this.newRegister();
+              this.emit(`  ${indexValI32} = trunc i64 ${indexVal} to i32`);
+              const s1 = this.newRegister();
+              this.emit(
+                `  ${s1} = insertvalue %struct.IndexOutOfBoundsError undef, i32 ${indexValI32}, 0`,
+              );
+              const s2 = this.newRegister();
+              this.emit(
+                `  ${s2} = insertvalue %struct.IndexOutOfBoundsError ${s1}, i32 ${size}, 1`,
+              );
+              currentStruct = s2;
+            }
+
+            this.emitThrow(currentStruct, "%struct.IndexOutOfBoundsError");
 
             this.emit(`${passLabel}:`);
           }
@@ -1479,10 +1745,76 @@ export abstract class ExpressionGenerator extends TypeGenerator {
           this.emit(`  br i1 ${isZero}, label %${errLabel}, label %${okLabel}`);
 
           this.emit(`${errLabel}:`);
-          const errorStruct = this.newRegister();
-          this.emit(
-            `  ${errorStruct} = insertvalue %struct.DivisionByZeroError undef, i8 0, 0`,
-          );
+          // Initialize DivisionByZeroError struct
+          const msg = "Division by zero";
+          if (!this.stringLiterals.has(msg)) {
+            this.stringLiterals.set(
+              msg,
+              `@.div_zero_msg.${this.stringLiterals.size}`,
+            );
+          }
+          const msgLen = msg.length + 1;
+          const msgPtr = `getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(msg)}, i32 0, i32 0)`;
+
+          const divLayout = this.structLayouts.get("DivisionByZeroError");
+          let currentStruct = "undef";
+
+          if (divLayout) {
+            if (divLayout.has("__vtable__")) {
+              const vtableIndex = divLayout.get("__vtable__");
+              const vtablePtr = this.newRegister();
+              this.emit(
+                `  ${vtablePtr} = bitcast [3 x i8*]* @DivisionByZeroError_vtable to i8*`,
+              );
+              const nextStruct = this.newRegister();
+              this.emit(
+                `  ${nextStruct} = insertvalue %struct.DivisionByZeroError ${currentStruct}, i8* ${vtablePtr}, ${vtableIndex}`,
+              );
+              currentStruct = nextStruct;
+            }
+
+            if (divLayout.has("message")) {
+              const idx = divLayout.get("message");
+              const nextStruct = this.newRegister();
+              this.emit(
+                `  ${nextStruct} = insertvalue %struct.DivisionByZeroError ${currentStruct}, i8* ${msgPtr}, ${idx}`,
+              );
+              currentStruct = nextStruct;
+            }
+            if (divLayout.has("code")) {
+              const idx = divLayout.get("code");
+              const nextStruct = this.newRegister();
+              this.emit(
+                `  ${nextStruct} = insertvalue %struct.DivisionByZeroError ${currentStruct}, i32 8, ${idx}`,
+              );
+              currentStruct = nextStruct;
+            }
+
+            if (divLayout.has("dummy")) {
+              const dummyIndex = divLayout.get("dummy");
+              const nextStruct = this.newRegister();
+              this.emit(
+                `  ${nextStruct} = insertvalue %struct.DivisionByZeroError ${currentStruct}, i8 0, ${dummyIndex}`,
+              );
+              currentStruct = nextStruct;
+            }
+
+            if (divLayout.has("__null_bit__")) {
+              const nullBitIndex = divLayout.get("__null_bit__");
+              const nextStruct = this.newRegister();
+              this.emit(
+                `  ${nextStruct} = insertvalue %struct.DivisionByZeroError ${currentStruct}, i1 1, ${nullBitIndex}`,
+              );
+              currentStruct = nextStruct;
+            }
+          } else {
+            const nextStruct = this.newRegister();
+            this.emit(
+              `  ${nextStruct} = insertvalue %struct.DivisionByZeroError undef, i8 0, 0`,
+            );
+            currentStruct = nextStruct;
+          }
+          const errorStruct = currentStruct;
           this.emitThrow(errorStruct, "%struct.DivisionByZeroError");
           // this.emit("  unreachable");
 
@@ -1524,10 +1856,76 @@ export abstract class ExpressionGenerator extends TypeGenerator {
           this.emit(`  br i1 ${isZero}, label %${errLabel}, label %${okLabel}`);
 
           this.emit(`${errLabel}:`);
-          const errorStruct = this.newRegister();
-          this.emit(
-            `  ${errorStruct} = insertvalue %struct.DivisionByZeroError undef, i8 0, 0`,
-          );
+          // Initialize DivisionByZeroError struct
+          const msg = "Division by zero";
+          if (!this.stringLiterals.has(msg)) {
+            this.stringLiterals.set(
+              msg,
+              `@.div_zero_msg.${this.stringLiterals.size}`,
+            );
+          }
+          const msgLen = msg.length + 1;
+          const msgPtr = `getelementptr inbounds ([${msgLen} x i8], [${msgLen} x i8]* ${this.stringLiterals.get(msg)}, i32 0, i32 0)`;
+
+          const divLayout = this.structLayouts.get("DivisionByZeroError");
+          let currentStruct = "undef";
+
+          if (divLayout) {
+            if (divLayout.has("__vtable__")) {
+              const vtableIndex = divLayout.get("__vtable__");
+              const vtablePtr = this.newRegister();
+              this.emit(
+                `  ${vtablePtr} = bitcast [3 x i8*]* @DivisionByZeroError_vtable to i8*`,
+              );
+              const nextStruct = this.newRegister();
+              this.emit(
+                `  ${nextStruct} = insertvalue %struct.DivisionByZeroError ${currentStruct}, i8* ${vtablePtr}, ${vtableIndex}`,
+              );
+              currentStruct = nextStruct;
+            }
+
+            if (divLayout.has("message")) {
+              const idx = divLayout.get("message");
+              const nextStruct = this.newRegister();
+              this.emit(
+                `  ${nextStruct} = insertvalue %struct.DivisionByZeroError ${currentStruct}, i8* ${msgPtr}, ${idx}`,
+              );
+              currentStruct = nextStruct;
+            }
+            if (divLayout.has("code")) {
+              const idx = divLayout.get("code");
+              const nextStruct = this.newRegister();
+              this.emit(
+                `  ${nextStruct} = insertvalue %struct.DivisionByZeroError ${currentStruct}, i32 8, ${idx}`,
+              );
+              currentStruct = nextStruct;
+            }
+
+            if (divLayout.has("dummy")) {
+              const dummyIndex = divLayout.get("dummy");
+              const nextStruct = this.newRegister();
+              this.emit(
+                `  ${nextStruct} = insertvalue %struct.DivisionByZeroError ${currentStruct}, i8 0, ${dummyIndex}`,
+              );
+              currentStruct = nextStruct;
+            }
+
+            if (divLayout.has("__null_bit__")) {
+              const nullBitIndex = divLayout.get("__null_bit__");
+              const nextStruct = this.newRegister();
+              this.emit(
+                `  ${nextStruct} = insertvalue %struct.DivisionByZeroError ${currentStruct}, i1 1, ${nullBitIndex}`,
+              );
+              currentStruct = nextStruct;
+            }
+          } else {
+            const nextStruct = this.newRegister();
+            this.emit(
+              `  ${nextStruct} = insertvalue %struct.DivisionByZeroError undef, i8 0, 0`,
+            );
+            currentStruct = nextStruct;
+          }
+          const errorStruct = currentStruct;
           this.emitThrow(errorStruct, "%struct.DivisionByZeroError");
           // this.emit("  unreachable");
 

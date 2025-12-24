@@ -3,6 +3,7 @@
 export [Array];
 
 import [Option] from "./option.bpl";
+import [IndexOutOfBoundsError], [EmptyError] from "std/errors.bpl";
 
 extern malloc(size: long) ret *void;
 extern free(ptr: *void) ret void;
@@ -50,6 +51,9 @@ struct Array<T> {
         because updating copy will not update primitives in original array element
     ###
     frame get(this: *Array<T>, index: int) ret T {
+        if ((index < 0) || (index >= this.length)) {
+            throw IndexOutOfBoundsError { index: index, size: this.length };
+        }
         return this.data[index];
     }
 
@@ -59,6 +63,9 @@ struct Array<T> {
         updating the returned reference will update the original array element
     ###
     frame getRef(this: *Array<T>, index: int) ret *T {
+        if ((index < 0) || (index >= this.length)) {
+            throw IndexOutOfBoundsError { index: index, size: this.length };
+        }
         return &this.data[index];
     }
 
@@ -66,6 +73,9 @@ struct Array<T> {
         sets the element at index to value
     ###
     frame set(this: *Array<T>, index: int, value: T) {
+        if ((index < 0) || (index >= this.length)) {
+            throw IndexOutOfBoundsError { index: index, size: this.length };
+        }
         this.data[index] = value;
     }
 
@@ -92,7 +102,7 @@ struct Array<T> {
     frame pop(this: *Array<T>) ret T {
         if (this.length == 0) {
             # Error: empty array
-            throw ArrayError { code: 1, message: "Pop from empty array" };
+            throw EmptyError { message: "Pop from empty array" };
         }
         this.length = this.length - 1;
         return this.data[this.length];
@@ -101,7 +111,7 @@ struct Array<T> {
     # Removes the element at index by shifting items left.
     frame removeAt(this: *Array<T>, index: int) {
         if ((index < 0) || (index >= this.length)) {
-            throw ArrayError { code: 2, message: "Index out of bounds" };
+            throw IndexOutOfBoundsError { index: index, size: this.length };
         }
         local i: int = index;
         loop (i < (this.length - 1)) {
@@ -238,10 +248,4 @@ struct Array<T> {
         *dest = this.pop();
         return *this;
     }
-}
-
-export [ArrayError];
-struct ArrayError {
-    code: int,
-    message: string,
 }
