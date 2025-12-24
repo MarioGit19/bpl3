@@ -1,7 +1,7 @@
 # Test enum recursive - minimal test
 
 extern printf(fmt: string, ...) ret int;
-extern malloc(size: u64) ret *void;
+extern malloc(size: ulong) ret *void;
 
 enum List {
     Nil,

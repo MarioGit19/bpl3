@@ -8,7 +8,7 @@ frame process_two<T, U>(a: T, b: U) {
     printf("Generic two args\n");
 }
 
-frame process_two(a: int, b: int) {
+frame processTwo(a: int, b: int) {
     printf("Int two args: %d, %d\n", a, b);
 }
 
@@ -49,7 +49,7 @@ struct Test {
 frame main() {
     process<double>(3.14);
 
-    process_two(10, 20);
+    processTwo(10, 20);
     process_two<double, double>(1.5, 2.5);
 
     process();

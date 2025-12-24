@@ -1,14 +1,14 @@
 # Comprehensive example: Pattern guards + Type matching
 
 extern printf(fmt: string, ...) ret int;
-extern malloc(size: u64) ret *void;
+extern malloc(size: ulong) ret *void;
 
 enum Result<T, E> {
     Ok(T),
     Err(E),
 }
 
-frame process_result(r: Result<int, string>) ret int {
+frame processResult(r: Result<int, string>) ret int {
     # Use pattern guards to handle different value ranges
     return match (r) {
         Result<int, string>.Ok(value) if value > 100 => 1,
@@ -18,11 +18,11 @@ frame process_result(r: Result<int, string>) ret int {
     };
 }
 
-frame check_and_process(r: Result<int, string>) ret int {
+frame checkAndProcess(r: Result<int, string>) ret int {
     # Use match<Type> to check variant before processing
     if (match<Result.Ok>(r)) {
         printf("Result is Ok\n");
-        return process_result(r);
+        return processResult(r);
     } else {
         printf("Result is Err\n");
         return 0;
@@ -37,16 +37,16 @@ frame main() ret int {
     local r4: Result<int, string> = Result<int, string>.Err("Something went wrong");
 
     printf("=== Test 1 ===\n");
-    local code1: int = check_and_process(r1);
+    local code1: int = checkAndProcess(r1);
 
     printf("\n=== Test 2 ===\n");
-    local code2: int = check_and_process(r2);
+    local code2: int = checkAndProcess(r2);
 
     printf("\n=== Test 3 ===\n");
-    local code3: int = check_and_process(r3);
+    local code3: int = checkAndProcess(r3);
 
     printf("\n=== Test 4 ===\n");
-    local code4: int = check_and_process(r4);
+    local code4: int = checkAndProcess(r4);
 
     printf("\nReturn codes: %d, %d, %d, %d\n", code1, code2, code3, code4);
 

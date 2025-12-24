@@ -1,11 +1,11 @@
-extern printf(fmt: *i8, ...) ret i32;
+extern printf(fmt: string, ...) ret int;
 
 struct Point {
-    x: i32,
-    y: i32,
+    x: int,
+    y: int,
 }
 
-frame main() ret i32 {
+frame main() ret int {
     printf("Extern with type OK\n");
     return 0;
 }

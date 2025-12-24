@@ -1,16 +1,16 @@
 import [Array] from "std/array.bpl";
 import [String] from "std/string.bpl";
 
-extern printf(fmt: *char, ...) ret int;
-extern scanf(fmt: *char, ...) ret int;
-extern malloc(size: i32) ret *void;
+extern printf(fmt: string, ...) ret int;
+extern scanf(fmt: string, ...) ret int;
+extern malloc(size: int) ret *void;
 extern free(ptr: *void);
-extern fopen(filename: *char, mode: *char) ret *void;
-extern fwrite(ptr: *void, size: i32, count: i32, file: *void) ret i32;
-extern fread(ptr: *void, size: i32, count: i32, file: *void) ret i32;
+extern fopen(filename: string, mode: string) ret *void;
+extern fwrite(ptr: *void, size: int, count: int, file: *void) ret int;
+extern fread(ptr: *void, size: int, count: int, file: *void) ret int;
 extern fclose(file: *void) ret int;
-extern strlen(s: *char) ret i32;
-extern strstr(haystack: *char, needle: *char) ret *char;
+extern strlen(s: string) ret int;
+extern strstr(haystack: string, needle: string) ret string;
 
 # Input limits
 global MAX_TITLE_LEN: int = 255;
@@ -90,7 +90,7 @@ struct MainTODO {
         return cast<*TODO>(0);
     }
 
-    frame promptChar(this: *MainTODO, prompt: *char) ret char {
+    frame promptChar(this: *MainTODO, prompt: string) ret char {
         printf("%s", prompt);
         local buf: char;
         scanf(" %c", &buf);
@@ -115,7 +115,7 @@ struct MainTODO {
         return out;
     }
 
-    frame promptPath(this: *MainTODO, label: *char) ret string {
+    frame promptPath(this: *MainTODO, label: string) ret string {
         local raw: string = cast<string>(malloc(MAX_PATH_LEN + 1));
         printf("%s", label);
         scanf("%511s", raw);
@@ -131,7 +131,7 @@ struct MainTODO {
         return out;
     }
 
-    frame promptBool(this: *MainTODO, label: *char) ret bool {
+    frame promptBool(this: *MainTODO, label: string) ret bool {
         local value: int = 0;
         printf("%s", label);
         scanf("%d", &value);
@@ -200,9 +200,9 @@ struct MainTODO {
         local i: int = 0;
         loop (i < this.items.len()) {
             local item: TODO = this.items.get(i);
-            local titleMatch: *char = strstr(item.title.cstr(), searchTerm.cstr());
-            local descMatch: *char = strstr(item.description.cstr(), searchTerm.cstr());
-            if ((titleMatch != cast<*char>(0)) || (descMatch != cast<*char>(0))) {
+            local titleMatch: string = strstr(item.title.cstr(), searchTerm.cstr());
+            local descMatch: string = strstr(item.description.cstr(), searchTerm.cstr());
+            if ((titleMatch != nullptr) || (descMatch != nullptr)) {
                 item.print();
                 found = found + 1;
             }
@@ -274,7 +274,7 @@ struct MainTODO {
         this.resetView();
     }
 
-    frame exportToBinary(this: *MainTODO, path: *char) ret bool {
+    frame exportToBinary(this: *MainTODO, path: string) ret bool {
         local file: *void = fopen(path, "wb");
         if (file == cast<*void>(0)) {
             printf("Error: Could not open file for writing.\n");
@@ -284,27 +284,27 @@ struct MainTODO {
         local magic: string = "TODOBIN";
         fwrite(cast<*void>(magic), 1, 7, file);
         # Write version (4 bytes)
-        local version: i32 = 1;
+        local version: int = 1;
         fwrite(cast<*void>(&version), 4, 1, file);
         # Write count (4 bytes)
-        local count32: i32 = this.count;
+        local count32: int = this.count;
         fwrite(cast<*void>(&count32), 4, 1, file);
         # Write each TODO
         local i: int = 0;
         loop (i < this.items.len()) {
             local item: TODO = this.items.get(i);
             # Write id (4 bytes)
-            local id32: i32 = item.id;
+            local id32: int = item.id;
             fwrite(cast<*void>(&id32), 4, 1, file);
             # Write completed (1 byte)
             local completedByte: char = item.completed ? cast<char>(1) : cast<char>(0);
             fwrite(cast<*void>(&completedByte), 1, 1, file);
             # Write title length and bytes
-            local titleLen: i32 = strlen(item.title.cstr());
+            local titleLen: int = strlen(item.title.cstr());
             fwrite(cast<*void>(&titleLen), 4, 1, file);
             fwrite(cast<*void>(item.title.cstr()), 1, titleLen, file);
             # Write description length and bytes
-            local descLen: i32 = strlen(item.description.cstr());
+            local descLen: int = strlen(item.description.cstr());
             fwrite(cast<*void>(&descLen), 4, 1, file);
             fwrite(cast<*void>(item.description.cstr()), 1, descLen, file);
             i = i + 1;
@@ -314,7 +314,7 @@ struct MainTODO {
         return true;
     }
 
-    frame importFromBinary(this: *MainTODO, path: *char) ret bool {
+    frame importFromBinary(this: *MainTODO, path: string) ret bool {
         local file: *void = fopen(path, "rb");
         if (file == cast<*void>(0)) {
             printf("Error: File not found.\n");
@@ -336,10 +336,10 @@ struct MainTODO {
             idx = idx + 1;
         }
         # Read version
-        local version: i32;
+        local version: int;
         fread(cast<*void>(&version), 4, 1, file);
         # Read count
-        local count32: i32;
+        local count32: int;
         fread(cast<*void>(&count32), 4, 1, file);
         printf("Found %d todos. Replace current %d items? (y/n): ", count32, this.count);
         local confirm: char;
@@ -357,16 +357,16 @@ struct MainTODO {
         # Read each TODO
         local i: int = 0;
         loop (i < count32) {
-            local id32: i32;
+            local id32: int;
             fread(cast<*void>(&id32), 4, 1, file);
             local completedByte: char;
             fread(cast<*void>(&completedByte), 1, 1, file);
-            local titleLen: i32;
+            local titleLen: int;
             fread(cast<*void>(&titleLen), 4, 1, file);
             local titleBuf: string = cast<string>(malloc(titleLen + 1));
             fread(cast<*void>(titleBuf), 1, titleLen, file);
             titleBuf[titleLen] = '\0';
-            local descLen: i32;
+            local descLen: int;
             fread(cast<*void>(&descLen), 4, 1, file);
             local descBuf: string = cast<string>(malloc(descLen + 1));
             fread(cast<*void>(descBuf), 1, descLen, file);

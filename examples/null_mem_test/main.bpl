@@ -8,7 +8,7 @@ frame main() ret int {
     local ptr: *void = malloc(12);
     memset(ptr, 0, 12);
 
-    # Cast to i8* and test __bpl_mem_is_zero
+    # Cast to char* and test __bpl_mem_is_zero
     local bytes: *int = cast<*int>(ptr);
     local result: int;
 

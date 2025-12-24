@@ -1,6 +1,6 @@
 import [MainTODO] from "./todo.bpl";
 
-extern printf(fmt: *char, ...) ret int;
+extern printf(fmt: string, ...) ret int;
 
 frame main() {
     printf("TODO Application Initialized\n");

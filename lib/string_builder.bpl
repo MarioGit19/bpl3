@@ -2,27 +2,27 @@
 
 export [StringBuilder];
 
-extern malloc(size: i64) ret *void;
+extern malloc(size: long) ret *void;
 extern free(ptr: *void) ret void;
-extern memcpy(dest: *void, src: *void, n: i64) ret *void;
-extern strlen(s: *char) ret int;
-extern strcpy(dst: *char, src: *char) ret *char;
-extern strcat(dst: *char, src: *char) ret *char;
+extern memcpy(dest: *void, src: *void, n: long) ret *void;
+extern strlen(s: string) ret int;
+extern strcpy(dst: string, src: string) ret string;
+extern strcat(dst: string, src: string) ret string;
 
 import [String] from "std/string.bpl";
 
 struct StringBuilder {
-    buffer: *char,
-    length: i32,
-    capacity: i32,
+    buffer: string,
+    length: int,
+    capacity: int,
     ###
         Creates a new StringBuilder with specified initial capacity
     ###
-    frame new(initial_capacity: i32) ret StringBuilder {
+    frame new(initial_capacity: int) ret StringBuilder {
         local sb: StringBuilder;
         sb.capacity = initial_capacity;
         sb.length = 0;
-        sb.buffer = cast<*char>(malloc(cast<i64>(initial_capacity + 1)));
+        sb.buffer = cast<string>(malloc(cast<long>(initial_capacity + 1)));
         sb.buffer[0] = cast<char>(0); # Null terminator
         return sb;
     }
@@ -49,19 +49,19 @@ struct StringBuilder {
     ###
         Ensures the buffer has enough capacity for additional bytes
     ###
-    frame ensureCapacity(this: *StringBuilder, additional: i32) {
-        local needed: i32 = this.length + additional;
+    frame ensureCapacity(this: *StringBuilder, additional: int) {
+        local needed: int = this.length + additional;
         if (needed >= this.capacity) {
             # Grow to at least double the current capacity or needed size
-            local new_capacity: i32 = this.capacity * 2;
+            local new_capacity: int = this.capacity * 2;
             if (new_capacity < needed) {
                 new_capacity = needed + 1;
             }
-            local new_buffer: *char = cast<*char>(malloc(cast<i64>(new_capacity + 1)));
+            local new_buffer: string = cast<string>(malloc(cast<long>(new_capacity + 1)));
 
             # Copy old content
             if (this.buffer != null) {
-                memcpy(cast<*void>(new_buffer), cast<*void>(this.buffer), cast<i64>(this.length));
+                memcpy(cast<*void>(new_buffer), cast<*void>(this.buffer), cast<long>(this.length));
                 free(cast<*void>(this.buffer));
             }
             this.buffer = new_buffer;
@@ -73,7 +73,7 @@ struct StringBuilder {
     ###
         Appends a C-string to the builder
     ###
-    frame append(this: *StringBuilder, str: *char) {
+    frame append(this: *StringBuilder, str: string) {
         if (str == null) {
             return;
         }
@@ -81,7 +81,7 @@ struct StringBuilder {
         this.ensureCapacity(str_len);
 
         # Copy the string
-        local i: i32 = 0;
+        local i: int = 0;
         loop (i < str_len) {
             this.buffer[this.length + i] = str[i];
             i = i + 1;
@@ -177,14 +177,14 @@ struct StringBuilder {
     ###
         Returns the current length
     ###
-    frame len(this: *StringBuilder) ret i32 {
+    frame len(this: *StringBuilder) ret int {
         return this.length;
     }
 
     ###
         Returns a C-string pointer (valid until next modification)
     ###
-    frame cstr(this: *StringBuilder) ret *char {
+    frame cstr(this: *StringBuilder) ret string {
         return this.buffer;
     }
 
@@ -196,7 +196,7 @@ struct StringBuilder {
     }
 
     # Operator overloading: Append with << operator
-    frame __lshift__(this: *StringBuilder, str: *char) ret StringBuilder {
+    frame __lshift__(this: *StringBuilder, str: string) ret StringBuilder {
         this.append(str);
         return *this;
     }

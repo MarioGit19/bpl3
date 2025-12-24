@@ -1759,6 +1759,21 @@ export abstract class ExpressionGenerator extends TypeGenerator {
   }
 
   protected generateCall(expr: AST.CallExpr): string {
+    // Check for std.mem.init intrinsic
+    if (expr.resolvedDeclaration) {
+      const decl = expr.resolvedDeclaration;
+      // Check if it's the init function in std/mem.bpl or lib/mem.bpl
+      // We check the file path and name
+      if (
+        decl.name === "init" &&
+        decl.location &&
+        (decl.location.file.endsWith("std/mem.bpl") ||
+          decl.location.file.endsWith("lib/mem.bpl"))
+      ) {
+        return this.generateMemInit(expr);
+      }
+    }
+
     let decl: any;
     // Check for enum variant constructor
     const enumVariantInfo = (expr as any).enumVariantInfo;
@@ -2009,6 +2024,8 @@ export abstract class ExpressionGenerator extends TypeGenerator {
 
           if (cleanType.startsWith("%struct.")) {
             structName = cleanType.substring(8);
+          } else if (cleanType.startsWith("%enum.")) {
+            structName = cleanType.substring(6);
           } else if (PRIMITIVE_STRUCT_MAP[objType.name]) {
             structName = PRIMITIVE_STRUCT_MAP[objType.name]!;
             targetThisType = `%struct.${structName}*`;
@@ -2026,7 +2043,11 @@ export abstract class ExpressionGenerator extends TypeGenerator {
           isInstanceCall = true;
 
           // Prepare context if object is instantiated generic struct
-          const structDecl = this.structMap.get(objType.name); // Original generic struct
+          let structDecl = this.structMap.get(objType.name); // Original generic struct
+          if (!structDecl) {
+            structDecl = this.enumDeclMap.get(objType.name) as any;
+          }
+
           if (
             structDecl &&
             structDecl.genericParams.length > 0 &&
@@ -2060,7 +2081,16 @@ export abstract class ExpressionGenerator extends TypeGenerator {
             // Handle generic static calls - need monomorphized name
             if (inner.genericArgs && inner.genericArgs.length > 0) {
               // Resolve the monomorphized struct name
-              const structDecl = this.structMap.get(inner.name);
+              let structDecl = this.structMap.get(inner.name);
+              if (!structDecl) {
+                // Check enum map
+                const enumDecl = this.enumDeclMap.get(inner.name);
+                if (enumDecl) {
+                  // Treat enum as struct for generic param lookup
+                  structDecl = enumDecl as any;
+                }
+              }
+
               if (structDecl && structDecl.genericParams.length > 0) {
                 // Build contextMap for generic substitution
                 contextMap = new Map();
@@ -2798,7 +2828,7 @@ export abstract class ExpressionGenerator extends TypeGenerator {
     const isVariadic = funcType.isVariadic === true;
 
     // Ensure external function is declared
-    if (callTarget.startsWith("@")) {
+    if (callTarget.startsWith("@") && isExtern) {
       const targetName = callTarget.substring(1);
       if (
         !this.declaredFunctions.has(targetName) &&
@@ -3715,11 +3745,20 @@ export abstract class ExpressionGenerator extends TypeGenerator {
     // Get enum information - handle generic instantiation
     let enumName = matchType.name;
 
+    // Substitute types in matchType if we are in a generic context
+    const substitutedMatchType = this.substituteType(
+      matchType,
+      this.currentTypeMap,
+    ) as AST.BasicTypeNode;
+
     // If this is a generic enum, instantiate it
-    if (matchType.genericArgs && matchType.genericArgs.length > 0) {
+    if (
+      substitutedMatchType.genericArgs &&
+      substitutedMatchType.genericArgs.length > 0
+    ) {
       enumName = this.instantiateGenericEnum(
         matchType.name,
-        matchType.genericArgs,
+        substitutedMatchType.genericArgs,
       );
     }
 
@@ -3993,12 +4032,21 @@ export abstract class ExpressionGenerator extends TypeGenerator {
     const enumName = parts[0]!;
     const variantName = parts.slice(1).join("."); // Handle nested dots if any
 
+    // Substitute types in valueType if we are in a generic context
+    const substitutedValueType = this.substituteType(
+      valueType,
+      this.currentTypeMap,
+    ) as AST.BasicTypeNode;
+
     // Get enum information - handle generic instantiation
     let resolvedEnumName = enumName;
-    if (valueType.genericArgs && valueType.genericArgs.length > 0) {
+    if (
+      substitutedValueType.genericArgs &&
+      substitutedValueType.genericArgs.length > 0
+    ) {
       resolvedEnumName = this.instantiateGenericEnum(
         enumName,
-        valueType.genericArgs,
+        substitutedValueType.genericArgs,
       );
     }
 
@@ -4502,6 +4550,56 @@ export abstract class ExpressionGenerator extends TypeGenerator {
     this.emit(`  ${result} = load ${enumType}, ${enumType}* ${enumPtr}`);
 
     return result;
+  }
+
+  protected generateMemInit(expr: AST.CallExpr): string {
+    if (expr.args.length !== 1) {
+      throw new CompilerError(
+        "std.mem.init expects exactly 1 argument",
+        "Usage: std.mem.init(ptr)",
+        expr.location,
+      );
+    }
+
+    const ptrExpr = expr.args[0]!;
+    const ptrVal = this.generateExpression(ptrExpr);
+    const ptrType = this.resolveType(ptrExpr.resolvedType!);
+
+    // ptrType should be T* or %struct.T*
+    // We need to find the struct name to get the layout
+    let structName = "";
+
+    // Check if it's a pointer to a struct
+    if (ptrType.startsWith("%struct.") && ptrType.endsWith("*")) {
+      structName = ptrType.substring(8, ptrType.length - 1);
+    } else if (ptrType.endsWith("*")) {
+      // Might be a basic type pointer like i32*
+      // Primitives don't have __null_bit__, so we can ignore or error?
+      // For now, we just ignore if it's not a struct with __null_bit__
+      return "";
+    } else {
+      // Not a pointer?
+      return "";
+    }
+
+    const layout = this.structLayouts.get(structName);
+    if (!layout) {
+      // Unknown struct or no layout (maybe opaque?)
+      return "";
+    }
+
+    const nullBitIndex = layout.get("__null_bit__");
+    if (nullBitIndex !== undefined) {
+      // Generate code to set __null_bit__ to 1
+      const structType = `%struct.${structName}`;
+      const nullBitPtr = this.newRegister();
+      this.emit(
+        `  ${nullBitPtr} = getelementptr inbounds ${structType}, ${structType}* ${ptrVal}, i32 0, i32 ${nullBitIndex}`,
+      );
+      this.emit(`  store i1 1, i1* ${nullBitPtr}`);
+    }
+
+    return ""; // Void return
   }
 
   protected generateSizeof(expr: AST.SizeofExpr): string {

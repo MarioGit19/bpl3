@@ -66,9 +66,9 @@ frame main() ret int {
 
     # === Option with Operators ===
     IO.printString("--- Option Operators ---");
-    local opt1: Option<int> = Option<int>.some(42);
-    local opt2: Option<int> = Option<int>.some(42);
-    local opt3: Option<int> = Option<int>.none();
+    local opt1: Option<int> = Option<int>.Some(42);
+    local opt2: Option<int> = Option<int>.Some(42);
+    local opt3: Option<int> = Option<int>.None;
 
     if (opt1.__eq__(opt2)) {
         # equality comparison

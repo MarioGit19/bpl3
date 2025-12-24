@@ -165,7 +165,7 @@ describe("Examples Fuzzing & Syntax Edge Cases", () => {
       }
 
       frame main() {
-          local b: Box<i32> = make_box<i32>(123);
+          local b: Box<int> = make_box<int>(123);
           printf("%d\\n", b.value);
       }
     `;
@@ -180,8 +180,8 @@ describe("Examples Fuzzing & Syntax Edge Cases", () => {
       extern printf(fmt: string, ...);
 
       struct Vector {
-          x: i32,
-          y: i32,
+          x: int,
+          y: int,
 
           frame __add__(this: *Vector, other: Vector) ret Vector {
               local res: Vector;
@@ -221,8 +221,8 @@ describe("Examples Fuzzing & Syntax Edge Cases", () => {
       }
 
       frame main() {
-          local inner: Box<i32> = make_box<i32>(42);
-          local outer: Box<Box<i32>> = make_box<Box<i32>>(inner);
+          local inner: Box<int> = make_box<int>(42);
+          local outer: Box<Box<int>> = make_box<Box<int>>(inner);
 
           printf("%d\\n", outer.value.value);
       }
@@ -238,7 +238,7 @@ describe("Examples Fuzzing & Syntax Edge Cases", () => {
       extern printf(fmt: string, ...);
 
       struct Counter {
-          val: i32,
+          val: int,
           frame increment(this: *Counter) {
               this.val = this.val + 1;
           }

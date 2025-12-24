@@ -21,11 +21,11 @@ struct Box<T> {
 }
 
 frame main() ret int {
-    local b: Box<i32>;
+    local b: Box<int>;
     b.val = 10;
 
     # Use the explicit method instead of operator to avoid codegen issue
-    local b2: Box<i32> = b.add(5);
+    local b2: Box<int> = b.add(5);
 
     printf("b.val = %d\n", b.val);
     printf("b2.val = %d\n", b2.val);

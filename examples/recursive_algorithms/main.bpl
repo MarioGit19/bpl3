@@ -26,7 +26,7 @@ frame power(base: int, exp: int) ret int {
         return base * power(base, exp - 1);
     }
 }
-frame binary_search(arr: *int, left: int, right: int, target: int) ret int {
+frame binarySearch(arr: *int, left: int, right: int, target: int) ret int {
     if (left > right) {
         return -1;
         # Not found
@@ -36,12 +36,12 @@ frame binary_search(arr: *int, left: int, right: int, target: int) ret int {
     if (*mid_ptr == target) {
         return mid;
     } else if (*mid_ptr > target) {
-        return binary_search(arr, left, mid - 1, target);
+        return binarySearch(arr, left, mid - 1, target);
     } else {
-        return binary_search(arr, mid + 1, right, target);
+        return binarySearch(arr, mid + 1, right, target);
     }
 }
-frame print_array(arr: *int, size: int) {
+frame printArray(arr: *int, size: int) {
     local i: int = 0;
     printf("[");
     loop (i < size) {
@@ -82,14 +82,14 @@ frame main() ret int {
     sorted_arr[8] = 17;
     sorted_arr[9] = 19;
     printf("Array: ");
-    print_array(&sorted_arr[0], 10);
+    printArray(&sorted_arr[0], 10);
     local targets: int[3];
     targets[0] = 7;
     targets[1] = 13;
     targets[2] = 20;
     local j: int = 0;
     loop (j < 3) {
-        local idx: int = binary_search(&sorted_arr[0], 0, 9, targets[j]);
+        local idx: int = binarySearch(&sorted_arr[0], 0, 9, targets[j]);
         if (idx >= 0) {
             printf("Found %d at index %d\n", targets[j], idx);
         } else {

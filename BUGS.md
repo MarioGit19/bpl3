@@ -4,39 +4,40 @@ This file tracks bugs and edge cases found during comprehensive testing.
 
 ## Summary
 
-| ID      | Category            | Description                                                                                                              | Status  |
-| ------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------- | ---------------------------------------------------------------- |
-| BUG-001 | Primitive Types     | Integer literal overflow is not detected (e.g., `i8 = 128`).                                                             | Fixed   |
-| BUG-002 | Arithmetic          | Division by zero in constant expressions is not detected (e.g., `1 / 0`).                                                | Fixed   |
-| BUG-003 | Structs             | Recursive structs without pointers are accepted (infinite size).                                                         | Fixed   |
-| BUG-004 | Functions           | Duplicate parameter names are accepted in function declarations.                                                         | Fixed   |
-| BUG-005 | Arrays              | Zero-sized arrays are accepted (`Type[0]`).                                                                              | Fixed   |
-| BUG-006 | Arrays              | Negative array sizes cause parser error instead of semantic error.                                                       | Fixed   |
-| BUG-007 | Control Flow        | Duplicate cases in switch statements are accepted.                                                                       | Fixed   |
-| BUG-008 | Scoping             | Variable shadowing in the same scope is accepted.                                                                        | Fixed   |
-| BUG-009 | Control Flow        | Unreachable code after return is accepted.                                                                               | Fixed   |
-| BUG-010 | Analysis            | Unused variables are accepted without warning or error.                                                                  | Fixed   |
-| BUG-011 | Type System         | Invalid type casts (e.g., `i32` to `string`) are accepted.                                                               | Fixed   |
-| BUG-012 | Structs             | Struct literals with missing fields are accepted (uninitialized memory).                                                 | Fixed   |
-| BUG-013 | Control Flow        | Switch statements accept floating point values.                                                                          | Fixed   |
-| BUG-014 | Analysis            | `sizeof<void>` is accepted.                                                                                              | Fixed   |
-| BUG-015 | Arithmetic          | Modulo operator `%` is accepted for floating point types.                                                                | Fixed   |
-| BUG-016 | Arrays              | Array indexing with floating point values is accepted.                                                                   | Fixed   |
-| BUG-017 | Operators           | Unary negation `-` is accepted for strings.                                                                              | Fixed   |
-| BUG-018 | Operators           | String subtraction `"a" - "b"` is accepted.                                                                              | Fixed   |
-| BUG-019 | Assignment          | Assignment to r-values (literals, expressions) is accepted.                                                              | Fixed   |
-| BUG-020 | Runtime             | Array out of bounds access returns garbage instead of crashing or erroring.                                              | Fixed   |
-| BUG-021 | Runtime             | Division by zero causes silent crash (exit code 1) without error message.                                                | Fixed   |
-| BUG-022 | Runtime             | Stack overflow causes silent crash (exit code 1) without error message.                                                  | Fixed   |
-| BUG-023 | Syntax              | Struct definitions require a trailing comma for the last field.                                                          | Fixed   |
-| BUG-024 | Syntax              | Generic struct literals `Box<i32> { ... }` are not supported.                                                            | Fixed   |
-| BUG-025 | Syntax              | Trailing commas in function calls `foo(1, 2,)` are not supported.                                                        | Fixed   |
-| BUG-026 | Runtime             | Structs have hidden overhead (null bit) increasing `sizeof` unexpectedly.                                                | Ignored | # this is not error, this is used for tracking if object is null |
-| BUG-027 | Codegen             | Match statements with data variants cause LLVM IR generation failure.                                                    | Fixed   |
-| BUG-028 | Analysis            | Generic Enum type inference fails for constructors (e.g., `Option.Some(42)`).                                            | Fixed   |
-| BUG-029 | Parser              | Calling a function pointer field directly `obj.ptr()` fails.                                                             | Fixed   |
-| BUG-030 | No Dynamic Dispatch | BPL does not support dynamic dispatch (virtual methods). Method calls are statically resolved based on the pointer type. | Fixed   |
-| BUG-031 | Codegen             | Comparison operators `!=` on structs generate invalid LLVM IR (`icmp` requires integer operands).                        | Fixed   |
+| ID      | Category            | Description                                                                                                              | Status     |
+| ------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------- | ---------------------------------------------------------------- |
+| BUG-001 | Primitive Types     | Integer literal overflow is not detected (e.g., `i8 = 128`).                                                             | Fixed      |
+| BUG-002 | Arithmetic          | Division by zero in constant expressions is not detected (e.g., `1 / 0`).                                                | Fixed      |
+| BUG-003 | Structs             | Recursive structs without pointers are accepted (infinite size).                                                         | Fixed      |
+| BUG-004 | Functions           | Duplicate parameter names are accepted in function declarations.                                                         | Fixed      |
+| BUG-005 | Arrays              | Zero-sized arrays are accepted (`Type[0]`).                                                                              | Fixed      |
+| BUG-006 | Arrays              | Negative array sizes cause parser error instead of semantic error.                                                       | Fixed      |
+| BUG-007 | Control Flow        | Duplicate cases in switch statements are accepted.                                                                       | Fixed      |
+| BUG-008 | Scoping             | Variable shadowing in the same scope is accepted.                                                                        | Fixed      |
+| BUG-009 | Control Flow        | Unreachable code after return is accepted.                                                                               | Fixed      |
+| BUG-010 | Analysis            | Unused variables are accepted without warning or error.                                                                  | Fixed      |
+| BUG-011 | Type System         | Invalid type casts (e.g., `i32` to `string`) are accepted.                                                               | Fixed      |
+| BUG-012 | Structs             | Struct literals with missing fields are accepted (uninitialized memory).                                                 | Fixed      |
+| BUG-013 | Control Flow        | Switch statements accept floating point values.                                                                          | Fixed      |
+| BUG-014 | Analysis            | `sizeof<void>` is accepted.                                                                                              | Fixed      |
+| BUG-015 | Arithmetic          | Modulo operator `%` is accepted for floating point types.                                                                | Fixed      |
+| BUG-016 | Arrays              | Array indexing with floating point values is accepted.                                                                   | Fixed      |
+| BUG-017 | Operators           | Unary negation `-` is accepted for strings.                                                                              | Fixed      |
+| BUG-018 | Operators           | String subtraction `"a" - "b"` is accepted.                                                                              | Fixed      |
+| BUG-019 | Assignment          | Assignment to r-values (literals, expressions) is accepted.                                                              | Fixed      |
+| BUG-020 | Runtime             | Array out of bounds access returns garbage instead of crashing or erroring.                                              | Fixed      |
+| BUG-021 | Runtime             | Division by zero causes silent crash (exit code 1) without error message.                                                | Fixed      |
+| BUG-022 | Runtime             | Stack overflow causes silent crash (exit code 1) without error message.                                                  | Fixed      |
+| BUG-023 | Syntax              | Struct definitions require a trailing comma for the last field.                                                          | Fixed      |
+| BUG-024 | Syntax              | Generic struct literals `Box<i32> { ... }` are not supported.                                                            | Fixed      |
+| BUG-025 | Syntax              | Trailing commas in function calls `foo(1, 2,)` are not supported.                                                        | Fixed      |
+| BUG-026 | Runtime             | Structs have hidden overhead (null bit) increasing `sizeof` unexpectedly.                                                | Ignored    | # this is not error, this is used for tracking if object is null |
+| BUG-027 | Codegen             | Match statements with data variants cause LLVM IR generation failure.                                                    | Fixed      |
+| BUG-028 | Analysis            | Generic Enum type inference fails for constructors (e.g., `Option.Some(42)`).                                            | Fixed      |
+| BUG-029 | Parser              | Calling a function pointer field directly `obj.ptr()` fails.                                                             | Fixed      |
+| BUG-030 | No Dynamic Dispatch | BPL does not support dynamic dispatch (virtual methods). Method calls are statically resolved based on the pointer type. | Fixed      |
+| BUG-031 | Codegen             | Comparison operators `!=` on structs generate invalid LLVM IR (`icmp` requires integer operands).                        | Fixed      |
+| BUG-032 | Pattern Matching    | Nested enum pattern matching with qualified names doesn't extract variant data correctly                                 | **Active** |
 
 ## Details
 
@@ -357,3 +358,31 @@ Comparison operators (like `!=`) on structs generate invalid LLVM IR because `ic
 struct Box { val: i32, frame __ne__(this: *Box, other: Box) ret bool { ... } }
 if (b1 != b2) { ... } // Generates invalid LLVM IR
 ```
+
+### BUG-032: Nested Enum Pattern Matching with Qualified Names
+
+When pattern matching on nested enums with qualified names (e.g., `Option<Option<int>>`), the inner enum value is not extracted correctly from the outer variant's data.
+
+```bpl
+import * as std from "std";
+
+frame test_nested() {
+    local nested: std.Option<std.Option<int>> = std.Option<std.Option<int>>.Some(std.Option<int>.Some(40));
+
+    match (nested) {
+        std.Option<std.Option<int>>.Some(inner) => {
+            // inner should be Option<int>.Some(40)
+            match (inner) {
+                std.Option<int>.Some(v) => printf("Value: %d\n", v),  // Should print 40
+                std.Option<int>.None => printf("None\n"),              // Incorrectly matches this
+            };
+        },
+        std.Option<std.Option<int>>.None => { printf("Outer None\n"); },
+    };
+}
+```
+
+**Expected:** Prints "Value: 40"
+**Actual:** Prints "None" (inner value is not extracted correctly)
+
+**Workaround:** Use non-qualified names (`Option` instead of `std.Option`) if the pattern is in the same module.

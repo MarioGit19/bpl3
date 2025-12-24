@@ -3,14 +3,14 @@
 export [Path];
 
 import [String] from "std/string.bpl";
-extern strlen(s: *char) ret int;
-extern malloc(size: i64) ret *char;
-extern free(ptr: *char) ret void;
+extern strlen(s: string) ret int;
+extern malloc(size: long) ret string;
+extern free(ptr: string) ret void;
 
 struct Path {
     frame join(a: string, b: string) ret String {
-        local pa: *char = cast<*char>(a);
-        local pb: *char = cast<*char>(b);
+        local pa: string = cast<string>(a);
+        local pb: string = cast<string>(b);
         local la: int = strlen(pa);
         local lb: int = strlen(pb);
         local needSlash: int = 1;
@@ -23,7 +23,7 @@ struct Path {
         }
         local extra: int = needSlash;
         local total: int = la + lb + extra;
-        local buf: *char = malloc(cast<i64>(total + 1));
+        local buf: string = malloc(cast<long>(total + 1));
         # copy a
         local i: int = 0;
         loop (i < la) {
@@ -47,7 +47,7 @@ struct Path {
     }
 
     frame basename(p: string) ret String {
-        local pp: *char = cast<*char>(p);
+        local pp: string = cast<string>(p);
         local lp: int = strlen(pp);
         if (lp == 0) {
             local empty: String;
@@ -64,7 +64,7 @@ struct Path {
         }
         local start: int = i + 1;
         local len: int = lp - start;
-        local buf: *char = malloc(cast<i64>(len + 1));
+        local buf: string = malloc(cast<long>(len + 1));
         local k: int = 0;
         loop (k < len) {
             buf[k] = pp[start + k];
@@ -77,7 +77,7 @@ struct Path {
     }
 
     frame dirname(p: string) ret String {
-        local pp2: *char = cast<*char>(p);
+        local pp2: string = cast<string>(p);
         local lp: int = strlen(pp2);
         if (lp == 0) {
             local empty: String;
@@ -100,7 +100,7 @@ struct Path {
             return empty2;
         }
         local len: int = i;
-        local buf: *char = malloc(cast<i64>(len + 1));
+        local buf: string = malloc(cast<long>(len + 1));
         local k: int = 0;
         loop (k < len) {
             buf[k] = pp2[k];

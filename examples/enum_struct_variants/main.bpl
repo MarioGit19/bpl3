@@ -9,7 +9,7 @@ enum Shape {
 }
 
 # Calculate approximate area (simplified for integer return)
-frame calculate_area(s: Shape) ret int {
+frame calculateArea(s: Shape) ret int {
     local three: float = 3.0;
     return match (s) {
         Shape.Circle { radius: r } => cast<int>(r * three),
@@ -23,7 +23,7 @@ frame calculate_area(s: Shape) ret int {
 }
 
 # Get shape name
-frame get_shape_name(s: Shape) ret int {
+frame getShapeName(s: Shape) ret int {
     return match (s) {
         Shape.Circle { radius: r } => 1,
         Shape.Rectangle { width: w, height: h } => 2,
@@ -33,7 +33,7 @@ frame get_shape_name(s: Shape) ret int {
 }
 
 # Test if shape has dimensions
-frame has_dimensions(s: Shape) ret int {
+frame hasDimensions(s: Shape) ret int {
     return match (s) {
         Shape.Circle { radius: r } => 1,
         Shape.Rectangle { width: w, height: h } => 1,
@@ -50,20 +50,20 @@ frame main() ret int {
     local point: Shape = Shape.Point;
 
     # Calculate areas
-    local area1: int = calculate_area(circle);
-    local area2: int = calculate_area(rect);
-    local area3: int = calculate_area(triangle);
-    local area4: int = calculate_area(point);
+    local area1: int = calculateArea(circle);
+    local area2: int = calculateArea(rect);
+    local area3: int = calculateArea(triangle);
+    local area4: int = calculateArea(point);
 
     # Get shape names
-    local name1: int = get_shape_name(circle);
-    local name2: int = get_shape_name(rect);
-    local name3: int = get_shape_name(triangle);
-    local name4: int = get_shape_name(point);
+    local name1: int = getShapeName(circle);
+    local name2: int = getShapeName(rect);
+    local name3: int = getShapeName(triangle);
+    local name4: int = getShapeName(point);
 
     # Check dimensions
-    local has_dim1: int = has_dimensions(circle);
-    local has_dim2: int = has_dimensions(point);
+    local has_dim1: int = hasDimensions(circle);
+    local has_dim2: int = hasDimensions(point);
 
     # Total: areas (15+20+12+0=47) + names (1+2+3+4=10) + dims (1+0=1) = 58
     return area1 + area2 + area3 + area4 + name1 + name2 + name3 + name4 + has_dim1 + has_dim2;

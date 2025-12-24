@@ -894,10 +894,10 @@ MatchArmBody
   / Expression
 
 Pattern
-  = PatternEnumStruct
+  = PatternWildcard
+  / PatternEnumStruct
   / PatternEnumTuple
   / PatternEnum
-  / PatternWildcard
   / PatternLiteral
   / PatternIdentifier
 
@@ -938,23 +938,74 @@ PatternIdentifier
   = name:Identifier { return patternIdentifier(name.name, location()); }
 
 EnumName
-  = name:Identifier gen:GenericArgs? {
-      return { name: name.name, genericArgs: gen || [] };
+  = name:QualifiedIdentifier gen:GenericArgs? {
+      return { name: name, genericArgs: gen || [] };
     }
 
 PatternEnum
-  = enumName:EnumName _ "." _ variantName:Identifier !(_ ("(" / "{")) {
-      return patternEnum(enumName.name, enumName.genericArgs, variantName.name, location());
+  = enumName:EnumName rest:(_ "." _ Identifier)? !(_ ("(" / "{")) {
+      let name = enumName.name;
+      let generics = enumName.genericArgs;
+      let variant = "";
+
+      if (generics.length > 0) {
+          if (!rest) error("Expected '.' and variant name after generic enum");
+          variant = rest[3].name;
+      } else {
+          if (rest) {
+             variant = rest[3].name;
+          } else {
+             const parts = name.split(".");
+             if (parts.length < 2) error("Enum pattern must be Enum.Variant");
+             variant = parts.pop();
+             name = parts.join(".");
+          }
+      }
+      return patternEnum(name, generics, variant, location());
     }
 
 PatternEnumTuple
-  = enumName:EnumName _ "." _ variantName:Identifier _ "(" _ bindings:PatternBindingList? _ ")" {
-      return patternEnumTuple(enumName.name, enumName.genericArgs, variantName.name, bindings || [], location());
+  = enumName:EnumName rest:(_ "." _ Identifier)? _ "(" _ bindings:PatternBindingList? _ ")" {
+      let name = enumName.name;
+      let generics = enumName.genericArgs;
+      let variant = "";
+
+      if (generics.length > 0) {
+          if (!rest) error("Expected '.' and variant name after generic enum");
+          variant = rest[3].name;
+      } else {
+          if (rest) {
+             variant = rest[3].name;
+          } else {
+             const parts = name.split(".");
+             if (parts.length < 2) error("Enum pattern must be Enum.Variant");
+             variant = parts.pop();
+             name = parts.join(".");
+          }
+      }
+      return patternEnumTuple(name, generics, variant, bindings || [], location());
     }
 
 PatternEnumStruct
-  = enumName:EnumName _ "." _ variantName:Identifier _ "{" _ fields:PatternFieldList? _ "}" {
-      return patternEnumStruct(enumName.name, enumName.genericArgs, variantName.name, fields || [], location());
+  = enumName:EnumName rest:(_ "." _ Identifier)? _ "{" _ fields:PatternFieldList? _ "}" {
+      let name = enumName.name;
+      let generics = enumName.genericArgs;
+      let variant = "";
+
+      if (generics.length > 0) {
+          if (!rest) error("Expected '.' and variant name after generic enum");
+          variant = rest[3].name;
+      } else {
+          if (rest) {
+             variant = rest[3].name;
+          } else {
+             const parts = name.split(".");
+             if (parts.length < 2) error("Enum pattern must be Enum.Variant");
+             variant = parts.pop();
+             name = parts.join(".");
+          }
+      }
+      return patternEnumStruct(name, generics, variant, fields || [], location());
     }
 
 PatternBindingList

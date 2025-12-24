@@ -1,13 +1,13 @@
 extern printf(fmt: string, ...);
-extern malloc(size: i64) ret *i8;
-extern free(ptr: *i8);
+extern malloc(size: long) ret string;
+extern free(ptr: string);
 struct Array<T> {
     data: *T,
     length: int,
     capacity: int,
     frame new(cap: int) ret Array<T> {
         local result: Array<T>;
-        local size: i64 = sizeof<T>() * cast<i64>(cap);
+        local size: long = sizeof<T>() * cast<long>(cap);
         local buffer: *T = cast<*T>(malloc(size));
         result.data = buffer;
         result.length = 0;
@@ -62,7 +62,7 @@ struct Array<T> {
         return result;
     }
     frame destroy(this: *Array<T>) {
-        free(cast<*i8>(this.data));
+        free(cast<string>(this.data));
     }
 }
 # Callbacks

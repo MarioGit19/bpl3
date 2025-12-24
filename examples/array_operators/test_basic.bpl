@@ -5,7 +5,7 @@ extern printf(fmt: string, ...);
 
 frame main() ret int {
     # Create an integer array
-    local arr: Array<i32> = Array<i32>.new(5);
+    local arr: Array<int> = Array<int>.new(5);
 
     # Test basic push
     printf("Testing basic push:\n");

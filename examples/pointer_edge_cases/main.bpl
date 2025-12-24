@@ -1,6 +1,6 @@
 extern printf(fmt: string, ...);
 # Test pointer manipulation and arithmetic edge cases
-frame test_pointer_arithmetic() {
+frame testPointerArithmetic() {
     printf("=== Pointer Arithmetic ===\n");
     local arr: int[10];
     local i: int = 0;
@@ -18,7 +18,7 @@ frame test_pointer_arithmetic() {
         offset = offset + 1;
     }
 }
-frame test_pointer_to_pointer() {
+frame testPointerToPointer() {
     printf("\n=== Pointer to Pointer ===\n");
     local value: int = 42;
     local ptr1: *int = &value;
@@ -31,21 +31,21 @@ frame test_pointer_to_pointer() {
     printf("Original value: %d\n", value);
     printf("Via ptr2: %d\n", *ptr2);
 }
-frame modify_through_pointer(ptr: *int, new_val: int) {
+frame modifyThroughPointer(ptr: *int, new_val: int) {
     *ptr = new_val;
 }
-frame test_pointer_parameters() {
+frame testPointerParameters() {
     printf("\n=== Pointer Parameters ===\n");
     local x: int = 10;
     local y: int = 20;
     printf("Before: x=%d, y=%d\n", x, y);
-    modify_through_pointer(&x, 99);
-    modify_through_pointer(&y, 88);
+    modifyThroughPointer(&x, 99);
+    modifyThroughPointer(&y, 88);
     printf("After: x=%d, y=%d\n", x, y);
 }
 frame main() ret int {
-    test_pointer_arithmetic();
-    test_pointer_to_pointer();
-    test_pointer_parameters();
+    testPointerArithmetic();
+    testPointerToPointer();
+    testPointerParameters();
     return 0;
 }

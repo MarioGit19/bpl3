@@ -13,7 +13,7 @@ export [Pair];
 
 struct Map<K, V> {
     items: Array<Pair<K, V>>,
-    frame new(initial_capacity: i32) ret Map<K, V> {
+    frame new(initial_capacity: int) ret Map<K, V> {
         local m: Map<K, V>;
         m.items = Array<Pair<K, V>>.new(initial_capacity);
         return m;
@@ -23,14 +23,14 @@ struct Map<K, V> {
         this.items.destroy();
     }
 
-    frame size(this: *Map<K, V>) ret i32 {
+    frame size(this: *Map<K, V>) ret int {
         return this.items.len();
     }
 
     frame set(this: *Map<K, V>, key: K, value: V) {
         # Find if key exists
-        local i: i32 = 0;
-        local n: i32 = this.items.len();
+        local i: int = 0;
+        local n: int = this.items.len();
         loop (i < n) {
             local p: Pair<K, V> = this.items.get(i);
             if (p.key == key) {
@@ -48,8 +48,8 @@ struct Map<K, V> {
     }
 
     frame has(this: *Map<K, V>, key: K) ret bool {
-        local i: i32 = 0;
-        local n: i32 = this.items.len();
+        local i: int = 0;
+        local n: int = this.items.len();
         loop (i < n) {
             local p: Pair<K, V> = this.items.get(i);
             if (p.key == key) {
@@ -61,26 +61,26 @@ struct Map<K, V> {
     }
 
     frame get(this: *Map<K, V>, key: K) ret Option<V> {
-        local i: i32 = 0;
-        local n: i32 = this.items.len();
+        local i: int = 0;
+        local n: int = this.items.len();
         loop (i < n) {
             local p: Pair<K, V> = this.items.get(i);
             if (p.key == key) {
-                return Option<V>.some(p.value);
+                return Option<V>.Some(p.value);
             }
             i = i + 1;
         }
-        return Option<V>.none();
+        return Option<V>.None;
     }
 
     frame remove(this: *Map<K, V>, key: K) ret bool {
-        local i: i32 = 0;
-        local n: i32 = this.items.len();
+        local i: int = 0;
+        local n: int = this.items.len();
         loop (i < n) {
             local p: Pair<K, V> = this.items.get(i);
             if (p.key == key) {
                 # Shift left from i+1
-                local j: i32 = i + 1;
+                local j: int = i + 1;
                 loop (j < n) {
                     local pj: Pair<K, V> = this.items.get(j);
                     this.items.set(j - 1, pj);
@@ -98,12 +98,12 @@ struct Map<K, V> {
         this.items.length = 0;
     }
 
-    frame getKey(this: *Map<K, V>, index: i32) ret K {
+    frame getKey(this: *Map<K, V>, index: int) ret K {
         local p: Pair<K, V> = this.items.get(index);
         return p.key;
     }
 
-    frame getValue(this: *Map<K, V>, index: i32) ret V {
+    frame getValue(this: *Map<K, V>, index: int) ret V {
         local p: Pair<K, V> = this.items.get(index);
         return p.value;
     }
@@ -115,8 +115,8 @@ struct Map<K, V> {
             return false;
         }
         # Check if all key-value pairs in this map exist in other
-        local i: i32 = 0;
-        local n: i32 = this.size();
+        local i: int = 0;
+        local n: int = this.size();
         loop (i < n) {
             local thisKey: K = this.getKey(i);
             local thisValue: V = this.getValue(i);
@@ -127,7 +127,8 @@ struct Map<K, V> {
                 return false;
             }
             # Values don't match
-            if (otherVal.unwrap() != thisValue) {
+            local val: V = otherVal.unwrap();
+            if (val != thisValue) {
                 return false;
             }
             i = i + 1;

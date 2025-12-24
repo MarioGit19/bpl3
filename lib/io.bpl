@@ -5,7 +5,7 @@ export [IO];
 extern printf(fmt: string, ...) ret int;
 extern scanf(fmt: string, ...) ret int;
 extern gets(buf: string) ret string;
-extern strlen(s: *char) ret int;
+extern strlen(s: string) ret int;
 
 struct IO {
     frame printf(format: string, a0: int) ret int {

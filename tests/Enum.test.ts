@@ -1393,7 +1393,7 @@ describe("Enum Methods", () => {
         color.undefined_method();
       }
     `;
-    expect(() => check(source)).toThrow("has no method");
+    expect(() => check(source)).toThrow("Cannot access member");
   });
 });
 

@@ -7,7 +7,7 @@ enum Color {
     Green,
     Blue,
 
-    frame is_primary(this: Color) ret bool {
+    frame isPrimary(this: Color) ret bool {
         return match (this) {
             Color.Red => true,
             Color.Green => true,
@@ -15,7 +15,7 @@ enum Color {
         };
     }
 
-    frame to_code(this: Color) ret int {
+    frame toCode(this: Color) ret int {
         return match (this) {
             Color.Red => 1,
             Color.Green => 2,
@@ -28,7 +28,7 @@ enum Result {
     Ok(int),
     Err(string),
 
-    frame unwrap_or(this: Result, default_val: int) ret int {
+    frame unwrapOr(this: Result, default_val: int) ret int {
         return match (this) {
             Result.Ok(value) => value,
             Result.Err(_) => default_val,
@@ -38,16 +38,16 @@ enum Result {
 
 frame main() ret int {
     local color: Color = Color.Red;
-    local is_primary: bool = color.is_primary();
-    local code: int = color.to_code();
+    local is_primary: bool = color.isPrimary();
+    local code: int = color.toCode();
 
     printf("Color is primary: %d, code: %d\n", is_primary, code);
 
     local ok_result: Result = Result.Ok(42);
     local err_result: Result = Result.Err("error");
 
-    local ok_val: int = ok_result.unwrap_or(0);
-    local err_val: int = err_result.unwrap_or(99);
+    local ok_val: int = ok_result.unwrapOr(0);
+    local err_val: int = err_result.unwrapOr(99);
 
     printf("Ok value: %d, Err value: %d\n", ok_val, err_val);
 

@@ -1,5 +1,5 @@
 extern printf(fmt: string, ...);
-extern malloc(size: uint) ret *i8;
+extern malloc(size: uint) ret string;
 frame testNullptr() {
     printf("Testing nullptr:\n");
     local ptr: *int = nullptr;
@@ -51,7 +51,7 @@ frame testPointerComparison() {
 frame testNullInStruct() {
     printf("\nTesting null in structs:\n");
     # Using malloc which can return null
-    local mem: *i8 = malloc(cast<uint>(100));
+    local mem: string = malloc(cast<uint>(100));
     if (mem != nullptr) {
         printf("Memory allocated successfully\n");
     } else {
@@ -68,7 +68,7 @@ frame returnNullOnError(shouldError: bool) ret *int {
 frame testVoidPointer() {
     printf("\nTesting void pointer:\n");
     local x: int = 42;
-    local voidPtr: *i8 = cast<*i8>(&x);
+    local voidPtr: string = cast<string>(&x);
     if (voidPtr != nullptr) {
         printf("void pointer is not null\n");
         local intPtr: *int = cast<*int>(voidPtr);

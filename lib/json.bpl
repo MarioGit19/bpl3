@@ -3,8 +3,8 @@
 export [JSON];
 
 import [String] from "std/string.bpl";
-extern malloc(size: i64) ret *char;
-extern free(ptr: *char) ret void;
+extern malloc(size: long) ret string;
+extern free(ptr: string) ret void;
 
 struct JSON {
     frame stringifyInt(n: int) ret String {
@@ -29,7 +29,7 @@ struct JSON {
             x = x / 10;
         }
         local total: int = idx + (neg ? 1 : 0);
-        local buf: *char = malloc(cast<i64>(total + 1));
+        local buf: string = malloc(cast<long>(total + 1));
         local i: int = 0;
         if (neg) {
             buf[0] = cast<char>(45);
@@ -49,7 +49,7 @@ struct JSON {
 
     frame parse(s: string) ret int {
         # Parse decimal int (optional leading '-')
-        local ps: *char = cast<*char>(s);
+        local ps: string = cast<string>(s);
         local i: int = 0;
         local sign: int = 1;
         if (ps[0] == cast<char>(45)) {

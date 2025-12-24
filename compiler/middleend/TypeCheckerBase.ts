@@ -136,16 +136,41 @@ export abstract class TypeCheckerBase {
       }
 
       const symbol = this.currentScope.resolve(type.name);
+      let resolvedSymbol = symbol;
+
+      if (!resolvedSymbol && type.name.includes(".")) {
+        const parts = type.name.split(".");
+        let currentScope = this.currentScope;
+        let currentSymbol: Symbol | undefined;
+
+        for (let i = 0; i < parts.length; i++) {
+          const part = parts[i]!;
+          currentSymbol = currentScope.resolve(part);
+          if (!currentSymbol) {
+            break;
+          }
+
+          if (i < parts.length - 1) {
+            if (currentSymbol.moduleScope) {
+              currentScope = currentSymbol.moduleScope;
+            } else {
+              currentSymbol = undefined;
+              break;
+            }
+          }
+        }
+        resolvedSymbol = currentSymbol;
+      }
 
       if (
         checkConstraints &&
-        symbol &&
-        (symbol.kind === "Struct" ||
-          symbol.kind === "Enum" ||
-          symbol.kind === "TypeAlias" ||
-          symbol.kind === "Spec")
+        resolvedSymbol &&
+        (resolvedSymbol.kind === "Struct" ||
+          resolvedSymbol.kind === "Enum" ||
+          resolvedSymbol.kind === "TypeAlias" ||
+          resolvedSymbol.kind === "Spec")
       ) {
-        const decl = symbol.declaration as
+        const decl = resolvedSymbol.declaration as
           | AST.StructDecl
           | AST.EnumDecl
           | AST.TypeAliasDecl
@@ -179,7 +204,7 @@ export abstract class TypeCheckerBase {
 
           // Revert to strict check but allow 0 args if it's an Enum (to support Option.Some syntax)
           // The StatementChecker will patch it up later.
-          if (symbol.kind === "Enum" && type.genericArgs.length === 0) {
+          if (resolvedSymbol.kind === "Enum" && type.genericArgs.length === 0) {
             // Allow raw enum type for now, assuming it will be inferred or is used as namespace
           } else {
             throw new CompilerError(
@@ -226,52 +251,64 @@ export abstract class TypeCheckerBase {
         }
       }
 
-      if (symbol && symbol.kind === "Struct") {
+      if (resolvedSymbol && resolvedSymbol.kind === "Struct") {
         const resolvedArgs = type.genericArgs.map((t) =>
           this.resolveType(t, checkConstraints),
         );
 
-        const basicType = type as AST.BasicTypeNode;
-        basicType.resolvedDeclaration = symbol.declaration as AST.StructDecl;
+        const basicType = { ...type } as AST.BasicTypeNode;
+        basicType.name = resolvedSymbol.name;
+        basicType.resolvedDeclaration =
+          resolvedSymbol.declaration as AST.StructDecl;
         basicType.genericArgs = resolvedArgs;
 
         return basicType;
       }
 
-      if (symbol && symbol.kind === "Enum") {
+      if (resolvedSymbol && resolvedSymbol.kind === "Enum") {
         const resolvedArgs = type.genericArgs.map((t) =>
           this.resolveType(t, checkConstraints),
         );
 
-        const basicType = type as AST.BasicTypeNode;
-        basicType.resolvedDeclaration = symbol.declaration as any;
+        const basicType = { ...type } as AST.BasicTypeNode;
+        basicType.name = resolvedSymbol.name;
+        basicType.resolvedDeclaration = resolvedSymbol.declaration as any;
         basicType.genericArgs = resolvedArgs;
 
         return basicType;
       }
 
-      if (symbol && symbol.kind === "Spec") {
+      if (resolvedSymbol && resolvedSymbol.kind === "Spec") {
         const resolvedArgs = type.genericArgs.map((t) =>
           this.resolveType(t, checkConstraints),
         );
 
-        const basicType = type as AST.BasicTypeNode;
-        basicType.resolvedDeclaration = symbol.declaration as AST.SpecDecl;
+        const basicType = { ...type } as AST.BasicTypeNode;
+        basicType.name = resolvedSymbol.name;
+        basicType.resolvedDeclaration =
+          resolvedSymbol.declaration as AST.SpecDecl;
         basicType.genericArgs = resolvedArgs;
 
         return basicType;
       }
 
-      if (symbol && symbol.kind === "TypeAlias" && symbol.type) {
+      if (
+        resolvedSymbol &&
+        resolvedSymbol.kind === "TypeAlias" &&
+        resolvedSymbol.type
+      ) {
         // If the alias points to itself (base type definition), return it
         if (
-          symbol.type.kind === "BasicType" &&
-          symbol.type.name === type.name
+          resolvedSymbol.type.kind === "BasicType" &&
+          resolvedSymbol.type.name === type.name
         ) {
           return type;
         }
 
-        const resolvedBase = this.resolveType(symbol.type, checkConstraints);
+        const resolvedBase = this.resolveType(
+          resolvedSymbol.type,
+          checkConstraints,
+        );
 
         if (resolvedBase.kind === "BasicType") {
           return {
@@ -874,19 +911,23 @@ export abstract class TypeCheckerBase {
     memberName: string,
   ):
     | {
-        decl: AST.StructDecl | AST.SpecDecl;
+        decl: AST.StructDecl | AST.SpecDecl | AST.EnumDecl;
         members: (AST.StructField | AST.FunctionDecl | AST.SpecMethod)[];
         genericMap: Map<string, AST.TypeNode>;
       }
     | undefined {
-    let decl: AST.StructDecl | AST.SpecDecl | undefined;
+    let decl: AST.StructDecl | AST.SpecDecl | AST.EnumDecl | undefined;
 
     if (
       baseType.resolvedDeclaration &&
       ((baseType.resolvedDeclaration as any).kind === "StructDecl" ||
-        (baseType.resolvedDeclaration as any).kind === "SpecDecl")
+        (baseType.resolvedDeclaration as any).kind === "SpecDecl" ||
+        (baseType.resolvedDeclaration as any).kind === "EnumDecl")
     ) {
-      decl = baseType.resolvedDeclaration as AST.StructDecl | AST.SpecDecl;
+      decl = baseType.resolvedDeclaration as
+        | AST.StructDecl
+        | AST.SpecDecl
+        | AST.EnumDecl;
     } else {
       // Check if it's a primitive type that maps to a struct
       if (PRIMITIVE_STRUCT_MAP[baseType.name]) {
@@ -902,6 +943,8 @@ export abstract class TypeCheckerBase {
         if (symbol) {
           if (symbol.kind === "Struct") {
             decl = symbol.declaration as AST.StructDecl;
+          } else if (symbol.kind === "Enum") {
+            decl = symbol.declaration as AST.EnumDecl;
           } else if (symbol.kind === "Spec") {
             decl = symbol.declaration as AST.SpecDecl;
           } else if (symbol.kind === "TypeAlias") {
@@ -925,7 +968,12 @@ export abstract class TypeCheckerBase {
       }
     }
 
-    if (!decl) return undefined;
+    if (!decl) {
+      console.log(
+        `resolveMemberWithContext: Could not resolve declaration for ${baseType.name}`,
+      );
+      return undefined;
+    }
 
     let members: (AST.StructField | AST.FunctionDecl | AST.SpecMethod)[] = [];
 
@@ -934,6 +982,10 @@ export abstract class TypeCheckerBase {
         (m) =>
           (m.kind === "StructField" && m.name === memberName) ||
           (m.kind === "FunctionDecl" && m.name === memberName),
+      );
+    } else if (decl.kind === "EnumDecl") {
+      members = (decl as AST.EnumDecl).methods.filter(
+        (m) => m.name === memberName,
       );
     } else {
       members = (decl as AST.SpecDecl).methods.filter(

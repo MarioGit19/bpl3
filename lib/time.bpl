@@ -2,12 +2,12 @@
 
 export [Time];
 
-extern time(ptr: *i64) ret i64;
+extern time(ptr: *long) ret long;
 extern usleep(usec: int) ret int;
 
 struct Time {
     frame now() ret int {
-        local t: i64 = 0;
+        local t: long = 0;
         return cast<int>(time(&t));
     }
     frame sleep(ms: int) {

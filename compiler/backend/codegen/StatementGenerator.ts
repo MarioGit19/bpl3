@@ -938,17 +938,36 @@ export abstract class StatementGenerator extends ExpressionGenerator {
   ) {
     // Skip generic templates unless we are instantiating them (map is populated)
     if (decl.genericParams.length > 0) {
-      const isInstantiating = decl.genericParams.every((p) =>
-        this.currentTypeMap.has(p.name),
-      );
+      const isInstantiating = decl.genericParams.every((p) => {
+        const pName = p.name.trim();
+        if (!this.currentTypeMap.has(pName)) return false;
+        const mapped = this.currentTypeMap.get(pName)!;
+        // Check if mapped type is a placeholder (maps to itself)
+        if (mapped.kind === "BasicType" && (mapped as any).name === pName) {
+          return false; // Treat as not instantiated
+        }
+        return true;
+      });
       if (!isInstantiating) return;
     }
 
     // Also skip methods of generic structs/enums unless instantiated
     if (parentStruct && parentStruct.genericParams.length > 0) {
-      const isInstantiating = parentStruct.genericParams.every((p) =>
-        this.currentTypeMap.has(p.name),
-      );
+      const isInstantiating = parentStruct.genericParams.every((p) => {
+        const pName = p.name.trim();
+        if (!this.currentTypeMap.has(pName)) {
+          console.log(
+            `[DEBUG] Skipping ${decl.name}: Type map missing ${pName}`,
+          );
+          return false;
+        }
+        const mapped = this.currentTypeMap.get(pName)!;
+        // Check if mapped type is a placeholder (maps to itself)
+        if (mapped.kind === "BasicType" && (mapped as any).name === pName) {
+          return false; // Treat as not instantiated
+        }
+        return true;
+      });
       if (!isInstantiating) {
         return;
       }
@@ -1011,6 +1030,14 @@ export abstract class StatementGenerator extends ExpressionGenerator {
         genericArgs,
       );
     }
+
+    // Update currentFunctionReturnType to use the resolved/substituted return type
+    this.currentFunctionReturnType = effectiveFuncType.returnType;
+
+    if (this.definedFunctions.has(name)) {
+      return;
+    }
+    this.definedFunctions.add(name);
 
     // DWARF: Create subprogram
     if (this.generateDwarf) {

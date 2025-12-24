@@ -1,7 +1,7 @@
-extern printf(fmt: *i8, ...) ret i32;
+extern printf(fmt: string, ...) ret int;
 
-frame print_hello() {
+frame printHello() {
     printf("Hello from lib\n");
 }
 
-export print_hello;
+export printHello;

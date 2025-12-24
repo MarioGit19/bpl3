@@ -4,10 +4,10 @@ export [Args];
 
 import [String] from "std/string.bpl";
 extern __bpl_argc() ret int;
-extern __bpl_argv_get(index: int) ret *char;
-extern strlen(s: *char) ret int;
-extern malloc(size: i64) ret *char;
-extern free(ptr: *char) ret void;
+extern __bpl_argv_get(index: int) ret string;
+extern strlen(s: string) ret int;
+extern malloc(size: long) ret string;
+extern free(ptr: string) ret void;
 
 struct Args {
     frame count() ret int {
@@ -15,7 +15,7 @@ struct Args {
     }
 
     frame get(index: int) ret String {
-        local arg: *char = __bpl_argv_get(index);
+        local arg: string = __bpl_argv_get(index);
         if (arg == null) {
             local empty: String;
             empty.data = null;

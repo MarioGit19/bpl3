@@ -11,7 +11,7 @@ enum Event {
 }
 
 # Process event and return event type code
-frame get_event_type(e: Event) ret int {
+frame getEventType(e: Event) ret int {
     return match (e) {
         Event.Click => 1,
         Event.KeyPress(code) => 2,
@@ -23,7 +23,7 @@ frame get_event_type(e: Event) ret int {
 }
 
 # Extract value from event (simplified - returns constant for now)
-frame get_event_value(e: Event) ret int {
+frame getEventValue(e: Event) ret int {
     return match (e) {
         Event.Click => 0,
         Event.KeyPress(code) => 1,
@@ -35,7 +35,7 @@ frame get_event_value(e: Event) ret int {
 }
 
 # Check if event has coordinates
-frame has_coordinates(e: Event) ret int {
+frame hasCoordinates(e: Event) ret int {
     return match (e) {
         Event.MouseMove { x: px, y: py } => 1,
         Event.Resize { width: w, height: h } => 1,
@@ -56,28 +56,28 @@ frame main() ret int {
     local close: Event = Event.Close;
 
     # Get event types: 1+2+3+4+5+6 = 21
-    local type1: int = get_event_type(click);
-    local type2: int = get_event_type(key);
-    local type3: int = get_event_type(mouse);
-    local type4: int = get_event_type(scroll);
-    local type5: int = get_event_type(resize);
-    local type6: int = get_event_type(close);
+    local type1: int = getEventType(click);
+    local type2: int = getEventType(key);
+    local type3: int = getEventType(mouse);
+    local type4: int = getEventType(scroll);
+    local type5: int = getEventType(resize);
+    local type6: int = getEventType(close);
 
     # Get values: 0+65+30+5+1400+0 = 1500
-    local val1: int = get_event_value(click);
-    local val2: int = get_event_value(key);
-    local val3: int = get_event_value(mouse);
-    local val4: int = get_event_value(scroll);
-    local val5: int = get_event_value(resize);
-    local val6: int = get_event_value(close);
+    local val1: int = getEventValue(click);
+    local val2: int = getEventValue(key);
+    local val3: int = getEventValue(mouse);
+    local val4: int = getEventValue(scroll);
+    local val5: int = getEventValue(resize);
+    local val6: int = getEventValue(close);
 
     # Check coords: 0+0+1+0+1+0 = 2
-    local coord1: int = has_coordinates(click);
-    local coord2: int = has_coordinates(key);
-    local coord3: int = has_coordinates(mouse);
-    local coord4: int = has_coordinates(scroll);
-    local coord5: int = has_coordinates(resize);
-    local coord6: int = has_coordinates(close);
+    local coord1: int = hasCoordinates(click);
+    local coord2: int = hasCoordinates(key);
+    local coord3: int = hasCoordinates(mouse);
+    local coord4: int = hasCoordinates(scroll);
+    local coord5: int = hasCoordinates(resize);
+    local coord6: int = hasCoordinates(close);
 
     # Total: types(21) + values(10) + coords(2) = 33
     local types: int = type1 + type2 + type3 + type4 + type5 + type6;

@@ -458,9 +458,66 @@ export function checkMember(
           pointerDepth: 0,
           arrayDimensions: [],
           location: expr.location,
+          resolvedDeclaration: enumDecl,
         },
         location: expr.location,
       } as any;
+    }
+
+    if (symbol.kind === "Module") {
+      return {
+        kind: "ModuleType",
+        name: symbol.name,
+        moduleScope: symbol.moduleScope,
+        location: expr.location,
+      } as any;
+    }
+
+    if (symbol.kind === "Struct") {
+      return {
+        kind: "MetaType",
+        type: {
+          kind: "BasicType",
+          name: symbol.name,
+          genericArgs: [],
+          pointerDepth: 0,
+          arrayDimensions: [],
+          location: expr.location,
+          resolvedDeclaration: symbol.declaration,
+        },
+        location: expr.location,
+      } as any;
+    }
+
+    if (symbol.kind === "TypeAlias") {
+      // Resolve the alias
+      const aliasDecl = symbol.declaration as AST.TypeAliasDecl;
+      const resolvedType = this.resolveType(aliasDecl.type);
+
+      if (resolvedType.kind === "BasicType") {
+        // If it aliases a struct, return MetaType for static access
+        // We need to find the symbol for the resolved type name
+        // It might be in the current scope or in the module scope where the alias is defined
+        let structSymbol = this.currentScope.resolve(resolvedType.name);
+
+        if (!structSymbol && symbol.moduleScope) {
+          structSymbol = symbol.moduleScope.resolve(resolvedType.name);
+        }
+
+        // If still not found, try to resolve it via TypeUtils or global scope if possible
+        // But resolvedType.name should be resolvable if the alias is valid.
+
+        if (structSymbol && structSymbol.kind === "Struct") {
+          return {
+            kind: "MetaType",
+            type: {
+              ...resolvedType,
+              resolvedDeclaration: structSymbol.declaration,
+            },
+            location: expr.location,
+          } as any;
+        }
+      }
     }
 
     return symbol.type;
@@ -469,40 +526,44 @@ export function checkMember(
   // Handle enum variant access
   if ((effectiveObjectType as any).kind === "MetaType") {
     const innerType = (effectiveObjectType as any).type as AST.BasicTypeNode;
-    const symbol = this.currentScope.resolve(innerType.name);
+    let symbol = this.currentScope.resolve(innerType.name);
+    let decl = innerType.resolvedDeclaration;
 
-    if (symbol && symbol.kind === "Enum") {
-      const enumDecl = symbol.declaration as AST.EnumDecl;
-      const variant = enumDecl.variants.find((v) => v.name === expr.property);
-
-      if (!variant) {
-        throw new CompilerError(
-          `Enum '${innerType.name}' has no variant '${expr.property}'`,
-          `Available variants: ${enumDecl.variants.map((v) => v.name).join(", ")}`,
-          expr.location,
-        );
-      }
-
-      // Store variant info for code generation
-      (expr as any).enumVariantInfo = {
-        enumDecl,
-        variant,
-        variantIndex: enumDecl.variants.indexOf(variant),
-        genericArgs: innerType.genericArgs,
-      };
-
-      // Return the enum type - variant construction returns enum type
-      return {
-        kind: "BasicType",
-        name: innerType.name,
-        genericArgs: innerType.genericArgs || [],
-        pointerDepth: 0,
-        arrayDimensions: [],
-        location: expr.location,
-      };
+    if (!decl && symbol) {
+      decl = symbol.declaration as any;
     }
 
-    if (symbol && symbol.kind === "Struct") {
+    if (decl && decl.kind === "EnumDecl") {
+      const enumDecl = decl as AST.EnumDecl;
+      const variant = enumDecl.variants.find((v) => v.name === expr.property);
+
+      if (variant) {
+        // Store variant info for code generation
+        (expr as any).enumVariantInfo = {
+          enumDecl,
+          variant,
+          variantIndex: enumDecl.variants.indexOf(variant),
+          genericArgs: innerType.genericArgs,
+        };
+
+        // Return the enum type - variant construction returns enum type
+        return {
+          kind: "BasicType",
+          name: innerType.name,
+          genericArgs: innerType.genericArgs || [],
+          pointerDepth: 0,
+          arrayDimensions: [],
+          location: expr.location,
+        };
+      }
+      // If not a variant, fall through to check for methods (handled below)
+    }
+
+    if (
+      (symbol && symbol.kind === "Struct") ||
+      (decl && decl.kind === "StructDecl") ||
+      (decl && decl.kind === "EnumDecl")
+    ) {
       const memberContext = this.resolveMemberWithContext(
         innerType,
         expr.property,
@@ -515,12 +576,19 @@ export function checkMember(
 
         if (methods.length > 0) {
           const candidates = methods.map((method) => {
-            // Substitute generics if we have a map
-            let returnType = method.returnType;
-            let paramTypes = method.params.map((p) => p.type);
+            // Resolve types in module context first
+            let { returnType, paramTypes } = resolveMethodTypesInModuleContext(
+              this,
+              method,
+            );
 
+            // Substitute generics if we have a map
             if (genericMap && genericMap.size > 0) {
+              console.log(
+                `Substituting return type ${this.typeToString(returnType)} with map keys: ${Array.from(genericMap.keys()).join(", ")}`,
+              );
               returnType = this.substituteType(returnType, genericMap);
+              console.log(`Result: ${this.typeToString(returnType)}`);
               paramTypes = paramTypes.map((t) =>
                 this.substituteType(t, genericMap),
               );
@@ -563,54 +631,10 @@ export function checkMember(
           }
         : effectiveObjectType;
 
-    // Check if it's an enum and look for methods
-    const symbol = this.currentScope.resolve(baseType.name);
-    if (symbol && symbol.kind === "Enum") {
-      const enumDecl = symbol.declaration as AST.EnumDecl;
-      const methods = (enumDecl.methods || []).filter(
-        (m: AST.FunctionDecl) => m.name === expr.property,
-      );
+    // Check if it's an enum and look for methods - DELEGATE TO resolveMemberWithContext
+    // const symbol = this.currentScope.resolve(baseType.name);
+    // if (symbol && symbol.kind === "Enum") { ... } removed
 
-      if (methods.length > 0) {
-        // Build method function types, stripping 'this' parameter
-        const candidates: AST.FunctionTypeNode[] = [];
-
-        for (const method of methods) {
-          // Check if first param is 'this' and strip it
-          let paramTypes = method.params.map((p) => p.type);
-          if (method.params.length > 0 && method.params[0]!.name === "this") {
-            paramTypes = method.params.slice(1).map((p) => p.type);
-          }
-
-          const funcType: AST.FunctionTypeNode = {
-            kind: "FunctionType",
-            returnType: method.returnType,
-            paramTypes,
-            location: method.location,
-            declaration: method,
-          } as any;
-
-          candidates.push(funcType);
-        }
-
-        if (candidates.length === 1 && candidates[0]) {
-          return candidates[0];
-        }
-
-        // Multiple overloads
-        if (candidates.length > 0 && candidates[0]) {
-          (candidates[0] as any).overloads = candidates;
-          return candidates[0];
-        }
-      }
-
-      // If no method found, it's an error (enum doesn't have fields)
-      throw new CompilerError(
-        `Enum '${enumDecl.name}' has no method '${expr.property}'`,
-        `To access enum variants, use the enum type directly (e.g., ${enumDecl.name}.${expr.property}).`,
-        expr.location,
-      );
-    }
     const memberContext = this.resolveMemberWithContext(
       baseType as AST.BasicTypeNode,
       expr.property,
@@ -710,18 +734,13 @@ export function checkMember(
 
         if (compatibleMethods.length === 1 && compatibleMethods[0]) {
           const method = compatibleMethods[0];
+
+          // Resolve types in module context first
+          let { returnType, paramTypes: allParamTypes } =
+            resolveMethodTypesInModuleContext(this, method);
+
           // Strip 'this' parameter
-          let paramTypes = method.params.slice(1).map((p) => p.type);
-          let returnType =
-            method.returnType ||
-            ({
-              kind: "BasicType",
-              name: "void",
-              genericArgs: [],
-              pointerDepth: 0,
-              arrayDimensions: [],
-              location: method.location,
-            } as AST.TypeNode);
+          let paramTypes = allParamTypes.slice(1);
 
           if (genericMap && genericMap.size > 0) {
             returnType = this.substituteType(returnType, genericMap);
@@ -742,15 +761,11 @@ export function checkMember(
         // Multiple overloads
         if (compatibleMethods.length > 0 && compatibleMethods[0]) {
           const first = compatibleMethods[0];
-          let firstParamTypes = first.params.slice(1).map((p) => p.type);
-          let firstReturnType = first.returnType || {
-            kind: "BasicType",
-            name: "void",
-            genericArgs: [],
-            pointerDepth: 0,
-            arrayDimensions: [],
-            location: first.location,
-          };
+
+          // Resolve types in module context first
+          let { returnType: firstReturnType, paramTypes: allFirstParamTypes } =
+            resolveMethodTypesInModuleContext(this, first);
+          let firstParamTypes = allFirstParamTypes.slice(1);
 
           if (genericMap && genericMap.size > 0) {
             firstReturnType = this.substituteType(firstReturnType, genericMap);
@@ -765,15 +780,11 @@ export function checkMember(
             paramTypes: firstParamTypes,
             location: expr.location,
             overloads: compatibleMethods.map((m) => {
-              let params = m.params.slice(1).map((p) => p.type);
-              let ret = m.returnType || {
-                kind: "BasicType",
-                name: "void",
-                genericArgs: [],
-                pointerDepth: 0,
-                arrayDimensions: [],
-                location: m.location,
-              };
+              // Resolve types in module context first
+              let { returnType: ret, paramTypes: allParams } =
+                resolveMethodTypesInModuleContext(this, m);
+              let params = allParams.slice(1);
+
               if (genericMap && genericMap.size > 0) {
                 ret = this.substituteType(ret, genericMap);
                 params = params.map((t) => this.substituteType(t, genericMap));
@@ -928,4 +939,35 @@ function inferGenericArgs(
       );
     }
   }
+}
+
+function resolveMethodTypesInModuleContext(
+  context: CallCheckerContext,
+  method: AST.FunctionDecl | AST.SpecMethod,
+): { returnType: AST.TypeNode; paramTypes: AST.TypeNode[] } {
+  let returnType = method.returnType || {
+    kind: "BasicType",
+    name: "void",
+    genericArgs: [],
+    pointerDepth: 0,
+    arrayDimensions: [],
+    location: method.location,
+  };
+  let paramTypes = method.params.map((p) => p.type);
+
+  if (method.location && (context as any).modules) {
+    const modulePath = method.location.file;
+    const moduleScope = (context as any).modules.get(modulePath);
+    if (moduleScope) {
+      const oldScope = (context as any).currentScope;
+      (context as any).currentScope = moduleScope;
+      try {
+        returnType = context.resolveType(returnType);
+        paramTypes = paramTypes.map((t) => context.resolveType(t));
+      } finally {
+        (context as any).currentScope = oldScope;
+      }
+    }
+  }
+  return { returnType, paramTypes };
 }

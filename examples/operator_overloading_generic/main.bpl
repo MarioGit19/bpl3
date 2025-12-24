@@ -13,7 +13,7 @@ struct Array<T> {
     # Constructor
     frame new(capacity: int) ret Array<T> {
         local arr: Array<T>;
-        local size: i64 = sizeof<T>() * cast<i64>(capacity);
+        local size: long = sizeof<T>() * cast<long>(capacity);
         arr.data = cast<*T>(malloc(cast<ulong>(size)));
         arr.length = 0;
         arr.capacity = capacity;
@@ -60,7 +60,7 @@ frame main() ret int {
 
     # Test with integers
     printf("--- Integer Array Test ---\n");
-    local intArr: Array<i32> = Array<i32>.new(10);
+    local intArr: Array<int> = Array<int>.new(10);
     intArr << 10;
     intArr << 20;
     intArr << 30;
@@ -71,7 +71,7 @@ frame main() ret int {
     printf("intArr[2] = %d\n", intArr[2]);
 
     # Test comparison
-    local intArr2: Array<i32> = Array<i32>.new(10);
+    local intArr2: Array<int> = Array<int>.new(10);
     intArr2 << 1;
     intArr2 << 2;
     intArr2 << 3;

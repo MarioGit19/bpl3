@@ -23,7 +23,7 @@ enum Option<T> {
     None,
 }
 
-frame test_match(c: Color) ret int {
+frame testMatch(c: Color) ret int {
     return match (c) {
         Color.Red => 0,
         Color.Green => 1,
@@ -33,6 +33,6 @@ frame test_match(c: Color) ret int {
 
 frame main() ret int {
     local c: Color = Color.Red;
-    local result: int = test_match(c);
+    local result: int = testMatch(c);
     return result;
 }

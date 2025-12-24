@@ -15,7 +15,7 @@ struct Student {
         printf("Student %d: %s - Score: %.2f\n", this.id, this.name, this.score);
     }
 }
-frame find_student_by_id(students: *Student, count: int, id: int) ret *Student {
+frame findStudentById(students: *Student, count: int, id: int) ret *Student {
     local i: int = 0;
     loop (i < count) {
         local current: *Student = students + i;
@@ -26,7 +26,7 @@ frame find_student_by_id(students: *Student, count: int, id: int) ret *Student {
     }
     return nullptr;
 }
-frame calculate_average(students: *Student, count: int) ret float {
+frame calculateAverage(students: *Student, count: int) ret float {
     local sum: float = 0.0;
     local i: int = 0;
     loop (i < count) {
@@ -36,7 +36,7 @@ frame calculate_average(students: *Student, count: int) ret float {
     }
     return sum / cast<float>(count);
 }
-frame find_highest_score(students: *Student, count: int) ret *Student {
+frame findHighestScore(students: *Student, count: int) ret *Student {
     local highest: *Student = students;
     local i: int = 1;
     loop (i < count) {
@@ -61,12 +61,12 @@ frame main() ret int {
         students[i].print();
         i = i + 1;
     }
-    local avg: float = calculate_average(&students[0], 5);
+    local avg: float = calculateAverage(&students[0], 5);
     printf("\nAverage score: %.2f\n", avg);
-    local top_student: *Student = find_highest_score(&students[0], 5);
+    local top_student: *Student = findHighestScore(&students[0], 5);
     printf("\nTop student:\n");
     top_student.print();
-    local found: *Student = find_student_by_id(&students[0], 5, 3);
+    local found: *Student = findStudentById(&students[0], 5, 3);
     if (found != nullptr) {
         printf("\nFound student with ID 3:\n");
         found.print();

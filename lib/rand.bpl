@@ -3,8 +3,8 @@
 export [Rand];
 
 struct Rand {
-    state: u64,
-    frame seed(seed: u64) ret Rand {
+    state: ulong,
+    frame seed(seed: ulong) ret Rand {
         local r: Rand;
         r.state = seed;
         return r;

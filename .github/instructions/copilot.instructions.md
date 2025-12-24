@@ -243,7 +243,7 @@ frame main() ret int {
 struct Animal {
     name: string,
     
-    frame make_sound(this: Animal) {
+    frame makeSound(this: Animal) {
         printf("%s makes a sound\n", this.name);
     }
 }
@@ -251,7 +251,7 @@ struct Animal {
 struct Dog extends Animal {
     breed: string,
     
-    frame make_sound(this: Dog) {
+    frame makeSound(this: Dog) {
         printf("%s barks!\n", this.name);
     }
 }
@@ -288,9 +288,9 @@ frame main() ret int {
 enum Option<T> {
     Some(T),
     None,
-    
+
     # Enums can have methods too
-    frame is_some(this: Option<T>) ret bool {
+    frame isSome(this: Option<T>) ret bool {
         return match<Option.Some>(this);
     }
 }
@@ -613,12 +613,12 @@ frame main() ret int {
 - Pointers to stack variables become invalid after function returns.
 
 ```bpl
-frame bad_example() ret *int {
+frame badExample() ret *int {
     local x: int = 10;
     return &x;  # DANGER: returning pointer to stack variable
 }
 
-frame good_example() ret *int {
+frame goodExample() ret *int {
     local ptr: *int = cast<*int>(malloc(sizeof(int)));
     *ptr = 10;
     return ptr;  # Safe: heap allocation persists
@@ -665,7 +665,7 @@ struct ConfigBuilder {
         return b;
     }
     
-    frame with_timeout(this: ConfigBuilder, t: int) ret ConfigBuilder {
+    frame withTimeout(this: ConfigBuilder, t: int) ret ConfigBuilder {
         this.timeout = t;
         return this;
     }
@@ -845,7 +845,7 @@ frame multiply(a: int, b: int) ret int {
 3. **Provide context** in error messages when possible.
 
 ```bpl
-frame parse_number(str: *char) ret int {
+frame parseNumber(str: *char) ret int {
     # Assuming parse implementation
     if (str == nullptr) {
         throw 1;  # Error code for null input
@@ -863,7 +863,7 @@ frame parse_number(str: *char) ret int {
 4. **Avoid buffer overflows** with bounds checking.
 
 ```bpl
-frame safe_access(arr: *int, size: int, index: int) ret int {
+frame safeAccess(arr: *int, size: int, index: int) ret int {
     if (index < 0 || index >= size) {
         throw 2;  # Error: index out of bounds
     }
@@ -881,7 +881,7 @@ frame safe_access(arr: *int, size: int, index: int) ret int {
 type Age = int;
 type UserID = int;
 
-frame get_user_age(id: UserID) ret Age {
+frame getUserAge(id: UserID) ret Age {
     # Implementation
     return 0;
 }
@@ -901,7 +901,7 @@ frame process(data: *LargeStruct) ret int {
 }
 
 # Over this:
-frame process_copy(data: LargeStruct) ret int {
+frame processCopy(data: LargeStruct) ret int {
     return data.value;
 }
 ```

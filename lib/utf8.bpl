@@ -5,11 +5,11 @@ export [UTF8];
 import [String] from "std/string.bpl";
 
 struct UTF8 {
-    frame encode(s: string) ret *char {
+    frame encode(s: string) ret string {
         # Strings are already UTF-8; return pointer
-        return cast<*char>(s);
+        return cast<string>(s);
     }
-    frame decode(buf: *char) ret String {
+    frame decode(buf: string) ret String {
         # Construct String from char* buffer
         return String.new(buf);
     }

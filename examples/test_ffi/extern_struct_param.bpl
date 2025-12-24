@@ -1,13 +1,13 @@
-extern printf(fmt: *i8, ...) ret i32;
+extern printf(fmt: string, ...) ret int;
 
 struct Point {
-    x: i32,
-    y: i32,
+    x: int,
+    y: int,
 }
 
 extern process_point(p: Point) ret void;
 
-frame main() ret i32 {
+frame main() ret int {
     local p: Point;
     p.x = 5;
     p.y = 10;

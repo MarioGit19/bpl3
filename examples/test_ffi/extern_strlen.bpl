@@ -1,7 +1,7 @@
-extern printf(fmt: *i8, ...) ret i32;
-extern strlen(s: *i8) ret u64;
+extern printf(fmt: string, ...) ret int;
+extern strlen(s: string) ret ulong;
 
-frame main() ret i32 {
+frame main() ret int {
     printf("FFI test passed: %d\n", strlen("Hello FFI"));
     return 0;
 }

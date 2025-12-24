@@ -1,8 +1,8 @@
 struct Point {
-    x: i32,
-    y: i32,
+    x: int,
+    y: int,
 }
-global const ORIGIN_X: i32 = 42;
+global const ORIGIN_X: int = 42;
 
 export [Point];
 export {ORIGIN_X};

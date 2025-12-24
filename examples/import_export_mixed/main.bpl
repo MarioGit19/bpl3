@@ -1,7 +1,7 @@
 import [Point], {ORIGIN_X} from "./mixed_exporter.bpl";
 
-extern exit(code: i32);
-extern printf(fmt: *i8, ...) ret i32;
+extern exit(code: int);
+extern printf(fmt: string, ...) ret int;
 
 frame main() {
     local p: Point = Point { x: ORIGIN_X, y: 69 };

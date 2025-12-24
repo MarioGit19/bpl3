@@ -3,30 +3,30 @@
 # This example uses a concrete IntArray type
 
 extern printf(fmt: string, ...) ret int;
-extern malloc(size: i64) ret *void;
+extern malloc(size: long) ret *void;
 extern free(ptr: *void) ret void;
-extern memcpy(dest: *void, src: *void, n: i64) ret *void;
+extern memcpy(dest: *void, src: *void, n: long) ret *void;
 
 struct IntArray {
-    data: *i32,
-    capacity: i32,
-    length: i32,
-    frame new(initial_capacity: i32) ret IntArray {
+    data: *int,
+    capacity: int,
+    length: int,
+    frame new(initial_capacity: int) ret IntArray {
         local arr: IntArray;
         arr.capacity = initial_capacity;
         arr.length = 0;
-        local size: i64 = cast<i64>(initial_capacity) * cast<i64>(4);
-        arr.data = cast<*i32>(malloc(size));
+        local size: long = cast<long>(initial_capacity) * cast<long>(4);
+        arr.data = cast<*int>(malloc(size));
         return arr;
     }
 
-    frame push(this: *IntArray, value: i32) {
+    frame push(this: *IntArray, value: int) {
         if (this.length >= this.capacity) {
             # Grow the array
-            local new_capacity: i32 = (this.capacity * 2) + 1;
-            local size: i64 = cast<i64>(new_capacity) * cast<i64>(4);
-            local new_data: *i32 = cast<*i32>(malloc(size));
-            local old_size: i64 = cast<i64>(this.length) * cast<i64>(4);
+            local new_capacity: int = (this.capacity * 2) + 1;
+            local size: long = cast<long>(new_capacity) * cast<long>(4);
+            local new_data: *int = cast<*int>(malloc(size));
+            local old_size: long = cast<long>(this.length) * cast<long>(4);
             if (this.data != null) {
                 memcpy(cast<*void>(new_data), cast<*void>(this.data), old_size);
                 free(cast<*void>(this.data));
@@ -38,7 +38,7 @@ struct IntArray {
         this.length = this.length + 1;
     }
 
-    frame pop(this: *IntArray) ret i32 {
+    frame pop(this: *IntArray) ret int {
         if (this.length == 0) {
             printf("Error: pop from empty array\n");
             return 0;
@@ -47,34 +47,34 @@ struct IntArray {
         return this.data[this.length];
     }
 
-    frame get(this: *IntArray, index: i32) ret i32 {
+    frame get(this: *IntArray, index: int) ret int {
         return this.data[index];
     }
 
-    frame set(this: *IntArray, index: i32, value: i32) {
+    frame set(this: *IntArray, index: int, value: int) {
         this.data[index] = value;
     }
 
-    frame len(this: *IntArray) ret i32 {
+    frame len(this: *IntArray) ret int {
         return this.length;
     }
 
     # Operator overloading: Push with <<
     # Returns copy to allow chaining (note: chaining creates temporaries)
-    frame __lshift__(this: *IntArray, value: i32) ret IntArray {
+    frame __lshift__(this: *IntArray, value: int) ret IntArray {
         this.push(value);
         return *this;
     }
 
     # Operator overloading: Pop with >>
     # Returns copy to allow chaining (note: chaining creates temporaries)
-    frame __rshift__(this: *IntArray, dest: *i32) ret IntArray {
+    frame __rshift__(this: *IntArray, dest: *int) ret IntArray {
         *dest = this.pop();
         return *this;
     }
 
     # Operator overloading: Array indexing with [] for reading
-    frame __get__(this: *IntArray, index: i32) ret i32 {
+    frame __get__(this: *IntArray, index: int) ret int {
         if ((index < 0) || (index >= this.length)) {
             printf("Error: index %d out of bounds (length: %d)\n", index, this.length);
             return 0;
@@ -83,7 +83,7 @@ struct IntArray {
     }
 
     # Operator overloading: Array indexing with [] for writing
-    frame __set__(this: *IntArray, index: i32, value: i32) {
+    frame __set__(this: *IntArray, index: int, value: int) {
         if ((index < 0) || (index >= this.length)) {
             printf("Error: index %d out of bounds (length: %d)\n", index, this.length);
             return;
@@ -114,7 +114,7 @@ frame main() ret int {
     arr << 50;
 
     printf("Array contents: [");
-    local i: i32 = 0;
+    local i: int = 0;
     loop (i < arr.len()) {
         printf("%d", arr.get(i));
         if (i < (arr.len() - 1)) {
@@ -161,7 +161,7 @@ frame main() ret int {
     }
     printf("]\n");
 
-    local popped: i32;
+    local popped: int;
     arr3 >> &popped;
     printf("Popped value: %d\n", popped);
     arr3 >> &popped;
@@ -223,7 +223,7 @@ frame main() ret int {
 
     mixedArr.set(1, 99);
     mixedArr << 40;
-    local val: i32;
+    local val: int;
     mixedArr >> &val;
 
     printf("After set(1, 99), << 40, and >> (popped %d): [", val);
@@ -284,7 +284,7 @@ frame main() ret int {
     exprArr << 20;
     exprArr << 30;
 
-    local idx: i32 = 1;
+    local idx: int = 1;
     printf("exprArr[idx] where idx=1: %d\n", exprArr[idx]);
     printf("exprArr[0] + exprArr[2]: %d\n", exprArr[0] + exprArr[2]);
 

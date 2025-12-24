@@ -2,17 +2,17 @@
 
 export [String];
 
-extern strlen(s: *char) ret int;
-extern strcpy(dst: *char, src: *char) ret *char;
-extern strcmp(s1: *char, s2: *char) ret int;
-extern strcat(dst: *char, src: *char) ret *char;
-extern malloc(size: i64) ret *char;
-extern free(ptr: *char) ret void;
+extern strlen(s: string) ret int;
+extern strcpy(dst: string, src: string) ret string;
+extern strcmp(s1: string, s2: string) ret int;
+extern strcat(dst: string, src: string) ret string;
+extern malloc(size: long) ret string;
+extern free(ptr: string) ret void;
 
 struct String {
-    data: *char,
+    data: string,
     length: int,
-    frame new(text: *char) ret String {
+    frame new(text: string) ret String {
         local s: String;
         if (text == null) {
             s.data = null;
@@ -21,7 +21,7 @@ struct String {
         }
         local len: int = strlen(text);
         s.length = len;
-        s.data = malloc(cast<i64>(len + 1));
+        s.data = malloc(cast<long>(len + 1));
         strcpy(s.data, text);
         return s;
     }
@@ -34,11 +34,11 @@ struct String {
         this.length = 0;
     }
 
-    frame cstr(this: *String) ret *char {
+    frame cstr(this: *String) ret string {
         return this.data;
     }
 
-    frame assign(this: *String, text: *char) {
+    frame assign(this: *String, text: string) {
         this.destroy();
         local newStr: String = String.new(text);
         this.data = newStr.data;
@@ -58,7 +58,7 @@ struct String {
         return String.new(this.data);
     }
 
-    frame includes(this: *String, substr: *char) ret bool {
+    frame includes(this: *String, substr: string) ret bool {
         if ((this.data == null) || (substr == null)) {
             return false;
         }
@@ -71,7 +71,7 @@ struct String {
             local found: bool = true;
             local j: int = 0;
             loop (j < substrLen) {
-                if (*(this.data + cast<i64>(i + j)) != *(substr + cast<i64>(j))) {
+                if (*(this.data + cast<long>(i + j)) != *(substr + cast<long>(j))) {
                     found = false;
                     break;
                 }
@@ -94,7 +94,7 @@ struct String {
             return this.clone();
         }
         local newLen: int = this.length + other.length;
-        local newData: *char = malloc(cast<i64>(newLen + 1));
+        local newData: string = malloc(cast<long>(newLen + 1));
         strcpy(newData, this.data);
         strcat(newData, other.data);
         local result: String;
@@ -176,7 +176,7 @@ struct String {
             return *this;
         }
         local newLen: int = this.length + other.length;
-        local newData: *char = malloc(cast<i64>(newLen + 1));
+        local newData: string = malloc(cast<long>(newLen + 1));
         strcpy(newData, this.data);
         strcat(newData, other.data);
         free(this.data);

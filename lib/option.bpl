@@ -2,73 +2,50 @@
 
 export [Option];
 
-struct Option<T> {
-    has: bool,
-    value: T,
-    frame some(value: T) ret Option<T> {
-        local o: Option<T>;
-        o.has = true;
-        o.value = value;
-        return o;
+enum Option<T> {
+    Some(T),
+    None,
+
+    frame isSome(this: Option<T>) ret bool {
+        return match<Option.Some>(this);
     }
 
-    frame none() ret Option<T> {
-        local o: Option<T>;
-        o.has = false;
-        return o;
+    frame isNone(this: Option<T>) ret bool {
+        return match<Option.None>(this);
     }
 
-    frame isSome(this: *Option<T>) ret bool {
-        if (this.has) {
-            return true;
-        }
-        return false;
-    }
-
-    frame isNone(this: *Option<T>) ret bool {
-        if (this.has) {
-            return false;
-        }
-        return true;
-    }
-
-    frame unwrap(this: *Option<T>) ret T {
-        if (this.has) {
-            return this.value;
-        }
-        # Using error code 100 for unwrap on None
+    frame panic() ret T {
         throw 100;
     }
 
-    frame unwrapOr(this: *Option<T>, defaultValue: T) ret T {
-        if (this.has) {
-            return this.value;
-        }
-        return defaultValue;
+    frame unwrap(this: Option<T>) ret T {
+        return match (this) {
+            Option.Some(val) => val,
+            Option.None => Option<T>.panic(),
+        };
     }
 
-    # Maps Option<T> to Option<U> by applying a function
-    # Note: Cannot implement as generic function pointer in current BPL3
-    # Users should call this manually with their mapping logic
-
-    # Operator overloading: Equality comparison
-    # Two Options are equal if both are None or both are Some with equal values
-    # Note: Requires T to have __eq__ or be primitive
-    frame __eq__(this: *Option<T>, other: Option<T>) ret bool {
-        if (this.has && other.has) {
-            # Both Some - compare values (works for primitives)
-            return this.value == other.value;
-        }
-        if (!this.has && !other.has) {
-            # Both None
-            return true;
-        }
-        # One Some, one None
-        return false;
+    frame unwrapOr(this: Option<T>, defaultValue: T) ret T {
+        return match (this) {
+            Option.Some(val) => val,
+            Option.None => defaultValue,
+        };
     }
 
-    # Operator overloading: Inequality comparison
-    frame __ne__(this: *Option<T>, other: Option<T>) ret bool {
-        return !this.__eq__(other);
+    frame __eq__(this: Option<T>, other: Option<T>) ret bool {
+        return match (this) {
+            Option.Some(v1) => match (other) {
+                Option.Some(v2) => v1 == v2,
+                Option.None => false,
+            },
+            Option.None => match (other) {
+                Option.Some(_) => false,
+                Option.None => true,
+            },
+        };
+    }
+
+    frame __ne__(this: Option<T>, other: Option<T>) ret bool {
+        return !(this.__eq__(other));
     }
 }

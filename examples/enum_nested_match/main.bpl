@@ -19,7 +19,7 @@ enum Status {
     Error(int),
 }
 
-frame unwrap_nested(outer: Outer) ret int {
+frame unwrapNested(outer: Outer) ret int {
     # Workaround for nested patterns: use nested match expressions
     # Instead of: Outer.Wrapped(Inner.Value(v)) => v
     # We use: Outer.Wrapped(inner) => match (inner) { Inner.Value(v) => v }
@@ -32,7 +32,7 @@ frame unwrap_nested(outer: Outer) ret int {
     };
 }
 
-frame process_status(s: Status) ret int {
+frame processStatus(s: Status) ret int {
     return match (s) {
         Status.Ok(code) => code,
         Status.Warning(code) => code + 100,
@@ -40,10 +40,10 @@ frame process_status(s: Status) ret int {
     };
 }
 
-frame combine_nested(o1: Outer, o2: Outer, s: Status) ret int {
-    local v1: int = unwrap_nested(o1);
-    local v2: int = unwrap_nested(o2);
-    local status_val: int = process_status(s);
+frame combineNested(o1: Outer, o2: Outer, s: Status) ret int {
+    local v1: int = unwrapNested(o1);
+    local v2: int = unwrapNested(o2);
+    local status_val: int = processStatus(s);
 
     printf("v1: %d, v2: %d, status: %d\n", v1, v2, status_val);
 
@@ -63,13 +63,13 @@ frame main() ret int {
     # Test status matching
     local status: Status = Status.Warning(5);
 
-    printf("Test 1 - Wrapped(Value(42)): %d\n", unwrap_nested(outer1));
-    printf("Test 2 - Wrapped(Empty): %d\n", unwrap_nested(outer2));
-    printf("Test 3 - None: %d\n", unwrap_nested(outer3));
-    printf("Test 4 - Warning(5): %d\n", process_status(status));
+    printf("Test 1 - Wrapped(Value(42)): %d\n", unwrapNested(outer1));
+    printf("Test 2 - Wrapped(Empty): %d\n", unwrapNested(outer2));
+    printf("Test 3 - None: %d\n", unwrapNested(outer3));
+    printf("Test 4 - Warning(5): %d\n", processStatus(status));
 
     # Combined test: 42 + 0 + 105 = 147
-    local result: int = combine_nested(outer1, outer2, status);
+    local result: int = combineNested(outer1, outer2, status);
     printf("Combined result: %d\n", result);
 
     return result;

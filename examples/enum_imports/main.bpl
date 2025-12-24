@@ -2,7 +2,7 @@
 
 import [Color], [Status], [Message] from "./enums.bpl";
 
-frame test_color() ret int {
+frame testColor() ret int {
     local c: Color = Color.Red;
     return match (c) {
         Color.Red => 1,
@@ -11,7 +11,7 @@ frame test_color() ret int {
     };
 }
 
-frame test_status() ret int {
+frame testStatus() ret int {
     local s: Status = Status.Busy;
     return match (s) {
         Status.Ready => 10,
@@ -20,7 +20,7 @@ frame test_status() ret int {
     };
 }
 
-frame test_message() ret int {
+frame testMessage() ret int {
     local msg: Message = Message.Move(5, 10);
     # Pattern destructuring now works! Variables x, y, text can be used.
     return match (msg) {
@@ -31,9 +31,9 @@ frame test_message() ret int {
 }
 
 frame main() ret int {
-    local color_result: int = test_color();
-    local status_result: int = test_status();
-    local message_result: int = test_message();
+    local color_result: int = testColor();
+    local status_result: int = testStatus();
+    local message_result: int = testMessage();
 
     # Returns 1 + 20 + 200 = 221 (pattern destructuring implemented!)
     return color_result + status_result + message_result;

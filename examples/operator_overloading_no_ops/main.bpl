@@ -12,7 +12,7 @@ struct Box<T> {
 }
 
 frame main() ret int {
-    local b: Box<i32>;
+    local b: Box<int>;
     b.val = 10;
     printf("value: %d\n", b.val);
     return 0;

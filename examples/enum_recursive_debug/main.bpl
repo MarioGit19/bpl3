@@ -1,7 +1,7 @@
 # Test recursive enums with pointers - debug version
 
 extern printf(fmt: string, ...) ret int;
-extern malloc(size: u64) ret *void;
+extern malloc(size: ulong) ret *void;
 
 enum MyList {
     Nil,

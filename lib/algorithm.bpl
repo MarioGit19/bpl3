@@ -6,10 +6,10 @@ import [Array] from "std/array.bpl";
 
 struct Algorithm {
     frame reverseInt(arr: *Array<int>) {
-        local n: i32 = arr.len();
-        local i: i32 = 0;
+        local n: int = arr.len();
+        local i: int = 0;
         loop (i < (n / 2)) {
-            local j: i32 = n - 1 - i;
+            local j: int = n - 1 - i;
             local a: int = arr.get(i);
             local b: int = arr.get(j);
             arr.set(i, b);
@@ -19,10 +19,10 @@ struct Algorithm {
     }
 
     frame sortIntAsc(arr: *Array<int>) {
-        local n: i32 = arr.len();
-        local i: i32 = 0;
+        local n: int = arr.len();
+        local i: int = 0;
         loop (i < n) {
-            local j: i32 = 0;
+            local j: int = 0;
             loop (j < (n - 1)) {
                 local a: int = arr.get(j);
                 local b: int = arr.get(j + 1);

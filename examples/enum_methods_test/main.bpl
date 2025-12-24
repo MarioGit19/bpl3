@@ -5,7 +5,7 @@ enum Status {
     Active,
     Completed,
 
-    frame is_active(this: Status) ret bool {
+    frame isActive(this: Status) ret bool {
         return match<Status.Active>(this);
     }
 
@@ -21,7 +21,7 @@ enum Status {
 frame main() ret int {
     local s: Status = Status.Active;
 
-    if (s.is_active()) {
+    if (s.isActive()) {
         printf("Status is active\n");
     }
     printf("Status code: %d\n", s.code());

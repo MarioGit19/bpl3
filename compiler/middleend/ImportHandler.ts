@@ -377,7 +377,12 @@ export class ImportHandler {
     this.ctx.defineSymbol(
       stmt.namespace!,
       "Module",
-      undefined,
+      {
+        kind: "ModuleType",
+        name: stmt.namespace!,
+        moduleScope: exportedScope,
+        location: stmt.location,
+      } as any,
       stmt,
       exportedScope,
     );

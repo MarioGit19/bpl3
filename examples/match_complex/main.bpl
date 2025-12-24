@@ -4,29 +4,29 @@ enum Tree {
 }
 
 extern printf(fmt: string, ...);
-extern malloc(size: u64) ret *void;
+extern malloc(size: ulong) ret *void;
 
-frame create_leaf(val: int) ret *Tree {
+frame createLeaf(val: int) ret *Tree {
     local t: *Tree = cast<*Tree>(malloc(sizeof(Tree)));
     *t = Tree.Leaf(val);
     return t;
 }
 
-frame create_node(left: *Tree, right: *Tree) ret *Tree {
+frame createNode(left: *Tree, right: *Tree) ret *Tree {
     local t: *Tree = cast<*Tree>(malloc(sizeof(Tree)));
     *t = Tree.Node(left, right);
     return t;
 }
 
-frame sum_tree(t: *Tree) ret int {
+frame sumTree(t: *Tree) ret int {
     if (t == null) {
         return 0;
     }
     return match (*t) {
         Tree.Leaf(val) => val,
         Tree.Node(left, right) => {
-            local l_sum: int = sum_tree(left);
-            local r_sum: int = sum_tree(right);
+            local l_sum: int = sumTree(left);
+            local r_sum: int = sumTree(right);
             return l_sum + r_sum;
         },
     };
@@ -38,7 +38,7 @@ enum Command {
     Exit,
 }
 
-frame process_command(cmd: Command) ret int {
+frame processCommand(cmd: Command) ret int {
     return match (cmd) {
         Command.Print(msg) => {
             printf("Printing: %s\n", msg);
@@ -57,9 +57,9 @@ frame process_command(cmd: Command) ret int {
 
 frame main() {
     # Test recursive tree sum
-    local t: *Tree = create_node(create_node(create_leaf(1), create_leaf(2)), create_leaf(3));
+    local t: *Tree = createNode(createNode(createLeaf(1), createLeaf(2)), createLeaf(3));
 
-    local sum: int = sum_tree(t);
+    local sum: int = sumTree(t);
     printf("Tree sum: %d\n", sum);
 
     # Test command processing with side effects
@@ -67,11 +67,11 @@ frame main() {
     local c2: Command = Command.Add(10, 20);
     local c3: Command = Command.Exit;
 
-    process_command(c1);
-    local res: int = process_command(c2);
+    processCommand(c1);
+    local res: int = processCommand(c2);
     printf("Add result: %d\n", res);
 
-    local exit_code: int = process_command(c3);
+    local exit_code: int = processCommand(c3);
     printf("Exit code: %d\n", exit_code);
 
     # Test nested match with different types

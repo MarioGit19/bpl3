@@ -7,7 +7,7 @@ import [Option] from "std/option.bpl";
 
 struct Stack<T> {
     inner: Array<T>,
-    frame new(initial_capacity: i32) ret Stack<T> {
+    frame new(initial_capacity: int) ret Stack<T> {
         local s: Stack<T>;
         s.inner = Array<T>.new(initial_capacity);
         return s;
@@ -22,19 +22,19 @@ struct Stack<T> {
     }
 
     frame pop(this: *Stack<T>) ret Option<T> {
-        local len: i32 = this.inner.len();
+        local len: int = this.inner.len();
         if (len <= 0) {
-            return Option<T>.none();
+            return Option<T>.None;
         }
-        local idx: i32 = len - 1;
+        local idx: int = len - 1;
         local value: T = this.inner.get(idx);
         # Reduce length (no shrink of capacity)
         # Overwrite last element not necessary
         this.inner.length = idx;
-        return Option<T>.some(value);
+        return Option<T>.Some(value);
     }
 
-    frame size(this: *Stack<T>) ret i32 {
+    frame size(this: *Stack<T>) ret int {
         return this.inner.len();
     }
 
@@ -43,11 +43,11 @@ struct Stack<T> {
     }
 
     frame peek(this: *Stack<T>) ret Option<T> {
-        local len: i32 = this.inner.len();
+        local len: int = this.inner.len();
         if (len <= 0) {
-            return Option<T>.none();
+            return Option<T>.None;
         }
-        return Option<T>.some(this.inner.get(len - 1));
+        return Option<T>.Some(this.inner.get(len - 1));
     }
 
     frame clear(this: *Stack<T>) {

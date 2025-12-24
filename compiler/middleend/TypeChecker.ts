@@ -102,8 +102,24 @@ export class TypeChecker extends TypeCheckerBase {
       this.modules.set(modulePath, moduleScope);
     }
 
+    // Pass 0: Process imports
+    for (const stmt of program.statements) {
+      if (stmt.kind === "Import") {
+        try {
+          this.checkImport(stmt as AST.ImportStmt);
+        } catch (e) {
+          if (this.collectAllErrors && e instanceof CompilerError) {
+            this.errors.push(e);
+            continue;
+          }
+          throw e;
+        }
+      }
+    }
+
     // Pass 1: Hoist declarations
     for (const stmt of program.statements) {
+      if (stmt.kind === "Import") continue;
       try {
         this.hoistDeclaration(stmt);
       } catch (e) {
@@ -117,6 +133,7 @@ export class TypeChecker extends TypeCheckerBase {
 
     // Pass 2: Check bodies
     for (const stmt of program.statements) {
+      if (stmt.kind === "Import") continue;
       try {
         this.checkStatement(stmt);
       } catch (e) {

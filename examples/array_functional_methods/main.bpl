@@ -58,7 +58,7 @@ frame main() ret int {
     printf("Any > 10: %s\n", anyBig ? "true" : "false");
 
     # IndexOf: find index of 3
-    local idx: i32 = arr.indexOf(3);
+    local idx: int = arr.indexOf(3);
     printf("Index of 3: %d\n", idx);
 
     # Contains: does it contain 5?

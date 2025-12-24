@@ -1,7 +1,7 @@
 import [MyStruct] from "./type_exporter.bpl";
 
-extern printf(fmt: *i8, ...) ret i32;
-extern exit(code: i32);
+extern printf(fmt: string, ...) ret int;
+extern exit(code: int);
 
 frame main() {
     local s: MyStruct = MyStruct { x: 1, y: 2 };

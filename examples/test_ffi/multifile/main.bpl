@@ -1,9 +1,9 @@
-import print_hello from "./lib.bpl";
+import printHello from "./lib.bpl";
 
-extern printf(fmt: *i8, ...) ret i32;
+extern printf(fmt: string, ...) ret int;
 
-frame main() ret i32 {
-    print_hello();
+frame main() ret int {
+    printHello();
     printf("Multi-file extern OK\n");
     return 0;
 }

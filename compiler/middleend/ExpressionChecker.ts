@@ -855,21 +855,45 @@ export function checkTypeMatch(
   // Check if this is an enum variant pattern
   if (targetTypeName.includes(".")) {
     const parts = targetTypeName.split(".");
-    let enumName = parts[0]!;
+    const variantName = parts.pop()!;
+    const enumPath = parts;
 
-    const genericMatch = enumName.match(/^([^<]+)/);
-    if (genericMatch) {
-      enumName = genericMatch[1]!;
+    let currentScope = this.currentScope;
+    let symbol: Symbol | undefined;
+
+    for (let i = 0; i < enumPath.length; i++) {
+      let part = enumPath[i]!;
+      const genericMatch = part.match(/^([^<]+)/);
+      if (genericMatch) {
+        part = genericMatch[1]!;
+      }
+
+      symbol = currentScope.resolve(part);
+      if (!symbol) break;
+
+      if (i < enumPath.length - 1) {
+        if (symbol.moduleScope) {
+          currentScope = symbol.moduleScope;
+        } else {
+          symbol = undefined;
+          break;
+        }
+      }
     }
 
-    const enumDecl = this.currentScope.resolve(enumName);
-    if (!enumDecl || enumDecl.kind !== "Enum") {
+    if (!symbol || symbol.kind !== "Enum") {
       throw new CompilerError(
-        `Cannot find enum '${enumName}'`,
-        `The type '${enumName}' in match<${targetTypeName}> is not a defined enum.`,
+        `Cannot find enum '${enumPath.join(".")}'`,
+        `The type '${enumPath.join(".")}' in match<${targetTypeName}> is not a defined enum.`,
         expr.location,
       );
     }
+
+    // Update targetType to use canonical enum name so codegen can find it
+    (expr.targetType as AST.BasicTypeNode).name =
+      `${symbol.name}.${variantName}`;
+    (expr.targetType as AST.BasicTypeNode).resolvedDeclaration =
+      symbol.declaration as AST.EnumDecl;
   } else {
     const isDefined =
       KNOWN_TYPES.includes(targetTypeName) ||
@@ -918,23 +942,58 @@ export function checkMatchExpr(
     );
   }
 
-  const symbol = this.currentScope.resolve(valueType.name);
-  if (!symbol) {
-    throw new CompilerError(
-      `Cannot find type '${valueType.name}'`,
-      "Ensure the enum is declared before use.",
-      expr.value.location,
-    );
-  }
-  if (symbol.kind !== "Enum") {
-    throw new CompilerError(
-      `Cannot match on non-enum type '${valueType.name}' (found ${symbol.kind})`,
-      "Match expressions are currently only supported on enum types.",
-      expr.value.location,
-    );
+  let enumDecl: AST.EnumDecl | undefined;
+  let symbolKind: string | undefined;
+
+  if (valueType.kind === "BasicType" && valueType.resolvedDeclaration) {
+    if (valueType.resolvedDeclaration.kind === "EnumDecl") {
+      enumDecl = valueType.resolvedDeclaration as AST.EnumDecl;
+      symbolKind = "Enum";
+    } else {
+      symbolKind = "Other";
+    }
   }
 
-  const enumDecl = symbol.declaration as AST.EnumDecl;
+  if (!enumDecl) {
+    let symbol = this.currentScope.resolve(valueType.name);
+    if (!symbol && valueType.name.includes(".")) {
+      const parts = valueType.name.split(".");
+      let current = this.currentScope.resolve(parts[0]);
+      for (let i = 1; i < parts.length; i++) {
+        if (!current || !current.moduleScope) {
+          current = undefined;
+          break;
+        }
+        current = current.moduleScope.getInCurrentScope(parts[i]);
+      }
+      symbol = current;
+    }
+
+    if (symbol) {
+      symbolKind = symbol.kind;
+      if (symbol.kind === "Enum") {
+        enumDecl = symbol.declaration as AST.EnumDecl;
+      }
+    }
+  }
+
+  if (!enumDecl) {
+    if (!symbolKind) {
+      throw new CompilerError(
+        `Cannot find type '${valueType.name}'`,
+        "Ensure the enum is declared before use.",
+        expr.value.location,
+      );
+    } else {
+      throw new CompilerError(
+        `Cannot match on non-enum type '${valueType.name}' (found ${symbolKind})`,
+        "Match expressions are currently only supported on enum types.",
+        expr.value.location,
+      );
+    }
+  }
+
+  // enumDecl is already resolved above
 
   let resultType: AST.TypeNode | undefined;
   for (const arm of expr.arms) {

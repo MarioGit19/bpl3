@@ -24,9 +24,9 @@ frame main() ret int {
     printf("=== Testing Generic Operator Overloading ===\n");
 
     # Test with integers
-    local c1: Counter<i32>;
+    local c1: Counter<int>;
     c1.value = 10;
-    local c2: Counter<i32> = c1 + 5;
+    local c2: Counter<int> = c1 + 5;
 
     printf("c1.value = %d\n", c1.value);
     printf("c2.value = %d\n", c2.value);

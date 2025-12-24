@@ -1,0 +1,6 @@
+{
+  "expectedOutput": "Testing assignment...\nAssignment OK\nTesting match...\nMatch Some: 15\nTesting match...\nMatch None\nTesting match<Type>...\nIs Some\nTesting equality...\nEquality OK\nTesting call and return...\nCall/Return OK\nTesting nested...\nNested None\n",
+  "args": [],
+  "env": {},
+  "input": ""
+}

@@ -15,17 +15,17 @@ struct Rectangle {
     frame perimeter(this: Rectangle) ret int {
         return (2 * this.width) + this.height;
     }
-    frame is_square(this: Rectangle) ret bool {
+    frame isSquare(this: Rectangle) ret bool {
         return this.width == this.height;
     }
     frame scale(this: Rectangle, factor: int) ret Rectangle {
         return Rectangle.new(this.width * factor, this.height * factor);
     }
-    frame print_info(this: Rectangle) {
+    frame printInfo(this: Rectangle) {
         printf("Rectangle: %d x %d\n", this.width, this.height);
         printf("  Area: %d\n", this.area());
         printf("  Perimeter: %d\n", this.perimeter());
-        if (this.is_square()) {
+        if (this.isSquare()) {
             printf("  This is a square!\n");
         }
     }
@@ -44,7 +44,7 @@ struct Circle {
     frame circumference(this: Circle) ret float {
         return 2.0 * 3.14159 * this.radius;
     }
-    frame print_info(this: Circle) {
+    frame printInfo(this: Circle) {
         printf("Circle: radius = %.2f\n", this.radius);
         printf("  Area: %.2f\n", this.area());
         printf("  Circumference: %.2f\n", this.circumference());
@@ -55,13 +55,13 @@ frame main() ret int {
     local rect2: Rectangle = Rectangle.new(7, 7);
     local circle: Circle = Circle.new(5.0);
     printf("=== Rectangle 1 ===\n");
-    rect1.print_info();
+    rect1.printInfo();
     printf("\n=== Rectangle 2 ===\n");
-    rect2.print_info();
+    rect2.printInfo();
     local scaled: Rectangle = rect1.scale(2);
     printf("\n=== Scaled Rectangle (2x) ===\n");
-    scaled.print_info();
+    scaled.printInfo();
     printf("\n=== Circle ===\n");
-    circle.print_info();
+    circle.printInfo();
     return 0;
 }

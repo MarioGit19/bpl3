@@ -12,10 +12,10 @@ struct Box<T> {
 }
 
 frame main() ret int {
-    local b: Box<i32>;
-    local addend: i32 = 5;
+    local b: Box<int>;
+    local addend: int = 5;
     b.val = 10;
-    local b2: Box<i32> = b + addend;
+    local b2: Box<int> = b + addend;
     printf("value: %d\n", b2.val);
     return 0;
 }

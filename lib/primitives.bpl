@@ -1,15 +1,15 @@
 import [String] from "std/string.bpl";
 
-extern sprintf(str: *char, format: *char, ...) ret i32;
-extern snprintf(str: *char, size: i64, format: *char, ...) ret i32;
-extern printf(format: *char, ...) ret i32;
-extern malloc(size: i64) ret *char;
-extern free(ptr: *char) ret void;
+extern sprintf(str: string, format: string, ...) ret int;
+extern snprintf(str: string, size: long, format: string, ...) ret int;
+extern printf(format: string, ...) ret int;
+extern malloc(size: long) ret string;
+extern free(ptr: string) ret void;
 
 struct Int {
-    value: i32,
+    value: int,
     frame toString(this: *Int) ret String {
-        local buf: *char = malloc(32);
+        local buf: string = malloc(32);
         sprintf(buf, "%d", this.value);
         local s: String = String.new(buf);
         free(buf);
@@ -31,7 +31,7 @@ struct Bool {
 struct Double {
     value: double,
     frame toString(this: *Double) ret String {
-        local buf: *char = malloc(64);
+        local buf: string = malloc(64);
         sprintf(buf, "%f", this.value);
         local s: String = String.new(buf);
         free(buf);
@@ -40,9 +40,9 @@ struct Double {
 }
 
 struct Long {
-    value: i64,
+    value: long,
     frame toString(this: *Long) ret String {
-        local buf: *char = malloc(32);
+        local buf: string = malloc(32);
         sprintf(buf, "%lld", this.value);
         local s: String = String.new(buf);
         free(buf);
@@ -51,10 +51,10 @@ struct Long {
 }
 
 struct Char {
-    value: i8,
+    value: char,
     frame toString(this: *Char) ret String {
-        local buf: *char = malloc(8);
-        sprintf(buf, "%c", cast<i32>(this.value));
+        local buf: string = malloc(8);
+        sprintf(buf, "%c", cast<int>(this.value));
         local s: String = String.new(buf);
         free(buf);
         return s;
@@ -62,10 +62,10 @@ struct Char {
 }
 
 struct UChar {
-    value: u8,
+    value: uchar,
     frame toString(this: *UChar) ret String {
-        local buf: *char = malloc(8);
-        sprintf(buf, "%c", cast<u32>(this.value));
+        local buf: string = malloc(8);
+        sprintf(buf, "%c", cast<uint>(this.value));
         local s: String = String.new(buf);
         free(buf);
         return s;
@@ -73,10 +73,10 @@ struct UChar {
 }
 
 struct Short {
-    value: i16,
+    value: short,
     frame toString(this: *Short) ret String {
-        local buf: *char = malloc(16);
-        sprintf(buf, "%hd", cast<i32>(this.value));
+        local buf: string = malloc(16);
+        sprintf(buf, "%hd", cast<int>(this.value));
         local s: String = String.new(buf);
         free(buf);
         return s;
@@ -84,10 +84,10 @@ struct Short {
 }
 
 struct UShort {
-    value: u16,
+    value: ushort,
     frame toString(this: *UShort) ret String {
-        local buf: *char = malloc(16);
-        sprintf(buf, "%d", cast<i32>(this.value));
+        local buf: string = malloc(16);
+        sprintf(buf, "%d", cast<int>(this.value));
         local s: String = String.new(buf);
         free(buf);
         return s;
@@ -95,9 +95,9 @@ struct UShort {
 }
 
 struct UInt {
-    value: u32,
+    value: uint,
     frame toString(this: *UInt) ret String {
-        local buf: *char = malloc(16);
+        local buf: string = malloc(16);
         sprintf(buf, "%u", this.value);
         local s: String = String.new(buf);
         free(buf);
@@ -106,9 +106,9 @@ struct UInt {
 }
 
 struct ULong {
-    value: u64,
+    value: ulong,
     frame toString(this: *ULong) ret String {
-        local buf: *char = malloc(32);
+        local buf: string = malloc(32);
         sprintf(buf, "%llu", this.value);
         local s: String = String.new(buf);
         free(buf);

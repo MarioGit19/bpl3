@@ -1,10 +1,10 @@
-extern printf(fmt: *char, ...) ret int;
-extern malloc(size: i64) ret *void;
+extern printf(fmt: string, ...) ret int;
+extern malloc(size: long) ret *void;
 extern free(ptr: *void);
 
 struct User {
     id: int,
-    name: *char,
+    name: string,
 }
 
 struct Item {
@@ -12,7 +12,7 @@ struct Item {
 }
 
 # Test 1: nullptr assigned to various pointer types (including struct pointers)
-frame test_nullptr_pointers() {
+frame testNullptrPointers() {
     printf("== Test 1: nullptr for all pointers ==\n");
     local p1: *int = nullptr;
     local p2: *User = nullptr;
@@ -23,18 +23,18 @@ frame test_nullptr_pointers() {
 }
 
 # Test 2: void pointer from malloc assigned to typed pointers
-frame test_void_to_typed() {
+frame testVoidToTyped() {
     printf("== Test 2: void* to typed pointers ==\n");
     local voidPtr: *void = malloc(100);
     local intPtr: *int = voidPtr;
     local userPtr: *User = voidPtr;
-    local charPtr: *char = voidPtr;
+    local charPtr: string = voidPtr;
     free(voidPtr);
     printf("void* to typed pointers: OK\n");
 }
 
 # Test 3: typed pointers assigned to void pointer
-frame test_typed_to_void() {
+frame testTypedToVoid() {
     printf("== Test 3: typed pointers to void* ==\n");
     local user: User = User { id: 42, name: "test" };
     local item: Item = Item { value: 99 };
@@ -52,7 +52,7 @@ frame acceptsVoidPtr(ptr: *void) {
     printf("void* param accepted: OK\n");
 }
 
-frame test_void_param() {
+frame testVoidParam() {
     printf("== Test 4: void* parameters ==\n");
     local user: User = User { id: 1, name: "alice" };
     local userPtr: *User = &user;
@@ -64,7 +64,7 @@ frame returnsVoidPtr() ret *void {
     return malloc(50);
 }
 
-frame test_void_return() {
+frame testVoidReturn() {
     printf("== Test 6: void* return values ==\n");
     local voidPtr: *void = returnsVoidPtr();
     local intPtr: *int = voidPtr;
@@ -73,7 +73,7 @@ frame test_void_return() {
 }
 
 # Test 6: malloc pattern (common use case)
-frame test_malloc_pattern() {
+frame testMallocPattern() {
     printf("== Test 6: malloc pattern ==\n");
     local userPtr: *User = malloc(sizeof(User));
     userPtr.id = 100;
@@ -83,7 +83,7 @@ frame test_malloc_pattern() {
 }
 
 # Test 7: null checks
-frame test_null_checks() {
+frame testNullChecks() {
     printf("== Test 7: null checks ==\n");
     local ptr: *int = nullptr;
     if (ptr == nullptr) {
@@ -97,13 +97,13 @@ frame test_null_checks() {
 
 frame main() ret int {
     printf("=== Null/Pointer Compatibility Tests ===\n");
-    test_nullptr_pointers();
-    test_void_to_typed();
-    test_typed_to_void();
-    test_void_param();
-    test_void_return();
-    test_malloc_pattern();
-    test_null_checks();
+    testNullptrPointers();
+    testVoidToTyped();
+    testTypedToVoid();
+    testVoidParam();
+    testVoidReturn();
+    testMallocPattern();
+    testNullChecks();
     printf("=== All tests passed ===\n");
     return 0;
 }

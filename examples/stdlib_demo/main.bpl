@@ -2,10 +2,10 @@ import [Array] from "std/array.bpl";
 import [String] from "std/string.bpl";
 import [IO] from "std/io.bpl";
 
-extern malloc(size: i64) ret *void;
+extern malloc(size: long) ret *void;
 extern free(ptr: *void) ret void;
 
-frame demo_array() {
+frame demoArray() {
     IO.log("--- Demo Array<int> ---");
     local arr: Array<int> = Array<int>.new(2);
 
@@ -36,7 +36,7 @@ frame demo_array() {
     IO.log("Array destroyed.");
 }
 
-frame demo_array_string() {
+frame demoArrayString() {
     IO.log("\n--- Demo Array<String> ---");
     local arr: Array<String> = Array<String>.new(2);
 
@@ -72,14 +72,14 @@ frame demo_array_string() {
     IO.log("Array<String> destroyed.");
 }
 
-frame demo_string() {
+frame demoString() {
     IO.log("\n--- Demo String ---");
     local s: String = String.new("Hello String");
     IO.printString(s.cstr());
     s.destroy();
 }
 
-frame demo_io() {
+frame demoIo() {
     IO.log("\n--- Demo IO ---");
     IO.log("IO.log test");
     IO.printInt(12345);
@@ -96,7 +96,7 @@ frame demo_io() {
 
     # Test readLine
     IO.log("Enter text:");
-    local buf: *char = cast<*char>(malloc(cast<i64>(100)));
+    local buf: string = cast<string>(malloc(cast<long>(100)));
     # Note: gets is unsafe, but used here for simplicity in demo
     local len: int = IO.readLine(buf);
     # Remove newline if present (gets usually keeps it or not? gets removes newline, fgets keeps it. 
@@ -109,10 +109,10 @@ frame demo_io() {
     free(cast<*void>(buf));
 }
 
-frame main() ret i32 {
-    demo_array();
-    demo_array_string();
-    demo_string();
-    demo_io();
+frame main() ret int {
+    demoArray();
+    demoArrayString();
+    demoString();
+    demoIo();
     return 0;
 }

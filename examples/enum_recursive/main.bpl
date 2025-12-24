@@ -1,20 +1,20 @@
 # Test recursive enums with pointers
 
 extern printf(fmt: string, ...) ret int;
-extern malloc(size: u64) ret *void;
+extern malloc(size: ulong) ret *void;
 
 enum List {
     Nil,
     Cons(int, *List),
 }
 
-frame list_sum(list: *List) ret int {
+frame listSum(list: *List) ret int {
     if (list == null) {
         return 0;
     }
     return match (*list) {
         List.Nil => 0,
-        List.Cons(value, next) => value + list_sum(next),
+        List.Cons(value, next) => value + listSum(next),
     };
 }
 
@@ -32,7 +32,7 @@ frame main() ret int {
     local head: *List = malloc(16);
     *head = List.Cons(1, node1);
 
-    local sum: int = list_sum(head);
+    local sum: int = listSum(head);
     printf("List sum: %d\n", sum);
 
     return sum;

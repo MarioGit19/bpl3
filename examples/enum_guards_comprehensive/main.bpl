@@ -16,7 +16,7 @@ enum Status {
 }
 
 # Classify temperature readings
-frame classify_temp(temp: Temperature) ret string {
+frame classifyTemp(temp: Temperature) ret string {
     return match (temp) {
         Temperature.Celsius(c) if c > 30 => "hot",
         Temperature.Celsius(c) if c > 15 => "warm",
@@ -34,7 +34,7 @@ frame classify_temp(temp: Temperature) ret string {
 }
 
 # Check loading progress with guards
-frame check_status(s: Status) ret int {
+frame checkStatus(s: Status) ret int {
     return match (s) {
         Status.Ready => 0,
         Status.Loading(pct) if pct >= 100 => 100, # Complete
@@ -47,7 +47,7 @@ frame check_status(s: Status) ret int {
 }
 
 # Guards with complex conditions
-frame validate_progress(s: Status) ret string {
+frame validateProgress(s: Status) ret string {
     return match (s) {
         Status.Loading(p) if (p >= 0) && (p <= 100) => "valid",
         Status.Loading(p) if p < 0 => "negative progress",
@@ -65,16 +65,16 @@ frame main() ret int {
     local t3: Temperature = Temperature.Celsius(5);
     local t4: Temperature = Temperature.Celsius(-10);
 
-    printf("35C: %s\n", classify_temp(t1));
-    printf("20C: %s\n", classify_temp(t2));
-    printf("5C: %s\n", classify_temp(t3));
-    printf("-10C: %s\n", classify_temp(t4));
+    printf("35C: %s\n", classifyTemp(t1));
+    printf("20C: %s\n", classifyTemp(t2));
+    printf("5C: %s\n", classifyTemp(t3));
+    printf("-10C: %s\n", classifyTemp(t4));
 
     printf("\n=== Fahrenheit ===\n");
     local f1: Temperature = Temperature.Fahrenheit(95);
     local f2: Temperature = Temperature.Fahrenheit(68);
-    printf("95F: %s\n", classify_temp(f1));
-    printf("68F: %s\n", classify_temp(f2));
+    printf("95F: %s\n", classifyTemp(f1));
+    printf("68F: %s\n", classifyTemp(f2));
 
     printf("\n=== Loading Progress ===\n");
     local s1: Status = Status.Loading(0);
@@ -83,20 +83,20 @@ frame main() ret int {
     local s4: Status = Status.Loading(80);
     local s5: Status = Status.Loading(100);
 
-    printf("Progress 0%%: %d\n", check_status(s1));
-    printf("Progress 30%%: %d\n", check_status(s2));
-    printf("Progress 60%%: %d\n", check_status(s3));
-    printf("Progress 80%%: %d\n", check_status(s4));
-    printf("Progress 100%%: %d\n", check_status(s5));
+    printf("Progress 0%%: %d\n", checkStatus(s1));
+    printf("Progress 30%%: %d\n", checkStatus(s2));
+    printf("Progress 60%%: %d\n", checkStatus(s3));
+    printf("Progress 80%%: %d\n", checkStatus(s4));
+    printf("Progress 100%%: %d\n", checkStatus(s5));
 
     printf("\n=== Progress Validation ===\n");
     local v1: Status = Status.Loading(50);
     local v2: Status = Status.Loading(-5);
     local v3: Status = Status.Loading(150);
 
-    printf("50%%: %s\n", validate_progress(v1));
-    printf("-5%%: %s\n", validate_progress(v2));
-    printf("150%%: %s\n", validate_progress(v3));
+    printf("50%%: %s\n", validateProgress(v1));
+    printf("-5%%: %s\n", validateProgress(v2));
+    printf("150%%: %s\n", validateProgress(v3));
 
     return 0;
 }

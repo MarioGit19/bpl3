@@ -957,7 +957,12 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
 
     // If generic args are provided, instantiate the generic enum
     if (genericArgs && genericArgs.length > 0) {
-      enumName = this.instantiateGenericEnum(enumDecl.name, genericArgs);
+      // Substitute generic args if we are in a generic context
+      const substitutedArgs = genericArgs.map((arg) =>
+        this.substituteType(arg, this.currentTypeMap),
+      );
+
+      enumName = this.instantiateGenericEnum(enumDecl.name, substitutedArgs);
     }
 
     const enumType = `%enum.${enumName}`;
@@ -994,6 +999,22 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
 
   protected mangleType(type: AST.TypeNode): string {
     if (type.kind === "BasicType") {
+      // Check for type aliases
+      if (this.typeAliasMap.has(type.name)) {
+        const aliasDecl = this.typeAliasMap.get(type.name)!;
+        // Only resolve non-generic aliases here to avoid complexity with generic args substitution in mangling
+        if (!aliasDecl.genericParams || aliasDecl.genericParams.length === 0) {
+          const aliasedMangled = this.mangleType(aliasDecl.type);
+
+          // Add pointers and arrays from the current usage
+          let suffix = "";
+          for (let i = 0; i < type.pointerDepth; i++) suffix += "_ptr";
+          for (let d of type.arrayDimensions) suffix += `_arr_${d}_`;
+
+          return `${aliasedMangled}${suffix}`;
+        }
+      }
+
       let name = type.name;
 
       // Normalize aliases to match TypeChecker and ensure consistent mangling
@@ -1027,6 +1048,9 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
           break;
         case "ulong":
           name = "u64";
+          break;
+        case "string":
+          name = "i8_ptr";
           break;
       }
 
@@ -1327,24 +1351,64 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
           const instantiatedArgs = basicType.genericArgs.map((arg) =>
             this.substituteType(arg, this.currentTypeMap),
           );
-          const structDecl = this.structMap.get(basicType.name);
-          const enumDecl = this.enumDeclMap.get(basicType.name);
+
+          let structDecl: AST.StructDecl | undefined;
+          let enumDecl: AST.EnumDecl | undefined;
+
+          // FIRST: Check resolvedDeclaration from TypeChecker (highest priority)
+          // This ensures that qualified names like std.Option are correctly resolved
+          // even if the name was canonicalized to just "Option" by TypeChecker
+          if (basicType.resolvedDeclaration) {
+            if (basicType.resolvedDeclaration.kind === "StructDecl") {
+              structDecl = basicType.resolvedDeclaration as AST.StructDecl;
+            } else if (basicType.resolvedDeclaration.kind === "EnumDecl") {
+              enumDecl = basicType.resolvedDeclaration as AST.EnumDecl;
+            }
+          }
+
+          // FALLBACK: Lookup by name (for types not resolved by TypeChecker)
+          if (!structDecl) structDecl = this.structMap.get(basicType.name);
+          if (!enumDecl) enumDecl = this.enumDeclMap.get(basicType.name);
+
+          // Check for placeholders in instantiatedArgs
+          const hasPlaceholders = instantiatedArgs.some((arg) => {
+            if (arg.kind === "BasicType") {
+              const name = (arg as AST.BasicTypeNode).name;
+              if (this.currentTypeMap.has(name)) {
+                const mapped = this.currentTypeMap.get(name)!;
+                if (
+                  mapped.kind === "BasicType" &&
+                  (mapped as any).name === name
+                ) {
+                  return true;
+                }
+              }
+            }
+            return false;
+          });
 
           if (structDecl) {
             // Instantiate generic struct
             llvmType = this.resolveMonomorphizedType(
               structDecl,
               instantiatedArgs,
+              hasPlaceholders,
             );
           } else if (enumDecl) {
             // Instantiate generic enum
             const mangledName = this.instantiateGenericEnum(
-              basicType.name,
+              enumDecl.name,
               instantiatedArgs,
+              hasPlaceholders,
             );
             llvmType = `%enum.${mangledName}`;
           } else {
             // Maybe a primitive like int<T>? Should not happen.
+            if (basicType.name === "T") {
+              if (this.currentTypeMap.has("T")) {
+                const mapped = this.currentTypeMap.get("T")!;
+              }
+            }
             llvmType = `%struct.${basicType.name}`; // Fallback
           }
         } else {
@@ -1392,8 +1456,24 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
               llvmType = "i8*"; // Generic pointer type
               break;
             default:
-              // Check if it's an enum type
-              if (this.enumVariants.has(basicType.name)) {
+              // For non-primitive types without generic args, check resolvedDeclaration first
+              if (basicType.resolvedDeclaration) {
+                if (basicType.resolvedDeclaration.kind === "EnumDecl") {
+                  const enumDecl =
+                    basicType.resolvedDeclaration as AST.EnumDecl;
+                  llvmType = `%enum.${enumDecl.name}`;
+                } else if (
+                  basicType.resolvedDeclaration.kind === "StructDecl"
+                ) {
+                  const structDecl =
+                    basicType.resolvedDeclaration as AST.StructDecl;
+                  llvmType = `%struct.${structDecl.name}`;
+                } else {
+                  llvmType = `%struct.${basicType.name}`;
+                }
+              } else if (this.enumVariants.has(basicType.name)) {
+                llvmType = `%enum.${basicType.name}`;
+              } else if (this.enumDeclMap.has(basicType.name)) {
                 llvmType = `%enum.${basicType.name}`;
               } else {
                 llvmType = `%struct.${basicType.name}`;
@@ -1466,7 +1546,24 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
   protected resolveMonomorphizedType(
     baseStruct: AST.StructDecl,
     genericArgs: AST.TypeNode[],
+    skipGeneration?: boolean,
   ): string {
+    // Auto-detect placeholders if skipGeneration is not provided
+    if (skipGeneration === undefined) {
+      skipGeneration = genericArgs.some((arg) => {
+        if (arg.kind === "BasicType") {
+          const name = (arg as AST.BasicTypeNode).name;
+          if (this.currentTypeMap.has(name)) {
+            const mapped = this.currentTypeMap.get(name)!;
+            if (mapped.kind === "BasicType" && (mapped as any).name === name) {
+              return true;
+            }
+          }
+        }
+        return false;
+      });
+    }
+
     // 1. Mangle Name
     const argNames = genericArgs
       .map((arg) => {
@@ -1477,10 +1574,33 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
 
     const mangledName = `${baseStruct.name}_${argNames}`;
 
+    // Check if we are instantiating with the generic params themselves (Box<T> -> Box<T>)
+    if (
+      baseStruct.genericParams &&
+      baseStruct.genericParams.length === genericArgs.length
+    ) {
+      const isIdentity = baseStruct.genericParams.every((p, i) => {
+        const arg = genericArgs[i]!;
+        return (
+          arg.kind === "BasicType" &&
+          (arg as AST.BasicTypeNode).name === p.name.trim()
+        );
+      });
+
+      if (isIdentity) {
+        return `%struct.${mangledName}`;
+      }
+    }
+
     // 2. Check if exists
     if (this.generatedStructs.has(mangledName)) {
       return `%struct.${mangledName}`;
     }
+
+    if (skipGeneration) {
+      return `%struct.${mangledName}`;
+    }
+
     // Also check structMap in case it was created but not yet generated (e.g. recursive reference)
     if (this.structMap.has(mangledName)) {
       return `%struct.${mangledName}`;
@@ -1608,7 +1728,7 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
             false,
             [],
           );
-          this.definedFunctions.add(fullMangledName);
+          // this.definedFunctions.add(fullMangledName); // Removed to allow generation
 
           this.pendingGenerations.push(() => {
             const oldName = method.name;
@@ -1642,7 +1762,35 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
   protected instantiateGenericEnum(
     enumName: string,
     genericArgs: AST.TypeNode[],
+    skipGeneration?: boolean,
   ): string {
+    // Auto-detect placeholders if skipGeneration is not provided
+    if (skipGeneration === undefined) {
+      skipGeneration = genericArgs.some((arg) => {
+        if (arg.kind === "BasicType") {
+          const name = (arg as AST.BasicTypeNode).name;
+          if (this.currentTypeMap.has(name)) {
+            const mapped = this.currentTypeMap.get(name)!;
+            if (mapped.kind === "BasicType" && (mapped as any).name === name) {
+              return true;
+            } else {
+              if (name === "T") {
+                console.log(
+                  `[DEBUG] instantiateGenericEnum: T in map but not placeholder. mapped.kind=${mapped.kind}, mapped.name=${(mapped as any).name}`,
+                );
+              }
+            }
+          } else {
+            // Log when T is present but not in map
+            if (name === "T") {
+              console.trace("Trace for T leak");
+            }
+          }
+        }
+        return false;
+      });
+    }
+
     // Create mangled name for the instantiated enum
     const mangledName = this.mangleGenericTypeName(enumName, genericArgs);
 
@@ -1650,6 +1798,11 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
     if (this.generatedEnums.has(mangledName)) {
       return mangledName;
     }
+
+    if (skipGeneration) {
+      return mangledName;
+    }
+
     this.generatedEnums.add(mangledName);
 
     // Get the generic enum declaration
@@ -1672,6 +1825,24 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
       );
     }
 
+    // Check if we are instantiating with the generic params themselves (Option<T> -> Option<T>)
+    if (
+      decl.genericParams &&
+      decl.genericParams.length === genericArgs.length
+    ) {
+      const isIdentity = decl.genericParams.every((p, i) => {
+        const arg = genericArgs[i]!;
+        return (
+          arg.kind === "BasicType" &&
+          (arg as AST.BasicTypeNode).name === p.name.trim()
+        );
+      });
+
+      if (isIdentity) {
+        return mangledName;
+      }
+    }
+
     // Build type substitution map
     const typeMap = new Map<string, AST.TypeNode>();
     if (decl.genericParams) {
@@ -1680,7 +1851,9 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
         i < decl.genericParams.length && i < genericArgs.length;
         i++
       ) {
-        typeMap.set(decl.genericParams[i]!.name, genericArgs[i]!);
+        // Ensure generic args have resolvedDeclaration for proper type resolution
+        const resolvedArg = this.ensureResolvedDeclaration(genericArgs[i]!);
+        typeMap.set(decl.genericParams[i]!.name.trim(), resolvedArg);
       }
     }
 
@@ -1695,16 +1868,20 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
           ? v.dataType.kind === "EnumVariantTuple"
             ? {
                 ...v.dataType,
-                types: v.dataType.types.map((t) =>
-                  this.substituteType(t, typeMap),
-                ),
+                types: v.dataType.types.map((t) => {
+                  const substituted = this.substituteType(t, typeMap);
+                  // Ensure substituted types have resolvedDeclaration for backend lookups
+                  return this.ensureResolvedDeclaration(substituted);
+                }),
               }
             : v.dataType.kind === "EnumVariantStruct"
               ? {
                   ...v.dataType,
                   fields: v.dataType.fields.map((f) => ({
                     name: f.name,
-                    type: this.substituteType(f.type, typeMap),
+                    type: this.ensureResolvedDeclaration(
+                      this.substituteType(f.type, typeMap),
+                    ),
                   })),
                 }
               : v.dataType
@@ -1713,9 +1890,71 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
     };
 
     // Generate the instantiated enum
+    const prevMap = this.currentTypeMap;
+    this.currentTypeMap = typeMap;
     this.generateEnum(instantiatedDecl, mangledName);
 
+    // Generate methods for instantiated enum
+    if (decl.methods) {
+      for (const method of decl.methods) {
+        const mangledMethodName = `${mangledName}_${method.name}`;
+
+        this.pendingGenerations.push(() => {
+          const innerPrevMap = this.currentTypeMap;
+          this.currentTypeMap = typeMap;
+
+          const oldName = method.name;
+          method.name = mangledMethodName;
+
+          // We pass instantiatedDecl as parent so 'this' resolves to the concrete enum
+          this.generateFunction(method, instantiatedDecl);
+
+          method.name = oldName;
+          this.currentTypeMap = innerPrevMap;
+        });
+      }
+    }
+
+    this.currentTypeMap = prevMap;
+
     return mangledName;
+  }
+
+  /**
+   * Ensure a type node has resolvedDeclaration attached for backend lookups.
+   * If the type is a BasicType with a name that should resolve to a struct/enum,
+   * but doesn't have resolvedDeclaration, look it up and attach it.
+   */
+  protected ensureResolvedDeclaration(type: AST.TypeNode): AST.TypeNode {
+    if (type.kind !== "BasicType") return type;
+
+    const basicType = type as AST.BasicTypeNode;
+
+    // Already has resolvedDeclaration, no need to look up
+    if (basicType.resolvedDeclaration) return type;
+
+    // Try to find the declaration in our maps
+    let decl =
+      this.structMap.get(basicType.name) ||
+      this.enumDeclMap.get(basicType.name);
+
+    // Handle qualified names (e.g., "std.Option" -> look for "Option")
+    if (!decl && basicType.name.includes(".")) {
+      const parts = basicType.name.split(".");
+      const simpleName = parts[parts.length - 1]!;
+      decl = this.structMap.get(simpleName) || this.enumDeclMap.get(simpleName);
+    }
+
+    if (decl) {
+      // Attach the resolved declaration and return a new node
+      return {
+        ...basicType,
+        resolvedDeclaration: decl,
+      };
+    }
+
+    // Not found, return as-is
+    return type;
   }
 
   protected mangleGenericTypeName(
@@ -1724,45 +1963,9 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
   ): string {
     if (genericArgs.length === 0) return baseName;
 
-    const argNames = genericArgs.map((arg) => {
-      if (arg.kind === "BasicType") {
-        const basicArg = arg as AST.BasicTypeNode;
-        let name = basicArg.name;
+    const argNames = genericArgs.map((arg) => this.mangleType(arg)).join("_");
 
-        // Normalize primitive type names to their LLVM canonical form
-        const primitiveMap: Record<string, string> = {
-          int: "i32",
-          uint: "i32",
-          u32: "i32",
-          char: "i8",
-          uchar: "i8",
-          u8: "i8",
-          short: "i16",
-          ushort: "i16",
-          u16: "i16",
-          long: "i64",
-          ulong: "i64",
-          u64: "i64",
-          bool: "i1",
-        };
-
-        const normalizedName = primitiveMap[name];
-        if (normalizedName) {
-          name = normalizedName;
-        }
-
-        if (basicArg.genericArgs && basicArg.genericArgs.length > 0) {
-          name = this.mangleGenericTypeName(name, basicArg.genericArgs);
-        }
-        if (basicArg.pointerDepth > 0) {
-          name += "_ptr".repeat(basicArg.pointerDepth);
-        }
-        return name;
-      }
-      return "unknown";
-    });
-
-    return `${baseName}_${argNames.join("_")}`;
+    return `${baseName}_${argNames}`;
   }
 
   protected resolveMonomorphizedFunction(
@@ -1864,6 +2067,8 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
                 ...mapped.arrayDimensions,
                 ...type.arrayDimensions,
               ],
+              // Preserve resolvedDeclaration from the mapped type
+              resolvedDeclaration: mapped.resolvedDeclaration,
             };
           }
           return mapped;
@@ -1871,11 +2076,14 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
       }
 
       // Recursively substitute generic args
+      const substitutedArgs = type.genericArgs.map((arg) =>
+        this.substituteType(arg, map),
+      );
       return {
         ...type,
-        genericArgs: type.genericArgs.map((arg) =>
-          this.substituteType(arg, map),
-        ),
+        genericArgs: substitutedArgs,
+        // Preserve resolvedDeclaration when creating new type with substituted args
+        resolvedDeclaration: type.resolvedDeclaration,
       };
     } else if (type.kind === "FunctionType") {
       return {

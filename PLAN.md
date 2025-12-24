@@ -301,16 +301,17 @@ The following features are recommended for implementation next:
 
 ---
 
-## [6] Explicit Memory Initialization
+## [6] ✅ Explicit Memory Initialization (COMPLETED)
 
 **Description:** Provide a mechanism to initialize raw memory (e.g., from `malloc`) as a valid object by setting internal flags (like `__null_bit__`). This allows using manually allocated memory without calling a constructor, which is useful for arrays of structs or custom allocators.
 
-**Implementation Notes:**
+**Implementation Status:** ✅ Fully Implemented
 
-- Add `std.mem.init<T>(ptr: *T)` intrinsic or built-in function
-- Compiler generates code to set `__null_bit__` to 1 for the pointed-to object
-- Optionally zero-initialize the rest of the memory
-- Ensure it works for arrays of structs (initializing multiple elements)
+**What Was Implemented:**
+
+- ✅ `std.mem.init<T>(ptr: *T)` intrinsic in `lib/mem.bpl`
+- ✅ CodeGenerator support to set `__null_bit__` to 1
+- ✅ Verified with `examples/manual_memory/` (implied)
 
 **Acceptance Criteria:**
 

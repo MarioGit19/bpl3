@@ -447,6 +447,10 @@ export function checkVariableDecl(
   let declaredType = decl.typeAnnotation
     ? this.resolveType(decl.typeAnnotation)
     : undefined;
+
+  if (declaredType) {
+    decl.resolvedType = declaredType;
+  }
   let initType: AST.TypeNode | undefined;
 
   if (decl.initializer) {
@@ -543,6 +547,8 @@ export function checkVariableDecl(
     );
   }
 
+  decl.resolvedType = declaredType;
+
   // Check for shadowing in current scope
   const existing = this.currentScope.getInCurrentScope(decl.name as string);
   if (existing) {
@@ -554,6 +560,7 @@ export function checkVariableDecl(
   }
 
   this.defineSymbol(decl.name as string, "Variable", declaredType, decl);
+  decl.resolvedType = declaredType;
 }
 
 /**

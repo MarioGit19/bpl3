@@ -6,7 +6,7 @@ enum Color {
     Blue,
 }
 
-frame test_red() ret int {
+frame testRed() ret int {
     local c: Color = Color.Red;
     return match (c) {
         Color.Red => 1,
@@ -15,7 +15,7 @@ frame test_red() ret int {
     };
 }
 
-frame test_green() ret int {
+frame testGreen() ret int {
     local c: Color = Color.Green;
     return match (c) {
         Color.Red => 0,
@@ -24,7 +24,7 @@ frame test_green() ret int {
     };
 }
 
-frame test_blue() ret int {
+frame testBlue() ret int {
     local c: Color = Color.Blue;
     return match (c) {
         Color.Red => 0,
@@ -34,9 +34,9 @@ frame test_blue() ret int {
 }
 
 frame main() ret int {
-    local r: int = test_red();
-    local g: int = test_green();
-    local b: int = test_blue();
+    local r: int = testRed();
+    local g: int = testGreen();
+    local b: int = testBlue();
     
     # Should return 6 if all tests pass (1 + 2 + 3)
     return r + g + b;

@@ -2,14 +2,14 @@ extern printf(fmt: string, ...);
 # Collatz Conjecture: For any positive integer n,
 # if n is even, divide by 2; if odd, multiply by 3 and add 1.
 # Repeat until n becomes 1.
-frame collatz_step(n: int) ret int {
+frame collatzStep(n: int) ret int {
     if ((n % 2) == 0) {
         return n / 2;
     } else {
         return (n * 3) + 1;
     }
 }
-frame collatz_sequence(n: int) ret int {
+frame collatzSequence(n: int) ret int {
     local steps: int = 0;
     local current: int = n;
     printf("Collatz sequence for %d: ", n);
@@ -19,7 +19,7 @@ frame collatz_sequence(n: int) ret int {
         if (current == 1) {
             break;
         }
-        current = collatz_step(current);
+        current = collatzStep(current);
     }
     printf("\n");
     return steps;
@@ -33,7 +33,7 @@ frame main() ret int {
     test_numbers[4] = 100;
     local i: int = 0;
     loop (i < 5) {
-        printf("Found solution in %d steps\n\n", collatz_sequence(test_numbers[i]));
+        printf("Found solution in %d steps\n\n", collatzSequence(test_numbers[i]));
         i = i + 1;
     }
     return 0;

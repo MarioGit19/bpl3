@@ -1,14 +1,14 @@
 extern printf(fmt: string, ...) ret int;
 
-frame print_val(i: int) {
+frame printVal(i: int) {
     printf("int: %d\n", i);
 }
 
-frame print_val(d: double) {
+frame printVal(d: double) {
     printf("double: %f\n", d);
 }
 
-frame print_val(b: bool) {
+frame printVal(b: bool) {
     if (b) {
         printf("bool: true\n");
     } else {
@@ -25,9 +25,9 @@ frame add(a: int, b: int, c: int) ret int {
 }
 
 frame main() {
-    print_val(42);
-    print_val(3.14);
-    print_val(true);
+    printVal(42);
+    printVal(3.14);
+    printVal(true);
 
     local sum2: int = add(10, 20);
     printf("sum2: %d\n", sum2);

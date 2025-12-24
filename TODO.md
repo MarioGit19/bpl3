@@ -155,7 +155,14 @@
   - Implementation notes: Map BPL source locations to LLVM IR debug metadata, generate DWARF type descriptors, emit debug info for functions/variables.
   - Acceptance criteria: Can step through BPL code in GDB/LLDB, variables show correct values, breakpoints work.
 
-- [5] Type Narrowing / Pattern Matching
+- [5] Type Narrowing / Pattern Matching (Partially Implemented)
+  - Description: Implement syntax and semantics for narrowing variable types based on runtime checks.
+  - **Status:** PARTIAL (Syntax only)
+  - Implemented:
+    - ✅ `match<T>(expr)` syntax (`TypeMatchExpr`)
+  - Missing:
+    - ❌ TypeChecker narrowing logic (updating context)
+    - ❌ Flow-sensitive analysis
 
 - [5] Documentation Generation Tool
 
@@ -184,9 +191,15 @@
   - Description: Support embedding expressions directly into string literals using `${expression}` syntax.
   - Implementation notes: Update lexer/parser, desugar to concatenation or builder, support arbitrary expressions.
   - Acceptance criteria: `$"Hello ${name}"` compiles, expressions evaluated correctly.
+ (Partially Implemented)
 
-- [6] Default and Named Arguments
-
+  - Description: Permit `struct MyInt : int { ... }` so a struct can behave as a primitive type with additional methods/fields.
+  - **Status:** PARTIAL (Syntax only)
+  - Implemented:
+    - ✅ Syntax `struct A : B` where B can be primitive type
+  - Missing:
+    - ❌ TypeChecker support for primitive inheritance
+    - ❌ Codegen support for primitive wrapper layout
   - Description: Allow functions to define default values for parameters and allow callers to specify arguments by name.
   - Implementation notes: Update declaration/call syntax, resolve defaults at call site, handle named args.
   - Acceptance criteria: Can declare/call with defaults, can use named arguments.
@@ -251,10 +264,12 @@
   - Implementation notes: Update parser/typechecker/codegen for recursive pattern matching.
   - Acceptance criteria: Can match deeply nested structures, exhaustiveness checking works.
 
-- [6] Explicit Memory Initialization
-
+- [x] Explicit Memory Initialization ✅
   - Description: Mechanism to initialize raw memory as valid object (set `__null_bit__`).
-  - Implementation notes: `std.mem.init<T>(ptr)` intrinsic, sets internal flags.
+  - **Final Status:** COMPLETE ✅
+  - Implemented features:
+    - ✅ **Intrinsic**: `std.mem.init<T>(ptr)`
+    - ✅ **Codegen**: Sets `__null_bit__` to 1 in LLVM IR
   - Acceptance criteria: Can use malloc'd memory without constructor call.
 
 - [7] Fuzz Testing Integration
@@ -359,9 +374,15 @@
   - Implementation notes: Implement Arena struct, bulk allocation/deallocation.
   - Acceptance criteria: Can allocate from arena, reset frees all memory.
 
-- [8] Const Correctness
+- [8] Const Correctness (Partially Implemented)
 
   - Description: Enforce `const` (or equivalent) declarations and immutability rules across the language: constant variables, read-only fields, `const` parameters, and compile-time constants. Ensure the compiler prevents mutation of `const` values and accepts usage patterns that are safe.
+  - **Status:** PARTIAL (Syntax only)
+  - Implemented:
+    - ✅ `const` keyword parsing in variable declarations
+  - Missing:
+    - ❌ TypeChecker enforcement of immutability
+    - ❌ `isConst` tracking in SymbolTable
   - Implementation notes: Add `isConst` flag to symbol/type entries. Propagate const through assignments, parameter passing, and returns. Treat `const` references to mutable objects as shallowly const unless a deeper const model is chosen. Decide whether `const` applies to variables, fields, and/or function returns.
   - Acceptance criteria: Examples declaring `const` variables produce errors on mutation; `const` parameters cannot be assigned inside functions; `const` globals evaluate as compile-time constants where used.
 
@@ -377,9 +398,26 @@
   - Implementation notes: Integrate with target threading primitives (pthreads on POSIX). Define memory model and synchronization primitives (mutex, atomic ops).
   - Acceptance criteria: Spawn, join threads, and synchronized access examples behave correctly.
 
-- [8] Inline Assembly Blocks
+- [8] Inline Assembly Blocks (Partially Implemented)
 
   - Description: Allow embedding inline assembly with explicit register lists and integration with calling conventions. Support `asm("flavor") { ... }` syntax for different assembly dialects (e.g., "intel", "att") or targets.
+  - **Status:** PARTIAL (Syntax supp (Partially Implemented)
+
+  - Description: Enhance the TypeChecker and semantic analysis to catch more errors at compile time, such as unreachable code, variable shadowing, and unused variables.
+  - **Status:** PARTIAL
+  - Implemented:
+    - ✅ Unreachable code detection
+    - ✅ Redeclaration check (same scope)
+  - Missing:
+    - ❌ Shadowing warning (outer scope)
+    - ❌ Unused variable detection (commented out)
+    - ✅ `asm("flavor") { ... }` syntax parsing
+    - ✅ Raw string injection into LLVM IR
+    - ✅ Simple variable substitution `(var)` -> local register
+  - Missing:
+    - ❌ Flavor-based wrapping (e.g. `call asm`)
+    - ❌ Explicit register constraints
+    - ❌ Validation of assembly content
   - Implementation notes: Add parser support and a safe lowered representation. During codegen, inject asm inline properly and validate register usage. Implement variable interpolation `(var)` and flavor-based wrapping (e.g. automatically wrapping x86 asm in LLVM `call asm`).
   - Acceptance criteria: `asm("intel") { mov rax, 42 }` compiles and emits correct inline assembly; `asm { ... (var) ... }` correctly interpolates variables.
 

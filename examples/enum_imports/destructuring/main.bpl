@@ -4,7 +4,7 @@ import [Message] from "../enums.bpl";
 
 extern printf(fmt: string, ...);
 
-frame test_add() ret int {
+frame testAdd() ret int {
     local msg: Message = Message.Move(5, 10);
     return match (msg) {
         Message.Quit => 0,
@@ -13,7 +13,7 @@ frame test_add() ret int {
     };
 }
 
-frame test_multiply() ret int {
+frame testMultiply() ret int {
     local msg: Message = Message.Move(3, 7);
     return match (msg) {
         Message.Quit => 0,
@@ -23,7 +23,7 @@ frame test_multiply() ret int {
     # 3 * 7 = 21
 }
 
-frame test_subtract() ret int {
+frame testSubtract() ret int {
     local msg: Message = Message.Move(20, 15);
     return match (msg) {
         Message.Quit => 0,
@@ -34,9 +34,9 @@ frame test_subtract() ret int {
 }
 
 frame main() ret int {
-    local add_result: int = test_add();
-    local mul_result: int = test_multiply();
-    local sub_result: int = test_subtract();
+    local add_result: int = testAdd();
+    local mul_result: int = testMultiply();
+    local sub_result: int = testSubtract();
 
     printf("Add: %d\n", add_result);
     printf("Multiply: %d\n", mul_result);

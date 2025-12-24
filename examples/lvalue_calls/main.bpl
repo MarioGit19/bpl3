@@ -1,4 +1,4 @@
-extern printf(fmt: *char, ...) ret int;
+extern printf(fmt: string, ...) ret int;
 
 struct Inner {
     value: int,

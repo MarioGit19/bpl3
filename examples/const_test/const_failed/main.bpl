@@ -1,12 +1,12 @@
-global const GLOBAL_CONST: i32 = 100;
-global var_global: i32 = 200;
+global const GLOBAL_CONST: int = 100;
+global var_global: int = 200;
 
-extern printf(fmt: *i8, ...) ret i32;
-extern exit(code: i32);
+extern printf(fmt: string, ...) ret int;
+extern exit(code: int);
 
 frame main() {
-  local const LOCAL_CONST: i32 = 10;
-  local var_local: i32 = 20;
+  local const LOCAL_CONST: int = 10;
+  local var_local: int = 20;
 
   # Read constants
   if (GLOBAL_CONST != 100) {

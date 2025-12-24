@@ -6,7 +6,7 @@ import [Map] from "std/map.bpl";
 
 struct Set<T> {
     inner: Map<T, bool>,
-    frame new(initial_capacity: i32) ret Set<T> {
+    frame new(initial_capacity: int) ret Set<T> {
         local s: Set<T>;
         s.inner = Map<T, bool>.new(initial_capacity);
         return s;
@@ -28,7 +28,7 @@ struct Set<T> {
         return this.inner.remove(value);
     }
 
-    frame size(this: *Set<T>) ret i32 {
+    frame size(this: *Set<T>) ret int {
         return this.inner.size();
     }
 
@@ -41,8 +41,8 @@ struct Set<T> {
         local result: Set<T> = Set<T>.new(this.size() + other.size());
 
         # Add all elements from this set
-        local i: i32 = 0;
-        local n: i32 = this.inner.size();
+        local i: int = 0;
+        local n: int = this.inner.size();
         loop (i < n) {
             local key: T = this.inner.getKey(i);
             result.add(key);
@@ -51,7 +51,7 @@ struct Set<T> {
 
         # Add all elements from other set
         i = 0;
-        local m: i32 = other.inner.size();
+        local m: int = other.inner.size();
         loop (i < m) {
             local key: T = other.inner.getKey(i);
             result.add(key);
@@ -65,8 +65,8 @@ struct Set<T> {
     frame difference(this: *Set<T>, other: *Set<T>) ret Set<T> {
         local result: Set<T> = Set<T>.new(this.size());
 
-        local i: i32 = 0;
-        local n: i32 = this.inner.size();
+        local i: int = 0;
+        local n: int = this.inner.size();
         loop (i < n) {
             local key: T = this.inner.getKey(i);
             if (!other.has(key)) {
@@ -82,8 +82,8 @@ struct Set<T> {
     frame intersection(this: *Set<T>, other: *Set<T>) ret Set<T> {
         local result: Set<T> = Set<T>.new(this.size());
 
-        local i: i32 = 0;
-        local n: i32 = this.inner.size();
+        local i: int = 0;
+        local n: int = this.inner.size();
         loop (i < n) {
             local key: T = this.inner.getKey(i);
             if (other.has(key)) {
@@ -116,8 +116,8 @@ struct Set<T> {
             return false;
         }
         # Check if all elements in this are in other
-        local i: i32 = 0;
-        local n: i32 = this.inner.size();
+        local i: int = 0;
+        local n: int = this.inner.size();
         loop (i < n) {
             local key: T = this.inner.getKey(i);
             if (!other.has(key)) {

@@ -3,9 +3,9 @@
 export [StringUtils];
 
 import [String] from "std/string.bpl";
-extern strlen(s: *char) ret int;
-extern malloc(size: i64) ret *char;
-extern free(ptr: *char) ret void;
+extern strlen(s: string) ret int;
+extern malloc(size: long) ret string;
+extern free(ptr: string) ret void;
 extern printf(fmt: string, ...) ret int;
 
 struct StringUtils {
@@ -77,7 +77,7 @@ struct StringUtils {
             empty.length = 0;
             return empty;
         }
-        local buf: *char = cast<*char>(malloc(cast<i64>(newlen + 1)));
+        local buf: string = cast<string>(malloc(cast<long>(newlen + 1)));
         local i: int = 0;
         loop (i < newlen) {
             buf[i] = s[start + i];
@@ -91,7 +91,7 @@ struct StringUtils {
 
     frame replaceChar(s: string, target: char, repl: char) ret String {
         local len: int = strlen(s);
-        local buf: *char = cast<*char>(malloc(cast<i64>(len + 1)));
+        local buf: string = cast<string>(malloc(cast<long>(len + 1)));
         local i: int = 0;
         loop (i < len) {
             local c: char = s[i];

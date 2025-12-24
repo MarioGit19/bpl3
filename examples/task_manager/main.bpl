@@ -91,7 +91,7 @@ struct Date {
     }
 
     # Convert date to days since epoch (simplified)
-    frame to_days(this: *Date) ret int {
+    frame toDays(this: *Date) ret int {
         return (this.year * 365) + (this.month * 30) + this.day;
     }
 
@@ -102,20 +102,20 @@ struct Date {
 
     # Operator overload: less than (<)
     frame __lt__(this: *Date, other: *Date) ret bool {
-        local this_days: int = this.to_days();
-        local other_days: int = other.to_days();
+        local this_days: int = this.toDays();
+        local other_days: int = other.toDays();
         return this_days < other_days;
     }
 
     # Operator overload: greater than (>)
     frame __gt__(this: *Date, other: *Date) ret bool {
-        local this_days: int = this.to_days();
-        local other_days: int = other.to_days();
+        local this_days: int = this.toDays();
+        local other_days: int = other.toDays();
         return this_days > other_days;
     }
 
     # Check if date is valid
-    frame is_valid(this: *Date) ret bool {
+    frame isValid(this: *Date) ret bool {
         if ((this.month < 1) || (this.month > 12)) {
             return false;
         }
@@ -138,13 +138,13 @@ struct Time {
     }
 
     # Convert to minutes
-    frame to_minutes(this: *Time) ret int {
+    frame toMinutes(this: *Time) ret int {
         return (this.hours * 60) + this.minutes;
     }
 
     # Operator overload: addition (+)
     frame __add__(this: *Time, other: *Time) ret Time {
-        local total_minutes: int = this.to_minutes() + other.to_minutes();
+        local total_minutes: int = this.toMinutes() + other.toMinutes();
         local result: Time;
         result.hours = total_minutes / 60;
         result.minutes = total_minutes % 60;
@@ -153,7 +153,7 @@ struct Time {
 
     # Operator overload: subtraction (-)
     frame __sub__(this: *Time, other: *Time) ret Time {
-        local diff_minutes: int = this.to_minutes() - other.to_minutes();
+        local diff_minutes: int = this.toMinutes() - other.toMinutes();
         local result: Time;
         result.hours = diff_minutes / 60;
         result.minutes = diff_minutes % 60;
@@ -194,7 +194,7 @@ struct Task {
     }
 
     # Get priority score for sorting
-    frame get_priority_score(this: *Task) ret int {
+    frame getPriorityScore(this: *Task) ret int {
         return match (this.priority) {
             Priority.Critical => 1000,
             Priority.High => 100,
@@ -204,7 +204,7 @@ struct Task {
     }
 
     # Check if task can be completed
-    frame can_complete(this: *Task) ret bool {
+    frame canComplete(this: *Task) ret bool {
         return match (this.status) {
             TaskStatus.InProgress(pct) => true,
             TaskStatus.NotStarted => false,
@@ -215,18 +215,18 @@ struct Task {
     }
 
     # Update task progress
-    frame update_progress(this: *Task, percent: int) {
+    frame updateProgress(this: *Task, percent: int) {
         this.status = TaskStatus.InProgress(percent);
     }
 
     # Operator overload: comparison by priority (>)
     frame __gt__(this: *Task, other: *Task) ret bool {
-        return this.get_priority_score() > other.get_priority_score();
+        return this.getPriorityScore() > other.getPriorityScore();
     }
 
     # Operator overload: comparison by priority (<)
     frame __lt__(this: *Task, other: *Task) ret bool {
-        return this.get_priority_score() < other.get_priority_score();
+        return this.getPriorityScore() < other.getPriorityScore();
     }
 
     # Operator overload: equality by ID (==)
@@ -235,7 +235,7 @@ struct Task {
     }
 
     # Check if task is overdue
-    frame is_overdue(this: *Task, current_year: int, current_month: int, current_day: int) ret bool {
+    frame isOverdue(this: *Task, current_year: int, current_month: int, current_day: int) ret bool {
         local is_complete: bool = match (this.status) {
             TaskStatus.Completed => true,
             TaskStatus.Cancelled(reason) => true,
@@ -265,7 +265,7 @@ struct User {
     }
 
     # Check if user has permission
-    frame has_permission(this: *User, perm: Permission) ret bool {
+    frame hasPermission(this: *User, perm: Permission) ret bool {
         local role_level: int = match (this.role) {
             UserRole.Admin => 4,
             UserRole.Manager => 3,
@@ -284,12 +284,12 @@ struct User {
         return (role_level >= required_level) && this.active;
     }
 
-    frame can_assign(this: *User) ret bool {
-        return this.has_permission(Permission.Assign);
+    frame canAssign(this: *User) ret bool {
+        return this.hasPermission(Permission.Assign);
     }
 
-    frame can_delete(this: *User) ret bool {
-        return this.has_permission(Permission.Delete);
+    frame canDelete(this: *User) ret bool {
+        return this.hasPermission(Permission.Delete);
     }
 }
 
@@ -311,7 +311,7 @@ struct TaskStats {
     }
 
     # Calculate completion percentage
-    frame completion_rate(this: *TaskStats) ret int {
+    frame completionRate(this: *TaskStats) ret int {
         if (this.total_tasks == 0) {
             return 0;
         }
@@ -395,12 +395,12 @@ struct TaskList {
     }
 
     # Count tasks by priority
-    frame count_by_priority(this: *TaskList, prio: Priority) ret int {
+    frame countByPriority(this: *TaskList, prio: Priority) ret int {
         local count: int = 0;
         local i: int = 0;
         loop (i < this.count) {
             local task_ptr: *Task = this.get(i);
-            if (priorities_match(task_ptr.priority, prio)) {
+            if (prioritiesMatch(task_ptr.priority, prio)) {
                 count = count + 1;
             }
             i = i + 1;
@@ -414,14 +414,14 @@ struct TaskList {
 # ============================================================================
 
 # Helper: Check if priorities match
-frame priorities_match(task_prio: Priority, filter_prio: Priority) ret bool {
+frame prioritiesMatch(task_prio: Priority, filter_prio: Priority) ret bool {
     local task_code: int = format(task_prio);
     local filter_code: int = format(filter_prio);
     return task_code == filter_code;
 }
 
 # Helper: Check if categories match
-frame categories_match(task_cat: TaskCategory, filter_cat: TaskCategory) ret bool {
+frame categoriesMatch(task_cat: TaskCategory, filter_cat: TaskCategory) ret bool {
     local task_code: int = match (task_cat) {
         TaskCategory.Bug => 0,
         TaskCategory.Feature => 1,
@@ -446,7 +446,7 @@ frame categories_match(task_cat: TaskCategory, filter_cat: TaskCategory) ret boo
 # ============================================================================
 
 # Overload 1: Calculate priority score from Priority enum
-frame calculate_score(prio: Priority) ret int {
+frame calculateScore(prio: Priority) ret int {
     return match (prio) {
         Priority.Critical => 1000,
         Priority.High => 100,
@@ -456,8 +456,8 @@ frame calculate_score(prio: Priority) ret int {
 }
 
 # Overload 2: Calculate priority score from Task
-frame calculate_score(task: *Task) ret int {
-    local base_score: int = task.get_priority_score();
+frame calculateScore(task: *Task) ret int {
+    local base_score: int = task.getPriorityScore();
     local status_multiplier: int = match (task.status) {
         TaskStatus.Blocked(reason) => 2,
         TaskStatus.InProgress(pct) => 1,
@@ -470,7 +470,7 @@ frame calculate_score(task: *Task) ret int {
 
 # Overload 3: Validate date
 frame validate(date: *Date) ret bool {
-    return date.is_valid();
+    return date.isValid();
 }
 
 # Overload 4: Validate task
@@ -516,7 +516,7 @@ frame format(date: *Date) ret int {
 }
 
 # Overload 9: Create notification code from NotificationType
-frame create_notification(ntype: NotificationType) ret int {
+frame createNotification(ntype: NotificationType) ret int {
     return match (ntype) {
         NotificationType.Info(code) => code,
         NotificationType.Warning(code) => code,
@@ -526,7 +526,7 @@ frame create_notification(ntype: NotificationType) ret int {
 }
 
 # Overload 10: Create notification from priority
-frame create_notification(prio: Priority) ret int {
+frame createNotification(prio: Priority) ret int {
     return match (prio) {
         Priority.Low => 1,
         Priority.Medium => 2,
@@ -540,7 +540,7 @@ frame create_notification(prio: Priority) ret int {
 # ============================================================================
 
 # Get role level for permission checks
-frame get_role_level(role: UserRole) ret int {
+frame getRoleLevel(role: UserRole) ret int {
     return match (role) {
         UserRole.Guest => 1,
         UserRole.User => 2,
@@ -550,7 +550,7 @@ frame get_role_level(role: UserRole) ret int {
 }
 
 # Check if status is terminal (completed or cancelled)
-frame is_terminal_status(status: TaskStatus) ret bool {
+frame isTerminalStatus(status: TaskStatus) ret bool {
     return match (status) {
         TaskStatus.Completed => true,
         TaskStatus.Cancelled(reason) => true,
@@ -559,7 +559,7 @@ frame is_terminal_status(status: TaskStatus) ret bool {
 }
 
 # Get status code for reporting
-frame get_status_code(status: TaskStatus) ret int {
+frame getStatusCode(status: TaskStatus) ret int {
     return match (status) {
         TaskStatus.NotStarted => 0,
         TaskStatus.InProgress(pct) => pct,
@@ -571,17 +571,17 @@ frame get_status_code(status: TaskStatus) ret int {
 }
 
 # Check if task matches filter criteria
-frame matches_filter(task: *Task, criteria: FilterCriteria) ret bool {
+frame matchesFilter(task: *Task, criteria: FilterCriteria) ret bool {
     return match (criteria) {
         FilterCriteria.All => true,
         FilterCriteria.ByAssignee(user_id) => task.assignee_id == user_id,
-        FilterCriteria.ByPriority(prio) => priorities_match(task.priority, prio),
-        FilterCriteria.ByCategory(cat) => categories_match(task.category, cat),
+        FilterCriteria.ByPriority(prio) => prioritiesMatch(task.priority, prio),
+        FilterCriteria.ByCategory(cat) => categoriesMatch(task.category, cat),
     };
 }
 
 # Calculate task statistics from list
-frame calculate_statistics(list: *TaskList) ret TaskStats {
+frame calculateStatistics(list: *TaskList) ret TaskStats {
     local stats: TaskStats = TaskStats.new();
     stats.total_tasks = list.count;
 
@@ -615,12 +615,12 @@ frame calculate_statistics(list: *TaskList) ret TaskStats {
 }
 
 # Get priority weight for sorting
-frame get_priority_weight(prio: Priority) ret int {
-    return calculate_score(prio);
+frame getPriorityWeight(prio: Priority) ret int {
+    return calculateScore(prio);
 }
 
 # Check if user can perform action on task
-frame can_perform_action(user: *User, task: *Task, perm: Permission) ret bool {
+frame canPerformAction(user: *User, task: *Task, perm: Permission) ret bool {
     if (!user.active) {
         return false;
     }
@@ -634,22 +634,22 @@ frame can_perform_action(user: *User, task: *Task, perm: Permission) ret bool {
         return true;
     }
     # Check general permission
-    if (!user.has_permission(perm)) {
+    if (!user.hasPermission(perm)) {
         return false;
     }
     # Additional checks for specific permissions
     return match (perm) {
-        Permission.Complete => (task.assignee_id == user.id) || user.can_assign(),
-        Permission.Delete => user.can_delete(),
-        Permission.Assign => user.can_assign(),
+        Permission.Complete => (task.assignee_id == user.id) || user.canAssign(),
+        Permission.Delete => user.canDelete(),
+        Permission.Assign => user.canAssign(),
         Permission.Read => true,
         Permission.Write => true,
     };
 }
 
 # Calculate urgency score combining priority and due date
-frame calculate_urgency(task: *Task, current_year: int, current_month: int, current_day: int) ret int {
-    local priority_score: int = task.get_priority_score();
+frame calculateUrgency(task: *Task, current_year: int, current_month: int, current_day: int) ret int {
+    local priority_score: int = task.getPriorityScore();
     local due_days: int = (task.due_year * 365) + (task.due_month * 30) + task.due_day;
     local current_days: int = (current_year * 365) + (current_month * 30) + current_day;
     local days_until_due: int = due_days - current_days;
@@ -672,7 +672,7 @@ frame calculate_urgency(task: *Task, current_year: int, current_month: int, curr
 }
 
 # Process notification and return action code multiplied by base
-frame process_notification(notif: NotificationType) ret int {
+frame processNotification(notif: NotificationType) ret int {
     return match (notif) {
         NotificationType.Info(code) => code * 1,
         NotificationType.Warning(code) => code * 2,
@@ -686,9 +686,9 @@ frame process_notification(notif: NotificationType) ret int {
 # ============================================================================
 
 # Assign task to user with validation
-frame assign_task(task: *Task, user: *User, assigner: *User) {
+frame assignTask(task: *Task, user: *User, assigner: *User) {
     # Check if assigner has permission
-    if (!can_perform_action(assigner, task, Permission.Assign)) {
+    if (!canPerformAction(assigner, task, Permission.Assign)) {
         return;
     }
     # Check if user is active
@@ -701,13 +701,13 @@ frame assign_task(task: *Task, user: *User, assigner: *User) {
 }
 
 # Complete a task with validation
-frame complete_task(task: *Task, user: *User) ret bool {
+frame completeTask(task: *Task, user: *User) ret bool {
     # Check permission
-    if (!can_perform_action(user, task, Permission.Complete)) {
+    if (!canPerformAction(user, task, Permission.Complete)) {
         return false;
     }
     # Check if task can be completed
-    if (!task.can_complete()) {
+    if (!task.canComplete()) {
         return false;
     }
     # Complete the task
@@ -716,8 +716,8 @@ frame complete_task(task: *Task, user: *User) ret bool {
 }
 
 # Block a task with reason code
-frame block_task(task: *Task, reason_code: int, user: *User) ret bool {
-    if (!can_perform_action(user, task, Permission.Write)) {
+frame blockTask(task: *Task, reason_code: int, user: *User) ret bool {
+    if (!canPerformAction(user, task, Permission.Write)) {
         return false;
     }
     task.status = TaskStatus.Blocked(reason_code);
@@ -725,19 +725,19 @@ frame block_task(task: *Task, reason_code: int, user: *User) ret bool {
 }
 
 # Calculate team statistics from multiple task lists
-frame aggregate_stats(list1: *TaskList, list2: *TaskList) ret TaskStats {
-    local stats1: TaskStats = calculate_statistics(list1);
-    local stats2: TaskStats = calculate_statistics(list2);
+frame aggregateStats(list1: *TaskList, list2: *TaskList) ret TaskStats {
+    local stats1: TaskStats = calculateStatistics(list1);
+    local stats2: TaskStats = calculateStatistics(list2);
     return &stats1 + &stats2;
 }
 
 # Filter tasks by criteria and count matches
-frame count_filtered_tasks(list: *TaskList, criteria: FilterCriteria) ret int {
+frame countFilteredTasks(list: *TaskList, criteria: FilterCriteria) ret int {
     local count: int = 0;
     local i: int = 0;
     loop (i < list.count) {
         local task_ptr: *Task = list.get(i);
-        if (matches_filter(task_ptr, criteria)) {
+        if (matchesFilter(task_ptr, criteria)) {
             count = count + 1;
         }
         i = i + 1;
@@ -746,7 +746,7 @@ frame count_filtered_tasks(list: *TaskList, criteria: FilterCriteria) ret int {
 }
 
 # Find highest priority task in list
-frame find_highest_priority(list: *TaskList) ret *Task {
+frame findHighestPriority(list: *TaskList) ret *Task {
     if (list.count == 0) {
         return list.get(0); # fallback
     }
@@ -763,7 +763,7 @@ frame find_highest_priority(list: *TaskList) ret *Task {
 }
 
 # Calculate total estimated hours for task list
-frame calculate_total_hours(list: *TaskList) ret int {
+frame calculateTotalHours(list: *TaskList) ret int {
     local total: int = 0;
     local i: int = 0;
     loop (i < list.count) {
@@ -775,11 +775,11 @@ frame calculate_total_hours(list: *TaskList) ret int {
 }
 
 # Check if any task in list is overdue
-frame has_overdue_tasks(list: *TaskList, year: int, month: int, day: int) ret bool {
+frame hasOverdueTasks(list: *TaskList, year: int, month: int, day: int) ret bool {
     local i: int = 0;
     loop (i < list.count) {
         local task_ptr: *Task = list.get(i);
-        if (task_ptr.is_overdue(year, month, day)) {
+        if (task_ptr.isOverdue(year, month, day)) {
             return true;
         }
         i = i + 1;
@@ -788,12 +788,12 @@ frame has_overdue_tasks(list: *TaskList, year: int, month: int, day: int) ret bo
 }
 
 # Get count of tasks by category
-frame count_by_category(list: *TaskList, cat: TaskCategory) ret int {
+frame countByCategory(list: *TaskList, cat: TaskCategory) ret int {
     local count: int = 0;
     local i: int = 0;
     loop (i < list.count) {
         local task_ptr: *Task = list.get(i);
-        if (categories_match(task_ptr.category, cat)) {
+        if (categoriesMatch(task_ptr.category, cat)) {
             count = count + 1;
         }
         i = i + 1;
@@ -802,13 +802,13 @@ frame count_by_category(list: *TaskList, cat: TaskCategory) ret int {
 }
 
 # Calculate category distribution scores
-frame calculate_category_scores(list: *TaskList) ret int {
-    local bugs: int = count_by_category(list, TaskCategory.Bug);
-    local features: int = count_by_category(list, TaskCategory.Feature);
-    local docs: int = count_by_category(list, TaskCategory.Documentation);
-    local tests: int = count_by_category(list, TaskCategory.Testing);
-    local deploys: int = count_by_category(list, TaskCategory.Deployment);
-    local maint: int = count_by_category(list, TaskCategory.Maintenance);
+frame calculateCategoryScores(list: *TaskList) ret int {
+    local bugs: int = countByCategory(list, TaskCategory.Bug);
+    local features: int = countByCategory(list, TaskCategory.Feature);
+    local docs: int = countByCategory(list, TaskCategory.Documentation);
+    local tests: int = countByCategory(list, TaskCategory.Testing);
+    local deploys: int = countByCategory(list, TaskCategory.Deployment);
+    local maint: int = countByCategory(list, TaskCategory.Maintenance);
 
     return (bugs * 100) + (features * 10) + (docs * 1) + (tests * 5) + (deploys * 20) + (maint * 3);
 }
@@ -848,14 +848,14 @@ frame main() ret int {
     local guest: User = User.new(4, UserRole.Guest);
 
     printf("\n=== User Permissions ===\n");
-    printf("Admin can assign: %d\n", admin.can_assign());
-    printf("Manager can assign: %d\n", manager.can_assign());
-    printf("Developer can assign: %d\n", developer.can_assign());
-    printf("Guest can assign: %d\n", guest.can_assign());
+    printf("Admin can assign: %d\n", admin.canAssign());
+    printf("Manager can assign: %d\n", manager.canAssign());
+    printf("Developer can assign: %d\n", developer.canAssign());
+    printf("Guest can assign: %d\n", guest.canAssign());
 
-    printf("Admin can delete: %d\n", admin.can_delete());
-    printf("Manager can delete: %d\n", manager.can_delete());
-    printf("Developer can delete: %d\n", developer.can_delete());
+    printf("Admin can delete: %d\n", admin.canDelete());
+    printf("Manager can delete: %d\n", manager.canDelete());
+    printf("Developer can delete: %d\n", developer.canDelete());
 
     # Create tasks with different priorities and statuses
     local task1: Task = Task.new(101, Priority.Critical);
@@ -907,9 +907,9 @@ frame main() ret int {
     }
     # Demonstrate function overloading
     printf("\n=== Function Overloading ===\n");
-    printf("Priority score (enum): %d\n", calculate_score(Priority.Critical));
-    printf("Priority score (task1): %d\n", calculate_score(&task1));
-    printf("Priority score (task4): %d\n", calculate_score(&task4));
+    printf("Priority score (enum): %d\n", calculateScore(Priority.Critical));
+    printf("Priority score (task1): %d\n", calculateScore(&task1));
+    printf("Priority score (task4): %d\n", calculateScore(&task4));
 
     printf("Date comparison: %d\n", compare(&today, &tomorrow));
     printf("Task comparison: %d\n", compare(&task1, &task2));
@@ -917,8 +917,8 @@ frame main() ret int {
     printf("Format priority: %d\n", format(Priority.High));
     printf("Format date: %d\n", format(&today));
 
-    printf("Create notification (enum): %d\n", create_notification(Priority.Critical));
-    printf("Create notification (type): %d\n", create_notification(NotificationType.Error(42)));
+    printf("Create notification (enum): %d\n", createNotification(Priority.Critical));
+    printf("Create notification (type): %d\n", createNotification(NotificationType.Error(42)));
 
     # Pattern matching on enum variants
     printf("\n=== Pattern Matching on Enums ===\n");
@@ -952,15 +952,15 @@ frame main() ret int {
 
     # Check if tasks are overdue
     printf("\n=== Overdue Check ===\n");
-    printf("Task1 overdue: %d\n", task1.is_overdue(2025, 12, 18));
-    printf("Task2 overdue: %d\n", task2.is_overdue(2025, 12, 18));
-    printf("Task5 overdue: %d\n", task5.is_overdue(2025, 12, 18));
+    printf("Task1 overdue: %d\n", task1.isOverdue(2025, 12, 18));
+    printf("Task2 overdue: %d\n", task2.isOverdue(2025, 12, 18));
+    printf("Task5 overdue: %d\n", task5.isOverdue(2025, 12, 18));
 
     # Calculate urgency scores
     printf("\n=== Urgency Scores ===\n");
-    printf("Task1 urgency: %d\n", calculate_urgency(&task1, 2025, 12, 18));
-    printf("Task2 urgency: %d\n", calculate_urgency(&task2, 2025, 12, 18));
-    printf("Task3 urgency: %d\n", calculate_urgency(&task3, 2025, 12, 18));
+    printf("Task1 urgency: %d\n", calculateUrgency(&task1, 2025, 12, 18));
+    printf("Task2 urgency: %d\n", calculateUrgency(&task2, 2025, 12, 18));
+    printf("Task3 urgency: %d\n", calculateUrgency(&task3, 2025, 12, 18));
 
     # Build task list
     local task_list: TaskList = TaskList.new();
@@ -974,10 +974,10 @@ frame main() ret int {
     printf("Total tasks in list: %d\n", task_list.count);
 
     # Count by priority
-    local critical_count: int = task_list.count_by_priority(Priority.Critical);
-    local high_count: int = task_list.count_by_priority(Priority.High);
-    local medium_count: int = task_list.count_by_priority(Priority.Medium);
-    local low_count: int = task_list.count_by_priority(Priority.Low);
+    local critical_count: int = task_list.countByPriority(Priority.Critical);
+    local high_count: int = task_list.countByPriority(Priority.High);
+    local medium_count: int = task_list.countByPriority(Priority.Medium);
+    local low_count: int = task_list.countByPriority(Priority.Low);
 
     printf("Critical priority tasks: %d\n", critical_count);
     printf("High priority tasks: %d\n", high_count);
@@ -988,15 +988,15 @@ frame main() ret int {
     printf("\n=== Permission-Based Actions ===\n");
 
     # Try to assign task1 to developer (as manager)
-    assign_task(&task1, &developer, &manager);
+    assignTask(&task1, &developer, &manager);
     printf("Task1 assigned to user %d\n", task1.assignee_id);
 
     # Try to complete task (as assigned user)
-    local completed: bool = complete_task(&task3, &developer);
+    local completed: bool = completeTask(&task3, &developer);
     printf("Task3 completion attempt: %d\n", completed);
 
     # Try to block a task
-    local blocked: bool = block_task(&task2, 500, &manager);
+    local blocked: bool = blockTask(&task2, 500, &manager);
     printf("Task2 blocked: %d\n", blocked);
 
     # Test notification system
@@ -1006,32 +1006,32 @@ frame main() ret int {
     local notif3: NotificationType = NotificationType.Error(3);
     local notif4: NotificationType = NotificationType.Success(4);
 
-    printf("Info notification code: %d\n", process_notification(notif1));
-    printf("Warning notification code: %d\n", process_notification(notif2));
-    printf("Error notification code: %d\n", process_notification(notif3));
-    printf("Success notification code: %d\n", process_notification(notif4));
+    printf("Info notification code: %d\n", processNotification(notif1));
+    printf("Warning notification code: %d\n", processNotification(notif2));
+    printf("Error notification code: %d\n", processNotification(notif3));
+    printf("Success notification code: %d\n", processNotification(notif4));
 
     # Demonstrate filter criteria matching
     printf("\n=== Filter Criteria ===\n");
     local filter_critical: FilterCriteria = FilterCriteria.ByPriority(Priority.Critical);
     local filter_bugs: FilterCriteria = FilterCriteria.ByCategory(TaskCategory.Bug);
 
-    printf("Task1 matches critical filter: %d\n", matches_filter(&task1, filter_critical));
-    printf("Task2 matches critical filter: %d\n", matches_filter(&task2, filter_critical));
-    printf("Task1 matches bug filter: %d\n", matches_filter(&task1, filter_bugs));
-    printf("Task2 matches bug filter: %d\n", matches_filter(&task2, filter_bugs));
+    printf("Task1 matches critical filter: %d\n", matchesFilter(&task1, filter_critical));
+    printf("Task2 matches critical filter: %d\n", matchesFilter(&task2, filter_critical));
+    printf("Task1 matches bug filter: %d\n", matchesFilter(&task1, filter_bugs));
+    printf("Task2 matches bug filter: %d\n", matchesFilter(&task2, filter_bugs));
 
-    local critical_filtered: int = count_filtered_tasks(&task_list, filter_critical);
-    local bug_filtered: int = count_filtered_tasks(&task_list, filter_bugs);
+    local critical_filtered: int = countFilteredTasks(&task_list, filter_critical);
+    local bug_filtered: int = countFilteredTasks(&task_list, filter_bugs);
     printf("Total critical tasks: %d\n", critical_filtered);
     printf("Total bug tasks: %d\n", bug_filtered);
 
     # Calculate role levels
     printf("\n=== Role Levels ===\n");
-    printf("Admin level: %d\n", get_role_level(admin.role));
-    printf("Manager level: %d\n", get_role_level(manager.role));
-    printf("User level: %d\n", get_role_level(developer.role));
-    printf("Guest level: %d\n", get_role_level(guest.role));
+    printf("Admin level: %d\n", getRoleLevel(admin.role));
+    printf("Manager level: %d\n", getRoleLevel(manager.role));
+    printf("User level: %d\n", getRoleLevel(developer.role));
+    printf("Guest level: %d\n", getRoleLevel(guest.role));
 
     # Test wildcard pattern matching
     printf("\n=== Wildcard Pattern Matching ===\n");
@@ -1043,45 +1043,45 @@ frame main() ret int {
 
     # Multiple priority checks
     printf("\n=== Priority Distribution ===\n");
-    printf("Critical priority weight: %d\n", get_priority_weight(Priority.Critical));
-    printf("High priority weight: %d\n", get_priority_weight(Priority.High));
-    printf("Medium priority weight: %d\n", get_priority_weight(Priority.Medium));
-    printf("Low priority weight: %d\n", get_priority_weight(Priority.Low));
+    printf("Critical priority weight: %d\n", getPriorityWeight(Priority.Critical));
+    printf("High priority weight: %d\n", getPriorityWeight(Priority.High));
+    printf("Medium priority weight: %d\n", getPriorityWeight(Priority.Medium));
+    printf("Low priority weight: %d\n", getPriorityWeight(Priority.Low));
 
     # Calculate statistics
     printf("\n=== Task Statistics ===\n");
-    local stats: TaskStats = calculate_statistics(&task_list);
+    local stats: TaskStats = calculateStatistics(&task_list);
     printf("Total tasks: %d\n", stats.total_tasks);
     printf("Completed: %d\n", stats.completed);
     printf("In progress: %d\n", stats.in_progress);
     printf("Blocked: %d\n", stats.blocked);
     printf("Not started: %d\n", stats.not_started);
-    printf("Completion rate: %d%%\n", stats.completion_rate());
+    printf("Completion rate: %d%%\n", stats.completionRate());
 
     # Find highest priority task
-    local highest: *Task = find_highest_priority(&task_list);
+    local highest: *Task = findHighestPriority(&task_list);
     printf("\n=== Highest Priority Task ===\n");
     printf("Task ID: %d\n", highest.id);
     printf("Priority code: %d\n", format(highest.priority));
 
     # Calculate total hours
-    local total_hours: int = calculate_total_hours(&task_list);
+    local total_hours: int = calculateTotalHours(&task_list);
     printf("\n=== Time Estimates ===\n");
     printf("Total estimated hours: %d\n", total_hours);
     printf("Average hours per task: %d\n", total_hours / task_list.count);
 
     # Check for overdue tasks
-    local has_overdue: bool = has_overdue_tasks(&task_list, 2025, 12, 18);
+    local has_overdue: bool = hasOverdueTasks(&task_list, 2025, 12, 18);
     printf("Has overdue tasks: %d\n", has_overdue);
 
     # Category distribution
     printf("\n=== Category Distribution ===\n");
-    local bug_count: int = count_by_category(&task_list, TaskCategory.Bug);
-    local feature_count: int = count_by_category(&task_list, TaskCategory.Feature);
-    local doc_count: int = count_by_category(&task_list, TaskCategory.Documentation);
-    local test_count: int = count_by_category(&task_list, TaskCategory.Testing);
-    local deploy_count: int = count_by_category(&task_list, TaskCategory.Deployment);
-    local maint_count: int = count_by_category(&task_list, TaskCategory.Maintenance);
+    local bug_count: int = countByCategory(&task_list, TaskCategory.Bug);
+    local feature_count: int = countByCategory(&task_list, TaskCategory.Feature);
+    local doc_count: int = countByCategory(&task_list, TaskCategory.Documentation);
+    local test_count: int = countByCategory(&task_list, TaskCategory.Testing);
+    local deploy_count: int = countByCategory(&task_list, TaskCategory.Deployment);
+    local maint_count: int = countByCategory(&task_list, TaskCategory.Maintenance);
 
     printf("Bugs: %d\n", bug_count);
     printf("Features: %d\n", feature_count);
@@ -1090,21 +1090,21 @@ frame main() ret int {
     printf("Deployment: %d\n", deploy_count);
     printf("Maintenance: %d\n", maint_count);
 
-    local category_score: int = calculate_category_scores(&task_list);
+    local category_score: int = calculateCategoryScores(&task_list);
     printf("Category distribution score: %d\n", category_score);
 
     # Test terminal status checking
     printf("\n=== Terminal Status Checks ===\n");
-    printf("Task1 terminal: %d\n", is_terminal_status(task1.status));
-    printf("Task5 terminal: %d\n", is_terminal_status(task5.status));
+    printf("Task1 terminal: %d\n", isTerminalStatus(task1.status));
+    printf("Task5 terminal: %d\n", isTerminalStatus(task5.status));
 
     # Get status codes
     printf("\n=== Status Codes ===\n");
-    printf("Task1 status code: %d\n", get_status_code(task1.status));
-    printf("Task2 status code: %d\n", get_status_code(task2.status));
-    printf("Task3 status code: %d\n", get_status_code(task3.status));
-    printf("Task4 status code: %d\n", get_status_code(task4.status));
-    printf("Task5 status code: %d\n", get_status_code(task5.status));
+    printf("Task1 status code: %d\n", getStatusCode(task1.status));
+    printf("Task2 status code: %d\n", getStatusCode(task2.status));
+    printf("Task3 status code: %d\n", getStatusCode(task3.status));
+    printf("Task4 status code: %d\n", getStatusCode(task4.status));
+    printf("Task5 status code: %d\n", getStatusCode(task5.status));
 
     # Create second list for aggregation test
     local task_list2: TaskList = TaskList.new();
@@ -1118,10 +1118,10 @@ frame main() ret int {
 
     # Aggregate statistics
     printf("\n=== Aggregated Statistics ===\n");
-    local agg_stats: TaskStats = aggregate_stats(&task_list, &task_list2);
+    local agg_stats: TaskStats = aggregateStats(&task_list, &task_list2);
     printf("Combined total tasks: %d\n", agg_stats.total_tasks);
     printf("Combined completed: %d\n", agg_stats.completed);
-    printf("Combined completion rate: %d%%\n", agg_stats.completion_rate());
+    printf("Combined completion rate: %d%%\n", agg_stats.completionRate());
 
     # Final summary
     printf("\n=== Final Summary ===\n");

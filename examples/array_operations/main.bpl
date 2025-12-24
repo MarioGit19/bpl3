@@ -1,6 +1,6 @@
 extern printf(fmt: string, ...);
 # Test array operations and boundary conditions
-frame test_array_initialization() {
+frame testArrayInitialization() {
     printf("=== Array Initialization ===\n");
     local arr: int[5];
     arr[0] = 10;
@@ -14,7 +14,7 @@ frame test_array_initialization() {
         i = i + 1;
     }
 }
-frame test_multidimensional_arrays() {
+frame testMultidimensionalArrays() {
     printf("\n=== Multi-dimensional Arrays ===\n");
     # Simulated 2D array using 1D array (3x3 matrix)
     local matrix: int[9];
@@ -47,7 +47,7 @@ frame test_multidimensional_arrays() {
         row = row + 1;
     }
 }
-frame sum_array(arr: *int, size: int) ret int {
+frame sumArray(arr: *int, size: int) ret int {
     local sum: int = 0;
     local i: int = 0;
     loop (i < size) {
@@ -57,7 +57,7 @@ frame sum_array(arr: *int, size: int) ret int {
     }
     return sum;
 }
-frame test_array_functions() {
+frame testArrayFunctions() {
     printf("\n=== Array as Function Parameter ===\n");
     local numbers: int[6];
     numbers[0] = 5;
@@ -66,10 +66,10 @@ frame test_array_functions() {
     numbers[3] = 20;
     numbers[4] = 25;
     numbers[5] = 30;
-    local total: int = sum_array(&numbers[0], 6);
+    local total: int = sumArray(&numbers[0], 6);
     printf("Sum of array: %d\n", total);
 }
-frame test_float_arrays() {
+frame testFloatArrays() {
     printf("\n=== Float Arrays ===\n");
     local temps: float[4];
     temps[0] = 98.6;
@@ -84,9 +84,9 @@ frame test_float_arrays() {
     }
 }
 frame main() ret int {
-    test_array_initialization();
-    test_multidimensional_arrays();
-    test_array_functions();
-    test_float_arrays();
+    testArrayInitialization();
+    testMultidimensionalArrays();
+    testArrayFunctions();
+    testFloatArrays();
     return 0;
 }

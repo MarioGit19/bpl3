@@ -4,23 +4,23 @@ export [Array];
 
 import [Option] from "./option.bpl";
 
-extern malloc(size: i64) ret *void;
+extern malloc(size: long) ret *void;
 extern free(ptr: *void) ret void;
-extern memcpy(dest: *void, src: *void, n: i64) ret *void;
+extern memcpy(dest: *void, src: *void, n: long) ret *void;
 
 struct Array<T> {
     data: *T,
-    capacity: i32,
-    length: i32,
+    capacity: int,
+    length: int,
     ###
         creates a new array with the specified initial capacity
     ###
-    frame new(initial_capacity: i32) ret Array<T> {
+    frame new(initial_capacity: int) ret Array<T> {
         local arr: Array<T>;
         arr.capacity = initial_capacity;
         arr.length = 0;
         # Calculate size in bytes: capacity * sizeof(T)
-        local size: i64 = cast<i64>(initial_capacity) * sizeof<T>();
+        local size: long = cast<long>(initial_capacity) * sizeof<T>();
         arr.data = cast<*T>(malloc(size));
         return arr;
     }
@@ -40,7 +40,7 @@ struct Array<T> {
     ###
         this returns the current length of the array
     ###
-    frame len(this: *Array<T>) ret i32 {
+    frame len(this: *Array<T>) ret int {
         return this.length;
     }
 
@@ -49,7 +49,7 @@ struct Array<T> {
         for primitive types is okay, for complex types consider using getRef()
         because updating copy will not update primitives in original array element
     ###
-    frame get(this: *Array<T>, index: i32) ret T {
+    frame get(this: *Array<T>, index: int) ret T {
         return this.data[index];
     }
 
@@ -58,26 +58,26 @@ struct Array<T> {
         useful for complex types to avoid copying
         updating the returned reference will update the original array element
     ###
-    frame getRef(this: *Array<T>, index: i32) ret *T {
+    frame getRef(this: *Array<T>, index: int) ret *T {
         return &this.data[index];
     }
 
     ###
         sets the element at index to value
     ###
-    frame set(this: *Array<T>, index: i32, value: T) {
+    frame set(this: *Array<T>, index: int, value: T) {
         this.data[index] = value;
     }
 
     frame push(this: *Array<T>, value: T) {
         if (this.length >= this.capacity) {
             # grow
-            local new_capacity: i32 = (this.capacity * 2) + 1;
-            local size: i64 = cast<i64>(new_capacity) * sizeof<T>();
+            local new_capacity: int = (this.capacity * 2) + 1;
+            local size: long = cast<long>(new_capacity) * sizeof<T>();
             local new_data: *T = cast<*T>(malloc(size));
 
             # Copy old data
-            local old_size: i64 = cast<i64>(this.length) * sizeof<T>();
+            local old_size: long = cast<long>(this.length) * sizeof<T>();
             if (this.data != null) {
                 memcpy(cast<*void>(new_data), cast<*void>(this.data), old_size);
                 free(cast<*void>(this.data));
@@ -99,11 +99,11 @@ struct Array<T> {
     }
 
     # Removes the element at index by shifting items left.
-    frame removeAt(this: *Array<T>, index: i32) {
+    frame removeAt(this: *Array<T>, index: int) {
         if ((index < 0) || (index >= this.length)) {
             throw ArrayError { code: 2, message: "Index out of bounds" };
         }
-        local i: i32 = index;
+        local i: int = index;
         loop (i < (this.length - 1)) {
             this.data[i] = this.data[i + 1];
             i = i + 1;
@@ -118,7 +118,7 @@ struct Array<T> {
     # Maps elements to a new array using a transformation function
     frame map<U>(this: *Array<T>, transform: Func<U>(T, int)) ret Array<U> {
         local result: Array<U> = Array<U>.new(this.capacity);
-        local i: i32 = 0;
+        local i: int = 0;
         loop (i < this.length) {
             result.push(transform(this.data[i], i));
             i = i + 1;
@@ -129,7 +129,7 @@ struct Array<T> {
     # Filters elements based on a predicate function
     frame filter(this: *Array<T>, predicate: Func<bool>(T, int)) ret Array<T> {
         local result: Array<T> = Array<T>.new(this.capacity);
-        local i: i32 = 0;
+        local i: int = 0;
         loop (i < this.length) {
             if (predicate(this.data[i], i)) {
                 result.push(this.data[i]);
@@ -142,7 +142,7 @@ struct Array<T> {
     # Reduces the array to a single value using a reducer function
     frame reduce<U>(this: *Array<T>, initial: U, reducer: Func<U>(U, T, int)) ret U {
         local accumulator: U = initial;
-        local i: i32 = 0;
+        local i: int = 0;
         loop (i < this.length) {
             accumulator = reducer(accumulator, this.data[i], i);
             i = i + 1;
@@ -152,7 +152,7 @@ struct Array<T> {
 
     # Iterates over each element and applies an action
     frame forEach(this: *Array<T>, action: Func<void>(T, int)) {
-        local i: i32 = 0;
+        local i: int = 0;
         loop (i < this.length) {
             action(this.data[i], i);
             i = i + 1;
@@ -161,19 +161,19 @@ struct Array<T> {
 
     # Finds the first element matching the predicate
     frame find(this: *Array<T>, predicate: Func<bool>(T)) ret Option<T> {
-        local i: i32 = 0;
+        local i: int = 0;
         loop (i < this.length) {
             if (predicate(this.data[i])) {
-                return Option<T>.some(this.data[i]);
+                return Option<T>.Some(this.data[i]);
             }
             i = i + 1;
         }
-        return Option<T>.none();
+        return Option<T>.None;
     }
 
     # Checks if every element matches the predicate
     frame every(this: *Array<T>, predicate: Func<bool>(T)) ret bool {
-        local i: i32 = 0;
+        local i: int = 0;
         loop (i < this.length) {
             if (!predicate(this.data[i])) {
                 return false;
@@ -185,7 +185,7 @@ struct Array<T> {
 
     # Checks if at least one element matches the predicate
     frame some(this: *Array<T>, predicate: Func<bool>(T)) ret bool {
-        local i: i32 = 0;
+        local i: int = 0;
         loop (i < this.length) {
             if (predicate(this.data[i])) {
                 return true;
@@ -196,8 +196,8 @@ struct Array<T> {
     }
 
     # Returns the index of the first occurrence of value, or -1 if not found
-    frame indexOf(this: *Array<T>, value: T) ret i32 {
-        local i: i32 = 0;
+    frame indexOf(this: *Array<T>, value: T) ret int {
+        local i: int = 0;
         loop (i < this.length) {
             if (this.data[i] == value) {
                 return i;
@@ -214,14 +214,14 @@ struct Array<T> {
 
     # Finds the first element matching the predicate
     frame findIndex(this: *Array<T>, predicate: Func<bool>(T)) ret Option<int> {
-        local i: i32 = 0;
+        local i: int = 0;
         loop (i < this.length) {
             if (predicate(this.data[i])) {
-                return Option<int>.some(i);
+                return Option<int>.Some(i);
             }
             i = i + 1;
         }
-        return Option<int>.none();
+        return Option<int>.None;
     }
 
     # Operator overloading: Push element with << (left shift)

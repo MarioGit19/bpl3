@@ -13,7 +13,7 @@ struct Counter {
     frame decrement(this: *Counter) {
         this.value = this.value - 1;
     }
-    frame get_value(this: Counter) ret int {
+    frame getValue(this: Counter) ret int {
         return this.value;
     }
     frame add(a: int, b: int) ret int {
@@ -44,13 +44,13 @@ frame main() ret int {
     printf("=== Static Methods Test ===\n");
     # Test static constructor
     local c1: Counter = Counter.create(10);
-    printf("Counter 1 initial value: %d\n", c1.get_value());
+    printf("Counter 1 initial value: %d\n", c1.getValue());
     # Test instance methods
     c1.increment();
     c1.increment();
-    printf("After 2 increments: %d\n", c1.get_value());
+    printf("After 2 increments: %d\n", c1.getValue());
     c1.decrement();
-    printf("After 1 decrement: %d\n", c1.get_value());
+    printf("After 1 decrement: %d\n", c1.getValue());
     # Test static utility methods
     local result: int = Counter.add(5, 7);
     printf("Static add(5, 7): %d\n", result);

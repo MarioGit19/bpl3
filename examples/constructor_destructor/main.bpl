@@ -1,6 +1,6 @@
 extern printf(fmt: string, ...);
-extern malloc(size: uint) ret *i8;
-extern free(ptr: *i8);
+extern malloc(size: uint) ret string;
+extern free(ptr: string);
 struct Resource {
     id: int,
     data: *int,
@@ -22,7 +22,7 @@ struct Resource {
     frame destroy(this: *Resource) {
         printf("Resource %d destructed (freeing memory)\n", this.id);
         if (this.data != nullptr) {
-            free(cast<*i8>(this.data));
+            free(cast<string>(this.data));
             # this.data = nullptr;
         }
     }

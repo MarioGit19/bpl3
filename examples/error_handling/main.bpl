@@ -12,7 +12,7 @@ frame divide(a: int, b: int) ret int {
     }
     return a / b;
 }
-frame safe_divide(a: int, b: int) {
+frame safeDivide(a: int, b: int) {
     try {
         local result: int = divide(a, b);
         printf("Division successful: %d / %d = %d\n", a, b, result);
@@ -24,7 +24,7 @@ frame safe_divide(a: int, b: int) {
         }
     }
 }
-frame process_number(n: int) {
+frame processNumber(n: int) {
     try {
         if (n < 0) {
             throw true;
@@ -41,7 +41,7 @@ frame process_number(n: int) {
         printf("Caught int error: number too large (%d)\n", e_int);
     }
 }
-frame test_struct_throw(value: int) {
+frame testStructThrow(value: int) {
     try {
         if (value < 0) {
             local err: MathError = MathError { code: -1, message: "Negative value error" };
@@ -56,7 +56,7 @@ frame test_struct_throw(value: int) {
         printf("Caught MathError: code=%d, message=%s\n", error.code, error.message);
     }
 }
-frame test_multiple_catch(value: int) {
+frame testMultipleCatch(value: int) {
     try {
         if (value < 0) {
             throw -42;
@@ -86,21 +86,21 @@ frame test_multiple_catch(value: int) {
 }
 frame main() ret int {
     printf("=== Division Examples ===\n");
-    safe_divide(10, 2);
-    safe_divide(10, 0);
-    safe_divide(20, 4);
+    safeDivide(10, 2);
+    safeDivide(10, 0);
+    safeDivide(20, 4);
     printf("\n=== Number Processing Examples ===\n");
-    process_number(50);
-    process_number(-5);
-    process_number(150);
+    processNumber(50);
+    processNumber(-5);
+    processNumber(150);
     printf("\n=== Struct Throw Examples ===\n");
-    test_struct_throw(50);
-    test_struct_throw(-10);
-    test_struct_throw(200);
+    testStructThrow(50);
+    testStructThrow(-10);
+    testStructThrow(200);
     printf("\n=== Multiple Catch Examples ===\n");
-    test_multiple_catch(50);
-    test_multiple_catch(-5);
-    test_multiple_catch(0);
-    test_multiple_catch(150);
+    testMultipleCatch(50);
+    testMultipleCatch(-5);
+    testMultipleCatch(0);
+    testMultipleCatch(150);
     return 0;
 }

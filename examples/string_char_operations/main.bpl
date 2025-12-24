@@ -112,7 +112,7 @@ frame testEscapeSequences() {
 frame testStringPointers() {
     printf("\n=== Testing String Pointers ===\n");
     local str: string = "Hello, BPL!";
-    local ptr: *char = cast<*char>(str);
+    local ptr: string = cast<string>(str);
     printf("Original string: %s\n", str);
     printf("First character via pointer: %c\n", *ptr);
     # Access characters via pointer arithmetic

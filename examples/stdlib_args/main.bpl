@@ -4,7 +4,7 @@ import [String] from "std/string.bpl";
 
 extern printf(fmt: string, ...) ret int;
 
-frame main(argc: int, argv: **char) ret int {
+frame main(argc: int, argv: *string) ret int {
     printf("=== Program Arguments From main ===\n");
     printf("Program started with %d arguments.\n", argc);
     local x: int = 0;

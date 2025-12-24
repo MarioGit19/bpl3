@@ -6,12 +6,12 @@ enum Color {
     Blue,
 }
 
-frame get_blue() ret Color {
+frame getBlue() ret Color {
     return Color.Blue;
 }
 
 frame main() ret int {
-    local c: Color = get_blue();
+    local c: Color = getBlue();
     return match (c) {
         Color.Red => 0,
         Color.Green => 1,

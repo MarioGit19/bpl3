@@ -12,7 +12,7 @@ enum Outer {
     None,
 }
 
-frame get_value(outer: Outer) ret int {
+frame getValue(outer: Outer) ret int {
     return match (outer) {
         Outer.Wrapped(inner) => match (inner) {
             Inner.Value(v) => v,
@@ -27,9 +27,9 @@ frame main() ret int {
     local o2: Outer = Outer.Wrapped(Inner.Empty);
     local o3: Outer = Outer.None;
 
-    local v1: int = get_value(o1);
-    local v2: int = get_value(o2);
-    local v3: int = get_value(o3);
+    local v1: int = getValue(o1);
+    local v2: int = getValue(o2);
+    local v3: int = getValue(o3);
 
     printf("v1: %d, v2: %d, v3: %d\n", v1, v2, v3);
 
