@@ -13,9 +13,13 @@ struct Array<T> {
     data: *T,
     capacity: int,
     length: int,
-    ###
-        creates a new array with the specified initial capacity
-    ###
+    /#
+    # Create Array
+    Creates a new array with the specified initial capacity.
+
+    ## Arguments
+    - `initial_capacity`: The number of elements to reserve memory for.
+    #/
     frame new(initial_capacity: int) ret Array<T> {
         local arr: Array<T>;
         arr.capacity = initial_capacity;
@@ -26,9 +30,10 @@ struct Array<T> {
         return arr;
     }
 
-    ###
-        destroys the array and frees memory
-    ###
+    /#
+    # Destroy Array
+    Frees the memory allocated for the array.
+    #/
     frame destroy(this: *Array<T>) {
         if (this.data != null) {
             free(cast<*void>(this.data));
@@ -38,18 +43,23 @@ struct Array<T> {
         this.length = 0;
     }
 
-    ###
-        this returns the current length of the array
-    ###
+    /#
+    # Get Length
+    Returns the current number of elements in the array.
+    #/
     frame len(this: *Array<T>) ret int {
         return this.length;
     }
 
-    ###
-        this returns a copy of the element at index
-        for primitive types is okay, for complex types consider using getRef()
+    /#
+    # Get Element (Copy)
+    Returns a copy of the element at the specified index.
+
+    ## Note
+    For complex types, consider using `getRef()` to avoid copying.
+    ##
         because updating copy will not update primitives in original array element
-    ###
+    #/
     frame get(this: *Array<T>, index: int) ret T {
         if ((index < 0) || (index >= this.length)) {
             throw IndexOutOfBoundsError { index: index, size: this.length };
@@ -57,11 +67,11 @@ struct Array<T> {
         return this.data[index];
     }
 
-    ###
+    /#
         this returns a reference to the element at index
         useful for complex types to avoid copying
         updating the returned reference will update the original array element
-    ###
+    #/
     frame getRef(this: *Array<T>, index: int) ret *T {
         if ((index < 0) || (index >= this.length)) {
             throw IndexOutOfBoundsError { index: index, size: this.length };
@@ -69,9 +79,9 @@ struct Array<T> {
         return &this.data[index];
     }
 
-    ###
+    /#
         sets the element at index to value
-    ###
+    #/
     frame set(this: *Array<T>, index: int, value: T) {
         if ((index < 0) || (index >= this.length)) {
             throw IndexOutOfBoundsError { index: index, size: this.length };
@@ -121,9 +131,9 @@ struct Array<T> {
         this.length = this.length - 1;
     }
 
-    ###
+    /#
         Functional methods
-    ###
+    #/
 
     # Maps elements to a new array using a transformation function
     frame map<U>(this: *Array<T>, transform: Func<U>(T, int)) ret Array<U> {

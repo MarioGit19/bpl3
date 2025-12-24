@@ -13,7 +13,7 @@ Identifier = [a-zA-Z_] [a-zA-Z0-9_]*;
 
 # Comments
 SingleLineComment = '#' [^\n\r]* ('\n' | '\r\n')?;
-MultiLineComment = '###' ( .* | '\n' )*? '###';
+MultiLineComment = '/#' ( .* | '\n' )*? '#/';
 
 # Types
 Type = FunctionType | TupleType | BasicType;

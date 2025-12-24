@@ -98,6 +98,25 @@ The following features are recommended for implementation next:
   - Prevent assignment to fields of `const` structs.
   - Prevent assignment to elements of `const` arrays.
   - Recursive const checking for nested access (e.g., `constStruct.field.subfield = 1` is illegal).
+
+---
+
+## [4] ✅ Documentation Generator (COMPLETED)
+
+**Description:** A tool to generate Markdown documentation from source code comments.
+
+**Implementation Status:** ✅ Fully Implemented (December 2025)
+
+**What Was Implemented:**
+
+- ✅ **Syntax Change**: Changed multi-line comments to `/# ... #/` to avoid conflict with Markdown headers (`###`).
+- ✅ **Parser**: Updated grammar and lexer to support new comment syntax.
+- ✅ **Generator**: Implemented `DocumentationGenerator` to parse comments and generate Markdown.
+- ✅ **CLI**: Added `docs` command to the CLI.
+- ✅ **Standard Library**: Updated all standard library files with proper documentation comments.
+
+---
+
 - ✅ **Lambda Support**: `const` correctness for captured variables and lambda parameters.
 - ✅ **Formatter**: Updated formatter to handle `const` syntax correctly.
 - ✅ **Tests**: Added comprehensive unit and integration tests covering all scenarios.
@@ -327,59 +346,55 @@ The following features are recommended for implementation next:
 
 ---
 
-## [5] Type Narrowing / Pattern Matching
-
-**Description:** Implement syntax and semantics for narrowing variable types based on runtime checks (useful inside `catch` blocks or generic contexts). This allows developers to work with more specific types after validation, enabling type-safe handling of polymorphic values and optional types.
-
-**Implementation Notes:**
-
-- Add a `match<T>(expr)` or `as<T>(expr)` AST construct for type narrowing
-- Implement TypeChecker rules to narrow variable types inside block scope
-- Ensure RTTI (Runtime Type Information) support for runtime checks
-- Support type guards and runtime type checks
-- Implement proper control flow analysis for narrowing
-- Support narrowing based on null checks, type tests, and guards
-- Generate runtime checks to validate type narrowing
-- Handle narrowing in different scopes correctly
-
-**Acceptance Criteria:**
-
-- Within a `match<T>(v)` block, `v` is considered to have type `T`
-- Member accesses and overloads resolve using the narrowed type
-- Runtime validation ensures safety of type narrowing
-- Narrowing works in catch blocks and generic contexts
-- Clear error messages when narrowing to incompatible types
-
----
-
-## [5] Linting Tool ✅ (COMPLETED)
+## [5] ✅ Linting Tool (COMPLETED)
 
 **Description:** Provide static analysis tooling to detect style issues, potential bugs, and code quality problems (unused variables, suspicious casts, missing returns, unreachable code). This helps developers maintain code quality and catch bugs early without running the program.
 
-**Status:** COMPLETE ✅
+**Implementation Status:** ✅ Fully Implemented (December 2025)
 
-- Implemented `bpl lint` command
-- Created extensible `Linter` class
-- Added basic rules (naming conventions)
+**What Was Implemented:**
 
-**Implementation Notes:**
-
-- Reuse existing AST and TypeChecker infrastructure
-- Implement individual lint rules as separate checkers
-- Make all rules configurable (enable/disable, severity levels)
-- Add autofix capabilities for simple, safe transformations
-- Support configuration files for project-wide settings
-- Implement rules for: unused variables, unreachable code, type mismatches, missing returns, shadowing
-- Integrate with compiler diagnostic system
-- Support suppression comments for false positives
+- ✅ **CLI Command**: `bpl lint <files...>`
+- ✅ **Linter Engine**: Extensible rule-based linter
+- ✅ **Rules**:
+  - Unused variables and parameters
+  - Naming conventions (PascalCase structs, camelCase functions)
+  - Unreachable code detection
+  - Shadowing detection
+- ✅ **Integration**: Integrated with compiler diagnostics
 
 **Acceptance Criteria:**
 
 - Linter runs successfully on projects
 - Reports actionable warnings with clear messages and locations
-- Autofix feature works for common issues (unused imports, obvious type errors)
 - Rules are configurable per-project
 - Output integrates well with IDE and build tools
+
+---
+
+## [6] ✅ Explicit Memory Initialization (COMPLETED)
+
+**Description:** Provide a mechanism to initialize raw memory (e.g., from `malloc`) as a valid object by setting internal flags (like `__null_bit__`). This allows using manually allocated memory without calling a constructor, which is useful for arrays of structs or custom allocators.
+
+**Implementation Status:** ✅ Fully Implemented (December 2025)
+
+**What Was Implemented:**
+
+- ✅ `std.mem.init<T>(ptr: *T)` intrinsic in `lib/mem.bpl`
+- ✅ CodeGenerator support to set `__null_bit__` to 1
+- ✅ Verified with `examples/manual_memory/`
+
+**Acceptance Criteria:**
+
+- `local ptr: *User = malloc(...)` followed by `std.mem.init(ptr)` makes `ptr` valid
+- Accessing members of initialized pointer does not throw `NullAccessError`
+- Works for single objects and arrays
+
+---
+
+- Clear error messages when narrowing to incompatible types
+
+---
 
 ---
 
@@ -400,24 +415,6 @@ The following features are recommended for implementation next:
 - Generated docs are properly styled and navigable
 
 ---
-
-## [6] ✅ Explicit Memory Initialization (COMPLETED)
-
-**Description:** Provide a mechanism to initialize raw memory (e.g., from `malloc`) as a valid object by setting internal flags (like `__null_bit__`). This allows using manually allocated memory without calling a constructor, which is useful for arrays of structs or custom allocators.
-
-**Implementation Status:** ✅ Fully Implemented
-
-**What Was Implemented:**
-
-- ✅ `std.mem.init<T>(ptr: *T)` intrinsic in `lib/mem.bpl`
-- ✅ CodeGenerator support to set `__null_bit__` to 1
-- ✅ Verified with `examples/manual_memory/` (implied)
-
-**Acceptance Criteria:**
-
-- `local ptr: *User = malloc(...)` followed by `std.mem.init(ptr)` makes `ptr` valid
-- Accessing members of initialized pointer does not throw `NullAccessError`
-- Works for single objects and arrays
 
 ---
 
@@ -534,7 +531,7 @@ The following features are recommended for implementation next:
 
 - Add control flow analysis passes for detecting unreachable code
 - Implement scope analysis for detecting variable shadowing
-- Add unused variable/parameter detection
+- ✅ Add unused variable/parameter detection
 - Detect unused function definitions
 - Implement type consistency checking across code paths
 - Add missing initialization detection
@@ -546,7 +543,7 @@ The following features are recommended for implementation next:
 
 - Compiler warns or errors on unreachable code
 - Shadowed variables are detected and reported
-- Unused variables and functions are flagged
+- ✅ Unused variables and functions are flagged
 - Clear messages guide developers to issues
 - Warnings can be individually configured or suppressed
 

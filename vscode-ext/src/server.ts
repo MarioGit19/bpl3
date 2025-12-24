@@ -23,6 +23,8 @@ import {
   InsertTextFormat,
 } from "vscode-languageserver/node";
 
+import { DocParser } from "../../compiler/common/DocParser";
+
 // Compiler integration
 import * as AST from "../../compiler/common/AST";
 import { CompilerError } from "../../compiler/common/CompilerError";
@@ -553,7 +555,8 @@ connection.onCompletion(
           // Check if varName is a variable in scope
           const line = textDocumentPosition.position.line + 1;
           const col = textDocumentPosition.position.character - 1;
-          const node = findNodeAtPosition(analysis.program, line, col);
+          const path = findNodeAtPosition(analysis.program, line, col);
+          const node = path.length > 0 ? path[path.length - 1] : null;
 
           if (node) {
             if (node.kind === "Identifier") {
@@ -1397,9 +1400,95 @@ connection.onHover((params: TextDocumentPositionParams): Hover | null => {
   if (analysis) {
     const line = params.position.line + 1;
     const column = params.position.character + 1;
-    const node = findNodeAtPosition(analysis.program, line, column);
+    const path = findNodeAtPosition(analysis.program, line, column);
+    const node = path.length > 0 ? path[path.length - 1] : null;
 
     if (node) {
+      // 1. Check if hovering a parameter definition in FunctionDecl
+      if (node.kind === "FunctionDecl") {
+        const func = node as AST.FunctionDecl;
+        if (func.documentation) {
+          // Check if position is within a param
+          for (const param of func.params) {
+            if (
+              line >= param.location.startLine &&
+              line <= param.location.endLine &&
+              column >= param.location.startColumn &&
+              column <= param.location.endColumn
+            ) {
+              // Hovering this param
+              const parsed = DocParser.parse(func.documentation);
+              const argDoc = DocParser.getArgumentDoc(parsed, param.name);
+              if (argDoc) {
+                return {
+                  contents: {
+                    kind: MarkupKind.Markdown,
+                    value: `**Parameter** \`${param.name}: ${analysis.checker.typeToString(param.type)}\`\n\n${argDoc}`,
+                  },
+                };
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Check if hovering an argument in a CallExpr
+      if (path.length >= 2) {
+        const parent = path[path.length - 2];
+        if (parent && parent.kind === "Call") {
+          const call = parent as AST.CallExpr;
+          // Find which arg index
+          const argIndex = call.args.indexOf(node as AST.Expression);
+          if (argIndex !== -1 && call.resolvedDeclaration) {
+            const funcDecl = call.resolvedDeclaration;
+            if (funcDecl.documentation && argIndex < funcDecl.params.length) {
+              const param = funcDecl.params[argIndex];
+              if (param) {
+                const paramName = param.name;
+                const parsed = DocParser.parse(funcDecl.documentation);
+                const argDoc = DocParser.getArgumentDoc(parsed, paramName);
+                if (argDoc) {
+                  return {
+                    contents: {
+                      kind: MarkupKind.Markdown,
+                      value: `**Argument** \`${paramName}\`\n\n${argDoc}`,
+                    },
+                  };
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // 3. General Documentation (Function, Struct, Enum, etc.)
+      if (node.documentation) {
+        const parsed = DocParser.parse(node.documentation);
+        let md = `**${(node as any).name || node.kind}**\n\n${parsed.description}`;
+        for (const section of parsed.sections) {
+          md += `\n\n## ${section.title}\n${section.content}`;
+        }
+        return { contents: { kind: MarkupKind.Markdown, value: md } };
+      }
+
+      // 4. Identifier resolving to documented declaration
+      if (node.kind === "Identifier") {
+        const ident = node as AST.IdentifierExpr;
+        if (
+          ident.resolvedDeclaration &&
+          ident.resolvedDeclaration.documentation
+        ) {
+          const parsed = DocParser.parse(
+            ident.resolvedDeclaration.documentation,
+          );
+          let md = `**${ident.name}**\n\n${parsed.description}`;
+          for (const section of parsed.sections) {
+            md += `\n\n## ${section.title}\n${section.content}`;
+          }
+          return { contents: { kind: MarkupKind.Markdown, value: md } };
+        }
+      }
+
       if (node.kind === "LambdaExpression") {
         const lambda = node as AST.LambdaExpr;
         const typeStr = lambda.resolvedType
@@ -2054,23 +2143,23 @@ function findNodeAtPosition(
   node: AST.ASTNode,
   line: number,
   column: number,
-): AST.ASTNode | null {
-  if (!node || !node.location) return null;
+): AST.ASTNode[] {
+  if (!node || !node.location) return [];
 
   // Check bounds
-  if (line < node.location.startLine || line > node.location.endLine)
-    return null;
+  if (line < node.location.startLine || line > node.location.endLine) return [];
   if (line === node.location.startLine && column < node.location.startColumn)
-    return null;
+    return [];
   if (line === node.location.endLine && column > node.location.endColumn)
-    return null;
+    return [];
 
   // Try to find a child that contains the position
   for (const key in node) {
     if (
       key === "location" ||
       key === "resolvedType" ||
-      key === "resolvedDeclaration"
+      key === "resolvedDeclaration" ||
+      key === "documentation"
     )
       continue;
     const child = (node as any)[key];
@@ -2078,18 +2167,22 @@ function findNodeAtPosition(
     if (Array.isArray(child)) {
       for (const item of child) {
         if (item && typeof item === "object" && item.kind) {
-          const res = findNodeAtPosition(item, line, column);
-          if (res) return res;
+          const path = findNodeAtPosition(item, line, column);
+          if (path.length > 0) {
+            return [node, ...path];
+          }
         }
       }
     } else if (child && typeof child === "object" && child.kind) {
-      const res = findNodeAtPosition(child, line, column);
-      if (res) return res;
+      const path = findNodeAtPosition(child, line, column);
+      if (path.length > 0) {
+        return [node, ...path];
+      }
     }
   }
 
   // If no child contains the position, then 'node' is the most specific one
-  return node;
+  return [node];
 }
 
 function findEnclosingStruct(text: string, line: number): string | null {

@@ -1353,7 +1353,7 @@ Whitespace
   = [ \t\n\r]+
 
 Comment
-  = c:("###" (!"###" .)* "###"
+  = c:("/#" (!"#/" SourceChar)* "#/"
   / "#"[^\n\r]*) {
     if (options && options.comments) {
       const loc = location();
@@ -1368,5 +1368,7 @@ Comment
     }
     return c;
   }
+
+SourceChar = .
 
 EOF = !.

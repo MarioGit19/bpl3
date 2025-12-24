@@ -12,6 +12,17 @@ frame add(a: int, b: int) ret int {
 }
 ```
 
+## Const Parameters
+
+Parameters can be marked as `const` to prevent modification within the function.
+
+```bpl
+frame print(msg: const string) {
+    # msg = "new string"; # Error: Cannot assign to const parameter
+    printf("%s\n", msg);
+}
+```
+
 ## Return Values
 
 Functions specify their return type after the parameter list using `ret Type`. If a function does not return a value, use `ret void` or omit the return type (defaults to void).

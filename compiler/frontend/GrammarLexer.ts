@@ -80,17 +80,17 @@ function extractComments(source: string, filePath: string): Token[] {
 
     while (col < line.length) {
       // Check for block comment start
-      if (!inBlockComment && line.substring(col, col + 3) === "###") {
+      if (!inBlockComment && line.substring(col, col + 2) === "/#") {
         inBlockComment = true;
         blockCommentStart = { line: lineNum + 1, column: col + 1 };
-        blockCommentContent = "###";
-        col += 3;
+        blockCommentContent = "/#";
+        col += 2;
         continue;
       }
 
       // Check for block comment end
-      if (inBlockComment && line.substring(col, col + 3) === "###") {
-        blockCommentContent += "###";
+      if (inBlockComment && line.substring(col, col + 2) === "#/") {
+        blockCommentContent += "#/";
         comments.push(
           new Token(
             TokenType.Comment,
@@ -103,7 +103,7 @@ function extractComments(source: string, filePath: string): Token[] {
         );
         inBlockComment = false;
         blockCommentContent = "";
-        col += 3;
+        col += 2;
         continue;
       }
 

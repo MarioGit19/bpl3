@@ -41,8 +41,70 @@ export class Parser {
 
     if (this.tokens.length > 0) {
       const comments = this.tokens.filter((t) => t.type === TokenType.Comment);
+      this.attachComments(ast);
       return { ...ast, comments };
     }
     return ast;
+  }
+
+  private attachComments(ast: AST.Program) {
+    if (this.tokens.length === 0) return;
+
+    // Only consider multi-line comments starting with /#
+    const comments = this.tokens
+      .filter((t) => t.type === TokenType.Comment && t.lexeme.startsWith("/#"))
+      .map((t) => ({
+        token: t,
+        // Calculate end line based on newlines in lexeme
+        endLine: t.line + t.lexeme.split(/\r\n|\r|\n/).length - 1,
+      }));
+
+    if (comments.length === 0) return;
+
+    const processNode = (node: AST.ASTNode) => {
+      const startLine = node.location.startLine;
+      // Find comment that ends exactly on the line before the node starts
+      // We could allow a gap, but strict adjacency is safer for now
+      const comment = comments.find((c) => c.endLine === startLine - 1);
+      if (comment) {
+        let cleanDoc = comment.token.lexeme;
+        // Remove /# and #/ markers
+        if (cleanDoc.startsWith("/#")) {
+          cleanDoc = cleanDoc.substring(2);
+          if (cleanDoc.endsWith("#/")) {
+            cleanDoc = cleanDoc.substring(0, cleanDoc.length - 2);
+          }
+        }
+        node.documentation = cleanDoc.trim();
+      }
+    };
+
+    for (const stmt of ast.statements) {
+      // Attach to top-level declarations
+      if (
+        [
+          "FunctionDecl",
+          "StructDecl",
+          "EnumDecl",
+          "SpecDecl",
+          "TypeDecl",
+          "GlobalVarDecl",
+        ].includes(stmt.kind)
+      ) {
+        processNode(stmt);
+
+        if (stmt.kind === "StructDecl") {
+          const s = stmt as AST.StructDecl;
+          s.members.forEach(processNode);
+        } else if (stmt.kind === "EnumDecl") {
+          const e = stmt as AST.EnumDecl;
+          e.variants.forEach(processNode);
+          e.methods.forEach(processNode);
+        } else if (stmt.kind === "SpecDecl") {
+          const s = stmt as AST.SpecDecl;
+          s.methods.forEach(processNode);
+        }
+      }
+    }
   }
 }

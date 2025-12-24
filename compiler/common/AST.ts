@@ -6,6 +6,7 @@ export interface ASTNode {
   kind: string;
   location: SourceLocation;
   resolvedType?: TypeNode;
+  documentation?: string;
 }
 
 export interface GenericParam {

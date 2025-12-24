@@ -7,15 +7,15 @@ This document outlines the syntax, types, and constructs available in the BPL3 l
 ### Comments
 
 - **Single-line comments**: Start with `#` and continue to the end of the line.
-- **Multi-line comments**: Enclosed in `### ... ###`.
+- **Multi-line comments**: Enclosed in `/# ... #/`.
 
 ```bpl
 # This is a single-line comment
 
-###
+/#
 This is a
 multi-line comment
-###
+#/
 ```
 
 ## 1. Types
@@ -79,7 +79,18 @@ local (a: int, b: bool) = getTuple();
 
 ### Constants
 
-_Currently, there is no `const` keyword. Use `global` or `local`._ (Note: `const` is a reserved keyword but not yet implemented in the parser).
+Use the `const` keyword to declare immutable variables.
+
+```bpl
+local const PI: float = 3.14159;
+global const MAX_USERS: int = 100;
+```
+
+`const` can also be used for function parameters:
+
+```bpl
+frame process(data: const *int) { ... }
+```
 
 ## 3. Functions
 
@@ -93,7 +104,7 @@ frame main() ret int {
 }
 
 struct X {
-    frame sum(this:X){ # member method
+    frame sum(this:*X){ # member method
         return 5;
     }
     frame add(a: int, b: int) ret int { # static method
@@ -207,10 +218,12 @@ try {
 
 ### Special Expressions
 
-- **Cast**: `cast<int>(3.5)`
+- **Cast**: `cast<int>(3.5)` or `(3.5 as int)`
+- **Type Check**: `(val is int)`
 - **Sizeof**: `sizeof(int)` or `sizeof(var)`
 - **Match**: `match(val) { ... }` (Pattern matching) or `match<Type>(val)` (Type check)
 - **Address/Dereference**: `&var`, `*ptr`
+- **Lambda**: `|arg(s):type| ret Type { ... }` - may contain 0 or many args:type, return type may be omitted if void
 
 ## 7. Known Limitations / Disallowed Constructs
 
@@ -238,7 +251,7 @@ import myFunc, myGlobal from "./utils.bpl";
 import [MyStruct], [MyType] from "./types.bpl";
 
 # Mixed imports
-import process, [Config] from "./lib.bpl";
+import process, [Config], [DisposableSpec], { MAX_USERS } from "./lib.bpl";
 
 # Namespace import
 import * as std from "std";
@@ -251,4 +264,5 @@ Symbols are private to the module by default. Use `export` to make them availabl
 ```bpl
 export myFunc;
 export [MyStruct];
+export { variable }
 ```

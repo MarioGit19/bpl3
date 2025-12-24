@@ -10,13 +10,12 @@ Lambda expressions (or anonymous functions) provide a concise way to define inli
 }
 ```
 
-If the lambda takes no arguments, you can use `||` or `|void|`.
+If the lambda takes no arguments, you can use `||`.
 If the return type is `void`, the `ret ReturnType` part can be omitted.
 
 ```bpl
 # No arguments, void return
 || { ... }
-|void| { ... }
 
 # Arguments, inferred void return
 |x: int| { ... }

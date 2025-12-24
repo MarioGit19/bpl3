@@ -144,20 +144,20 @@ if (x > 0) {         # Check if positive
 
 ### Multi-Line Comments
 
-Enclosed between `###` delimiters:
+Enclosed between `/#` and `#/` delimiters:
 
 ```bpl
-###
+/#
 This is a multi-line comment.
 It can span multiple lines.
-Everything between ### markers is ignored.
-###
+Everything between /# and #/ markers is ignored.
+#/
 
 frame main() ret int {
-    ###
+    /#
     You can put multi-line comments
     inside function bodies too.
-    ###
+    #/
     return 0;
 }
 ```
@@ -167,14 +167,14 @@ frame main() ret int {
 While BPL doesn't have special doc comment syntax (like `///` or `/**`), you can use comments for documentation:
 
 ```bpl
-###
+/#
 Function: calculateSum
 Purpose: Adds two integers and returns the result
 Parameters:
   - a: First integer
   - b: Second integer
 Returns: Sum of a and b
-###
+#/
 frame calculateSum(a: int, b: int) ret int {
     return a + b;
 }

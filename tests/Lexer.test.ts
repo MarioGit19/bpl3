@@ -428,7 +428,7 @@ describe("Lexer - Extended Tests", () => {
     });
 
     it("should skip multi-line comments", () => {
-      const tokens = tokenize("### This is\na comment ###\nlocal");
+      const tokens = tokenize("/# This is\na comment #/\nlocal");
       expect(tokens[0]!.type).toBe(TokenType.Comment);
       expect(tokens[1]!.type).toBe(TokenType.Local);
     });

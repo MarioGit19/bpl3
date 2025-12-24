@@ -167,15 +167,15 @@ export class GenericParser {
         break;
       }
 
-      // multiline comment ### ... ###
-      if (this.source.startsWith("###", this.position)) {
-        const end = this.source.indexOf("###", this.position + 3);
+      // multiline comment /# ... #/
+      if (this.source.startsWith("/#", this.position)) {
+        const end = this.source.indexOf("#/", this.position + 2);
         if (end === -1) {
           throw new Error(
             `Unterminated multiline comment at ${this.line}:${this.column}`,
           );
         }
-        const slice = this.source.slice(this.position, end + 3);
+        const slice = this.source.slice(this.position, end + 2);
         this.advance(slice);
         advanced = true;
         continue;

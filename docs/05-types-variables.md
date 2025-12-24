@@ -344,6 +344,19 @@ frame scopeExample() ret void {
 }
 ```
 
+### Constants
+
+Use the `const` keyword to declare immutable variables. Once initialized, their value cannot be changed.
+
+```bpl
+global const INT_MAX: int = 2147483647;
+local const PI: float = 3.14159;
+local const MAX_RETRIES: int = 3;
+
+# Error: Cannot assign to const variable
+# PI = 3.14;
+```
+
 ### Global Variables
 
 Declared at module scope:

@@ -90,6 +90,11 @@
   - ✅ Immutability enforcement in TypeChecker
   - ✅ Recursive mutability checking for member access and indexing
   - ✅ `this` treated as const pointer in methods
+- [x] Documentation Generator ✅
+  - ✅ Multi-line comment syntax changed to `/# ... #/` to avoid Markdown conflict
+  - ✅ Markdown generation from comments
+  - ✅ Standard Library documentation
+  - ✅ CLI `docs` command
 - [x] Type Narrowing / Pattern Matching ✅
   - ✅ `is` operator for type checking (e.g., `x is int`)
   - ✅ `as` operator for type casting (e.g., `x as float`)
@@ -98,6 +103,10 @@
   - ✅ Formatter support for `as`/`is` expressions (parentheses enforcement)
   - ✅ Integration with `match` expressions
   - ✅ Comprehensive test suite covering inheritance, specs, and enums
+- [x] Unused Variable Detection ✅
+  - ✅ Compiler error for unused local variables
+  - ✅ `_` prefix suppression support
+  - ✅ Integration with all existing tests
 - [x] Internal Error Structs for Standard Library (Replace integer error codes with proper structs) ✅
   - `ResultUnwrapError`, `OptionUnwrapError`
   - `IndexOutOfBoundsError`, `NullPointerError`
@@ -127,21 +136,6 @@
   - [ ] Intersection Types (`TypeA & TypeB`)
   - [ ] Union Types (`TypeA | TypeB`) (beyond Enums)
   - [ ] Type Guards (User-defined `is` functions)
-
-  - **Final Status:** ALL COMPLETE ✅ - All 93 enum-specific tests passing, 756 integration tests passing
-  - Implemented features:
-    - ✅ **Enum Methods**: Full method support with `this` parameter, generic context inheritance, LLVM codegen
-    - ✅ **Enum Equality Comparison**: `==` and `!=` operators with tag comparison and memcmp for payload data
-    - ✅ **Recursive Enums**: Pointer-based data structures with proper alignment padding and memory layout
-    - ✅ **Generic Enum Type Mangling**: Consistent type name normalization (int→i32) across LLVM IR generation
-    - ✅ **Pattern Guards**: Full conditional matching support with `if` guards, multiple guards per variant
-    - ✅ **Type Checking with match<Type>**: Runtime variant discrimination for early returns and validation
-  - Known limitations (non-critical, workarounds exist):
-    - ⏳ Nested pattern matching - Use nested match expressions as workaround
-    - ⏳ Direct field access on struct variants - Use pattern matching to extract fields
-    - ⏳ Namespace-qualified patterns - Import enums directly instead
-    - ⏳ Generic type inference - Requires bidirectional type checking (future enhancement)
-  - **Why complete:** All essential features for practical enum usage are implemented and thoroughly tested. Remaining limitations have simple workarounds and don't impact typical use cases.
 
 - [x] Multi-Target Support ✅ (FULLY COMPLETE)
 
@@ -190,16 +184,6 @@
   - Acceptance criteria: Can step through BPL code in GDB/LLDB, variables show correct values, breakpoints work.
   - Implementation notes: Map BPL source locations to LLVM IR debug metadata, generate DWARF type descriptors, emit debug info for functions/variables.
   - Acceptance criteria: Can step through BPL code in GDB/LLDB, variables show correct values, breakpoints work.
-
-- [5] Type Narrowing / Pattern Matching (Partially Implemented)
-
-  - Description: Implement syntax and semantics for narrowing variable types based on runtime checks.
-  - **Status:** PARTIAL (Syntax only)
-  - Implemented:
-    - ✅ `match<T>(expr)` syntax (`TypeMatchExpr`)
-  - Missing:
-    - ❌ TypeChecker narrowing logic (updating context)
-    - ❌ Flow-sensitive analysis
 
 - [5] Documentation Generation Tool
 
@@ -412,18 +396,6 @@
   - Implementation notes: Implement Arena struct, bulk allocation/deallocation.
   - Acceptance criteria: Can allocate from arena, reset frees all memory.
 
-- [8] Const Correctness (Partially Implemented)
-
-  - Description: Enforce `const` (or equivalent) declarations and immutability rules across the language: constant variables, read-only fields, `const` parameters, and compile-time constants. Ensure the compiler prevents mutation of `const` values and accepts usage patterns that are safe.
-  - **Status:** PARTIAL (Syntax only)
-  - Implemented:
-    - ✅ `const` keyword parsing in variable declarations
-  - Missing:
-    - ❌ TypeChecker enforcement of immutability
-    - ❌ `isConst` tracking in SymbolTable
-  - Implementation notes: Add `isConst` flag to symbol/type entries. Propagate const through assignments, parameter passing, and returns. Treat `const` references to mutable objects as shallowly const unless a deeper const model is chosen. Decide whether `const` applies to variables, fields, and/or function returns.
-  - Acceptance criteria: Examples declaring `const` variables produce errors on mutation; `const` parameters cannot be assigned inside functions; `const` globals evaluate as compile-time constants where used.
-
 - [8] Async/Await
 
   - Description: Add `async` functions and `await` operator with promise-like semantics to simplify asynchronous programming.
@@ -458,9 +430,9 @@
   - Implemented:
     - ✅ Unreachable code detection
     - ✅ Redeclaration check (same scope)
+    - ✅ Unused variable detection
   - Missing:
     - ❌ Shadowing warning (outer scope)
-    - ❌ Unused variable detection (commented out)
   - Implementation notes: Add passes for control flow analysis (reachability) and scope analysis (shadowing).
   - Acceptance criteria: Compiler warns or errors on unreachable code and shadowed variables.
 
@@ -481,12 +453,6 @@
   - Description: Provide runtime type inspection and manipulation capabilities.
   - Implementation notes: Generate type metadata during compilation, expose reflection APIs in stdlib (getType, getFields, getMembers).
   - Acceptance criteria: Runtime type information available for inspection, can iterate fields, get method signatures at runtime.
-
-- [9] Result<T, E> Type and Error Propagation
-
-  - Description: Implement Result enum and ? operator for error propagation.
-  - Implementation notes: Define Result in stdlib, implement ? operator that unwraps Ok or returns Err, support try-like semantics.
-  - Acceptance criteria: Result type works like Rust's Result, ? operator propagates errors, functions returning Result integrate smoothly.
 
 - [9] Macro System
   - Description: Implement compile-time code generation with procedural macros.

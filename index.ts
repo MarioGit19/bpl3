@@ -17,6 +17,7 @@ import { Parser } from "./compiler/frontend/Parser";
 import { PackageManager } from "./compiler/middleend/PackageManager";
 import { TypeChecker } from "./compiler/middleend/TypeChecker";
 import { Linter } from "./compiler/linter/Linter";
+import { DocumentationGenerator } from "./compiler/docs/DocumentationGenerator";
 
 const program = new Command();
 
@@ -989,6 +990,27 @@ program
       console.log(content);
     } catch (e) {
       console.error(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("docs")
+  .argument("<file>", "Input BPL file")
+  .description("Generate Markdown documentation for a BPL file and its imports")
+  .option("-o, --output <file>", "Output file path (default: docs.md)")
+  .action((file, options, command) => {
+    try {
+      const generator = new DocumentationGenerator();
+      const markdown = generator.generate(file);
+
+      const globalOpts = command.parent?.opts() || {};
+      const outputPath = options.output || globalOpts.output || "docs.md";
+
+      fs.writeFileSync(outputPath, markdown);
+      console.log(`Documentation generated at ${outputPath}`);
+    } catch (error: any) {
+      console.error("Error generating documentation:", error.message);
       process.exit(1);
     }
   });

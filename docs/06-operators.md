@@ -22,22 +22,22 @@ This guide covers all operators available in BPL, their precedence, associativit
 
 BPL operators follow C-like precedence rules. Higher precedence operators bind more tightly.
 
-| Precedence  | Operators                                            | Description                           | Associativity |
-| ----------- | ---------------------------------------------------- | ------------------------------------- | ------------- | ------------- | ------------- |
-| 1 (highest) | `()` `[]` `.` `->`                                   | Parentheses, subscript, member access | Left to right |
-| 2           | `!` `~` `++` `--` `+` `-` `*` `&` `cast` `sizeof`    | Unary operators                       | Right to left |
-| 3           | `*` `/` `%`                                          | Multiplicative                        | Left to right |
-| 4           | `+` `-`                                              | Additive                              | Left to right |
-| 5           | `<<` `>>`                                            | Bitwise shift                         | Left to right |
-| 6           | `<` `<=` `>` `>=`                                    | Relational                            | Left to right |
-| 7           | `==` `!=`                                            | Equality                              | Left to right |
-| 8           | `&`                                                  | Bitwise AND                           | Left to right |
-| 9           | `^`                                                  | Bitwise XOR                           | Left to right |
-| 10          | `                                                    | `                                     | Bitwise OR    | Left to right |
-| 11          | `&&`                                                 | Logical AND                           | Left to right |
-| 12          | `                                                    |                                       | `             | Logical OR    | Left to right |
-| 13          | `?:`                                                 | Ternary conditional                   | Right to left |
-| 14 (lowest) | `=` `+=` `-=` `*=` `/=` `%=` `<<=` `>>=` `&=` `^=` ` | =`                                    | Assignment    | Right to left |
+| Precedence  | Operators                                                   | Description                           | Associativity |
+| ----------- | ----------------------------------------------------------- | ------------------------------------- | ------------- | ------------- | ------------- |
+| 1 (highest) | `()` `[]` `.` `->`                                          | Parentheses, subscript, member access | Left to right |
+| 2           | `!` `~` `++` `--` `+` `-` `*` `&` `cast` `sizeof` `is` `as` | Unary operators                       | Right to left |
+| 3           | `*` `/` `%`                                                 | Multiplicative                        | Left to right |
+| 4           | `+` `-`                                                     | Additive                              | Left to right |
+| 5           | `<<` `>>`                                                   | Bitwise shift                         | Left to right |
+| 6           | `<` `<=` `>` `>=`                                           | Relational                            | Left to right |
+| 7           | `==` `!=`                                                   | Equality                              | Left to right |
+| 8           | `&`                                                         | Bitwise AND                           | Left to right |
+| 9           | `^`                                                         | Bitwise XOR                           | Left to right |
+| 10          | `                                                           | `                                     | Bitwise OR    | Left to right |
+| 11          | `&&`                                                        | Logical AND                           | Left to right |
+| 12          | `                                                           |                                       | `             | Logical OR    | Left to right |
+| 13          | `?:`                                                        | Ternary conditional                   | Right to left |
+| 14 (lowest) | `=` `+=` `-=` `*=` `/=` `%=` `<<=` `>>=` `&=` `^=` `        | =`                                    | Assignment    | Right to left |
 
 ## Arithmetic Operators
 
@@ -446,6 +446,27 @@ matrix[1][2] = 5;
 ```bpl
 local p: int* = &arr[0];
 local third: int = p[2];  # Equivalent to: *(p + 2)
+```
+
+## Type Operators
+
+### Type Check (`is`)
+
+The `is` operator checks if a value is of a specific type at runtime.
+
+```bpl
+if (x is int) {
+    printf("x is an integer\n");
+}
+```
+
+### Type Cast (`as`)
+
+The `as` operator performs an explicit type conversion.
+
+```bpl
+local f: float = 3.14;
+local i: int = f as int;
 ```
 
 ## Sizeof Operator

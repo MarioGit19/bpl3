@@ -15,9 +15,9 @@ struct StringBuilder {
     buffer: string,
     length: int,
     capacity: int,
-    ###
+    /#
         Creates a new StringBuilder with specified initial capacity
-    ###
+    #/
     frame new(initial_capacity: int) ret StringBuilder {
         local sb: StringBuilder;
         sb.capacity = initial_capacity;
@@ -27,16 +27,16 @@ struct StringBuilder {
         return sb;
     }
 
-    ###
+    /#
         Creates a new StringBuilder with default capacity of 256
-    ###
+    #/
     frame newDefault() ret StringBuilder {
         return StringBuilder.new(256);
     }
 
-    ###
+    /#
         Destroys the StringBuilder and frees memory
-    ###
+    #/
     frame destroy(this: *StringBuilder) {
         if (this.buffer != null) {
             free(cast<*void>(this.buffer));
@@ -46,9 +46,9 @@ struct StringBuilder {
         this.capacity = 0;
     }
 
-    ###
+    /#
         Ensures the buffer has enough capacity for additional bytes
-    ###
+    #/
     frame ensureCapacity(this: *StringBuilder, additional: int) {
         local needed: int = this.length + additional;
         if (needed >= this.capacity) {
@@ -70,9 +70,9 @@ struct StringBuilder {
         }
     }
 
-    ###
+    /#
         Appends a C-string to the builder
-    ###
+    #/
     frame append(this: *StringBuilder, str: string) {
         if (str == null) {
             return;
@@ -91,16 +91,16 @@ struct StringBuilder {
         this.buffer[this.length] = cast<char>(0); # Null terminator
     }
 
-    ###
+    /#
         Appends a String object to the builder
-    ###
+    #/
     frame appendString(this: *StringBuilder, str: String) {
         this.append(str.cstr());
     }
 
-    ###
+    /#
         Appends a single character to the builder
-    ###
+    #/
     frame appendChar(this: *StringBuilder, ch: char) {
         this.ensureCapacity(1);
         this.buffer[this.length] = ch;
@@ -108,9 +108,9 @@ struct StringBuilder {
         this.buffer[this.length] = cast<char>(0); # Null terminator
     }
 
-    ###
+    /#
         Appends an integer to the builder
-    ###
+    #/
     frame appendInt(this: *StringBuilder, value: int) {
         # Convert int to string manually
         # Handle negative numbers
@@ -164,9 +164,9 @@ struct StringBuilder {
         this.buffer[this.length] = cast<char>(0); # Null terminator
     }
 
-    ###
+    /#
         Clears the builder without freeing memory
-    ###
+    #/
     frame clear(this: *StringBuilder) {
         this.length = 0;
         if (this.buffer != null) {
@@ -174,23 +174,23 @@ struct StringBuilder {
         }
     }
 
-    ###
+    /#
         Returns the current length
-    ###
+    #/
     frame len(this: *StringBuilder) ret int {
         return this.length;
     }
 
-    ###
+    /#
         Returns a C-string pointer (valid until next modification)
-    ###
+    #/
     frame cstr(this: *StringBuilder) ret string {
         return this.buffer;
     }
 
-    ###
+    /#
         Builds and returns a String object (caller must destroy)
-    ###
+    #/
     frame toString(this: *StringBuilder) ret String {
         return String.new(this.buffer);
     }
