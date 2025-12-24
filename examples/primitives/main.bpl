@@ -8,12 +8,12 @@ frame main() ret int {
     local g: long = 7000000000;
     local h: ulong = 8000000000;
     # Test casts
-    local i: int = cast<int>(a);
-    local j: long = cast<long>(e);
-    local k: short = cast<short>(c);
-    local l: char = cast<char>(a);
+    local _i: int = cast<int>(a);
+    local _j: long = cast<long>(e);
+    local _k: short = cast<short>(c);
+    local _l: char = cast<char>(a);
     # Test arithmetic
-    local m: int = e + 100;
+    local _m: int = e + 100;
     printf("a=%d\n", cast<int>(a));
     printf("b=%d\n", cast<int>(b));
     printf("c=%d\n", cast<int>(c));

@@ -5,6 +5,6 @@ enum Message {
 }
 
 frame main() ret int {
-    local quit: Message = Message.Quit;
+    local _quit: Message = Message.Quit;
     return 0;
 }

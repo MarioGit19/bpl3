@@ -2,6 +2,5 @@
   "expectedOutput": ["Success: 5", "Got expected error"],
   "args": [],
   "env": {},
-  "input": "",
-  "skip_compilation": false
+  "input": ""
 }

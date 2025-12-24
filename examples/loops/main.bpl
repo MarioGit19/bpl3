@@ -29,7 +29,7 @@ frame main() ret int {
     local k: int = 0;
     loop (k < 10) {
         k = k + 1;
-        if (k % 2 == 0) {
+        if ((k % 2) == 0) {
             continue;
         }
         printf("%d ", k);

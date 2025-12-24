@@ -11,6 +11,8 @@
     "# You can also use argc and argv as main args",
     "",
     "frame main(argc: int, argv: **char) ret int {",
+    "    # Prevent unused variable error",
+    "    local _unused: **char = argv;",
     "    printf(\"Command-line Arguments Demo\\n\");",
     "    printf(\"To access command-line arguments, you would:\\n\");",
     "    printf(\"1. Import the Args module: import [Args] from \\\"std/args.bpl\\\"\\n\");",

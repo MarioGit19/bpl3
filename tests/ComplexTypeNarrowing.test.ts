@@ -68,7 +68,7 @@ describe("Complex Type Narrowing", () => {
         }
         frame main() {
             local d: Dog = Dog.new("Buddy", "Golden");
-            local a: Animal = d as Animal;
+            local _a: Animal = d as Animal;
         }
       `;
       expect(() => check(source)).not.toThrow();

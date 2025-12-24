@@ -41,7 +41,7 @@ describe("Type Narrowing (as/is)", () => {
   describe("Parser", () => {
     it("should parse 'as' expression", () => {
       const source =
-        "frame main() { local x: int = 10; local y: uint = x as uint; }";
+        "frame main() { local x: int = 10; local _y: uint = x as uint; }";
       const program = parse(source);
       const func = program.statements[0] as AST.FunctionDecl;
       const block = func.body as AST.BlockStmt;
@@ -83,7 +83,7 @@ describe("Type Narrowing (as/is)", () => {
       // So 'as' is LOWER precedence than arithmetic (Additive).
       // x + y as T -> (x + y) as T
 
-      const source = "frame main() { local x: int = 1 + 2 as int; }";
+      const source = "frame main() { local _x: int = 1 + 2 as int; }";
       const program = parse(source);
       const func = program.statements[0] as AST.FunctionDecl;
       const block = func.body as AST.BlockStmt;
@@ -95,7 +95,7 @@ describe("Type Narrowing (as/is)", () => {
     });
 
     it("should handle chained 'as'", () => {
-      const source = "frame main() { local x: int = 1 as int as uint; }";
+      const source = "frame main() { local _x: int = 1 as int as uint; }";
       const program = parse(source);
       const func = program.statements[0] as AST.FunctionDecl;
       const block = func.body as AST.BlockStmt;
@@ -116,8 +116,8 @@ describe("Type Narrowing (as/is)", () => {
       const source = `
         frame main() {
           local x: int = 10;
-          local y: uint = x as uint;
-          local z: float = x as float;
+          local _y: uint = x as uint;
+          local _z: float = x as float;
         }
       `;
       expect(() => check(source)).not.toThrow();
@@ -138,7 +138,7 @@ describe("Type Narrowing (as/is)", () => {
       const source = `
         frame main() {
           local x: int = 10;
-          local s: string = x as string; // Invalid
+          local _s: string = x as string; // Invalid
         }
       `;
       expect(() => check(source)).toThrow(CompilerError);
@@ -158,7 +158,7 @@ describe("Type Narrowing (as/is)", () => {
       const source = `
             frame main() {
                 local x: int = 10;
-                local b: bool = x is int;
+                local _b: bool = x is int;
             }
         `;
       expect(() => check(source)).not.toThrow();
@@ -170,7 +170,7 @@ describe("Type Narrowing (as/is)", () => {
       const source = `
         frame main() {
           local x: int = 10;
-          local y: float = x as float;
+          local _y: float = x as float;
         }
       `;
       const ir = compile(source);
@@ -207,14 +207,14 @@ describe("Type Narrowing (as/is)", () => {
   describe("Complex Scenarios", () => {
     describe("Formatter", () => {
       it("should format 'as' with parentheses", () => {
-        const source = "frame main() { local x: int = 10 as int; }";
+        const source = "frame main() { local _x: int = 10 as int; }";
         const formatted = format(source);
         expect(formatted).toContain("(10 as int)");
       });
 
       it("should format chained 'as' with parentheses", () => {
         const source =
-          "frame main() { local x: bool = 42 as int as short as bool; }";
+          "frame main() { local _x: bool = 42 as int as short as bool; }";
         const formatted = format(source);
         expect(formatted).toContain("(((42 as int) as short) as bool)");
       });
@@ -237,7 +237,7 @@ describe("Type Narrowing (as/is)", () => {
           }
           frame main() {
               local d: Dog = Dog.new("Buddy", "Golden");
-              local a: Animal = d as Animal;
+              local _a: Animal = d as Animal;
           }
         `;
         expect(() => check(source)).not.toThrow();

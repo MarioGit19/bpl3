@@ -271,10 +271,10 @@ describe("Bug Hunting - Edge Cases", () => {
       expectError(source, "unreachable");
     });
 
-    it.skip("should warn or error on unused variable", () => {
+    it("should warn or error on unused variable", () => {
       const source = `
             frame main() {
-                local x: i32 = 1;
+                local name: i32 = 1;
             }
           `;
       expectError(source, "unused");

@@ -16,7 +16,7 @@ frame testValidThenNull() {
     # Now assign null
     d = null;
     printf("Assigned null, now accessing...\n");
-    local val: int = d.value; # Should trap
+    local _val: int = d.value; # Should trap
     printf("Should not reach here\n");
 }
 
@@ -63,7 +63,7 @@ frame testCopyNull() {
     local d2: Data = d1; # Copy null
 
     printf("Accessing d2...\n");
-    local val: int = d2.value; # Should trap
+    local _val: int = d2.value; # Should trap
     printf("Should not reach here\n");
 }
 

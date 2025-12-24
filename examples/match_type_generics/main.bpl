@@ -40,15 +40,15 @@ frame main() ret int {
     local someVal: Option<int> = Option<int>.Some(42);
     local noneVal: Option<int> = Option<int>.None;
 
-    local result1: int = checkOption(someVal);
-    local result2: int = checkOption(noneVal);
+    local _result1: int = checkOption(someVal);
+    local _result2: int = checkOption(noneVal);
 
     # Test Result enum variant matching
     local okVal: Result<int, string> = Result<int, string>.Ok(100);
     local errVal: Result<int, string> = Result<int, string>.Err("error");
 
-    local result3: int = checkResult(okVal);
-    local result4: int = checkResult(errVal);
+    local _result3: int = checkResult(okVal);
+    local _result4: int = checkResult(errVal);
 
     return 0;
 }

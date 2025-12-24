@@ -9,8 +9,8 @@ frame main() ret int {
     memset(ptr, 0, 12);
 
     # Cast to char* and test __bpl_mem_is_zero
-    local bytes: *int = cast<*int>(ptr);
-    local result: int;
+    local _bytes: *int = cast<*int>(ptr);
+    local _result: int;
 
     printf("Testing zeroed memory...\n");
 

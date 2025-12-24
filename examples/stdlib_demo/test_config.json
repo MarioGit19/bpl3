@@ -32,6 +32,5 @@
   ],
   "args": [],
   "env": {},
-  "input": "42\ninput",
-  "skip_compilation": false
+  "input": "42\ninput"
 }

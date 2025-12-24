@@ -51,13 +51,15 @@ frame main() ret int {
     # but let's try if it works. If not, we'll use flat array.
     # Based on previous files, flat arrays are common.
     # Let's try to declare a 2D array.
-    
+
     # local matrix: int[2][2]; # This might be risky if not fully supported.
     # Let's stick to flat array for 2D simulation to be safe and robust for this basic example.
-    
+
     local matrix: int[4]; # 2x2
-    matrix[0] = 1; matrix[1] = 2;
-    matrix[2] = 3; matrix[3] = 4;
+    matrix[0] = 1;
+    matrix[1] = 2;
+    matrix[2] = 3;
+    matrix[3] = 4;
 
     printf("2x2 Matrix (flat):\n");
     printf("%d %d\n", matrix[0], matrix[1]);

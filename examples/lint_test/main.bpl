@@ -2,7 +2,7 @@ struct bad_struct_name {
     x: int,
 }
 
-frame BadFunctionName() {
+frame bad_function_name() {
     return;
 }
 

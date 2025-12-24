@@ -2,6 +2,5 @@
   "expectedOutput": ["Quitting", "Moving", "To 10, 20", "Other message"],
   "args": [],
   "env": {},
-  "input": "",
-  "skip_compilation": false
+  "input": ""
 }

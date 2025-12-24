@@ -25,7 +25,7 @@ describe("Match Explicit Return", () => {
       
       frame main() {
         local s: Status = Status.Ok;
-        local res: string = match(s) {
+        local _res: string = match(s) {
           Status.Ok => "OK",
           Status.Error(code) => {
             if (code == 404) {
@@ -84,7 +84,7 @@ describe("Match Explicit Return", () => {
       frame main() {
         local opt: Outer = Outer.Wrap(Inner.Val(10));
         
-        local res: int = match(opt) {
+        local _res: int = match(opt) {
           Outer.None => 0,
           Outer.Wrap(inner) => {
             return match(inner) {

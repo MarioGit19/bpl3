@@ -13,7 +13,7 @@ struct Counter {
 frame testArithmetic() {
     printf("Test 1: Null in arithmetic\n");
     local p: Point = null;
-    local result: int = p.x + p.y; # Should trap on p.x
+    local _result: int = p.x + p.y; # Should trap on p.x
     printf("Should not reach here\n");
 }
 
@@ -44,7 +44,7 @@ frame testCompoundAssignment() {
 frame testTernary() {
     printf("Test 4: Null in ternary\n");
     local p: Point = null;
-    local result: int = true ? p.x : 0; # Should trap evaluating p.x
+    local _result: int = true ? p.x : 0; # Should trap evaluating p.x
     printf("Should not reach here\n");
 }
 
@@ -61,19 +61,19 @@ frame testMultipleAccess() {
     printf("Test 6: Multiple accesses in expression\n");
     local p: Point = null;
     # Should trap on first access (p.x)
-    local result: int = (p.x * 2) + (p.y * 3);
+    local _result: int = (p.x * 2) + (p.y * 3);
     printf("Should not reach here\n");
 }
 
-# Test null in nested function calls
-frame getDouble(n: int) ret int {
-    return n * 2;
+# Test 7: Null in nested function calls
+frame getDouble(x: int) ret int {
+    return x * 2;
 }
 
 frame testNestedCalls() {
     printf("Test 7: Null in nested calls\n");
     local p: Point = null;
-    local result: int = getDouble(p.x); # Should trap evaluating p.x
+    local _result: int = getDouble(p.x); # Should trap evaluating p.x
     printf("Should not reach here\n");
 }
 

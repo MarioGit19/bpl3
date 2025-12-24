@@ -98,19 +98,20 @@ export function checkBlock(
   }
 
   if (newScope) {
-    // const unused = this.currentScope.getUnusedVariables();
-    // for (const symbol of unused) {
-    //   const error = new CompilerError(
-    //     `Unused variable '${symbol.name}'`,
-    //     "Variable is declared but never used.",
-    //     symbol.declaration.location,
-    //   );
-    //   if (this.collectAllErrors) {
-    //     this.errors.push(error);
-    //   } else {
-    //     throw error;
-    //   }
-    // }
+    const unused = this.currentScope.getUnusedVariables();
+    for (const symbol of unused) {
+      if (symbol.name.startsWith("_")) continue;
+      const error = new CompilerError(
+        `Unused variable '${symbol.name}'`,
+        "Variable is declared but never used.",
+        symbol.declaration.location,
+      );
+      if (this.collectAllErrors) {
+        this.errors.push(error);
+      } else {
+        throw error;
+      }
+    }
     this.currentScope = this.currentScope.exitScope();
   }
 }

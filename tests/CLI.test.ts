@@ -22,7 +22,7 @@ describe("CLI Tests", () => {
       "Struct 'bad_struct_name' should be PascalCase",
     );
     expect(result.stderr).toContain(
-      "Function 'BadFunctionName' should be camelCase",
+      "Function 'bad_function_name' should be camelCase",
     );
     expect(result.stderr).toContain("[L001]");
   });

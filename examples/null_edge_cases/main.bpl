@@ -23,7 +23,7 @@ struct Container {
 frame testNestedAccess() {
     printf("Test 1: Nested member access on null\n");
     local outer: Outer = null;
-    local val: int = outer.inner.value; # Should trap on outer.inner
+    local _val: int = outer.inner.value; # Should trap on outer.inner
     printf("Should not reach here\n");
 }
 
@@ -31,7 +31,7 @@ frame testNestedAccess() {
 frame testArrayInStruct() {
     printf("Test 2: Array in null struct\n");
     local c: Container = null;
-    local val: int = c.items[5]; # Should trap on c.items
+    local _val: int = c.items[5]; # Should trap on c.items
     printf("Should not reach here\n");
 }
 
@@ -42,10 +42,10 @@ frame testMultipleNulls() {
     local b: Container = null;
 
     # First access should trap
-    local x: int = a.data;
+    local _x: int = a.data;
 
     # This should never execute
-    local y: int = b.count;
+    local _y: int = b.count;
     printf("Should not reach here\n");
 }
 
@@ -56,7 +56,7 @@ frame testNullInLoop() {
     local i: int = 0;
 
     loop (i < 5) {
-        local val: int = outer.data; # Should trap on first iteration
+        local _val: int = outer.data; # Should trap on first iteration
         i = i + 1;
     }
     printf("Should not reach here\n");
@@ -72,7 +72,7 @@ frame testAssignThenAccess() {
     outer = null;
 
     # This should trap
-    local val: int = outer.data;
+    local _val: int = outer.data;
     printf("Should not reach here\n");
 }
 
@@ -84,7 +84,7 @@ frame testConditionalNull() {
     if (outer == null) {
         printf("Correctly detected null\n");
         # But accessing it should still trap
-        local val: int = outer.data;
+        local _val: int = outer.data;
     }
     printf("Should not reach here\n");
 }
@@ -94,7 +94,7 @@ frame testStructArrayElement() {
     printf("Test 7: Struct array element\n");
     local arr: Outer[3];
     arr[1] = null;
-    local val: int = arr[1].data; # Should trap
+    local _val: int = arr[1].data; # Should trap
     printf("Should not reach here\n");
 }
 
@@ -103,7 +103,7 @@ frame testDeepNested() {
     printf("Test 8: Deep nested access\n");
     local outer: Outer = null;
     # Even though we're accessing nested field, trap should happen on first null access
-    local val: int = outer.inner.value;
+    local _val: int = outer.inner.value;
     printf("Should not reach here\n");
 }
 

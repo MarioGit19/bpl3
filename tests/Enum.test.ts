@@ -150,7 +150,7 @@ describe("Enum Type Checker - Valid Cases", () => {
         Blue,
       }
       frame main() {
-        local c: Color = Color.Red;
+        local _c: Color = Color.Red;
       }
     `;
     expect(() => check(source)).not.toThrow();
@@ -162,7 +162,7 @@ describe("Enum Type Checker - Valid Cases", () => {
         Move(int, int),
       }
       frame main() {
-        local msg: Message = Message.Move(10, 20);
+        local _msg: Message = Message.Move(10, 20);
       }
     `;
     expect(() => check(source)).not.toThrow();
@@ -183,7 +183,7 @@ describe("Enum Type Checker - Valid Cases", () => {
         };
       }
       frame main() {
-        local result: int = process(Color.Blue);
+        local _result: int = process(Color.Blue);
       }
     `;
     expect(() => check(source)).not.toThrow();
@@ -200,7 +200,7 @@ describe("Enum Type Checker - Valid Cases", () => {
         return Color.Red;
       }
       frame main() {
-        local c: Color = get_color();
+        local _c: Color = get_color();
       }
     `;
     expect(() => check(source)).not.toThrow();
@@ -272,7 +272,7 @@ describe("Enum Type Checker - Valid Cases", () => {
       }
       frame main() {
         local pos: Position;
-        local val: int = pos.get_direction_value(Direction.North);
+        local _val: int = pos.get_direction_value(Direction.North);
       }
     `;
     expect(() => check(source)).not.toThrow();
@@ -498,8 +498,8 @@ describe("Enum Integration Tests", () => {
       }
       
       frame main() {
-        local c: Color = Color.Red;
-        local s: Status = Status.Ready;
+        local _c: Color = Color.Red;
+        local _s: Status = Status.Ready;
       }
     `;
     expect(() => check(source)).not.toThrow();
@@ -844,7 +844,7 @@ describe("Enum with Complex Types", () => {
       }
       frame main() {
         local x: int = 42;
-        local d: Data = Data.Pointer(&x);
+        local _d: Data = Data.Pointer(&x);
       }
     `;
     expect(() => check(source)).not.toThrow();
@@ -857,7 +857,7 @@ describe("Enum with Complex Types", () => {
       }
       frame main() {
         local arr: int[10];
-        local c: Container = Container.Array(arr);
+        local _c: Container = Container.Array(arr);
       }
     `;
     expect(() => check(source)).not.toThrow();
@@ -869,7 +869,7 @@ describe("Enum with Complex Types", () => {
         Data(int, float, bool),
       }
       frame main() {
-        local m: Mixed = Mixed.Data(42, 3.14, true);
+        local _m: Mixed = Mixed.Data(42, 3.14, true);
       }
     `;
     expect(() => check(source)).not.toThrow();
@@ -912,8 +912,8 @@ describe("Enum Negative Cases", () => {
         Green,
       }
       frame main() {
-        local Red: int = 42;
-        local c: Color = Color.Red;
+        local _Red: int = 42;
+        local _c: Color = Color.Red;
       }
     `;
     // Variable shadowing of enum variant - may or may not be allowed
@@ -1021,7 +1021,7 @@ describe("Enum Struct Variant Construction", () => {
         Rectangle { width: float, height: float },
       }
       frame main() {
-        local s: Shape = Shape.Circle { radius: 5.0 };
+        local _s: Shape = Shape.Circle { radius: 5.0 };
       }
     `;
     const program = parse(source);
@@ -1034,7 +1034,7 @@ describe("Enum Struct Variant Construction", () => {
         Circle { radius: float },
       }
       frame main() {
-        local s: Shape = Shape.Circle { radius: 5.0 };
+        local _s: Shape = Shape.Circle { radius: 5.0 };
       }
     `;
     expect(() => check(source)).not.toThrow();
@@ -1046,7 +1046,7 @@ describe("Enum Struct Variant Construction", () => {
         Rectangle { width: float, height: float },
       }
       frame main() {
-        local s: Shape = Shape.Rectangle { width: 10.0, height: 20.0 };
+        local _s: Shape = Shape.Rectangle { width: 10.0, height: 20.0 };
       }
     `;
     expect(() => check(source)).not.toThrow();
@@ -1258,7 +1258,7 @@ describe("Enum Generic Instantiation", () => {
         None,
       }
       frame main() {
-        local x: Option<int> = Option.Some(42);
+        local _x: Option<int> = Option.Some(42);
       }
     `;
     // This now works due to improved type inference
@@ -1589,7 +1589,7 @@ describe("Enum Type Matching with match<Type>", () => {
       }
       frame main() {
         local c: Color = Color.Red;
-        local is_red: bool = match<Color.Red>(c);
+        local _is_red: bool = match<Color.Red>(c);
       }
     `;
     expect(() => check(source)).not.toThrow();

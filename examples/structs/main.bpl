@@ -3,7 +3,6 @@ extern printf(fmt: string, ...);
 struct Point {
     x: int,
     y: int,
-
     frame new(x: int, y: int) ret Point {
         local p: Point;
         p.x = x;
@@ -21,14 +20,13 @@ struct Point {
     }
 
     frame isEqual(this: Point, other: Point) ret bool {
-        return this.x == other.x && this.y == other.y;
+        return (this.x == other.x) && (this.y == other.y);
     }
 }
 
 struct Rect {
     top_left: Point,
     bottom_right: Point,
-
     frame new(x1: int, y1: int, x2: int, y2: int) ret Rect {
         local r: Rect;
         r.top_left = Point.new(x1, y1);
@@ -43,8 +41,7 @@ struct Rect {
     }
 
     frame contains(this: Rect, p: Point) ret bool {
-        return p.x >= this.top_left.x && p.x <= this.bottom_right.x &&
-               p.y >= this.top_left.y && p.y <= this.bottom_right.y;
+        return (p.x >= this.top_left.x) && (p.x <= this.bottom_right.x) && (p.y >= this.top_left.y) && (p.y <= this.bottom_right.y);
     }
 }
 
@@ -65,7 +62,7 @@ frame main() ret int {
     local p2: Point = Point.new(15, 15);
     printf("Created p2: ");
     p2.print();
-    
+
     if (p1.isEqual(p2)) {
         printf("p1 is equal to p2\n");
     } else {

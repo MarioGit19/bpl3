@@ -53,7 +53,7 @@ describe("Enum Methods", () => {
       
       frame main() {
         local s: Status = Status.Active;
-        local b: bool = s.is_active();
+        local _b: bool = s.is_active();
       }
     `;
     expect(() => check(source)).not.toThrow();

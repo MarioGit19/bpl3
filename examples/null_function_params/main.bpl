@@ -48,7 +48,7 @@ frame main() ret int {
     # Test 1: Pass null directly
     printf("Test 1: Passing null as parameter\n");
     local p: Point = null;
-    local result: int = processPoint(p); # Should trap inside processPoint
+    local _result: int = processPoint(p); # Should trap inside processPoint
 
     printf("Should not reach here\n");
     return 0;

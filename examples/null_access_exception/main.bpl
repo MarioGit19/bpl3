@@ -10,7 +10,7 @@ frame main() ret int {
 
     try {
         local p: Point = null;
-        local value: int = p.x; # Should throw NullAccessError
+        local _value: int = p.x; # Should throw NullAccessError
         printf("Should not reach here\n");
     } catch (e: NullAccessError) {
         printf("Caught null access exception!\n");

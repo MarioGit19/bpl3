@@ -24,7 +24,7 @@ describe("Match No Implicit Return", () => {
       frame main() {
         local s: Shape = Shape.Circle;
         # Expecting int, but block returns void (no return stmt)
-        local x: int = match(s) {
+        local _x: int = match(s) {
           Shape.Circle => {
             10; 
           }
@@ -40,7 +40,7 @@ describe("Match No Implicit Return", () => {
       
       frame main() {
         local s: Shape = Shape.Circle;
-        local x: int = match(s) {
+        local _x: int = match(s) {
           Shape.Circle => {
             return 10;
           }
@@ -56,7 +56,7 @@ describe("Match No Implicit Return", () => {
       
       frame main() {
         local s: Shape = Shape.Circle;
-        local x: int = match(s) {
+        local _x: int = match(s) {
           Shape.Circle => 10
         };
       }

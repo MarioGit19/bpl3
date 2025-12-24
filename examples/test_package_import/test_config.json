@@ -4,6 +4,5 @@
   "args": [],
   "env": {},
   "input": "",
-  "skip_compilation": false,
   "description": "Requires 'math-utils' package to be installed - package import test"
 }

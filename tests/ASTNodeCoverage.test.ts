@@ -122,7 +122,7 @@ describe("AST Node Coverage & Edge Cases", () => {
       const source = `
         frame main() {
           local arr: i32[10];
-          local ptr: *i32 = cast<*i32>(arr);
+          local _ptr: *i32 = cast<*i32>(arr);
         }
       `;
       expectSuccess(source);
@@ -180,7 +180,7 @@ describe("AST Node Coverage & Edge Cases", () => {
     it("should allow sizeof basic types", () => {
       const source = `
         frame main() {
-          local s: i64 = sizeof<i32>();
+          local _s: i64 = sizeof<i32>();
         }
       `;
       expectSuccess(source);

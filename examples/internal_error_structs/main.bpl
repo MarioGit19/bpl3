@@ -14,20 +14,20 @@ frame main() ret int {
     # Test OptionUnwrapError
     try {
         local opt: Option<int> = Option<int>.None;
-        opt.unwrap();
+        local _val: int = opt.unwrap();
     } catch (e: OptionUnwrapError) {
         printf("Caught OptionUnwrapError: %s\n", e.message);
     }
     # Test ResultUnwrapError
     try {
         local res: Result<int, int> = Result<int, int>.Ok(42);
-        res.unwrapErr();
+        local _val: int = res.unwrapErr();
     } catch (e: ResultUnwrapError) {
         printf("Caught ResultUnwrapError: %s\n", e.message);
     }
     # Test IOError
     try {
-        FS.readFile("non_existent_file.txt");
+        local _content: String = FS.readFile("non_existent_file.txt");
     } catch (e: IOError) {
         printf("Caught IOError: %s (code: %d)\n", e.message, e.code);
     }
@@ -42,7 +42,7 @@ frame main() ret int {
             throw IndexOutOfBoundsError.new("Custom index error message");
         }
         # Should throw (but we threw above)
-        arr.get(10);
+        local _val: int = arr.get(10);
     } catch (e: IndexOutOfBoundsError) {
         printf("Caught IndexOutOfBoundsError: %s (index %d, size %d)\n", e.message, e.index, e.size);
     }
@@ -82,7 +82,7 @@ frame main() ret int {
     try {
         local a: int = 10;
         local b: int = 0;
-        local c: int = a / b;
+        local _c: int = a / b;
     } catch (e: DivisionByZeroError) {
         printf("Caught DivisionByZeroError\n");
     }

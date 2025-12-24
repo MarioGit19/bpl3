@@ -76,8 +76,8 @@
     "    local success: Result<int, string> = Result<int, string>.Ok(150);",
     "    local failure: Result<int, string> = Result<int, string>.Err(\"not found\");",
     "    ",
-    "    local v1: int = processResult(success);",
-    "    local v2: int = processResult(failure);",
+    "    local _v1: int = processResult(success);",
+    "    local _v2: int = processResult(failure);",
     "    ",
     "    return 0;",
     "}"

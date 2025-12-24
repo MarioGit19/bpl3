@@ -20,7 +20,7 @@
     "    printf(\"float: %d bytes\\n\", sizeof(float));",
     "    printf(\"bool: %d bytes\\n\", sizeof(bool));",
     "    ",
-    "    local p: Point;",
+    "    local _p: Point;",
     "    printf(\"Point struct: %d bytes\\n\", sizeof(Point));",
     "    ",
     "    printf(\"\\nSizeof can be used for:\\n\");",

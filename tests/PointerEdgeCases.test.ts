@@ -67,7 +67,7 @@ describe("Pointer Edge Cases", () => {
     const source = `
       frame main() {
         local ptr: *i32 = null;
-        local val: i32 = ptr[0];
+        local _val: i32 = ptr[0];
       }
     `;
     expectSuccess(source);
@@ -77,7 +77,7 @@ describe("Pointer Edge Cases", () => {
     const source = `
       frame main() {
         local ptr: *i32 = null;
-        local ptr2: *i32 = ptr + 1;
+        local _ptr2: *i32 = ptr + 1;
       }
     `;
     expectSuccess(source);
@@ -87,7 +87,7 @@ describe("Pointer Edge Cases", () => {
     const source = `
       frame main() {
         local ptr: *i32 = null;
-        local ptr2: *i32 = ptr - 1;
+        local _ptr2: *i32 = ptr - 1;
       }
     `;
     expectSuccess(source);
@@ -98,7 +98,7 @@ describe("Pointer Edge Cases", () => {
       frame main() {
         local ptr1: *i32 = null;
         local ptr2: *i32 = null;
-        local diff: i64 = ptr1 - ptr2;
+        local _diff: i64 = ptr1 - ptr2;
       }
     `;
     expectSuccess(source);
@@ -108,7 +108,7 @@ describe("Pointer Edge Cases", () => {
     const source = `
       frame main() {
         local ptr: *i32 = null;
-        local val: i32 = *ptr;
+        local _val: i32 = *ptr;
       }
     `;
     expectSuccess(source);
@@ -118,7 +118,7 @@ describe("Pointer Edge Cases", () => {
     const source = `
       frame main() {
         local x: i32 = 10;
-        local ptr: *i32 = &x;
+        local _ptr: *i32 = &x;
       }
     `;
     expectSuccess(source);
@@ -130,7 +130,7 @@ describe("Pointer Edge Cases", () => {
       frame main() {
         local p: Point = Point { x: 1, y: 2 };
         local ptr: *Point = &p;
-        local x: i32 = ptr.x;
+        local _x: i32 = ptr.x;
       }
     `;
     expectSuccess(source);
@@ -142,7 +142,7 @@ describe("Pointer Edge Cases", () => {
       frame main() {
         local p: Point = Point { x: 1, y: 2 };
         local ptr: *Point = &p;
-        local x: i32 = (*ptr).x;
+        local _x: i32 = (*ptr).x;
       }
     `;
     expectSuccess(source);
@@ -153,7 +153,7 @@ describe("Pointer Edge Cases", () => {
       type IntPtr = *i32;
       frame main() {
         local ptr: IntPtr = null;
-        local val: i32 = ptr[0];
+        local _val: i32 = ptr[0];
       }
     `;
     expectSuccess(source);
@@ -162,7 +162,7 @@ describe("Pointer Edge Cases", () => {
   it("should allow indexing generic pointer", () => {
     const source = `
       frame foo<T>(ptr: *T) {
-        local val: T = ptr[0];
+        local _val: T = ptr[0];
       }
       frame main() {
         local ptr: *i32 = null;
@@ -186,8 +186,8 @@ describe("Pointer Edge Cases", () => {
     const source = `
       frame main() {
         local pptr: **i32 = null;
-        local ptr: *i32 = pptr[0];
-        local val: i32 = pptr[0][0];
+        local _ptr: *i32 = pptr[0];
+        local _val: i32 = pptr[0][0];
       }
     `;
     expectSuccess(source);

@@ -7,7 +7,7 @@
     "extern printf(fmt: string, ...);",
     "",
     "# Generic function - works for any type",
-    "frame printSize<T>(dummy: T) {",
+    "frame printSize<T>(_dummy: T) {",
     "    local size: int = sizeof(T);",
     "    printf(\"Type size: %d bytes\\n\", size);",
     "}",

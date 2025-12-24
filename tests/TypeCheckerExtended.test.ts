@@ -55,10 +55,10 @@ describe("TypeChecker - Extended Tests", () => {
 
     it("should allow array to pointer decay", () => {
       const source = `
-        frame test(arr: *int) ret void {}
+        frame test(_arr: *int) ret void {}
         frame main() ret int {
-          local arr: int[10];
-          test(arr);
+          local _arr: int[10];
+          test(_arr);
           return 0;
         }
       `;
@@ -72,8 +72,8 @@ describe("TypeChecker - Extended Tests", () => {
         frame add(a: int, b: int) ret int { return a + b; }
         frame add(a: float, b: float) ret float { return a + b; }
         frame main() ret int {
-          local x: int = add(1, 2);
-          local y: float = add(1.0, 2.0);
+          local _x: int = add(1, 2);
+          local _y: float = add(1.0, 2.0);
           return 0;
         }
       `;
@@ -147,7 +147,7 @@ describe("TypeChecker - Extended Tests", () => {
       const source = `
         struct Box<T> { value: T, }
         frame main() ret int {
-          local b: Box<Box<int>>;
+          local _b: Box<Box<int>>;
           return 0;
         }
       `;
@@ -344,7 +344,7 @@ describe("TypeChecker - Extended Tests", () => {
     it("should allow void functions without return", () => {
       const source = `
         frame test() ret void {
-          local x: int = 10;
+          local _x: int = 10;
         }
       `;
       expect(() => check(source)).not.toThrow();
@@ -456,7 +456,7 @@ describe("TypeChecker - Extended Tests", () => {
       const source = `
         frame main() ret int {
           local x: int = 10;
-          local y: float = cast<float>(x);
+          local _y: float = cast<float>(x);
           return 0;
         }
       `;
@@ -467,7 +467,7 @@ describe("TypeChecker - Extended Tests", () => {
       const source = `
         frame main() ret int {
           local p: *void = nullptr;
-          local ip: *int = cast<*int>(p);
+          local _ip: *int = cast<*int>(p);
           return 0;
         }
       `;
@@ -478,7 +478,7 @@ describe("TypeChecker - Extended Tests", () => {
       const source = `
         frame main() ret int {
           local a: i64 = 1000;
-          local b: i32 = cast<i32>(a);
+          local _b: i32 = cast<i32>(a);
           return 0;
         }
       `;
@@ -503,7 +503,7 @@ describe("TypeChecker - Extended Tests", () => {
         frame main() ret int {
           local x: int = 10;
           if (true) {
-            local y: int = x;
+            local _y: int = x;
           }
           return 0;
         }
@@ -542,7 +542,7 @@ describe("TypeChecker - Extended Tests", () => {
     it("should allow null assignment to pointers", () => {
       const source = `
         frame main() ret int {
-          local p: *int = null;
+          local _p: *int = null;
           return 0;
         }
       `;

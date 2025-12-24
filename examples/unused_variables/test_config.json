@@ -1,0 +1,9 @@
+{
+  "expectedOutput": ["Unused variable 'x'", "Unused variable 'z'"],
+  "exitCode": 1,
+  "args": [],
+  "env": {
+    "NO_COLOR": "1"
+  },
+  "input": ""
+}

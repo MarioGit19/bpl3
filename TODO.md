@@ -439,16 +439,8 @@
 - [8] Inline Assembly Blocks (Partially Implemented)
 
   - Description: Allow embedding inline assembly with explicit register lists and integration with calling conventions. Support `asm("flavor") { ... }` syntax for different assembly dialects (e.g., "intel", "att") or targets.
-  - **Status:** PARTIAL (Syntax supp (Partially Implemented)
-
-  - Description: Enhance the TypeChecker and semantic analysis to catch more errors at compile time, such as unreachable code, variable shadowing, and unused variables.
   - **Status:** PARTIAL
   - Implemented:
-    - ✅ Unreachable code detection
-    - ✅ Redeclaration check (same scope)
-  - Missing:
-    - ❌ Shadowing warning (outer scope)
-    - ❌ Unused variable detection (commented out)
     - ✅ `asm("flavor") { ... }` syntax parsing
     - ✅ Raw string injection into LLVM IR
     - ✅ Simple variable substitution `(var)` -> local register
@@ -462,6 +454,13 @@
 - [9] Semantic Analysis Improvements
 
   - Description: Enhance the TypeChecker and semantic analysis to catch more errors at compile time, such as unreachable code, variable shadowing, and unused variables.
+  - **Status:** PARTIAL
+  - Implemented:
+    - ✅ Unreachable code detection
+    - ✅ Redeclaration check (same scope)
+  - Missing:
+    - ❌ Shadowing warning (outer scope)
+    - ❌ Unused variable detection (commented out)
   - Implementation notes: Add passes for control flow analysis (reachability) and scope analysis (shadowing).
   - Acceptance criteria: Compiler warns or errors on unreachable code and shadowed variables.
 

@@ -5,6 +5,6 @@ enum Message {
 }
 
 frame main() ret int {
-    local msg: Message = Message.Move(10, 20);
+    local _msg: Message = Message.Move(10, 20);
     return 0;
 }

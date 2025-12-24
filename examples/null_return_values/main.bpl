@@ -42,7 +42,7 @@ frame main() ret int {
     printf("Test 2: Using returned null value\n");
 
     try {
-        local result: int = processData(data);
+        local _result: int = processData(data);
         printf("ERROR: Should have thrown!\n");
     } catch (e: NullAccessError) {
         printf("Caught: %s in %s (expr: %s)\n", e.message, e.function, e.expression);

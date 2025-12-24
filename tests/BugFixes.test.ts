@@ -36,7 +36,7 @@ describe("Bug Fixes", () => {
     const source = `
       struct Point { x: i32, y: i32 }
       frame main() {
-        local p: Point = Point { x: 1, y: 2, };
+        local _p: Point = Point { x: 1, y: 2, };
       }
     `;
     const { exitCode, stderr } = runBPL(source);
@@ -46,7 +46,7 @@ describe("Bug Fixes", () => {
 
   it("BUG-025: should allow trailing commas in function calls", () => {
     const source = `
-      frame foo(a: i32, b: i32) {}
+      frame foo(_a: i32, _b: i32) {}
       frame main() {
         foo(1, 2,);
       }
@@ -60,7 +60,7 @@ describe("Bug Fixes", () => {
     const source = `
       struct Box<T> { val: T }
       frame main() {
-        local b: Box<i32> = Box<i32> { val: 1 };
+        local _b: Box<i32> = Box<i32> { val: 1 };
       }
     `;
     const { exitCode, stderr } = runBPL(source);

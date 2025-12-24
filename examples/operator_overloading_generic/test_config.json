@@ -1,9 +1,24 @@
 {
-  "expectedOutput": [],
+  "expectedOutput": [
+    "=== Testing Generic Operator Overloading ===",
+    "",
+    "--- Integer Array Test ---",
+    "Integer array size: 3",
+    "intArr[0] = 10",
+    "intArr[1] = 20",
+    "intArr[2] = 30",
+    "Arrays have same length (both 3)",
+    "",
+    "--- Float Array Test ---",
+    "Float array size: 3",
+    "floatArr[0] = 1.5",
+    "floatArr[1] = 2.5",
+    "floatArr[2] = 3.5",
+    "",
+    "=== All tests passed! ==="
+  ],
   "exitCode": 0,
   "args": [],
   "env": {},
-  "input": "",
-  "skip_compilation": false,
-  "description": "BROKEN: Generic operator overloading test - needs fixing for return types"
+  "input": ""
 }

@@ -1,10 +1,10 @@
 extern printf(fmt: string, ...) ret int;
 
-frame process<T>(val: T) {
+frame process<T>(_val: T) {
     printf("Generic process\n");
 }
 
-frame process_two<T, U>(a: T, b: U) {
+frame process_two<T, U>(_a: T, _b: U) {
     printf("Generic two args\n");
 }
 
@@ -25,7 +25,7 @@ frame process(x: long) {
 }
 
 struct Test {
-    frame process<T>(this: *Test, val: T) {
+    frame process<T>(this: *Test, _val: T) {
         printf("Struct generic process\n");
     }
 
@@ -37,7 +37,7 @@ struct Test {
         printf("Struct non-generic process (instance)\n");
     }
 
-    frame process(obj: Test) {
+    frame process(_obj: Test) {
         printf("Struct non-generic process (static)\n");
     }
 

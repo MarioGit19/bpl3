@@ -3,7 +3,6 @@ extern printf(fmt: string, ...);
 # Generic Struct
 struct Box<T> {
     value: T,
-
     frame new(val: T) ret Box<T> {
         local b: Box<T>;
         b.value = val;
@@ -23,7 +22,6 @@ struct Box<T> {
 struct Pair<K, V> {
     first: K,
     second: V,
-
     frame new(k: K, v: V) ret Pair<K, V> {
         local p: Pair<K, V>;
         p.first = k;
@@ -56,7 +54,7 @@ frame main() ret int {
     # Test Box<int>
     local b1: Box<int> = Box<int>.new(10);
     printf("Box<int>: %d\n", b1.get());
-    
+
     b1.set(20);
     printf("Box<int> updated: %d\n", b1.get());
 
@@ -82,7 +80,7 @@ frame main() ret int {
     # Test Nested Generics
     local inner: Box<int> = Box<int>.new(999);
     local outer: Box<Box<int>> = Box<Box<int>>.new(inner);
-    
+
     local retrieved_inner: Box<int> = outer.get();
     printf("Nested Box<Box<int>>: %d\n", retrieved_inner.get());
 

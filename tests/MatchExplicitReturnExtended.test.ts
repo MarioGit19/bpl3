@@ -76,7 +76,7 @@ describe("Match Explicit Return Extended", () => {
       frame main() {
         local s: Status = Status.Ok;
         
-        local res: int = match(s) {
+        local _res: int = match(s) {
           Status.Ok => {
             local i: int = 0;
             loop (i < 10) {
@@ -101,11 +101,11 @@ describe("Match Explicit Return Extended", () => {
       frame main() {
         local s: Status = Status.Ok;
         
-        local res: int = match(s) {
+        local _res: int = match(s) {
           Status.Ok => {
             return 1;
-            local x: int = 2; # Unreachable but valid syntax
-            return x;
+            local _x: int = 2; # Unreachable but valid syntax
+            return _x;
           }
         };
       }
@@ -121,7 +121,7 @@ describe("Match Explicit Return Extended", () => {
       frame main() {
         local s: Shape = Shape.Circle;
         
-        local p: Point = match(s) {
+        local _p: Point = match(s) {
           Shape.Circle => {
             return Point { x: 0, y: 0 };
           },

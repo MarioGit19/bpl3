@@ -38,7 +38,7 @@ describe("Match Exhaustiveness with Guards", () => {
       
       frame main() {
         local c: Color = Color.Red;
-        local x: int = match(c) {
+        local _x: int = match(c) {
           Color.Red if false => 1,
           Color.Red => 3,
           Color.Blue => 2
@@ -54,7 +54,7 @@ describe("Match Exhaustiveness with Guards", () => {
       
       frame main() {
         local c: Color = Color.Red;
-        local x: int = match(c) {
+        local _x: int = match(c) {
           Color.Red if false => 1,
           _ => 2
         };

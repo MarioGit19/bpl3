@@ -22,7 +22,7 @@ frame main() ret int {
     printf("About to access p3.x...\n");
 
     try {
-        local val: int = p3.x; # Should trap here
+        local _val: int = p3.x; # Should trap here
         printf("ERROR: Should not reach here\n");
     } catch (e: NullAccessError) {
         printf("Caught: %s in %s (expr: %s)\n", e.message, e.function, e.expression);

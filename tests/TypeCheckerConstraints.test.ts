@@ -22,7 +22,7 @@ describe("TypeChecker - Generic Constraints", () => {
           b.val = val;
           return b;
       }
-      frame process<T: Box<int>>(val: T) {}
+      frame process<T: Box<int>>(_val: T) {}
       
       frame main() {
         local b: Box<int> = make_box<int>(10);
@@ -41,7 +41,7 @@ describe("TypeChecker - Generic Constraints", () => {
           b.val = val;
           return b;
       }
-      frame process<T: Box<int>>(val: T) {}
+      frame process<T: Box<int>>(_val: T) {}
       
       frame main() {
         local b: Box<string> = make_box<string>("hello");
@@ -55,7 +55,7 @@ describe("TypeChecker - Generic Constraints", () => {
 
   it("should reject generic function call with primitive type violating constraint", () => {
     const source = `
-      frame process<T: int>(val: T) {}
+      frame process<T: int>(_val: T) {}
       
       frame main() {
         process<string>("hello");
@@ -68,7 +68,7 @@ describe("TypeChecker - Generic Constraints", () => {
 
   it("should accept generic function call with primitive type satisfying constraint", () => {
     const source = `
-      frame process<T: int>(val: T) {}
+      frame process<T: int>(_val: T) {}
       
       frame main() {
         process<int>(10);
@@ -83,7 +83,7 @@ describe("TypeChecker - Generic Constraints", () => {
       struct Parent { x: int, }
       struct Child : Parent { y: int, }
       
-      frame process<T: Parent>(val: T) {}
+      frame process<T: Parent>(_val: T) {}
       
       frame main() {
         local c: Child = Child{ x: 1, y: 2, };
@@ -123,7 +123,7 @@ describe("TypeChecker - Generic Constraints", () => {
 
   it("should handle multiple generic parameters with constraints", () => {
     const source = `
-      frame func<T: int, U: string>(a: T, b: U) {}
+      frame func<T: int, U: string>(_a: T, _b: U) {}
       
       frame main() {
         func<int, int>(10, 20);
@@ -137,7 +137,7 @@ describe("TypeChecker - Generic Constraints", () => {
   it("should handle nested generic constraints", () => {
     const source = `
       struct Container<T> { val: T, }
-      frame process<U: Container<int>>(val: U) {}
+      frame process<U: Container<int>>(_val: U) {}
       
       frame main() {
         local c: Container<string>;
@@ -152,7 +152,7 @@ describe("TypeChecker - Generic Constraints", () => {
   it("should allow valid nested generic constraints", () => {
     const source = `
       struct Container<T> { val: T, }
-      frame process<U: Container<int>>(val: U) {}
+      frame process<U: Container<int>>(_val: U) {}
       
       frame main() {
         local c: Container<int>;

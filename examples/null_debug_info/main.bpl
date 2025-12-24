@@ -14,7 +14,7 @@ frame testMemberAccess() {
     local p: Point = null;
 
     printf("About to access p.x (should trap with error)...\n");
-    local val: int = p.x; # This will trap with detailed error message
+    local _val: int = p.x; # This will trap with detailed error message
 
     printf("This line should never execute\n");
 }
@@ -23,7 +23,7 @@ frame testIndexAccess() {
     local c: Container = null;
 
     printf("About to access c.items[0] (should trap with error)...\n");
-    local val: int = c.items[0]; # This will trap with detailed error message
+    local _val: int = c.items[0]; # This will trap with detailed error message
 
     printf("This line should never execute\n");
 }

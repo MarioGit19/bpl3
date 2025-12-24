@@ -14,11 +14,11 @@ struct Item {
 # Test 1: nullptr assigned to various pointer types (including struct pointers)
 frame testNullptrPointers() {
     printf("== Test 1: nullptr for all pointers ==\n");
-    local p1: *int = nullptr;
-    local p2: *User = nullptr;
-    local p3: *void = nullptr;
-    local p4: string = nullptr;
-    local p5: *Item = nullptr;
+    local _p1: *int = nullptr;
+    local _p2: *User = nullptr;
+    local _p3: *void = nullptr;
+    local _p4: string = nullptr;
+    local _p5: *Item = nullptr;
     printf("nullptr for all pointers: OK\n");
 }
 
@@ -26,9 +26,9 @@ frame testNullptrPointers() {
 frame testVoidToTyped() {
     printf("== Test 2: void* to typed pointers ==\n");
     local voidPtr: *void = malloc(100);
-    local intPtr: *int = voidPtr;
-    local userPtr: *User = voidPtr;
-    local charPtr: string = voidPtr;
+    local _intPtr: *int = voidPtr;
+    local _userPtr: *User = voidPtr;
+    local _charPtr: string = voidPtr;
     free(voidPtr);
     printf("void* to typed pointers: OK\n");
 }
@@ -42,13 +42,13 @@ frame testTypedToVoid() {
     local userPtr: *User = &user;
     local itemPtr: *Item = &item;
 
-    local voidPtr1: *void = userPtr;
-    local voidPtr2: *void = itemPtr;
+    local _voidPtr1: *void = userPtr;
+    local _voidPtr2: *void = itemPtr;
     printf("typed pointers to void*: OK\n");
 }
 
 # Test 4: void pointer in function parameters
-frame acceptsVoidPtr(ptr: *void) {
+frame acceptsVoidPtr(_ptr: *void) {
     printf("void* param accepted: OK\n");
 }
 
@@ -67,7 +67,7 @@ frame returnsVoidPtr() ret *void {
 frame testVoidReturn() {
     printf("== Test 6: void* return values ==\n");
     local voidPtr: *void = returnsVoidPtr();
-    local intPtr: *int = voidPtr;
+    local _intPtr: *int = voidPtr;
     free(voidPtr);
     printf("void* return: OK\n");
 }

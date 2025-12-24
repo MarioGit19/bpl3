@@ -12,7 +12,7 @@ frame main() ret int {
     printf("Attempting to access p.x on null object:\n");
 
     # This will trap with an error message
-    local val: int = p.x;
+    local _val: int = p.x;
 
     printf("This should not print\n");
     return 0;
