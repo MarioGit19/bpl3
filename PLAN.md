@@ -10,16 +10,38 @@ Priority levels: 0 = Highest Priority, 9 = Lowest Priority
 
 The following features are recommended for implementation next:
 
-### 1. **Type Narrowing / Pattern Matching** [Priority 3] 🔍 TYPES
+### 1. **Advanced Type System Features** [Priority 4] 🔍 TYPES
 
-- **Why:** Allows safer code by narrowing types in conditional blocks
-- **Impact:** Reduces need for explicit casts
-- **Use cases:** `if (x is int) { ... }`
-- **Complexity:** Medium (requires flow-sensitive analysis)
+- **Why:** Increases expressiveness and type safety
+- **Impact:** Allows more flexible API design
+- **Use cases:** Intersection types, Union types, Type guards
+- **Complexity:** High
 
 ---
 
 ## 📋 COMPLETED FEATURES
+
+---
+
+## [3] ✅ Type Narrowing / Pattern Matching (COMPLETED)
+
+**Description:** Allows safer code by narrowing types in conditional blocks and explicit casting.
+
+**Implementation Status:** ✅ Fully Implemented (December 2025)
+
+**What Was Implemented:**
+
+- ✅ **`is` Operator**: Runtime type checking (e.g., `if (x is int)`).
+- ✅ **`as` Operator**: Explicit type casting (e.g., `local y = x as float`).
+- ✅ **Struct Upcasting**: Support for casting child structs to parent structs (e.g., `Dog` as `Animal`).
+- ✅ **Chained Casts**: Correct parsing and formatting for chained casts (e.g., `x as int as float`).
+- ✅ **Formatter**: Enforced parentheses for `as`/`is` expressions to ensure correct precedence.
+- ✅ **Tests**: Comprehensive test suite covering primitives, structs, inheritance, specs, and enums.
+
+**Tests:**
+
+- `tests/TypeNarrowing.test.ts`: Consolidated test suite for all type narrowing features.
+- `examples/type_narrowing/`: Integration example demonstrating usage.
 
 ---
 
@@ -372,7 +394,6 @@ The following features are recommended for implementation next:
 - Performance remains acceptable (no unnecessary boxing/unboxing)
 
 ---
-
 
 ## [8] Async/Await
 

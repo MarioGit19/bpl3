@@ -1,0 +1,14 @@
+{
+  "expectedOutput": [
+    "x is i32 (Correct)",
+    "x is int (Correct)",
+    "x is NOT uint (Correct)",
+    "y is i32 (Correct)",
+    "Chained as works (Correct)",
+    "'as' matches 'cast' (Correct)",
+    "'is' matches 'match' (Correct)"
+  ],
+  "args": [],
+  "env": {},
+  "input": ""
+}

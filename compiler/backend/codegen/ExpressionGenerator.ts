@@ -51,6 +51,10 @@ export abstract class ExpressionGenerator extends TypeGenerator {
         return this.generateMatchExpr(expr as AST.MatchExpr);
       case "TypeMatch":
         return this.generateTypeMatch(expr as AST.TypeMatchExpr);
+      case "Is":
+        return this.generateIs(expr as AST.IsExpr);
+      case "As":
+        return this.generateAs(expr as AST.AsExpr);
       case "LambdaExpression":
         return this.generateLambda(expr as AST.LambdaExpr);
       default:
@@ -4083,6 +4087,140 @@ export abstract class ExpressionGenerator extends TypeGenerator {
     return result;
   }
 
+  protected resolveCanonicalType(type: AST.TypeNode): AST.TypeNode {
+    // 1. Substitute generics
+    const substituted = this.substituteType(type, this.currentTypeMap);
+
+    // 2. Resolve aliases
+    if (substituted.kind === "BasicType") {
+      if (this.typeAliasMap.has(substituted.name)) {
+        const alias = this.typeAliasMap.get(substituted.name)!;
+        if (
+          alias.genericParams.length > 0 &&
+          substituted.genericArgs.length > 0
+        ) {
+          const typeMap = new Map<string, AST.TypeNode>();
+          for (let i = 0; i < alias.genericParams.length; i++) {
+            if (i < substituted.genericArgs.length) {
+              typeMap.set(
+                alias.genericParams[i].name,
+                substituted.genericArgs[i],
+              );
+            }
+          }
+          const aliasSubstituted = this.substituteType(alias.type, typeMap);
+          return this.resolveCanonicalType(aliasSubstituted);
+        } else if (alias.genericParams.length === 0) {
+          return this.resolveCanonicalType(alias.type);
+        }
+      }
+    }
+    return substituted;
+  }
+
+  protected getCanonicalPrimitiveName(name: string): string {
+    switch (name) {
+      case "int":
+        return "i32";
+      case "i32":
+        return "i32";
+      case "uint":
+        return "u32";
+      case "u32":
+        return "u32";
+      case "long":
+        return "i64";
+      case "i64":
+        return "i64";
+      case "ulong":
+        return "u64";
+      case "u64":
+        return "u64";
+      case "short":
+        return "i16";
+      case "i16":
+        return "i16";
+      case "ushort":
+        return "u16";
+      case "u16":
+        return "u16";
+      case "char":
+        return "i8";
+      case "uchar":
+        return "u8";
+      case "u8":
+        return "u8";
+      case "i8":
+        return "i8";
+      case "bool":
+        return "bool";
+      case "i1":
+        return "bool";
+      default:
+        return name;
+    }
+  }
+
+  protected areTypesSemanticallyEqual(
+    t1: AST.TypeNode,
+    t2: AST.TypeNode,
+  ): boolean {
+    const ct1 = this.resolveCanonicalType(t1);
+    const ct2 = this.resolveCanonicalType(t2);
+
+    if (ct1.kind !== ct2.kind) return false;
+
+    if (ct1.kind === "BasicType" && ct2.kind === "BasicType") {
+      const name1 = this.getCanonicalPrimitiveName(ct1.name);
+      const name2 = this.getCanonicalPrimitiveName(ct2.name);
+      if (name1 !== name2) return false;
+      if (ct1.pointerDepth !== ct2.pointerDepth) return false;
+      if (ct1.arrayDimensions.length !== ct2.arrayDimensions.length)
+        return false;
+      for (let i = 0; i < ct1.arrayDimensions.length; i++) {
+        if (ct1.arrayDimensions[i] !== ct2.arrayDimensions[i]) return false;
+      }
+      if (ct1.genericArgs.length !== ct2.genericArgs.length) return false;
+      for (let i = 0; i < ct1.genericArgs.length; i++) {
+        if (
+          !this.areTypesSemanticallyEqual(
+            ct1.genericArgs[i]!,
+            ct2.genericArgs[i]!,
+          )
+        )
+          return false;
+      }
+      return true;
+    }
+
+    if (ct1.kind === "FunctionType" && ct2.kind === "FunctionType") {
+      if (!this.areTypesSemanticallyEqual(ct1.returnType, ct2.returnType))
+        return false;
+      if (ct1.paramTypes.length !== ct2.paramTypes.length) return false;
+      for (let i = 0; i < ct1.paramTypes.length; i++) {
+        if (
+          !this.areTypesSemanticallyEqual(
+            ct1.paramTypes[i]!,
+            ct2.paramTypes[i]!,
+          )
+        )
+          return false;
+      }
+      return true;
+    }
+
+    if (ct1.kind === "TupleType" && ct2.kind === "TupleType") {
+      if (ct1.types.length !== ct2.types.length) return false;
+      for (let i = 0; i < ct1.types.length; i++) {
+        if (!this.areTypesSemanticallyEqual(ct1.types[i]!, ct2.types[i]!))
+          return false;
+      }
+      return true;
+    }
+
+    return false;
+  }
+
   protected generateRegularTypeMatch(
     matchValue: string,
     valueType: AST.TypeNode,
@@ -4092,20 +4230,23 @@ export abstract class ExpressionGenerator extends TypeGenerator {
     // For regular type matching, compare the resolved LLVM types
     // Since generics are monomorphized, we know the concrete types at compile time.
 
-    const valueTypeStr = this.resolveType(valueType);
-    const targetTypeStr = this.resolveType(targetType);
-
-    // Exact match
-    if (valueTypeStr === targetTypeStr) {
+    // Check semantic equality instead of LLVM type equality
+    if (this.areTypesSemanticallyEqual(valueType, targetType)) {
       const result = this.newRegister();
       this.emit(`  ${result} = icmp eq i1 1, 1`);
       return result;
     }
 
+    const canonicalValue = this.resolveCanonicalType(valueType);
+    const canonicalTarget = this.resolveCanonicalType(targetType);
+
     // Inheritance checking
-    if (valueType.kind === "BasicType" && targetType.kind === "BasicType") {
-      const valueBasic = valueType as AST.BasicTypeNode;
-      const targetBasic = targetType as AST.BasicTypeNode;
+    if (
+      canonicalValue.kind === "BasicType" &&
+      canonicalTarget.kind === "BasicType"
+    ) {
+      const valueBasic = canonicalValue as AST.BasicTypeNode;
+      const targetBasic = canonicalTarget as AST.BasicTypeNode;
 
       // Only check inheritance if pointer depth matches
       if (valueBasic.pointerDepth === targetBasic.pointerDepth) {
@@ -4117,10 +4258,29 @@ export abstract class ExpressionGenerator extends TypeGenerator {
       }
     }
 
-    // Otherwise, types do not match
     const result = this.newRegister();
     this.emit(`  ${result} = icmp eq i1 0, 1`);
     return result;
+  }
+
+  protected generateIs(expr: AST.IsExpr): string {
+    const typeMatchExpr: AST.TypeMatchExpr = {
+      kind: "TypeMatch",
+      targetType: expr.type,
+      value: expr.expression,
+      location: expr.location,
+    };
+    return this.generateTypeMatch(typeMatchExpr);
+  }
+
+  protected generateAs(expr: AST.AsExpr): string {
+    const castExpr: AST.CastExpr = {
+      kind: "Cast",
+      targetType: expr.type,
+      expression: expr.expression,
+      location: expr.location,
+    };
+    return this.generateCast(castExpr);
   }
 
   protected generatePatternTupleBindings(

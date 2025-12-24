@@ -60,6 +60,7 @@ export const NUMERIC_TYPES = [
  */
 export const KNOWN_TYPES = [
   "int",
+  "i1",
   "i8",
   "i16",
   "i32",

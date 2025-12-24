@@ -919,6 +919,146 @@ export function checkTypeMatch(
 }
 
 /**
+ * Check an 'is' expression (expr is Type)
+ */
+export function checkIs(
+  this: ExpressionCheckerContext,
+  expr: AST.IsExpr,
+): AST.TypeNode {
+  this.checkExpression(expr.expression);
+
+  // If it's a BasicType, it might be an enum variant (e.g. Option.Some)
+  if (expr.type.kind === "BasicType") {
+    const targetType = expr.type as AST.BasicTypeNode;
+    const targetTypeName = targetType.name;
+
+    // Check if this is an enum variant pattern
+    if (targetTypeName.includes(".")) {
+      const parts = targetTypeName.split(".");
+      const variantName = parts.pop()!;
+      const enumPath = parts;
+
+      let currentScope = this.currentScope;
+      let symbol: Symbol | undefined;
+
+      for (let i = 0; i < enumPath.length; i++) {
+        let part = enumPath[i]!;
+        const genericMatch = part.match(/^([^<]+)/);
+        if (genericMatch) {
+          part = genericMatch[1]!;
+        }
+
+        symbol = currentScope.resolve(part);
+        if (!symbol) break;
+
+        if (i < enumPath.length - 1) {
+          if (symbol.moduleScope) {
+            currentScope = symbol.moduleScope;
+          } else {
+            symbol = undefined;
+            break;
+          }
+        }
+      }
+
+      if (!symbol || symbol.kind !== "Enum") {
+        throw new CompilerError(
+          `Cannot find enum '${enumPath.join(".")}'`,
+          `The type '${enumPath.join(".")}' in 'is' expression is not a defined enum.`,
+          expr.location,
+        );
+      }
+
+      // Update targetType to use canonical enum name so codegen can find it
+      (expr.type as AST.BasicTypeNode).name = `${symbol.name}.${variantName}`;
+      (expr.type as AST.BasicTypeNode).resolvedDeclaration =
+        symbol.declaration as AST.EnumDecl;
+    } else {
+      // Regular type check
+      const resolved = this.resolveType(expr.type);
+      if (
+        resolved.kind === "BasicType" &&
+        !KNOWN_TYPES.includes(resolved.name) &&
+        !resolved.resolvedDeclaration
+      ) {
+        throw new CompilerError(
+          `Unknown type: ${resolved.name}`,
+          "Ensure the type is defined.",
+          expr.location,
+        );
+      }
+      expr.type = resolved;
+    }
+  } else {
+    const resolved = this.resolveType(expr.type);
+    if (
+      resolved.kind === "BasicType" &&
+      !KNOWN_TYPES.includes(resolved.name) &&
+      !resolved.resolvedDeclaration
+    ) {
+      throw new CompilerError(
+        `Unknown type: ${resolved.name}`,
+        "Ensure the type is defined.",
+        expr.location,
+      );
+    }
+    expr.type = resolved;
+  }
+
+  return {
+    kind: "BasicType",
+    name: "bool",
+    genericArgs: [],
+    pointerDepth: 0,
+    arrayDimensions: [],
+    location: expr.location,
+  };
+}
+
+/**
+ * Check an 'as' expression (expr as Type)
+ */
+export function checkAs(
+  this: ExpressionCheckerContext,
+  expr: AST.AsExpr,
+): AST.TypeNode {
+  const exprType = this.checkExpression(expr.expression);
+
+  if (exprType) {
+    // Disallow casting integers to string
+    if (expr.type.kind === "BasicType" && expr.type.name === "string") {
+      const resolvedSource = this.resolveType(exprType);
+      // Check if source is integer and not a pointer
+      if (
+        resolvedSource.kind === "BasicType" &&
+        resolvedSource.pointerDepth === 0 &&
+        (this as any).isIntegerType(resolvedSource)
+      ) {
+        throw new CompilerError(
+          `Cannot cast integer type '${this.typeToString(resolvedSource)}' to 'string'`,
+          "Casting integers to string is not allowed. Use .toString() or similar conversion methods.",
+          expr.location,
+        );
+      }
+    }
+
+    const resolved = this.resolveType(exprType);
+    const target = this.resolveType(expr.type);
+
+    // Check if cast is allowed using isCastAllowed from base
+    if (!(this as any).isCastAllowed(resolved, target)) {
+      throw new CompilerError(
+        `Cannot cast ${this.typeToString(resolved)} to ${this.typeToString(target)}`,
+        "This cast is not allowed.",
+        expr.location,
+      );
+    }
+  }
+
+  return expr.type;
+}
+
+/**
  * Check a match expression
  */
 export function checkMatchExpr(

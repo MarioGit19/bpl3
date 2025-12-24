@@ -90,14 +90,24 @@
   - ✅ Immutability enforcement in TypeChecker
   - ✅ Recursive mutability checking for member access and indexing
   - ✅ `this` treated as const pointer in methods
+- [x] Type Narrowing / Pattern Matching ✅
+  - ✅ `is` operator for type checking (e.g., `x is int`)
+  - ✅ `as` operator for type casting (e.g., `x as float`)
+  - ✅ Struct upcasting (e.g., `Dog` as `Animal`)
+  - ✅ Chained casts support (e.g., `x as int as float`)
+  - ✅ Formatter support for `as`/`is` expressions (parentheses enforcement)
+  - ✅ Integration with `match` expressions
+  - ✅ Comprehensive test suite covering inheritance, specs, and enums
 
 ## Pending Features (expanded)
 
 ### RECOMMENDED NEXT PRIORITIES
 
-- [x] Enum Types - All Essential Features ✅ (FULLY COMPLETE)
+- [ ] **Advanced Type System Features**
+  - [ ] Intersection Types (`TypeA & TypeB`)
+  - [ ] Union Types (`TypeA | TypeB`) (beyond Enums)
+  - [ ] Type Guards (User-defined `is` functions)
 
-  - Description: Implement all critical enum features for production use: methods, equality, recursive enums, pattern guards, and type checking.
   - **Final Status:** ALL COMPLETE ✅ - All 93 enum-specific tests passing, 756 integration tests passing
   - Implemented features:
     - ✅ **Enum Methods**: Full method support with `this` parameter, generic context inheritance, LLVM codegen

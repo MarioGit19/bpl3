@@ -720,9 +720,21 @@ export class Formatter {
         );
       case "LambdaExpression":
         return this.formatLambda(expr as AST.LambdaExpr);
+      case "Is":
+        return this.formatIs(expr as AST.IsExpr);
+      case "As":
+        return this.formatAs(expr as AST.AsExpr);
       default:
         return `/* Unknown expr: ${(expr as AST.Expression).kind} */`;
     }
+  }
+
+  private formatIs(expr: AST.IsExpr): string {
+    return `(${this.formatExpression(expr.expression)} is ${this.formatType(expr.type)})`;
+  }
+
+  private formatAs(expr: AST.AsExpr): string {
+    return `(${this.formatExpression(expr.expression)} as ${this.formatType(expr.type)})`;
   }
 
   private formatLiteral(expr: AST.LiteralExpr): string {

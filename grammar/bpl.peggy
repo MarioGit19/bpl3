@@ -107,6 +107,14 @@
     return { kind: "TypeMatch", targetType, value, location: makeLoc(loc) };
   }
 
+  function isNode(expression, type, loc) {
+    return { kind: "Is", expression, type, location: makeLoc(loc) };
+  }
+
+  function asNode(expression, type, loc) {
+    return { kind: "As", expression, type, location: makeLoc(loc) };
+  }
+
   function genericInstantiation(base, genericArgs, loc) {
     return { kind: "GenericInstantiation", base, genericArgs, location: makeLoc(loc) };
   }
@@ -712,12 +720,25 @@ BitwiseAndOperator
   = op:"&" !"&" { return { op, loc: location() }; }
 
 Equality
-  = left:Relational tail:(_ op:EqualityOperator _ right:Relational)* {
+  = left:TypeCheck tail:(_ op:EqualityOperator _ right:TypeCheck)* {
       return tail.reduce((acc, [, op, , r]) => binary(acc, makeOperatorToken(op.op, op.loc), r, makeLoc(mergeLoc(acc.location, r.location))), left);
     }
 
 EqualityOperator
   = op:("==" / "!=") { return { op, loc: location() }; }
+
+TypeCheck
+  = head:Relational tail:(_ (K_is / K_as) _ Type)* {
+      return tail.reduce((expr, [, op, , type]) => {
+        const opStr = op[0];
+        const loc = makeLoc(mergeLoc(expr.location, type.location));
+        if (opStr === "is") {
+          return isNode(expr, type, loc);
+        } else {
+          return asNode(expr, type, loc);
+        }
+      }, head);
+    }
 
 Relational
   = left:Shift tail:(_ op:RelationalOperator _ right:Shift)* {
@@ -1263,6 +1284,9 @@ K_sizeof
 K_match
   = $("match") IdBoundary
 
+K_is
+  = $("is") IdBoundary
+
 K_Func
   = $("Func") IdBoundary
 
@@ -1315,6 +1339,7 @@ KeywordReserved
   / "cast" IdBoundary
   / "sizeof" IdBoundary
   / "match" IdBoundary
+  / "is" IdBoundary
   / "Func" IdBoundary
   / "null" IdBoundary
   / "nullptr" IdBoundary

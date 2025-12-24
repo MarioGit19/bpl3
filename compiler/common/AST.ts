@@ -68,7 +68,21 @@ export type Expression =
   | AssignmentExpr
   | TernaryExpr
   | GenericInstantiationExpr
-  | LambdaExpr;
+  | LambdaExpr
+  | IsExpr
+  | AsExpr;
+
+export interface IsExpr extends ASTNode {
+  kind: "Is";
+  expression: Expression;
+  type: TypeNode;
+}
+
+export interface AsExpr extends ASTNode {
+  kind: "As";
+  expression: Expression;
+  type: TypeNode;
+}
 
 export interface LiteralExpr extends ASTNode {
   kind: "Literal";

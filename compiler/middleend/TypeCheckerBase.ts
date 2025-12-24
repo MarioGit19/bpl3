@@ -1089,6 +1089,20 @@ export abstract class TypeCheckerBase {
         return true;
       }
 
+      // Struct upcasting
+      if (
+        resolvedSource.pointerDepth === 0 &&
+        resolvedTarget.pointerDepth === 0 &&
+        resolvedSource.resolvedDeclaration &&
+        resolvedSource.resolvedDeclaration.kind === "StructDecl" &&
+        resolvedTarget.resolvedDeclaration &&
+        resolvedTarget.resolvedDeclaration.kind === "StructDecl"
+      ) {
+        if (this.isSubtype(resolvedSource, resolvedTarget)) {
+          return true;
+        }
+      }
+
       // Pointer casts
       if (resolvedSource.pointerDepth > 0 && resolvedTarget.pointerDepth > 0) {
         return true;

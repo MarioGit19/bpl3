@@ -344,6 +344,12 @@ export class TypeChecker extends TypeCheckerBase {
       case "TypeMatch":
         type = ExprChecker.checkTypeMatch.call(this as any, expr);
         break;
+      case "Is":
+        type = ExprChecker.checkIs.call(this as any, expr);
+        break;
+      case "As":
+        type = ExprChecker.checkAs.call(this as any, expr);
+        break;
       case "Match":
         type = ExprChecker.checkMatchExpr.call(this as any, expr);
         break;
