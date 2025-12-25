@@ -1,5 +1,6 @@
 # Literals
 StringLiteral = '"' ( '\\' . | [^"\n\r] )* '"';
+InterpolatedStringLiteral = '$"' ( '\\' . | [^"\n\r] )* '"';
 CharLiteral = "'" ( '\\' . | [^'\n\r] ) "'";
 NumberLiteral = 
     '0x' [0-9a-fA-F]+ 
@@ -98,7 +99,7 @@ TupleLiteral = '(' Expression (',' Expression)+ ','? ')';
 
 Primary = Literal | TupleLiteral | Identifier | ArrayLiteral | StructLiteral | CastExpression | SizeofExpression | MatchExpression | '(' Expression ')';
 
-Literal = StringLiteral | CharLiteral | NumberLiteral | BoolLiteral | NullLiteral | NullptrLiteral;
+Literal = InterpolatedStringLiteral | StringLiteral | CharLiteral | NumberLiteral | BoolLiteral | NullLiteral | NullptrLiteral;
 ArrayLiteral = '[' (Expression (',' Expression)* ','?)? ']';
 StructLiteral = '{' (Identifier ':' Expression (',' Identifier ':' Expression)* ','?)? '}';
 CastExpression = 'cast' '<' Type '>' '(' Expression ')';

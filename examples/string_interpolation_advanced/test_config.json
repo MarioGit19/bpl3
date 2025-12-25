@@ -1,0 +1,18 @@
+{
+  "expectedOutput": [
+    "Greetings from advanced example!",
+    "Point is (10, 20)",
+    "Result: Positive",
+    "Escaped: ${x} = 5",
+    "Literal Point: (100, 200)",
+    "Pointer: 0x",
+    "Status: Active",
+    "Ternary: True",
+    "Function: Greetings",
+    "Arithmetic: 30",
+    "Vector Sum: Vector(4, 6)"
+  ],
+  "args": [],
+  "env": {},
+  "input": ""
+}

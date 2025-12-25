@@ -1061,7 +1061,9 @@ export abstract class TypeCheckerBase {
     const resolvedSource = this.resolveType(source);
     const resolvedTarget = this.resolveType(target);
 
-    if (this.areTypesCompatible(resolvedSource, resolvedTarget)) return true;
+    if (this.areTypesCompatible(resolvedSource, resolvedTarget)) {
+      return true;
+    }
 
     // Allow casting between function pointers and void pointers (or any pointer)
     if (
@@ -1100,6 +1102,66 @@ export abstract class TypeCheckerBase {
       ) {
         if (this.isSubtype(resolvedSource, resolvedTarget)) {
           return true;
+        }
+      }
+
+      // Struct <-> Primitive inheritance
+      if (
+        resolvedSource.pointerDepth === 0 &&
+        resolvedTarget.pointerDepth === 0
+      ) {
+        // Case 1: Struct -> Primitive (e.g. MyInt -> int)
+        if (
+          resolvedSource.kind === "BasicType" &&
+          resolvedSource.resolvedDeclaration &&
+          resolvedSource.resolvedDeclaration.kind === "StructDecl" &&
+          resolvedTarget.kind === "BasicType"
+        ) {
+          const structDecl =
+            resolvedSource.resolvedDeclaration as AST.StructDecl;
+          if (
+            structDecl.inheritanceList &&
+            structDecl.inheritanceList.length > 0
+          ) {
+            // Check if the first inherited type is the target primitive
+            const parent = structDecl.inheritanceList[0];
+            const resolvedParent = this.resolveType(parent);
+
+            // Fix: Ensure parent is not a struct (to avoid matching implicit 'Type' inheritance)
+            if (
+              !this.isStructType(resolvedParent.name) &&
+              this.areTypesCompatible(resolvedParent, resolvedTarget)
+            ) {
+              return true;
+            }
+          }
+        }
+
+        // Case 2: Primitive -> Struct (e.g. int -> MyInt)
+        if (
+          resolvedTarget.kind === "BasicType" &&
+          resolvedTarget.resolvedDeclaration &&
+          resolvedTarget.resolvedDeclaration.kind === "StructDecl" &&
+          resolvedSource.kind === "BasicType"
+        ) {
+          const structDecl =
+            resolvedTarget.resolvedDeclaration as AST.StructDecl;
+          if (
+            structDecl.inheritanceList &&
+            structDecl.inheritanceList.length > 0
+          ) {
+            // Check if the first inherited type is the source primitive
+            const parent = structDecl.inheritanceList[0];
+            const resolvedParent = this.resolveType(parent);
+
+            // Fix: Ensure parent is not a struct
+            if (
+              !this.isStructType(resolvedParent.name) &&
+              this.areTypesCompatible(resolvedParent, resolvedSource)
+            ) {
+              return true;
+            }
+          }
         }
       }
 

@@ -118,6 +118,235 @@ export function checkLiteral(
 }
 
 /**
+ * Check an interpolated string expression
+ */
+export function checkInterpolatedString(
+  this: ExpressionCheckerContext,
+  expr: AST.InterpolatedStringExpr,
+): AST.TypeNode {
+  // Desugar to String concatenation: String.new("") + part1 + part2 ...
+
+  // Initial: String.new("")
+  let currentExpr: AST.Expression = {
+    kind: "Call",
+    callee: {
+      kind: "Member",
+      object: { kind: "Identifier", name: "String", location: expr.location },
+      property: "new",
+      location: expr.location,
+    },
+    args: [
+      {
+        kind: "Literal",
+        value: "",
+        raw: '""',
+        type: "string",
+        location: expr.location,
+      },
+    ],
+    genericArgs: [],
+    location: expr.location,
+  };
+
+  for (const part of expr.parts) {
+    if (!part) {
+      continue;
+    }
+    let rhs: AST.Expression;
+
+    if (part.kind === "Literal" && part.type === "string") {
+      rhs = part;
+    } else {
+      // Check if the expression is already a string
+      // We need to check the type of the expression, but checkExpression might have side effects or report errors
+      // if we call it multiple times. However, we need the type to decide how to wrap it.
+      // The issue is that `checkExpression` is called inside the loop, and then again when checking `currentExpr`.
+      // But `currentExpr` is constructed using `part` which is AST node.
+      // If we modify `part` or wrap it, we should use the wrapped version.
+
+      // Let's try to determine type without full check if possible, or just rely on checkExpression result.
+      // The error "No compatible instance method 'toString' found on type '*i8'" suggests that
+      // for `string` (which is `*i8`), it tries to call `.toString()` because `partType.name` check failed or something.
+
+      // Wait, `string` type name is "string" (lowercase).
+      // In BPL `string` is alias for `*char` (or `*i8`).
+
+      const partType = this.checkExpression(part);
+
+      // Check for "string" (primitive string)
+      // Note: In BPL, 'string' is often an alias for '*char' or '*i8'
+      // We need to check if it's a pointer to char/i8 or explicitly named "string"
+      const isPrimitiveString =
+        (partType &&
+          partType.kind === "BasicType" &&
+          partType.name === "string") ||
+        (partType &&
+          partType.kind === "BasicType" &&
+          (partType.name === "char" || partType.name === "i8") &&
+          partType.pointerDepth === 1);
+
+      if (isPrimitiveString) {
+        // It is a primitive string, wrap in String.new()
+        rhs = {
+          kind: "Call",
+          callee: {
+            kind: "Member",
+            object: {
+              kind: "Identifier",
+              name: "String",
+              location: part.location,
+            },
+            property: "new",
+            location: part.location,
+          },
+          args: [part],
+          genericArgs: [],
+          location: part.location,
+        };
+      }
+      // Check for "String" (std.String struct)
+      else if (
+        partType &&
+        partType.kind === "BasicType" &&
+        partType.name === "String"
+      ) {
+        rhs = part;
+      }
+      // Check for pointers (e.g. *int)
+      else if (partType && partType.pointerDepth > 0) {
+        // For pointers, we always print the address unless it's a primitive string (handled above).
+        // We cast the pointer to 'long' and call String.fromAddress(long).
+
+        rhs = {
+          kind: "Call",
+          callee: {
+            kind: "Member",
+            object: {
+              kind: "Identifier",
+              name: "String",
+              location: part.location,
+            },
+            property: "fromAddress",
+          },
+          args: [
+            {
+              kind: "Cast",
+              expression: part,
+              targetType: {
+                kind: "BasicType",
+                name: "long",
+                pointerDepth: 0,
+                genericArgs: [],
+                arrayDimensions: [],
+                location: part.location,
+              },
+              location: part.location,
+            },
+          ],
+          genericArgs: [],
+          location: part.location,
+        };
+      }
+
+      // Check for Array Literals or Arrays
+      else if (partType && partType.kind === "ArrayType") {
+        // Arrays don't have methods in BPL usually, they are just structs or pointers.
+        // But `[1, 2, 3]` is an ArrayLiteral which might be `int[]` or `Array<int>`.
+        // If it's `Array<T>`, it might have `toString`.
+        // If it's `T[]` (slice/dynamic array), it might not.
+
+        // Let's try to call `String.fromArray(arr)`?
+        // Or maybe we can implement a generic `toString` for arrays in the compiler?
+        // That would be complex to desugar to AST.
+
+        // Alternative: "rule it that it's not allowed in compile time"
+        // The user gave us the option.
+        // "either fix it or we will rule it that it's not allowed in compile time"
+
+        // Given the complexity of printing arbitrary arrays (need to iterate, print elements, join),
+        // and pointers (need hex formatting), and we are in `ExpressionChecker` desugaring...
+        // It might be safer to disallow it for now with a clear error message,
+        // UNLESS we can find a `toString` method.
+
+        // Let's check for `toString` method.
+        const hasToString =
+          partType.kind === "BasicType" &&
+          this.resolveMemberWithContext(partType, "toString");
+
+        if (hasToString) {
+          rhs = {
+            kind: "Call",
+            callee: {
+              kind: "Member",
+              object: part,
+              property: "toString",
+              location: part.location,
+            },
+            args: [],
+            genericArgs: [],
+            location: part.location,
+          };
+        } else {
+          // No toString method found.
+          // For arrays without toString, we will report an error.
+          // This fulfills "rule it that it's not allowed".
+          throw new CompilerError(
+            `Array type '${this.typeToString(partType)}' cannot be interpolated directly. Please implement a 'toString' method or convert it to a string manually.`,
+            "Array interpolation requires a 'toString' method.",
+            part.location,
+          );
+        }
+      }
+      // Check for other types that might need toString()
+      else {
+        // Call .toString() on the expression
+        rhs = {
+          kind: "Call",
+          callee: {
+            kind: "Member",
+            object: part,
+            property: "toString",
+            location: part.location,
+          },
+          args: [],
+          genericArgs: [],
+          location: part.location,
+        };
+      }
+    }
+
+    // currentExpr = currentExpr + rhs
+    currentExpr = {
+      kind: "Binary",
+      left: currentExpr,
+      operator: { type: TokenType.Plus, lexeme: "+", line: 0, column: 0 },
+      right: rhs,
+      location: expr.location,
+    };
+  }
+
+  expr.desugared = currentExpr;
+
+  // Check the desugared expression
+  // This will resolve types, operators, and ensure String is available
+  const type = this.checkExpression(currentExpr);
+
+  if (!type) {
+    // Should not happen if String is available
+    return {
+      kind: "BasicType",
+      name: "string",
+      genericArgs: [],
+      pointerDepth: 0,
+      arrayDimensions: [],
+      location: expr.location,
+    };
+  }
+
+  return type;
+}
+
+/**
  * Check an identifier expression
  */
 export function checkIdentifier(
@@ -182,6 +411,9 @@ export function checkIdentifier(
     return this.resolveType(symbol.type, false);
   }
 
+  console.error(
+    `DEBUG: Symbol '${expr.name}' has no type! Kind: ${symbol.kind}`,
+  );
   return symbol.type;
 }
 
@@ -478,11 +710,14 @@ export function checkUnary(
   // Address-of operator (&)
   if (op === TokenType.Ampersand) {
     if (operandType.kind === "BasicType") {
+      if (!operandType)
+        console.error("DEBUG: operandType is undefined in Ampersand check");
       return {
         ...operandType,
         pointerDepth: operandType.pointerDepth + 1,
       };
     }
+
     throw new CompilerError(
       `Cannot take address of ${this.typeToString(operandType)}`,
       "Address-of requires an lvalue.",
@@ -494,6 +729,8 @@ export function checkUnary(
   if (op === TokenType.Star) {
     if (operandType.kind === "BasicType") {
       if (operandType.pointerDepth > 0) {
+        if (!operandType)
+          console.error("DEBUG: operandType is undefined in Star check 1");
         return {
           ...operandType,
           pointerDepth: operandType.pointerDepth - 1,
@@ -501,12 +738,15 @@ export function checkUnary(
       }
       if (operandType.arrayDimensions.length > 0) {
         // Dereferencing array gives element type
+        if (!operandType)
+          console.error("DEBUG: operandType is undefined in Star check 2");
         return {
           ...operandType,
           arrayDimensions: operandType.arrayDimensions.slice(1),
         };
       }
     }
+
     throw new CompilerError(
       `Cannot dereference non-pointer type ${this.typeToString(operandType)}`,
       "Dereference requires a pointer type.",

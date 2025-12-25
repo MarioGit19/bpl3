@@ -448,7 +448,23 @@ export class OverloadResolver {
         const resolvedExpected = this.ctx.resolveType(expectedType);
         const resolvedActual = this.ctx.resolveType(paramTypes[i]!);
 
-        if (!this.ctx.areTypesCompatible(resolvedExpected, resolvedActual)) {
+        // Allow implicit address-of for operator parameters (T -> *T)
+        const isAddressOfMatch =
+          resolvedExpected.kind === "BasicType" &&
+          resolvedActual.kind === "BasicType" &&
+          resolvedExpected.pointerDepth === resolvedActual.pointerDepth + 1 &&
+          this.ctx.areTypesCompatible(
+            {
+              ...resolvedExpected,
+              pointerDepth: resolvedExpected.pointerDepth - 1,
+            },
+            resolvedActual,
+          );
+
+        if (
+          !this.ctx.areTypesCompatible(resolvedExpected, resolvedActual) &&
+          !isAddressOfMatch
+        ) {
           allMatch = false;
           break;
         }

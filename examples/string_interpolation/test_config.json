@@ -1,0 +1,10 @@
+{
+  "expectedOutput": [
+    "Hello BPL v1!",
+    "10 + 20 = 30",
+    "Use ${variable} to interpolate"
+  ],
+  "args": [],
+  "env": {},
+  "input": ""
+}

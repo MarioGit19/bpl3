@@ -2,6 +2,7 @@ export enum TokenType {
   // Literals
   Identifier = "Identifier",
   StringLiteral = "StringLiteral",
+  InterpolatedStringLiteral = "InterpolatedStringLiteral",
   CharLiteral = "CharLiteral",
   NumberLiteral = "NumberLiteral",
 

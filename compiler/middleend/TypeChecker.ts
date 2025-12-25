@@ -311,6 +311,9 @@ export class TypeChecker extends TypeCheckerBase {
       case "Literal":
         type = ExprChecker.checkLiteral.call(this as any, expr);
         break;
+      case "InterpolatedString":
+        type = ExprChecker.checkInterpolatedString.call(this as any, expr);
+        break;
       case "Identifier":
         type = ExprChecker.checkIdentifier.call(this as any, expr);
         break;

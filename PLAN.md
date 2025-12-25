@@ -14,7 +14,7 @@ The following features are recommended for implementation next:
 
 - **Why:** Increases expressiveness and type safety
 - **Impact:** Allows more flexible API design
-- **Use cases:** Intersection types, Union types, Type guards
+- **Use cases:** Type guards
 - **Complexity:** High
 
 ---
@@ -418,28 +418,28 @@ The following features are recommended for implementation next:
 
 ---
 
-## [6] Allow Structs to Inherit Primitives
+## [6] Allow Structs to Inherit Primitives ✅
 
 **Description:** Permit `struct MyInt : int { ... }` so a struct can behave as a primitive type with additional methods/fields. This enables creating specialized primitive types with domain-specific methods while maintaining compatibility with code expecting the base primitive type.
 
 **Implementation Notes:**
 
-- Carefully design memory layout to ensure compatibility with base primitive
-- Implement type compatibility rules: instances of `MyInt` must be usable where `int` is expected
-- Implement implicit conversion rules (MyInt -> int when needed)
-- Handle method overriding semantics for primitive methods
-- Consider specialization in codegen for performance
-- Generate efficient code that doesn't add overhead for the wrapper struct
-- Support field additions on top of primitive base
-- Handle constructors and conversions properly
+- ✅ Carefully design memory layout to ensure compatibility with base primitive (`__base__` field)
+- ✅ Implement type compatibility rules: instances of `MyInt` must be usable where `int` is expected
+- ✅ Implement implicit conversion rules (MyInt -> int when needed)
+- ✅ Handle method overriding semantics for primitive methods
+- ✅ Consider specialization in codegen for performance
+- ✅ Generate efficient code that doesn't add overhead for the wrapper struct
+- ✅ Support field additions on top of primitive base
+- ✅ Handle constructors and conversions properly
 
 **Acceptance Criteria:**
 
-- `MyInt` instances can be passed to APIs expecting `int`
-- Struct can add methods to the primitive type
-- Memory layout is compatible with base primitive type
-- Overrides of primitive methods are callable
-- Performance remains acceptable (no unnecessary boxing/unboxing)
+- ✅ `MyInt` instances can be passed to APIs expecting `int`
+- ✅ Struct can add methods to the primitive type
+- ✅ Memory layout is compatible with base primitive type
+- ✅ Overrides of primitive methods are callable
+- ✅ Performance remains acceptable (no unnecessary boxing/unboxing)
 
 ---
 
@@ -565,22 +565,22 @@ The following features are recommended for implementation next:
 
 ---
 
-## [6] String Interpolation
+## [6] String Interpolation ✅
 
 **Description:** Support embedding expressions directly into string literals using `${expression}` syntax. This simplifies string construction and improves readability compared to concatenation or `printf` formatting.
 
 **Implementation Notes:**
 
-- Update lexer/parser to handle interpolated strings (e.g., `$"Value: ${x}"`)
-- Desugar interpolation into string concatenation or `StringBuilder` calls
-- Support arbitrary expressions inside `${...}`
-- Handle escaping of `$` characters
+- ✅ Update lexer/parser to handle interpolated strings (e.g., `$"Value: ${x}"`)
+- ✅ Desugar interpolation into string concatenation or `StringBuilder` calls
+- ✅ Support arbitrary expressions inside `${...}`
+- ✅ Handle escaping of `$` characters
 
 **Acceptance Criteria:**
 
-- `local s: string = $"Hello ${name}!";` compiles and works
-- Expressions inside `${}` are evaluated correctly
-- Works with complex expressions (e.g., `${a + b}`)
+- ✅ `local s: string = $"Hello ${name}!";` compiles and works
+- ✅ Expressions inside `${}` are evaluated correctly
+- ✅ Works with complex expressions (e.g., `${a + b}`)
 
 ---
 

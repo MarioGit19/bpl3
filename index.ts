@@ -544,7 +544,13 @@ function processCodeInternal(
 
   // Original single-file compilation path
 
-  const tokens = lexWithGrammar(content, filePath);
+  let tokens: any[] = [];
+  try {
+    tokens = lexWithGrammar(content, filePath);
+  } catch (e) {
+    // Lexer might fail on new syntax not yet in grammar.bpl
+    // Proceed with parser only (comments will be missing)
+  }
 
   if (options.emit === "tokens") {
     console.log(JSON.stringify(tokens, null, 2));

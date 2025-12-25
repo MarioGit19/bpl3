@@ -851,6 +851,7 @@ Primary
   / NullLiteral
   / NullptrLiteral
   / NumberLiteral
+  / InterpolatedStringLiteral
   / StringLiteral
   / CharLiteral
   / StructLiteral
@@ -1370,5 +1371,34 @@ Comment
   }
 
 SourceChar = .
+
+InterpolatedStringLiteral
+  = '$"' parts:InterpolatedStringPart* '"' {
+      return {
+        kind: "InterpolatedString",
+        parts: parts,
+        location: makeLoc(location())
+      };
+    }
+
+InterpolatedStringPart
+  = "${" _ expr:Expression _ "}" { return expr; }
+  / chars:InterpolatedStringChars {
+      return literal(chars, JSON.stringify(chars), "string", location());
+    }
+
+InterpolatedStringChars
+  = chars:InterpolatedStringChar+ {
+      const raw = '"' + chars.join("") + '"';
+      return JSON.parse(raw);
+    }
+
+InterpolatedStringChar
+  = "\\" c:. { 
+      if (c === '$') return '$'; 
+      return text(); 
+    }
+  / [^"\\$\n\r] { return text(); }
+  / "$" ! "{" { return "$"; }
 
 EOF = !.

@@ -52,6 +52,7 @@ export interface FunctionTypeNode extends ASTNode {
 
 export type Expression =
   | LiteralExpr
+  | InterpolatedStringExpr
   | IdentifierExpr
   | BinaryExpr
   | UnaryExpr
@@ -90,6 +91,12 @@ export interface LiteralExpr extends ASTNode {
   value: any;
   raw: string;
   type: "string" | "number" | "bool" | "char" | "null" | "nullptr" | "unit";
+}
+
+export interface InterpolatedStringExpr extends ASTNode {
+  kind: "InterpolatedString";
+  parts: Expression[];
+  desugared?: Expression;
 }
 
 export interface IdentifierExpr extends ASTNode {

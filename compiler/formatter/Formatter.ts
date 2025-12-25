@@ -686,6 +686,10 @@ export class Formatter {
     switch (expr.kind) {
       case "Literal":
         return this.formatLiteral(expr as AST.LiteralExpr);
+      case "InterpolatedString":
+        return this.formatInterpolatedString(
+          expr as AST.InterpolatedStringExpr,
+        );
       case "Identifier":
         return (expr as AST.IdentifierExpr).name;
       case "Binary":
@@ -744,6 +748,36 @@ export class Formatter {
   private formatLiteral(expr: AST.LiteralExpr): string {
     // Preserve original literal lexeme to avoid changing escapes
     return expr.raw;
+  }
+
+  private formatInterpolatedString(expr: AST.InterpolatedStringExpr): string {
+    let output = '$"';
+    for (const part of expr.parts) {
+      if (
+        part.kind === "Literal" &&
+        (part as AST.LiteralExpr).type === "string"
+      ) {
+        // It's a string part
+        const val = (part as AST.LiteralExpr).value as string;
+        // Escape special characters for interpolated string
+        output += this.escapeInterpolatedStringPart(val);
+      } else {
+        // It's an expression
+        output += `\${${this.formatExpression(part)}}`;
+      }
+    }
+    output += '"';
+    return output;
+  }
+
+  private escapeInterpolatedStringPart(s: string): string {
+    return s
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"')
+      .replace(/\${/g, "\\${")
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r")
+      .replace(/\t/g, "\\t");
   }
 
   private formatBinary(expr: AST.BinaryExpr): string {

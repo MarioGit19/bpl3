@@ -11,6 +11,10 @@ export abstract class ExpressionGenerator extends TypeGenerator {
     switch (expr.kind) {
       case "Literal":
         return this.generateLiteral(expr as AST.LiteralExpr);
+      case "InterpolatedString":
+        return this.generateInterpolatedString(
+          expr as AST.InterpolatedStringExpr,
+        );
       case "Identifier":
         return this.generateIdentifier(expr as AST.IdentifierExpr);
       case "Binary":
@@ -61,6 +65,19 @@ export abstract class ExpressionGenerator extends TypeGenerator {
         console.warn(`Unhandled expression kind: ${expr.kind}`);
         return "0"; // Placeholder
     }
+  }
+
+  protected generateInterpolatedString(
+    expr: AST.InterpolatedStringExpr,
+  ): string {
+    if (expr.desugared) {
+      return this.generateExpression(expr.desugared);
+    }
+    throw new CompilerError(
+      "Interpolated string was not desugared during type checking",
+      "This is an internal compiler error.",
+      expr.location,
+    );
   }
 
   protected generateLambda(expr: AST.LambdaExpr): string {
@@ -2864,7 +2881,20 @@ export abstract class ExpressionGenerator extends TypeGenerator {
             if (objTypeStr.endsWith("*")) {
               objPtr = this.generateExpression(objExpr);
             } else {
-              objPtr = this.generateAddress(objExpr);
+              try {
+                objPtr = this.generateAddress(objExpr);
+              } catch {
+                // Spill to stack
+                const val = this.generateExpression(objExpr);
+                const spill = this.allocateStack(
+                  `vcall_spill_${this.labelCount++}`,
+                  objTypeStr,
+                );
+                this.emit(
+                  `  store ${objTypeStr} ${val}, ${objTypeStr}* ${spill}`,
+                );
+                objPtr = spill;
+              }
             }
 
             const vtableIndex = this.structLayouts
@@ -3203,13 +3233,18 @@ export abstract class ExpressionGenerator extends TypeGenerator {
 
           // Optimize for L-values passing to pointer: take address directly (T -> *T)
           if (destType === srcType + "*") {
-            if (
-              arg.kind === "Identifier" ||
-              arg.kind === "Member" ||
-              arg.kind === "Index"
-            ) {
+            try {
               const addr = this.generateAddress(arg as any);
               return `${destType} ${addr}`;
+            } catch {
+              // R-value passed where pointer expected: spill to stack
+              const val = this.generateExpression(arg);
+              const spill = this.allocateStack(
+                `arg_spill_${this.labelCount++}`,
+                srcType,
+              );
+              this.emit(`  store ${srcType} ${val}, ${srcType}* ${spill}`);
+              return `${destType} ${spill}`;
             }
           }
 
@@ -4136,6 +4171,89 @@ export abstract class ExpressionGenerator extends TypeGenerator {
       const reg = this.newRegister();
       this.emit(`  ${reg} = load ${destType}, ${srcType} ${val}`);
       return reg;
+    }
+
+    // Struct <-> Primitive inheritance casts
+    if (
+      srcTypeNode.kind === "BasicType" &&
+      destTypeNode.kind === "BasicType" &&
+      srcTypeNode.pointerDepth === 0 &&
+      destTypeNode.pointerDepth === 0
+    ) {
+      // Case 1: Struct -> Primitive (Unwrap)
+      if (srcType.startsWith("%struct.") && !destType.startsWith("%struct.")) {
+        // We assume TypeChecker has validated that this is a valid inheritance cast
+        // Extract the field corresponding to the primitive base
+        const structName = srcTypeNode.name;
+        const layout = this.structLayouts.get(structName);
+        let baseIdx = 0;
+        if (layout && layout.has("__base__")) {
+          baseIdx = layout.get("__base__")!;
+        }
+
+        const extracted = this.newRegister();
+        this.emit(
+          `  ${extracted} = extractvalue ${srcType} ${val}, ${baseIdx}`,
+        );
+        return extracted;
+      }
+
+      // Case 2: Primitive -> Struct (Wrap)
+      if (!srcType.startsWith("%struct.") && destType.startsWith("%struct.")) {
+        // We assume TypeChecker has validated that this is a valid inheritance cast
+        // Insert the primitive value into the base field
+        const structName = destTypeNode.name;
+        const layout = this.structLayouts.get(structName);
+        let baseIdx = 0;
+        if (layout && layout.has("__base__")) {
+          baseIdx = layout.get("__base__")!;
+        }
+
+        let structReg = this.newRegister();
+        this.emit(
+          `  ${structReg} = insertvalue ${destType} undef, ${srcType} ${val}, ${baseIdx}`,
+        );
+
+        // Initialize VTable if present
+        if (layout && layout.has("__vtable__")) {
+          const vtableIdx = layout.get("__vtable__")!;
+          const vtablePtr = this.newRegister();
+          // We don't know the exact size of the vtable array here easily,
+          // but we can bitcast the global directly if we know its name.
+          // The global is named @StructName_vtable.
+          // We can try to bitcast from [...] to i8*.
+          // But we need the type.
+          // Alternatively, we can look up the vtable definition if we tracked it.
+          // Or we can just assume it's a pointer and we are storing it.
+
+          // For now, let's try to find the vtable size from vtableLayouts
+          const vtableEntries = this.vtableLayouts.get(structName);
+          const size = vtableEntries ? vtableEntries.length : 0;
+
+          if (size > 0) {
+            this.emit(
+              `  ${vtablePtr} = bitcast [${size} x i8*]* @${structName}_vtable to i8*`,
+            );
+            const nextStruct = this.newRegister();
+            this.emit(
+              `  ${nextStruct} = insertvalue ${destType} ${structReg}, i8* ${vtablePtr}, ${vtableIdx}`,
+            );
+            structReg = nextStruct;
+          }
+        }
+
+        // Set null bit if present
+        if (layout && layout.has("__null_bit__")) {
+          const nullBitIdx = layout.get("__null_bit__")!;
+          const finalReg = this.newRegister();
+          this.emit(
+            `  ${finalReg} = insertvalue ${destType} ${structReg}, i1 0, ${nullBitIdx}`,
+          );
+          return finalReg;
+        }
+
+        return structReg;
+      }
     }
 
     const reg = this.newRegister();

@@ -477,6 +477,40 @@ export abstract class TypeGenerator extends BaseCodeGenerator {
             break; // Only one parent struct
           }
 
+          // Check for primitive inheritance
+          const primitives = [
+            "int",
+            "uint",
+            "i32",
+            "u32",
+            "i64",
+            "u64",
+            "long",
+            "ulong",
+            "i16",
+            "u16",
+            "short",
+            "ushort",
+            "i8",
+            "u8",
+            "char",
+            "bool",
+            "float",
+            "double",
+          ];
+          if (
+            primitives.includes(typeNode.name) &&
+            typeNode.pointerDepth === 0
+          ) {
+            fields.push({
+              kind: "StructField",
+              name: "__base__",
+              type: typeNode,
+              location: typeNode.location,
+            });
+            break;
+          }
+
           // Fallback to name lookup (local structs)
           const parent = this.structMap.get(typeNode.name);
           if (parent) {

@@ -193,4 +193,24 @@ struct String {
         otherStr.destroy();
         return result;
     }
+
+    frame fromInt(val: long) ret String {
+        local buf: string = malloc(32); # Enough for 64-bit int
+        sprintf(buf, "%ld", val);
+        local s: String;
+        s.data = buf;
+        s.length = strlen(buf);
+        return s;
+    }
+
+    frame fromAddress(addr: long) ret String {
+        local buf: string = malloc(32); # Enough for 64-bit hex
+        sprintf(buf, "%#lx", addr);
+        local s: String;
+        s.data = buf;
+        s.length = strlen(buf);
+        return s;
+    }
 }
+
+extern sprintf(str: string, format: string, ...) ret int;
